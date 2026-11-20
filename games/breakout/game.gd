@@ -14,15 +14,20 @@ const Synth = preload("res://core/util/synth.gd")
 const ScoreTable = preload("res://core/util/score_table.gd")
 const BRICK_SHADER = preload("res://games/breakout/shaders/brick_circuit.gdshader")
 const SHIELD_SHADER = preload("res://games/breakout/shaders/shield.gdshader")
+const EXPLOSION_SHADER = preload("res://games/breakout/shaders/pixel_explosion.gdshader")
+const LIFE_ICON_SHADER = preload("res://games/breakout/shaders/plasma_icon.gdshader")
 
 const ACCENT := Color("3ec7ff")
 const PADDLE_MODEL := "res://assets/models/breakout/paddle.glb"
 const MODEL_PADDLE_WIDTH := 1.9  # paddle.glb's native length along X
 const ENGINE_X := 0.74           # engine nozzles, after scaling to PADDLE_W
-## Row families: colour + texture set (scripts/tools/gen_circuit_bricks.py).
-const FAMILIES := ["crimson", "amber", "gold", "verdant", "azure", "violet"]
-const ROW_COLORS := [Color("ff4f6d"), Color("ff9a3e"), Color("ffd23e"), Color("4fff7a"), Color("3ec7ff"), Color("b36bff")]
-const TEXTURE_VARIANTS := 4
+## Brick textures (D-045): the director's circuit_<colour>.png, downsampled to
+## 512 px (scripts/tools/prepare_circuit_textures.py). Each brick shows its own
+## random rectangle. Rows top->bottom: red, red, green, green, blue, blue.
+const CIRCUIT_COLOURS := ["red", "red", "green", "green", "blue", "blue"]
+const CIRCUIT_GLOW := {"red": Color("ff5a32"), "green": Color("4dff6a"), "blue": Color("3ec7ff")}
+const CIRCUIT_TEXELS := 512.0
+const BRICK_TEXELS_W := 64.0  # texels across one brick (chunky pixel size)
 ## Game-over finale (D-044): explosion fills the screen, fade to black, then
 ## GAME OVER + score; Launch/Start may skip once the score is shown.
 const FINALE_FADE_AT := 0.9
@@ -70,9 +75,9 @@ var _ball: Node3D
 var _halo: MeshInstance3D
 var _trail: Fx.Trail
 var _brick_nodes: Array[MeshInstance3D] = []
-var _brick_mats := {}  # "row:variant" -> ShaderMaterial
+var _brick_mats := {}  # colour -> ShaderMaterial
+var _life_icons: Array[ColorRect] = []
 var _hud_score: Label
-var _hud_charges: Label
 var _hint: Label
 var _bg_score: Label
 var _bg_charges: Label
@@ -146,7 +151,7 @@ func _handle_events() -> void:
 			"brick":
 				var n := _brick_nodes[e[1]]
 				n.visible = false
-				_burst(n.position, ROW_COLORS[sim.bricks[e[1]].row % ROW_COLORS.size()])
+				_explode_brick(n.position, _row_glow(sim.bricks[e[1]].row))
 				Audio.sfx("tb_brick")
 			"serve":
 				Audio.sfx("tb_fire")
@@ -162,6 +167,7 @@ func _handle_events() -> void:
 				Dmd.flash(tr("DMD_RACK_CLEAR"), 2.0, Dmd.GREEN)
 				for n in _brick_nodes:
 					n.visible = true
+					_randomize_crop(n)
 				_trail.clear()
 				_hint.visible = true
 			"lost":
@@ -186,7 +192,7 @@ func _refresh_status() -> void:
 	var score_txt := ScoreTable.format_score(sim.score)
 	var charges := tr("TB_CHARGES") % sim.balls_left
 	_hud_score.text = score_txt
-	_hud_charges.text = charges
+	_update_life_icons()
 	_bg_score.text = score_txt
 	_bg_charges.text = charges
 	Dmd.show_score(sim.score, tr("DMD_PLAYER_1"), charges, ACCENT)
@@ -373,17 +379,23 @@ func _build_ship(fallback_mat: Material) -> void:
 	_paddle.add_child(key)
 
 
-func _brick_material(row: int, variant: int) -> ShaderMaterial:
-	var key := "%d:%d" % [row, variant]
-	if not _brick_mats.has(key):
-		var fam: String = FAMILIES[row % FAMILIES.size()]
+func _row_glow(row: int) -> Color:
+	return CIRCUIT_GLOW[CIRCUIT_COLOURS[row % CIRCUIT_COLOURS.size()]]
+
+
+func _brick_material(colour: String, brick_size: Vector3) -> ShaderMaterial:
+	if not _brick_mats.has(colour):
 		var m := ShaderMaterial.new()
 		m.shader = BRICK_SHADER
-		m.set_shader_parameter("circuit", load("res://assets/textures/breakout/bricks/%s_%d.png" % [fam, variant]))
-		m.set_shader_parameter("glow_mask", load("res://assets/textures/breakout/bricks/%s_%d_glow.png" % [fam, variant]))
-		m.set_shader_parameter("glow_color", ROW_COLORS[row % ROW_COLORS.size()])
-		_brick_mats[key] = m
-	return _brick_mats[key]
+		m.set_shader_parameter("circuit", load("res://assets/textures/breakout/circuit_%s.png" % colour))
+		m.set_shader_parameter("glow_color", CIRCUIT_GLOW[colour])
+		m.set_shader_parameter("brick_size", brick_size)
+		# Texture footprint of one brick: BRICK_TEXELS_W across, aspect-correct height.
+		var w := BRICK_TEXELS_W / CIRCUIT_TEXELS
+		m.set_shader_parameter("crop_size", Vector2(w, w * brick_size.z / brick_size.x))
+		m.set_shader_parameter("brick_texels", Vector2(BRICK_TEXELS_W, roundf(BRICK_TEXELS_W * brick_size.z / brick_size.x)))
+		_brick_mats[colour] = m
+	return _brick_mats[colour]
 
 
 func _build_bricks() -> void:
@@ -392,45 +404,78 @@ func _build_bricks() -> void:
 		var b: Dictionary = sim.bricks[i]
 		var r: Rect2 = b.rect
 		var col := i % Sim.BRICK_COLS
-		var variant: int = (int(b.row) * 7 + col * 13) % TEXTURE_VARIANTS
 		var size := Vector3(r.size.x, 0.3, r.size.y)
-		var mat := _brick_material(b.row, variant)
-		mat.set_shader_parameter("brick_size", size)
-		var n := _box(size, Vector3(r.get_center().x, 0, r.get_center().y), mat)
+		var colour: String = CIRCUIT_COLOURS[int(b.row) % CIRCUIT_COLOURS.size()]
+		var n := _box(size, Vector3(r.get_center().x, 0, r.get_center().y), _brick_material(colour, size))
+		_randomize_crop(n)
 		# Pulse ripples diagonally across the swarm, with a little jitter.
 		n.set_instance_shader_parameter("phase", -(col * 0.55 + b.row * 0.8) + float((i * 37) % 11) * 0.08)
 		_root.add_child(n)
 		_brick_nodes.append(n)
 
 
-## Nanomachine disintegration: a quick burst of glowing cubes in the brick colour.
-func _burst(pos: Vector3, color: Color) -> void:
+## Each brick shows a rectangle cut from a random, texel-snapped spot (D-045).
+func _randomize_crop(n: MeshInstance3D) -> void:
+	n.set_instance_shader_parameter("crop_offset",
+		Vector2(randi() % int(CIRCUIT_TEXELS), randi() % int(CIRCUIT_TEXELS)) / CIRCUIT_TEXELS)
+
+
+## Pixel-art explosion (D-046): a dithered, stepped-palette blast billboard plus a
+## spray of square "pixel" particles in white/yellow/orange/brick colour.
+func _explode_brick(pos: Vector3, color: Color) -> void:
+	var blast := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(1.3, 1.3)
+	blast.mesh = quad
+	var bm := ShaderMaterial.new()
+	bm.shader = EXPLOSION_SHADER
+	bm.set_shader_parameter("tint", color)
+	blast.material_override = bm
+	blast.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	blast.position = pos + Vector3(0, 0.25, 0)
+	blast.set_instance_shader_parameter("seed", randf() * 100.0)
+	_root.add_child(blast)
+	var tw := blast.create_tween()
+	tw.tween_method(func(a: float): blast.set_instance_shader_parameter("age", a), 0.0, 1.0, 0.45)
+	tw.tween_callback(blast.queue_free)
+
 	var p := CPUParticles3D.new()
 	p.one_shot = true
-	p.amount = 18
-	p.lifetime = 0.5
+	p.amount = 28
+	p.lifetime = 0.6
 	p.explosiveness = 1.0
 	p.direction = Vector3(0, 1, 0)
-	p.spread = 70.0
-	p.initial_velocity_min = 1.5
-	p.initial_velocity_max = 3.5
-	p.gravity = Vector3(0, -6, 0)
-	p.scale_amount_min = 0.5
-	p.scale_amount_max = 1.0
-	var cube := BoxMesh.new()
-	cube.size = Vector3(0.07, 0.07, 0.07)
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = color
-	m.emission_enabled = true
-	m.emission = color
-	m.emission_energy_multiplier = 2.0
-	cube.material = m
-	p.mesh = cube
+	p.spread = 85.0
+	p.initial_velocity_min = 2.0
+	p.initial_velocity_max = 4.5
+	p.gravity = Vector3(0, -5, 0)
+	p.damping_min = 2.0
+	p.damping_max = 3.0
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = Vector3(0.3, 0.05, 0.12)
+	var palette := Gradient.new()  # each particle picks one flat colour
+	palette.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
+	palette.offsets = PackedFloat32Array([0.0, 0.25, 0.5, 0.75])
+	palette.colors = PackedColorArray([Color.WHITE, Color(1.0, 0.9, 0.4), Color(1.0, 0.5, 0.15), color])
+	p.color_initial_ramp = palette
+	var fade := Gradient.new()
+	fade.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
+	fade.offsets = PackedFloat32Array([0.0, 0.7])
+	fade.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+	p.color_ramp = fade
+	var px := QuadMesh.new()  # hard-edged square = a pixel
+	px.size = Vector2(0.075, 0.075)
+	var pm := StandardMaterial3D.new()
+	pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	pm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	pm.vertex_color_use_as_albedo = true
+	pm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	px.material = pm
+	p.mesh = px
 	p.position = pos
 	_root.add_child(p)
 	p.emitting = true
-	get_tree().create_timer(0.8).timeout.connect(p.queue_free)
+	get_tree().create_timer(0.9).timeout.connect(p.queue_free)
 
 
 func _box(size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
@@ -454,14 +499,31 @@ func _build_hud() -> void:
 	_hud_score = UI.label("0", 56, UI.YELLOW, HORIZONTAL_ALIGNMENT_LEFT)
 	_hud_score.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.add_child(_hud_score)
-	_hud_charges = UI.label("", 44, UI.CYAN, HORIZONTAL_ALIGNMENT_RIGHT)
-	bar.add_child(_hud_charges)
+	# Lives = plasma charges, shown as plasma-ball icons (D-047).
+	var icons := HBoxContainer.new()
+	icons.add_theme_constant_override("separation", 6)
+	bar.add_child(icons)
+	_life_icons.clear()
+	for i in maxi(sim.balls_left, 1):
+		var icon := ColorRect.new()
+		icon.custom_minimum_size = Vector2(64, 64)
+		var im := ShaderMaterial.new()
+		im.shader = LIFE_ICON_SHADER
+		im.set_shader_parameter("time_offset", i * 0.7)
+		icon.material = im
+		icons.add_child(icon)
+		_life_icons.append(icon)
 	_hint = UI.label(tr("TB_PRESS_LAUNCH"), 52, UI.WHITE)
 	_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_hint.offset_top = -560
 	_hint.offset_left = -400
 	_hint.offset_right = 400
 	add_to_table(_hint)
+
+
+func _update_life_icons() -> void:
+	for i in _life_icons.size():
+		(_life_icons[i].material as ShaderMaterial).set_shader_parameter("spent", 0.0 if i < sim.balls_left else 1.0)
 
 
 func _build_backglass() -> void:

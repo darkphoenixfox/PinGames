@@ -412,3 +412,30 @@
   - At 6 s the module emits `finished` (high-score entry or the picker). From 2.6 s, Launch/Start skips ahead.
   - Fix found on the way: billboard materials need `billboard_keep_scale`, otherwise every fireball stayed at its base size.
 - **Status:** Accepted
+
+### D-045 — Brick textures come from the director's circuit art (supersedes the procedural textures in D-041)
+- **Date:** 2026-11-20
+- **Decision (director):** bricks use the director's `circuit_red/green/blue.png`. Each brick is a rectangle cut from a random spot, giving a low-pixel texture per brick. There are 3 colours.
+- **Implementation:**
+  - **Preparation:** `scripts/tools/prepare_circuit_textures.py` keeps the 2048 px originals in `assets/source/breakout/` and writes 512 px box-downsampled copies to `assets/textures/breakout/`.
+  - **Shader:** `brick_circuit.gdshader` samples with nearest filtering. Each brick gets a random texel-snapped `crop_offset` (instance uniform), and `crop_size` is the brick footprint: 64 texels across, aspect-correct. Crops are re-randomised for each new rack.
+  - **Bevel:** a 1-texel bevel (light top-left in the glow colour, dark bottom-right) separates the bricks, because the art is continuous.
+  - **Glow:** the glow mask is derived from the texture (bright and saturated pixels).
+  - **Colours:** rows run red, red, green, green, blue, blue.
+  - **Retired:** the procedural generator and its 48 textures were removed.
+- **Status:** Accepted
+
+### D-046 — Pixel-art brick explosions
+- **Date:** 2026-11-20
+- **Decision (director):** bricks break with pixelated explosions and particles.
+- **Implementation:**
+  - **Blast:** `pixel_explosion.gdshader` on a billboard quad, with UVs quantised to a 14×14 grid. It's a ragged ring that expands and hollows out, with a stepped palette (white, yellow, orange, brick colour), and dissolves through ordered dithering over 0.45 s (`age` instance uniform tweened).
+  - **Particles:** 28 `CPUParticles3D` hard-edged square quads, each in one flat palette colour (constant-interpolation `color_initial_ramp`), with gravity and damping.
+  - **Brightness:** kept at modest HDR so bloom doesn't blur the pixels.
+- **Status:** Accepted
+
+### D-047 — Lives shown as plasma-ball icons
+- **Date:** 2026-11-20
+- **Decision (director):** remaining lives (charges) are shown as plasma-ball icons at the top of the screen.
+- **Implementation:** `plasma_icon.gdshader` is a canvas shader matching the in-game plasma look. The HUD has one 64 px icon per starting charge, and a spent charge becomes a faint ring. The DMD and backglass still show "CHARGES n" as text.
+- **Status:** Accepted

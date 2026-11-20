@@ -102,13 +102,13 @@ Rules:
 **DMD:** score, charges, "MULTIBALL!", power-up names, brick count left.
 **Backglass:** world art, boss portrait and health bar, power-up legend.
 **Fiction and art direction (director, D-041):**
-- **The bricks** are a sentient, self-replicating alien race of nanomachines. Each brick is a 16-bit-style circuit board: substrate dither, coloured traces, gold pads and IC chips, each chip with a glowing "eye". LEDs and traces pulse in waves across the swarm. Destroyed bricks burst into glowing cubes. There are six colour families, one per row.
+- **The bricks** are a sentient, self-replicating alien race of nanomachines (D-045). Each brick is a unique rectangle cut from a random spot of the director's 16-bit circuit textures (red, green and blue; two rows each, top to bottom), shown as chunky low-res pixels with a 1-texel bevel. Their lit LEDs and traces pulse in waves across the swarm. Destroyed bricks blow up in a **pixel-art explosion**: a dithered blast in white, yellow, orange and the brick colour, plus a spray of square pixel particles (D-046).
 - **The player** flies a spaceship (the paddle, `paddle.glb`).
   - It **banks** up to about 18° when moving. The hitbox stays a fixed rectangle.
   - The side engines are **afterburners** (D-042). Both are off at rest. While moving, only the trailing one burns: a cone of blue flame, white-hot at the nozzle and tapering to a point, that grows with speed and flares on a dash.
 - **The ball** is a **plasma shot**. It is invisible until fired. Launch or Start fires it from the ship, with a firing sound, a muzzle flash and a recoil kick and shake of the ship (D-042). In flight it has a white-hot core, a swirling halo, electric arcs and a fading trail.
 - **Rebounds:** the ship's **energy shield** flashes in front of the hull, with a ripple from the impact point, and deflects the plasma back at the swarm.
-- **Lives** are the ship's **energy charges** ("CHARGES", "CHARGE LOST").
+- **Lives** are the ship's **energy charges**. They show as **plasma-ball icons** at the top right of the TABLE (a used charge becomes a faint ring). The DMD and backglass show "CHARGES n", and losing one says "CHARGE LOST" (D-047).
 - **Setting (D-043):** the ship is in orbit. The horizon of an **earth-like planet** runs across the bottom of the TABLE: so huge that its curve is barely visible, out of focus (depth of field), with a glowing atmospheric rim and haze. It has oceans, continents and drifting clouds. Plasma that gets past the ship falls past the horizon: an **explosion sound**, a **fireball**, and the planet's surface **lights up where it would have hit**, with a shockwave spreading along the horizon. The ship sits higher to make room.
 - **Game over (D-044):** when the last charge is lost, the explosion grows until it fills the whole screen, with a bigger, longer blast. The screen fades to black, then **GAME OVER** and the **final score** show on the TABLE, DMD and backglass. After about 4 s (or Launch/Start to skip) the game goes to high-score entry or back to the picker.
 
