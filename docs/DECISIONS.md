@@ -342,3 +342,9 @@
   - **Blender:** Blender 5.3 at `C:\dev\Blender\blender.exe` is available for headless (`--background --python`) model processing: decimating over-budget meshes, fixing orientation and scale, resizing textures, and pre-rendering sprites from 3D (GDD §8). Scripts go in `scripts/tools/`, and the director never needs to open Blender.
 - **Why:** The director has no editor workflow (D-004), but models still need review and processing.
 - **Status:** Accepted
+
+### D-039 — Assets with no stated source are director-made
+- **Date:** 2026-11-20
+- **Decision:** If the director hands over an asset without naming a source, it was made by the director with one of: ComfyUI (approved models, D-035), Gemini Pro or Meshy Pro. These are paid or approved tools, so they're cleared for commercial use. Record it in CREDITS.md as "Director-made". Ask about the source only when the director names a third-party source (a website, an artist or a pack), which then needs the usual license check (D-032).
+- **Why:** The director's instruction. It saves a round trip for every asset.
+- **Status:** Accepted
