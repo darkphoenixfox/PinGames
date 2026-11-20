@@ -1,0 +1,39 @@
+; PinGames — hand-maintained project file. Do not require the Godot editor to change it.
+; See docs/DECISIONS.md (D-004) for the "no editor" rule.
+
+config_version=5
+
+[application]
+
+config/name="PinGames"
+config/description="Arcade-inspired games for virtual pinball cabinets."
+run/main_scene="res://shell/main.tscn"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="PinGames"
+config/features=PackedStringArray("4.7")
+run/low_processor_mode=false
+
+[autoload]
+
+Config="*res://core/config.gd"
+I18n="*res://core/i18n.gd"
+CabinetInput="*res://core/cabinet_input.gd"
+Dmd="*res://core/dmd/dmd.gd"
+Screens="*res://core/screens.gd"
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/subwindows/embed_subwindows=false
+window/vsync/vsync_mode=1
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=false
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=1
+renderer/rendering_method="forward_plus"
+environment/defaults/default_clear_color=Color(0, 0, 0, 1)

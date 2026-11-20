@@ -1,0 +1,15 @@
+# Godot generated
+.godot/
+*.translation
+# Build output
+exports/
+builds/
+# Local / user data
+user_data/
+*.log
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/settings.local.json
