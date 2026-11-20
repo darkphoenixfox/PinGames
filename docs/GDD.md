@@ -140,3 +140,19 @@ The current proposal is **(b)**.
 5. Should we support multiplayer (alternating players, as in pinball)? The shell is ready for `start(players)`.
 6. Should nudge or an analog plunger be used at all (they aren't guaranteed)?
 7. How do you want music made: AI-generated tracks, tracker modules, or royalty-free packs?
+
+## 8. Asset pipeline
+### 3D models (D-020)
+- **Source:** Meshy. Export **.glb** with PBR textures, and use Meshy's remesh or reduced polycount.
+- **Location:** `assets/models/<breakout|shmup|racer|shared>/<snake_case_name>.glb`. Commit it, and Git LFS handles the file.
+- **Polycount budgets** (initial; to revise after profiling on the cabinet):
+  - Hero objects (player ship, paddle, player car): ≤ 15k triangles
+  - Enemies and props: ≤ 5k triangles
+  - Bosses: ≤ 40k triangles
+- **Textures:** 1024² by default, 2048² for bosses and hero objects only.
+- **Look:** the GLB's own materials are the base. Each game's style (outline, cel bands, retro dithering) is a shader applied in code.
+- **Sprites from 3D:** super-scaler sprites, such as racer roadside objects and cars seen from fixed angles, may be pre-rendered from GLBs into sprite sheets by a headless Godot script. They don't need to be drawn by hand.
+- **Credits:** add one row per file to `assets/CREDITS.md`.
+
+### 2D art, audio, fonts
+These are AI-generated or royalty-free, and each needs a row in `assets/CREDITS.md`. Their file formats will be decided in M1 and M6.

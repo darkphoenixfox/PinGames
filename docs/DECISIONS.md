@@ -170,3 +170,18 @@
 - **Date:** 2026-11-20
 - **Decision:** The autoloads are `Config`, then `I18n`, `CabinetInput`, `Dmd` and `Screens`, in that order (`Screens` uses `Dmd`). They also load when running `--script` tests, so the tests import only the pure helpers in `core/util/`, which don't reference any autoload.
 - **Status:** Accepted
+
+### D-020 — 3D models come from Meshy as .glb
+- **Date:** 2026-11-20
+- **Decision:** 3D models are generated with Meshy and exported as `.glb` (binary glTF 2.0). The pipeline is in `docs/GDD.md` §8:
+  - Files go in `assets/models/<game or shared>/<name>.glb`.
+  - Godot imports them from the command line (`scripts/test.ps1` runs the import).
+  - Code loads them as `PackedScene`.
+  - Any per-game look, such as a cel or retro shader, is applied in code by overriding materials at runtime. Exported files are never edited by hand.
+- **Why:** The director chose this. Godot supports glTF natively, so the no-editor workflow (D-004) keeps working.
+- **Consequences:**
+  - Export from Meshy at reduced polycount, because the cabinet GPU is unknown (D-015). See the §8 budgets.
+  - Change import options by editing the `.glb.import` text file, never through the editor.
+  - Each model gets a row in `assets/CREDITS.md` recording the Meshy plan or license it was made under, because the license terms depend on the plan.
+  - Animated models (Meshy rigging) are allowed. Animations are played by name from code.
+- **Status:** Accepted
