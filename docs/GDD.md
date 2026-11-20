@@ -161,3 +161,9 @@ Rules:
 
 ### 2D art, audio, fonts
 These are AI-generated or royalty-free, and each needs a row in `assets/CREDITS.md`. Their file formats will be decided in M1 and M6.
+
+### Music assignments (director's picks; license must be confirmed on each page before import, D-032)
+| Use | Track | Source | License (from search summary, unverified) | Status |
+|---|---|---|---|---|
+| Main screen (picker / attract) | "Legends" | https://opengameart.org/content/legends | **Unknown**: confirm on the page | Waiting for the file and license proof |
+| Turbo Run (racer) | "8-bit Music Pack (Loopable)" by CodeManu | https://opengameart.org/content/8-bit-music-pack-loopable | CC BY 3.0 | Waiting for the file and license proof |
