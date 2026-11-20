@@ -14,4 +14,5 @@ Keep proof of the license, such as a screenshot or saved page dated at download,
 
 | Path | Title | Author | Source URL | License / AI plan | Changes | Date |
 |---|---|---|---|---|---|---|
-| — | — | — | — | — | — | No assets yet |
+| `audio/music/main/legends.ogg` | Legends | KLY (Kim Lightyear), 2014 | https://opengameart.org/content/legends | ⚠️ **PENDING**: OGA page license not yet confirmed. The MP3's embedded note says: *"You are allowed to use this track in your projects. You are not allowed to sell my music. Credit me by name in your project description."* Commercial use inside a game is ambiguous, so confirm before release. | MP3→OGG, leading/trailing silence trimmed, looped | 2026-11-20 |
+| `audio/music/racer/codemanu_menu.ogg`, `codemanu_action_1..5.ogg` | 8-bit Music Pack (Loopable) | CodeManu | https://opengameart.org/content/8-bit-music-pack-loopable | CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/), per search listing; license proof screenshot pending | MP3→OGG, looped | 2026-11-20 |

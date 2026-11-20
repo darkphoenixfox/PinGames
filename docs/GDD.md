@@ -165,5 +165,5 @@ These are AI-generated or royalty-free, and each needs a row in `assets/CREDITS.
 ### Music assignments (director's picks; license must be confirmed on each page before import, D-032)
 | Use | Track | Source | License (from search summary, unverified) | Status |
 |---|---|---|---|---|
-| Main screen (picker / attract) | "Legends" | https://opengameart.org/content/legends | **Unknown**: confirm on the page | Waiting for the file and license proof |
-| Turbo Run (racer) | "8-bit Music Pack (Loopable)" by CodeManu | https://opengameart.org/content/8-bit-music-pack-loopable | CC BY 3.0 | Waiting for the file and license proof |
+| Main screen (picker; attract if "attract sounds" is on) | "Legends" by KLY (Kim Lightyear) | https://opengameart.org/content/legends | **Pending**: embedded note says "not allowed to sell my music; credit me by name" | ✅ In game. License must be confirmed before release |
+| Turbo Run (racer): menu + 5 race loops | "8-bit Music Pack (Loopable)" by CodeManu | https://opengameart.org/content/8-bit-music-pack-loopable | CC BY 3.0 | ✅ In game (racer stub plays race loop 1) |

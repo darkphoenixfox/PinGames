@@ -22,6 +22,10 @@ func allows_operator_combo() -> bool:
 func enter() -> void:
 	add_table(UI.fill(Color.BLACK))
 	add_backglass(UI.fill(Color.BLACK))
+	if Config.get_value("operator", "attract_sounds"):
+		Audio.play_music(Audio.MUSIC_MAIN)
+	else:
+		Audio.stop_music(2.0)
 	_next_page()
 
 

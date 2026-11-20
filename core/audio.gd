@@ -19,7 +19,12 @@ const UI_SOUNDS := {
 	"fanfare": [[784.0, 784.0, 0.1], [784.0, 784.0, 0.1], [1047.0, 1047.0, 0.12], [1319.0, 1319.0, 0.35]],
 }
 
+## Shared music (D-033). Game-specific tracks live in each game module.
+const MUSIC_MAIN := "res://assets/audio/music/main/legends.ogg"
+
 var _music: AudioStreamPlayer
+var _music_path := ""
+var _music_tween: Tween
 var _pool: Array[AudioStreamPlayer] = []
 var _sounds := {}
 
@@ -75,12 +80,47 @@ func sfx(sound_name: String) -> void:
 	_pool[0].play()
 
 
-func play_music(stream: AudioStream) -> void:
-	if _music.stream == stream and _music.playing:
+## Plays a looping music track (res:// path to an .ogg), fading out whatever is
+## playing. Calling it again with the same path keeps the track going.
+func play_music(path: String, fade: float = 1.0) -> void:
+	if path == _music_path and _music.playing:
 		return
-	_music.stream = stream
-	_music.play()
+	var stream := load(path) as AudioStream
+	if stream == null:
+		push_warning("Audio: cannot load music '%s'" % path)
+		return
+	if stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+	_music_path = path
+	_fade_to(func():
+		_music.stream = stream
+		_music.volume_db = -40.0
+		_music.play()
+		_tween_volume(0.0, fade), fade)
 
 
-func stop_music() -> void:
-	_music.stop()
+func stop_music(fade: float = 1.0) -> void:
+	_music_path = ""
+	_fade_to(func(): _music.stop(), fade)
+
+
+func current_music() -> String:
+	return _music_path
+
+
+func _fade_to(then: Callable, fade: float) -> void:
+	if _music_tween:
+		_music_tween.kill()
+	if not _music.playing or fade <= 0.0:
+		then.call()
+		return
+	_music_tween = _tween_volume(-40.0, fade * 0.5)
+	_music_tween.finished.connect(then)
+
+
+func _tween_volume(db: float, seconds: float) -> Tween:
+	if _music_tween and _music_tween.is_valid():
+		_music_tween.kill()
+	_music_tween = create_tween()
+	_music_tween.tween_property(_music, "volume_db", db, maxf(seconds, 0.01))
+	return _music_tween

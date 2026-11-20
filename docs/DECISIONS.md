@@ -277,3 +277,20 @@
 - **Why:** This is the director's call; commercial distribution is possible.
 - **Consequences:** The game will have an in-game credits screen (attract page and operator System Info), generated from `assets/CREDITS.md` data (M6). Before any commercial release, every row in CREDITS.md is re-checked.
 - **Status:** Accepted
+
+### D-033 — Asset intake from the director's drop folder; music playback
+- **Date:** 2026-11-20
+- **Decision:**
+  - **Intake:** the director drops raw assets into `C:\Users\Phoenixfox\Dev\PinGamesAssets` (outside the repo). Claude imports **only the files the director names**. Other files there are staged for later and are left alone. Originals are never moved or deleted.
+  - **Processing tools:**
+    - `scripts/tools/to_ogg.sh <in> <out> [trim]` converts audio to OGG Vorbis q6 with ffmpeg, optionally trimming silence at both ends. Don't trim tracks that are already seamless loops.
+    - `scripts/tools/sprite_cutout.py` removes a plain background from AI-generated sprites by flood fill from the border, then crops and scales them.
+  - **Layout in the repo:**
+    - `assets/audio/music/<main|game id>/`
+    - `assets/models/<game id|shared>/`
+    - `assets/sprites/<game id|shared>/`
+    - `assets/source/` for kept originals
+    - `assets/licenses/` for license proof
+  - **Music playback:** `Audio.play_music(path, fade)` loops OGG and fades out the previous track. `Audio.MUSIC_MAIN` plays on the picker, and in attract mode only when `attract_sounds` is on. Games stop the shell music on start and play their own tracks (`MUSIC` const in the module).
+- **Why:** The director asked Claude to organise the assets. Only named files are imported because the director stages future assets in the same folder.
+- **Status:** Accepted

@@ -16,6 +16,7 @@ func enter() -> void:
 	add_child(module)
 	module.finished.connect(_on_finished)
 	Audio.sfx("start")
+	Audio.stop_music(0.6)  # games start their own music
 	module.start(1)
 	print("Shell: started game '%s'" % game_id)
 
