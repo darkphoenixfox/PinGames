@@ -450,3 +450,15 @@
     - runs a headless import first, so new assets load.
 - **Why:** The director asked that test runs not come to the foreground.
 - **Status:** Accepted (no_focus behaviour to be confirmed by the director)
+
+### D-049 — Tilt Breaker: starfield, no walls, edge shields
+- **Date:** 2026-11-20
+- **Decision (director):**
+  - Add a starfield to the black background that rotates when the ship moves.
+  - Remove the level barriers. A rebound at the screen edge, a little inside it, shows the shield rebound effect at the hit point.
+- **Implementation:**
+  - **Starfield:** `starfield.gdshader` on a ColorRect in a `CanvasLayer(layer=-1)`, used as the 3D background through `Environment.BG_CANVAS` (`background_canvas_max_layer=-1`). It has three parallax layers of square pixel stars rotating around a pivot far below the screen. The angle is advanced each frame by a smoothed `-paddle_vx * 0.006` spin plus a small drift.
+  - **No camera DOF:** it blurred the canvas background into bokeh blobs. The planet's defocus is now faked in `planet.gdshader` (3 noise octaves and soft coast and cloud edges, `softness`).
+  - **Boundaries:** `Sim.FIELD` is now (-4.1, -7.1, 8.2, 15.1), 0.4 inside the 9-unit screen. `wall` events carry `[side, hit]`. Each side has a flat shield strip using `shield.gdshader`, with the ripple at the hit point. The wall boxes and the `tb_wall` sound were removed.
+  - **Dev:** `--tb-show-shields` keeps the edge shields lit, for visual checks.
+- **Status:** Accepted

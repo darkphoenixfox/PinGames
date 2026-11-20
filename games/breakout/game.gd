@@ -16,6 +16,7 @@ const BRICK_SHADER = preload("res://games/breakout/shaders/brick_circuit.gdshade
 const SHIELD_SHADER = preload("res://games/breakout/shaders/shield.gdshader")
 const EXPLOSION_SHADER = preload("res://games/breakout/shaders/pixel_explosion.gdshader")
 const LIFE_ICON_SHADER = preload("res://games/breakout/shaders/plasma_icon.gdshader")
+const STARFIELD_SHADER = preload("res://games/breakout/shaders/starfield.gdshader")
 
 const ACCENT := Color("3ec7ff")
 const PADDLE_MODEL := "res://assets/models/breakout/paddle.glb"
@@ -51,10 +52,14 @@ const RECOIL_SHAKE := 0.05
 const PLANET_RADIUS := 100.0
 const PLANET_RIM_ABOVE_BOTTOM := 1.7
 const PLANET_DEPTH_BEHIND := 30.0
+## Starfield rotation (D-049): radians/s of spin per unit/s of ship speed, how
+## quickly the spin follows the ship, and an idle drift.
+const STAR_SPIN_PER_SPEED := 0.006
+const STAR_SPIN_RESPONSE := 3.0
+const STAR_DRIFT := 0.004
 
 const SOUNDS := {
 	"tb_shield": [[520.0, 900.0, 0.06, "triangle", 0.3], [900.0, 700.0, 0.05, "noise", 0.08]],
-	"tb_wall": [[300.0, 300.0, 0.025, "triangle", 0.25]],
 	"tb_brick": [[880.0, 1320.0, 0.05, "square", 0.18], [1400.0, 300.0, 0.08, "noise", 0.12]],
 	"tb_explode": [[900.0, 60.0, 0.9, "noise", 0.45]],
 	"tb_explode_big": [[1400.0, 40.0, 0.4, "noise", 0.6], [500.0, 25.0, 1.8, "noise", 0.55]],
@@ -72,6 +77,10 @@ var _ship: Node3D         # child of _paddle; banks visually
 var _engines: Array = []  # [left, right] Fx.ShipEngine
 var _shield_mat: ShaderMaterial
 var _shield_age := 99.0
+var _edge_shields := {}  # "l"/"r"/"t" -> {mat: ShaderMaterial, age: float}
+var _star_mat: ShaderMaterial
+var _star_angle := 0.0
+var _star_spin := 0.0
 var _ball: Node3D
 var _halo: MeshInstance3D
 var _trail: Fx.Trail
@@ -148,7 +157,8 @@ func _handle_events() -> void:
 				_shield_mat.set_shader_parameter("hit_x",
 					clampf((sim.ball_pos.x - sim.paddle_x) / (Sim.PADDLE_W * 0.5), -1.0, 1.0))
 			"wall":
-				Audio.sfx("tb_wall")
+				Audio.sfx("tb_shield")
+				_flash_edge_shield(e[1][0], e[1][1])
 			"brick":
 				var n := _brick_nodes[e[1]]
 				n.visible = false
@@ -240,6 +250,20 @@ func _animate(delta: float) -> void:
 	var burn := absf(push) + _dash_glow * 0.6
 	_engines[0].set_thrust(burn if push > 0.0 else 0.0)
 	_engines[1].set_thrust(burn if push < 0.0 else 0.0)
+	# Edge shields (dev: --tb-show-shields keeps them lit mid-ripple for checks)
+	for side in _edge_shields:
+		var sh: Dictionary = _edge_shields[side]
+		if Config.cli.has("tb-show-shields"):
+			sh.age = 0.12
+		if sh.age < 5.0:
+			sh.age += delta
+			sh.mat.set_shader_parameter("age", sh.age)
+			sh.mat.set_shader_parameter("strength", clampf(1.0 - sh.age / SHIELD_FADE, 0.0, 1.0))
+	# Starfield swings with the ship's movement (D-049)
+	var target_spin := -sim.paddle_vx * STAR_SPIN_PER_SPEED
+	_star_spin = lerpf(_star_spin, target_spin, 1.0 - exp(-STAR_SPIN_RESPONSE * delta))
+	_star_angle += (_star_spin + STAR_DRIFT) * delta
+	_star_mat.set_shader_parameter("angle", _star_angle)
 	# Shield flash
 	_shield_age += delta
 	_shield_mat.set_shader_parameter("age", _shield_age)
@@ -269,8 +293,9 @@ func _build_world() -> void:
 
 	var env := WorldEnvironment.new()
 	env.environment = Environment.new()
-	env.environment.background_mode = Environment.BG_COLOR
-	env.environment.background_color = Color(0.008, 0.01, 0.025)
+	# Space background = a pixel starfield drawn on canvas layer -1 (D-049).
+	env.environment.background_mode = Environment.BG_CANVAS
+	env.environment.background_canvas_max_layer = -1
 	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.environment.ambient_light_color = Color(0.45, 0.5, 0.65)
 	env.environment.ambient_light_energy = 0.6
@@ -297,13 +322,8 @@ func _build_world() -> void:
 	cam.position = target + Vector3(0, cos(t), sin(t)) * 20.0
 	cam.near = 1.0
 	cam.far = 260.0
-	# Depth of field: the playfield (~20 units away) stays sharp, the planet blurs.
-	var attrs := CameraAttributesPractical.new()
-	attrs.dof_blur_far_enabled = true
-	attrs.dof_blur_far_distance = 26.0
-	attrs.dof_blur_far_transition = 8.0
-	attrs.dof_blur_amount = 0.12
-	cam.attributes = attrs
+	# No camera DOF: it also blurred the starfield background. The planet's
+	# out-of-focus look is done in its own shader instead (D-049).
 	_root.add_child(cam)
 	cam.look_at(target, Vector3.UP)
 	cam.current = true
@@ -314,21 +334,14 @@ func _build_world() -> void:
 	_root.add_child(_planet)
 	_planet.place(cam.global_transform.basis, target, -cam.size * 0.5 + PLANET_RIM_ABOVE_BOTTOM, PLANET_DEPTH_BEHIND)
 
-	# Walls
-	var wall_mat := StandardMaterial3D.new()
-	wall_mat.albedo_color = Color(0.05, 0.08, 0.12)
-	wall_mat.emission_enabled = true
-	wall_mat.emission = ACCENT
-	wall_mat.emission_energy_multiplier = 0.45
-	wall_mat.metallic_specular = 0.1
-	var f := Sim.FIELD
-	var wall_len := Sim.DRAIN_Y - f.position.y
-	var wall_cz := f.position.y + wall_len * 0.5
-	_root.add_child(_box(Vector3(0.3, 0.5, wall_len), Vector3(f.position.x - 0.15, 0, wall_cz), wall_mat))
-	_root.add_child(_box(Vector3(0.3, 0.5, wall_len), Vector3(f.end.x + 0.15, 0, wall_cz), wall_mat))
-	_root.add_child(_box(Vector3(f.size.x + 0.6, 0.5, 0.3), Vector3(0, 0, f.position.y - 0.15), wall_mat))
+	# No visible barriers (D-049): invisible boundaries flash an energy shield
+	# where the plasma rebounds.
+	_build_edge_shields()
+	_build_starfield()
 
-	_build_ship(wall_mat)
+	var fallback_mat := StandardMaterial3D.new()
+	fallback_mat.albedo_color = Color(0.6, 0.7, 0.8)
+	_build_ship(fallback_mat)
 
 	# Plasma shot + trail
 	_ball = Fx.make_plasma_ball(Sim.BALL_R)
@@ -338,6 +351,61 @@ func _build_world() -> void:
 	_trail.width = Sim.BALL_R * 1.1
 	_root.add_child(_trail)
 	_animate(0.0)
+
+
+func _build_starfield() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = -1  # <= background_canvas_max_layer: drawn as the 3D background
+	add_to_table(layer)
+	var rect := ColorRect.new()
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_star_mat = ShaderMaterial.new()
+	_star_mat.shader = STARFIELD_SHADER
+	rect.material = _star_mat
+	layer.add_child(rect)
+
+
+## Shield strips along the invisible boundaries, same effect as the ship's shield.
+func _build_edge_shields() -> void:
+	var f := Sim.FIELD
+	var side_len := Sim.DRAIN_Y - f.position.y
+	var side_cz := f.position.y + side_len * 0.5
+	# side: [length, position, rotation_y_degrees]
+	var specs := {
+		"l": [side_len, Vector3(f.position.x, 0.08, side_cz), 90.0],
+		"r": [side_len, Vector3(f.end.x, 0.08, side_cz), -90.0],
+		"t": [f.size.x, Vector3(f.get_center().x, 0.08, f.position.y), 0.0],
+	}
+	for side in specs:
+		var spec: Array = specs[side]
+		var m := MeshInstance3D.new()
+		var plane := PlaneMesh.new()
+		plane.size = Vector2(spec[0], 0.6)
+		m.mesh = plane
+		var mat := ShaderMaterial.new()
+		mat.shader = SHIELD_SHADER
+		mat.set_shader_parameter("strength", 0.0)
+		m.material_override = mat
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		m.position = spec[1]
+		m.rotation_degrees = Vector3(0.0, spec[2], 0.0)
+		_root.add_child(m)
+		_edge_shields[side] = {"mat": mat, "age": 99.0, "center": spec[1], "half": spec[0] * 0.5}
+
+
+func _flash_edge_shield(side: String, hit: Vector2) -> void:
+	var sh: Dictionary = _edge_shields[side]
+	var c: Vector3 = sh.center
+	var t := 0.0
+	match side:
+		"l":
+			t = -(hit.y - c.z) / sh.half   # rotated +90: local +X runs towards -Z
+		"r":
+			t = (hit.y - c.z) / sh.half    # rotated -90: local +X runs towards +Z
+		"t":
+			t = (hit.x - c.x) / sh.half
+	sh.mat.set_shader_parameter("hit_x", clampf(t, -1.0, 1.0))
+	sh.age = 0.0
 
 
 func _build_ship(fallback_mat: Material) -> void:

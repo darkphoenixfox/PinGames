@@ -6,7 +6,9 @@ extends RefCounted
 const BP = preload("res://games/breakout/ball_physics.gd")
 
 # --- playfield -----------------------------------------------------------------
-const FIELD := Rect2(-4.3, -7.2, 8.6, 15.2)  # inner walls: left, top, width, height
+## Invisible rebound boundaries (D-049), kept a little inside the screen edges
+## (screen is 9 units wide); rebounds there show an energy-shield flash.
+const FIELD := Rect2(-4.1, -7.1, 8.2, 15.1)  # left, top, width, height
 ## The plasma is lost once it passes the planet's horizon line (D-043).
 const DRAIN_Y := 7.3
 # --- paddle --------------------------------------------------------------------
@@ -58,8 +60,8 @@ var _held_time := 0.0
 ## Each brick: {rect: Rect2, hp: int, alive: bool, row: int, points: int}
 var bricks: Array = []
 ## Events produced by the last step(): [name, data]. Names: serve, paddle, wall,
-## brick (data = index), rack_clear, lost (data = x where the plasma left),
-## over, dash.
+## wall (data = [side "l"|"r"|"t", hit position]), brick (data = index),
+## rack_clear, lost (data = x where the plasma left), over, dash.
 var events: Array = []
 
 
@@ -160,15 +162,15 @@ func _ball_substep(h: float) -> bool:
 	if ball_pos.x - BALL_R < FIELD.position.x:
 		ball_pos.x = FIELD.position.x + BALL_R
 		ball_vel.x = absf(ball_vel.x)
-		events.append(["wall", null])
+		events.append(["wall", ["l", Vector2(FIELD.position.x, ball_pos.y)]])
 	elif ball_pos.x + BALL_R > FIELD.end.x:
 		ball_pos.x = FIELD.end.x - BALL_R
 		ball_vel.x = -absf(ball_vel.x)
-		events.append(["wall", null])
+		events.append(["wall", ["r", Vector2(FIELD.end.x, ball_pos.y)]])
 	if ball_pos.y - BALL_R < FIELD.position.y:
 		ball_pos.y = FIELD.position.y + BALL_R
 		ball_vel.y = absf(ball_vel.y)
-		events.append(["wall", null])
+		events.append(["wall", ["t", Vector2(ball_pos.x, FIELD.position.y)]])
 	# Bricks: resolve the deepest contact only (one bounce per substep).
 	var best := -1
 	var best_c := {}

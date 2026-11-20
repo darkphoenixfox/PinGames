@@ -1,11 +1,14 @@
-// Tilt Breaker backdrop planet (D-043): earth-like surface with procedural oceans,
+// Tilt Breaker backdrop planet (D-043, D-049): earth-like surface with procedural oceans,
 // continents and clouds, a glowing atmospheric rim, and impact flashes where lost
 // plasma shots strike (impact_point in world space, impact_age seconds since hit).
+// "Out of focus" is faked here (few noise octaves, wide soft edges) instead of
+// camera DOF, which would also blur the starfield.
 shader_type spatial;
 render_mode specular_schlick_ggx;
 
 uniform float detail_scale = 0.22;     // noise frequency per world unit on the surface
 uniform float sea_level = 0.5;
+uniform float softness = 0.12;   // width of coast/cloud edges: bigger = blurrier
 uniform vec4 deep_sea : source_color = vec4(0.02, 0.08, 0.25, 1.0);
 uniform vec4 shallow_sea : source_color = vec4(0.05, 0.35, 0.55, 1.0);
 uniform vec4 lowland : source_color = vec4(0.16, 0.42, 0.14, 1.0);
@@ -37,7 +40,7 @@ float noise(vec3 x) {
 float fbm(vec3 p) {
 	float v = 0.0;
 	float a = 0.5;
-	for (int i = 0; i < 5; i++) {
+	for (int i = 0; i < 3; i++) {  // few octaves = no fine detail (defocused)
 		v += a * noise(p);
 		p = p * 2.03 + vec3(1.7, 9.2, 3.1);
 		a *= 0.5;
@@ -53,14 +56,14 @@ void vertex() {
 void fragment() {
 	vec3 p = local_pos * detail_scale;
 	float h = fbm(p);
-	float land = smoothstep(sea_level, sea_level + 0.02, h);
-	float coast = smoothstep(sea_level - 0.08, sea_level, h) * (1.0 - land);
+	float land = smoothstep(sea_level - softness * 0.5, sea_level + softness * 0.5, h);
+	float coast = smoothstep(sea_level - softness * 1.5, sea_level, h) * (1.0 - land);
 	vec3 sea = mix(deep_sea.rgb, shallow_sea.rgb, coast);
 	vec3 ground = mix(lowland.rgb, highland.rgb, smoothstep(sea_level + 0.05, sea_level + 0.2, h));
 	vec3 col = mix(sea, ground, land);
 	// Drifting clouds
 	float c = fbm(p * 1.6 + vec3(TIME * 0.015, 0.0, TIME * 0.01));
-	float cloud = smoothstep(0.55, 0.72, c);
+	float cloud = smoothstep(0.5, 0.5 + softness * 2.5, c);
 	col = mix(col, vec3(0.95), cloud * 0.85);
 	ALBEDO = col;
 	ROUGHNESS = mix(0.35, 0.95, max(land, cloud));
