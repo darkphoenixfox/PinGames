@@ -123,8 +123,9 @@ static func make_charge_particles(ring_radius: float, color: Color) -> CPUPartic
 	p.scale_amount_curve = curve
 	var fade := Gradient.new()
 	fade.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
-	fade.colors = PackedColorArray([Color(color, 0.0), Color(color, 1.0), Color(1, 1, 1, 1)])
+	fade.colors = PackedColorArray([Color(1, 1, 1, 0.0), Color(1, 1, 1, 1.0), Color(1.2, 1.2, 1.2, 1.0)])
 	p.color_ramp = fade
+	p.color = color  # tint (set per charge level by the game)
 	var px := QuadMesh.new()
 	px.size = Vector2(0.07, 0.07)
 	var m := StandardMaterial3D.new()
@@ -133,7 +134,7 @@ static func make_charge_particles(ring_radius: float, color: Color) -> CPUPartic
 	m.vertex_color_use_as_albedo = true
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	m.albedo_color = Color(2.0, 2.0, 2.0, 1.0)  # HDR so the glow picks them up
+	m.albedo_color = Color(1.25, 1.25, 1.25, 1.0)  # mild HDR: glows but keeps its colour
 	px.material = m
 	p.mesh = px
 	return p
@@ -150,6 +151,19 @@ static func make_wormhole(size: float) -> MeshInstance3D:
 	m.material_override = mat
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return m
+
+
+## Recolours a plasma ball made by make_plasma_ball (core + halo + arcs).
+static func tint_plasma(ball: Node3D, color: Color) -> void:
+	var core := ball.get_child(0) as MeshInstance3D
+	var cm := core.material_override as StandardMaterial3D
+	cm.albedo_color = color.lerp(Color.WHITE, 0.6)
+	cm.emission = color.lerp(Color.WHITE, 0.5)
+	var halo := ball.get_child(1) as MeshInstance3D
+	var hm := halo.material_override as ShaderMaterial
+	hm.set_shader_parameter("core_color", color.lerp(Color.WHITE, 0.7))
+	hm.set_shader_parameter("halo_color", color)
+	hm.set_shader_parameter("arc_color", color.lerp(Color.WHITE, 0.3))
 
 
 ## Ribbon trail that follows a moving point. Call update(pos) every frame and

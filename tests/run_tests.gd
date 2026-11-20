@@ -265,37 +265,71 @@ func test_breakout_sim() -> void:
 	var after_dash: float = d.paddle_x
 	d.step(0.05, false, false, false, 1)
 	check(after_dash > 0.5 and d.events.filter(func(e): return e[0] == "dash").is_empty(), "dash + cooldown")
-	# Energy blast (D-051): hold both 1 s, release -> blast; costs 1/3; 3 per bar.
+	# Energy blast (D-051, D-054): 0.8 s per level, up to 3 levels, 1/3 power per
+	# level, only while the plasma is in play.
 	var bl = Sim.new()
 	bl.setup(3)
-	var tally := {"blast": 0, "blast_fail": 0, "hits": 0}
+	var tally := {"blast": 0, "blast_fail": 0, "levels": []}
 	var stepper := func(both: bool) -> void:
-		bl.step(1.0 / 60.0, both, both, false, 0)
+		if bl.state == Sim.State.SERVE and not both:
+			bl.step(1.0 / 60.0, false, false, true, 0)  # keep the plasma in play
+		else:
+			bl.step(1.0 / 60.0, both, both, false, 0)
 		for e in bl.events:
-			if e[0] == "blast" or e[0] == "blast_fail":
-				tally[e[0]] += 1
-			elif e[0] == "blast_end" and e[1][1] != -1:
-				tally.hits += 1
-	for shot in 4:
-		for k in 70:  # hold both ~1.17 s
-			stepper.call(true)
-		stepper.call(false)  # release
+			if e[0] == "blast":
+				tally.blast += 1
+				tally.levels.append(e[1][1])
+			elif e[0] == "blast_fail":
+				tally.blast_fail += 1
+	var serve_test = Sim.new()
+	serve_test.setup(3)
 	for k in 120:
+		serve_test.step(1.0 / 60.0, true, true, false, 0)
+	serve_test.step(1.0 / 60.0, false, false, false, 0)
+	check(serve_test.blasts.is_empty() and is_equal_approx(serve_test.power, 1.0), "no blast while waiting to fire the plasma")
+	stepper.call(false)  # fire the plasma
+	bl.freeze_ball = true
+	for shot in 3:  # three level-1 blasts (hold 0.9 s)
+		for k in 54:
+			stepper.call(true)
 		stepper.call(false)
-	check(tally.blast == 3, "full bar = 3 blasts (%d)" % tally.blast)
-	check(tally.blast_fail == 1, "4th blast fails on empty bar")
-	check(tally.hits == 3, "each blast hits one brick (%d)" % tally.hits)
-	check(bl.blasts.is_empty(), "blasts dissolve")
-	var p0: float = bl.power
+	check(tally.blast == 3 and tally.levels == [1, 1, 1], "three level-1 blasts (%s)" % [tally.levels])
+	for k in 54:
+		stepper.call(true)
+	stepper.call(false)
+	check(tally.blast == 3 and tally.blast_fail >= 1, "empty bar: no 4th blast, LOW POWER")
+	check(Sim.BLAST_CHARGE_TIME < 0.85, "charge time cut by 20%")
+	var lv = Sim.new()
+	lv.setup(3)
+	lv.step(1.0 / 60.0, false, false, true, 0)  # plasma in play
+	lv.freeze_ball = true  # the ship can't move while charging; keep the plasma safe
+	var reached: Array = []
+	for k in 60 * 3:
+		lv.step(1.0 / 60.0, true, true, false, 0)
+		for e in lv.events:
+			if e[0] == "charged":
+				reached.append(e[1])
+	check(reached == [1, 2, 3] and is_equal_approx(lv.blast_charge, 3.0), "charges through 3 levels (%s)" % [reached])
+	lv.step(1.0 / 60.0, false, false, false, 0)
+	check(lv.blasts.size() == 1 and lv.blasts[0].level == 3 and lv.power < 0.01, "level-3 blast spends the full bar")
+	var pierced := 0
+	for k in 120:
+		lv.step(1.0 / 60.0, false, false, false, 0)
+		pierced += lv.events.filter(func(e): return e[0] == "brick").size()
+	check(pierced >= 3, "level-3 blast pierces 3 bricks (%d)" % pierced)
+	var cap = Sim.new()
+	cap.setup(3)
+	cap.step(1.0 / 60.0, false, false, true, 0)
+	cap.freeze_ball = true
+	cap.power = 0.4  # only 1 level affordable (stays < 2/3 while recharging 3 s)
+	for k in 60 * 3:
+		cap.step(1.0 / 60.0, true, true, false, 0)
+	check(is_equal_approx(cap.blast_charge, 1.0), "charge capped by available power")
+	var p0: float = cap.power
+	cap.step(1.0 / 60.0, false, false, false, 0)
 	for k in 60 * 5:
-		bl.step(1.0 / 60.0, false, false, false, 0)
-	check(bl.power > p0 + 0.2 and bl.power < p0 + 0.4, "slow recharge after delay (%.2f -> %.2f)" % [p0, bl.power])
-	var short = Sim.new()
-	short.setup(3)
-	for k in 30:
-		short.step(1.0 / 60.0, true, true, false, 0)
-	short.step(1.0 / 60.0, false, false, false, 0)
-	check(short.blasts.is_empty() and is_equal_approx(short.power, 1.0), "short hold does not fire")
+		cap.step(1.0 / 60.0, false, false, false, 0)
+	check(cap.power > p0 - Sim.BLAST_COST + 0.2, "slow recharge after delay")
 	test_breakout_enemies(Sim)
 
 

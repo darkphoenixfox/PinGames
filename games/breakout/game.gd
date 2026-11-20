@@ -39,6 +39,9 @@ const FINALE_SKIP_AT := 2.6
 const FINALE_END_AT := 6.0
 ## Camera lean towards the player (0 = straight down) (D-040).
 const CAMERA_TILT_DEG := 20.0
+## Blast charge levels (D-054): particle/sphere/bolt colour and sphere size.
+const LEVEL_COLORS := [Color(0.35, 0.65, 1.0), Color(1.0, 0.85, 0.25), Color(1.0, 0.3, 0.2)]
+const LEVEL_SPHERE_SCALE := [0.5, 0.75, 1.0]
 ## Ship banking (visual only; the hitbox is always the sim's rectangle).
 const MAX_BANK_DEG := 18.0
 const BANK_RESPONSE := 10.0
@@ -87,15 +90,41 @@ const SOUNDS := {
 		 {"f": [1568.0, 1568.0], "t": 0.5, "w": "pulse25", "v": 0.22, "vib": [7.0, 0.3]}],
 		[{"f": [131.0, 131.0], "t": 0.32, "w": "triangle", "v": 0.35, "env": "hold"},
 		 {"f": [196.0, 196.0], "t": 0.5, "w": "triangle", "v": 0.35}]], "echo": ECHO},
-	"tb_charge": {"voices": [  # rising charge-up while both flippers are held
-		[{"f": [180.0, 900.0], "t": 1.0, "w": "pulse25", "v": 0.14, "vib": [14.0, 0.4], "env": "hold", "a": 0.05}],
-		[{"f": [90.0, 450.0], "t": 1.0, "w": "triangle", "v": 0.25, "env": "hold", "a": 0.05}]]},
-	"tb_charged": {"voices": [[{"f": [1760.0, 1760.0], "t": 0.25, "w": "triangle", "v": 0.35, "arp": [0, 12], "arp_rate": 30.0}]],
-		"echo": ECHO},
-	"tb_blast": {"voices": [  # big energy blast
-		[{"f": [1800.0, 140.0], "t": 0.4, "w": "saw", "v": 0.25, "lp": 0.2}],
+	# Charge-up per level (D-054): a rising sweep while charging towards level n...
+	"tb_charge1": {"voices": [
+		[{"f": [140.0, 330.0], "t": 0.8, "w": "pulse25", "v": 0.12, "vib": [12.0, 0.4], "env": "hold", "a": 0.05}],
+		[{"f": [70.0, 165.0], "t": 0.8, "w": "triangle", "v": 0.25, "env": "hold", "a": 0.05}]]},
+	"tb_charge2": {"voices": [
+		[{"f": [220.0, 520.0], "t": 0.8, "w": "pulse25", "v": 0.12, "vib": [15.0, 0.5], "env": "hold", "a": 0.05}],
+		[{"f": [110.0, 260.0], "t": 0.8, "w": "triangle", "v": 0.25, "env": "hold", "a": 0.05}]]},
+	"tb_charge3": {"voices": [
+		[{"f": [330.0, 780.0], "t": 0.8, "w": "pulse25", "v": 0.13, "vib": [18.0, 0.6], "env": "hold", "a": 0.05}],
+		[{"f": [165.0, 390.0], "t": 0.8, "w": "triangle", "v": 0.26, "env": "hold", "a": 0.05}]]},
+	# ...and a warm hum (not a beep) when level n is reached, deeper-to-higher.
+	"tb_level1": {"voices": [
+		[{"f": [110.0, 110.0], "t": 0.6, "w": "sine", "v": 0.45, "vib": [5.0, 0.15], "a": 0.08}],
+		[{"f": [220.0, 220.0], "t": 0.6, "w": "triangle", "v": 0.18, "vib": [5.0, 0.15], "a": 0.12, "lp": 0.5}]],
+		"echo": [0.1, 0.3, 0.5]},
+	"tb_level2": {"voices": [
+		[{"f": [147.0, 147.0], "t": 0.6, "w": "sine", "v": 0.45, "vib": [6.0, 0.18], "a": 0.08}],
+		[{"f": [294.0, 294.0], "t": 0.6, "w": "triangle", "v": 0.18, "vib": [6.0, 0.18], "a": 0.12, "lp": 0.5}]],
+		"echo": [0.1, 0.3, 0.5]},
+	"tb_level3": {"voices": [
+		[{"f": [196.0, 196.0], "t": 0.7, "w": "sine", "v": 0.48, "vib": [7.0, 0.22], "a": 0.08}],
+		[{"f": [392.0, 392.0], "t": 0.7, "w": "triangle", "v": 0.2, "vib": [7.0, 0.22], "a": 0.12, "lp": 0.5}],
+		[{"f": [98.0, 98.0], "t": 0.7, "w": "pulse25", "v": 0.06, "a": 0.15, "lp": 0.7}]],
+		"echo": [0.1, 0.35, 0.55]},
+	"tb_blast1": {"voices": [  # energy blast, level 1..3 (bigger each level)
+		[{"f": [1600.0, 220.0], "t": 0.3, "w": "saw", "v": 0.22, "lp": 0.25}],
+		[{"f": [120.0, 70.0], "t": 0.25, "w": "sine", "v": 0.35}]], "echo": ECHO},
+	"tb_blast2": {"voices": [
+		[{"f": [1800.0, 160.0], "t": 0.4, "w": "saw", "v": 0.25, "lp": 0.2}],
 		[{"f": [3200.0, 400.0], "t": 0.25, "w": "lfsr", "v": 0.15, "lp": 0.3}],
-		[{"f": [120.0, 60.0], "t": 0.3, "w": "sine", "v": 0.4}]], "echo": ECHO},
+		[{"f": [110.0, 55.0], "t": 0.35, "w": "sine", "v": 0.42}]], "echo": ECHO},
+	"tb_blast3": {"voices": [
+		[{"f": [2000.0, 90.0], "t": 0.6, "w": "saw", "v": 0.28, "lp": 0.15}],
+		[{"f": [4000.0, 300.0], "t": 0.4, "w": "lfsr", "v": 0.2, "lp": 0.25}],
+		[{"f": [100.0, 35.0], "t": 0.55, "w": "sine", "v": 0.5}]], "echo": [0.12, 0.4, 0.6]},
 	"tb_wormhole": {"voices": [  # warping teleport whoosh
 		[{"f": [180.0, 1300.0], "t": 1.1, "w": "sine", "v": 0.3, "vib": [9.0, 2.0], "env": "hold", "a": 0.25}],
 		[{"f": [90.0, 650.0], "t": 1.1, "w": "pulse25", "v": 0.07, "vib": [13.0, 1.0], "env": "hold", "a": 0.35}]],
@@ -136,6 +165,7 @@ var _enemy_nodes := {}  # enemy id -> {root, body, spin: Vector3, hole, colour: 
 var _circuit_textures: Array = []
 var _charge_glow: Node3D
 var _charge_particles: CPUParticles3D
+var _charge_level_shown := 0
 var _launch := false
 var _dash := 0
 var _dash_glow := 0.0
@@ -221,20 +251,21 @@ func _handle_events() -> void:
 				Audio.sfx("tb_dash")
 				_dash_glow = 1.0
 			"charge_start":
-				Audio.sfx("tb_charge")
+				Audio.sfx("tb_charge%d" % int(e[1]))
 			"charged":
-				Audio.sfx("tb_charged")
+				Audio.sfx("tb_level%d" % int(e[1]))
 			"blast":
-				Audio.sfx("tb_blast")
-				_recoil = 0.7
-				_spawn_blast_node()
+				var blevel: int = e[1][1]
+				Audio.sfx("tb_blast%d" % blevel)
+				_recoil = 0.5 + 0.25 * blevel
+				_spawn_blast_node(blevel)
 			"blast_fail":
 				Audio.sfx("tb_low_power")
 				Dmd.flash(tr("TB_LOW_POWER"), 1.0, Dmd.RED)
 			"blast_end":
 				var end_pos: Vector2 = e[1][0]
-				var colour := _row_glow(sim.bricks[e[1][1]].row) if e[1][1] != -1 else Color(0.5, 0.8, 1.0)
-				_explode_brick(Vector3(end_pos.x, 0.0, end_pos.y), colour)
+				var end_level: int = e[1][2]
+				_explode_brick(Vector3(end_pos.x, 0.0, end_pos.y), LEVEL_COLORS[end_level - 1], 0.8 + 0.3 * end_level)
 			"enemy_spawn":
 				_spawn_enemy_node(e[1][0], e[1][1])
 				Audio.sfx("tb_wormhole")
@@ -725,13 +756,18 @@ func _animate_enemies(delta: float) -> void:
 
 
 # --- energy blast visuals (D-051) -------------------------------------------------------
-func _spawn_blast_node() -> void:
+func _spawn_blast_node(level: int) -> void:
 	var m := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(Sim.BLAST_W * 2.4, Sim.BLAST_H * 2.2)
+	var grow := 0.85 + 0.25 * level
+	plane.size = Vector2(Sim.blast_width(level) * 2.4, Sim.BLAST_H * 2.2 * grow)
 	m.mesh = plane
 	var mat := ShaderMaterial.new()
 	mat.shader = BLAST_SHADER
+	var col: Color = LEVEL_COLORS[level - 1]
+	mat.set_shader_parameter("body_color", col)
+	mat.set_shader_parameter("edge_color", col.lerp(Color(0.7, 0.4, 1.0), 0.4))
+	mat.set_shader_parameter("intensity", 2.2 + 0.5 * level)
 	m.material_override = mat
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_root.add_child(m)
@@ -746,14 +782,26 @@ func _animate_blasts(_delta: float) -> void:
 		var p: Vector2 = sim.blasts[i].pos
 		# Nose leads: shift the drawn bolt so its tail trails behind the hitbox.
 		_blast_nodes[i].position = Vector3(p.x, 0.12, p.y + Sim.BLAST_H * 0.55)
-	# Charging (D-053): particles converge while charging; the ball shows once charged.
-	var charging := sim.blast_charge > 0.0 and sim.blast_charge < 1.0
-	var charged := sim.blast_charge >= 1.0
+	# Charging (D-053, D-054): particles in the colour of the level being charged
+	# converge in front of the nose; the sphere shows the level already reached
+	# (small blue, medium yellow, full-size red).
+	var reached := int(floor(sim.blast_charge + 0.0001))
+	var charging := sim.blast_charge > 0.0 or (sim.state == Sim.State.PLAY and CabinetInput.is_down(&"flip_l") \
+		and CabinetInput.is_down(&"flip_r"))
+	charging = charging and reached < mini(sim.affordable_level(), Sim.BLAST_MAX_LEVEL)
 	if _charge_particles.emitting != charging:
 		_charge_particles.emitting = charging
-	_charge_glow.visible = charged
-	if charged:
-		_charge_glow.scale = Vector3.ONE * (1.0 + 0.15 * sin(Time.get_ticks_msec() * 0.03))
+	if charging:
+		_charge_particles.color = LEVEL_COLORS[reached]
+	_charge_glow.visible = reached >= 1
+	if reached >= 1:
+		if _charge_level_shown != reached:
+			_charge_level_shown = reached
+			Fx.tint_plasma(_charge_glow, LEVEL_COLORS[reached - 1])
+		var pulse := 1.0 + 0.12 * sin(Time.get_ticks_msec() * 0.03)
+		_charge_glow.scale = Vector3.ONE * LEVEL_SPHERE_SCALE[reached - 1] * pulse
+	else:
+		_charge_level_shown = 0
 
 
 ## Backglass: title art only (status is on the DMD, D-051).

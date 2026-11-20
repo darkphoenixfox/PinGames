@@ -93,7 +93,7 @@ Rules:
 | Ship line / drain line | z = 5.9 / 7.3 | the plasma is lost once it passes the planet's horizon |
 | Paddle top speed / accel / stop | 11 / 70 / 90 per s | crosses the field in ~0.8 s |
 | Dash (magna save) | 26 u/s for 0.12 s, 0.6 s cooldown | |
-| Ball start / max speed | 8.5 → 15 u/s | +0.12 per paddle hit |
+| Ball start / max speed | 8.5 → 13.5 u/s | +0.25 per ship hit (max after about 20 returns, D-054) |
 | Paddle return angle | up to 60° from vertical | by hit position, plus a little paddle "english" |
 | Auto-serve | 6 s | the ball launches by itself if Launch isn't pressed |
 
@@ -110,7 +110,12 @@ Rules:
 - **Rebounds:** the ship's **energy shield** flashes in front of the hull, with a ripple from the impact point, and deflects the plasma back at the swarm.
 - **Lives** are the ship's **energy charges**. Losing one says "CHARGE LOST".
 - **Status only on the DMD (D-051):** big score, the remaining charges as plasma dots, and the blast power bar (3 cells). The TABLE has no HUD, and the backglass shows the title art.
-- **Energy blast (D-051):** hold **both flippers for 1 s**: glowing particles gather at a point in front of the ship, with a rising tone, and once charged the plasma ball appears there with a "ready" ping (D-053). Then release. The ship fires an energy bolt straight up. It hits the first brick in its path like one plasma hit, then dissolves (or dissolves at the top boundary). Each blast costs ⅓ of the power bar, so a full bar holds 3 blasts. Power starts recharging slowly 1 s after the last blast (full in about 15 s). Releasing with too little power gives a "LOW POWER" buzz. The ship can't move while charging.
+- **Energy blast (D-051, D-053, D-054):** only while the plasma is in play (not while waiting to fire it). Hold **both flippers** to charge in up to **3 levels**, 0.8 s each:
+  - **Level 1:** blue particles gather in front of the ship, then a small blue sphere appears.
+  - **Level 2:** yellow particles, then a medium yellow sphere.
+  - **Level 3:** red particles, then a full-size red sphere.
+
+  Each level plays a rising charge tone, then a warm **hum** when reached. Each level needs ⅓ of the power bar to be available, and charging stops at the highest level you can afford; with an empty bar you hear "LOW POWER". Releasing fires a bolt straight up in that level's colour: a level-n bolt is bigger and punches through up to **n** bricks or enemies (one plasma hit each) before dissolving, and it costs n/3 of the bar. Power recharges slowly from 1 s after the last blast (full in about 15 s). The ship can't move while charging.
 - **Sound (D-050):** 16-bit-era effects synthesized in code (pulse waves, LFSR noise, arpeggios, vibrato, SNES-style echo).
 - **Setting (D-043):** the ship is in orbit. The horizon of an **earth-like planet** runs across the bottom of the TABLE: so huge that its curve is barely visible, out of focus (soft, low-detail shading), with a glowing atmospheric rim and haze. It has oceans, continents and drifting clouds. Plasma that gets past the ship falls past the horizon: an **explosion sound**, a **fireball**, and the planet's surface **lights up where it would have hit**, with a shockwave spreading along the horizon. The ship sits higher to make room.
 - **Space (D-049):** a pixel-art starfield (three parallax layers of square stars that twinkle) fills the background. It swings around a pivot far below the screen as the ship moves, like the ship moving along its orbit. There are **no visible walls**: invisible boundaries sit a little inside the screen edges, and a rebound there flashes an energy shield (the same effect as the ship's) where the plasma hits.

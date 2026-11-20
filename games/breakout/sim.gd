@@ -25,8 +25,8 @@ const DASH_COOLDOWN := 0.6
 # --- ball ----------------------------------------------------------------------
 const BALL_R := 0.16
 const BALL_START_SPEED := 8.5
-const BALL_MAX_SPEED := 15.0
-const SPEEDUP_PER_PADDLE_HIT := 0.12
+const BALL_MAX_SPEED := 13.5          # reasonable cap, reached after ~20 returns
+const SPEEDUP_PER_PADDLE_HIT := 0.25  # noticeable speed-up per ship hit (D-054)
 const MIN_VERTICAL := 0.28
 const AUTO_SERVE_SECONDS := 6.0
 const MAX_SUBSTEP := 0.05  # world units per collision substep (no tunnelling)
@@ -39,8 +39,9 @@ const BRICK_GAP := 0.05
 const BRICK_POINTS := [120, 100, 80, 60, 50, 40]  # per row, top row first
 const RACK_BONUS := 1000
 # --- energy blast (D-051) ---------------------------------------------------------
-const BLAST_CHARGE_TIME := 1.0     # hold both flippers this long, then release
-const BLAST_COST := 1.0 / 3.0      # a full power bar = 3 blasts
+const BLAST_CHARGE_TIME := 0.8     # per charge level (director: -20%, D-054)
+const BLAST_MAX_LEVEL := 3         # levels 1..3, each needs one more power cell
+const BLAST_COST := 1.0 / 3.0      # per level; a full power bar = 3 levels
 const POWER_RECHARGE_DELAY := 1.0  # after the last blast
 const POWER_RECHARGE_RATE := 1.0 / 15.0  # per second (full bar in 15 s)
 const BLAST_SPEED := 20.0
@@ -79,14 +80,18 @@ var ball_pos := Vector2.ZERO
 var ball_vel := Vector2.ZERO
 var ball_speed := BALL_START_SPEED
 var _held_time := 0.0
+## Test hook: keeps the plasma in place (used by headless tests of long holds).
+var freeze_ball := false
 
-## Energy blast power 0..1 and the charge progress of the held flippers 0..1+.
+## Energy blast power 0..1 and the charge of the held flippers in levels
+## (0..BLAST_MAX_LEVEL, fractional while charging).
 var power := 1.0
 var blast_charge := 0.0
 var _since_blast := 99.0
 var _both_held := false
-## Live blasts: {pos: Vector2}. Each hits one brick (like a single plasma hit),
-## then dissolves; otherwise it dissolves at the top boundary.
+## Live blasts: {pos: Vector2, level: int, hits_left: int}. A level-n blast hits
+## up to n bricks/enemies (one plasma hit each), then dissolves; otherwise it
+## dissolves at the top boundary.
 var blasts: Array = []
 
 ## Tetrahedron enemies: {id, pos, state ("wormhole"|"sweep"|"orbit"), t, phase,
@@ -101,8 +106,9 @@ var bricks: Array = []
 ## Events produced by the last step(): [name, data]. Names: serve, paddle, wall,
 ## wall (data = [side "l"|"r"|"t", hit position]), brick (data = index),
 ## rack_clear, lost (data = x where the plasma left), over, dash,
-## charge_start, charged, blast (data = start pos), blast_fail (low power),
-## blast_end (data = [pos, brick index or -1]),
+## charge_start (data = level being charged), charged (data = level reached),
+## blast (data = [start pos, level]), blast_fail (low power),
+## blast_end (data = [pos, brick index or -1, level]),
 ## enemy_spawn (data = [id, pos]), enemy_ready (id),
 ## enemy_destroyed (data = [id, pos]), ship_destroyed (data = ship pos).
 var events: Array = []
@@ -155,6 +161,8 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 		if launch or _held_time >= AUTO_SERVE_SECONDS:
 			_serve()
 		return
+	if freeze_ball:
+		return
 	var dist := ball_vel.length() * dt
 	var n := maxi(1, ceili(dist / MAX_SUBSTEP))
 	var h := dt / n
@@ -163,58 +171,84 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 			break
 
 
-## Holding both flippers charges; releasing after BLAST_CHARGE_TIME fires a blast
-## if there is enough power. Power recharges slowly after a short delay.
+## Highest charge level the current power allows (0..BLAST_MAX_LEVEL).
+func affordable_level() -> int:
+	return clampi(int(floor(power / BLAST_COST + 0.0001)), 0, BLAST_MAX_LEVEL)
+
+
+## Holding both flippers charges level by level (BLAST_CHARGE_TIME each, up to
+## what the power bar allows); releasing fires the reached level. Only while the
+## plasma is in play (not while waiting to fire it). Power recharges slowly.
 func _update_power_and_blast(dt: float, both: bool) -> void:
 	_since_blast += dt
 	if _since_blast >= POWER_RECHARGE_DELAY:
 		power = minf(1.0, power + POWER_RECHARGE_RATE * dt)
-	if both:
+	var can_charge := state == State.PLAY
+	if both and can_charge:
+		var cap := affordable_level()
 		if not _both_held:
-			events.append(["charge_start", null])
-		var before := blast_charge
-		blast_charge += dt / BLAST_CHARGE_TIME
-		if before < 1.0 and blast_charge >= 1.0:
-			events.append(["charged", null])
-	elif _both_held:
-		if blast_charge >= 1.0:
-			if power >= BLAST_COST - 0.0001:
-				power -= BLAST_COST
-				_since_blast = 0.0
-				var start := Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BLAST_H * 0.5)
-				blasts.append({"pos": start})
-				events.append(["blast", start])
-			else:
+			if cap == 0:
 				events.append(["blast_fail", null])
+			else:
+				events.append(["charge_start", 1])
+		var before := blast_charge
+		blast_charge = minf(blast_charge + dt / BLAST_CHARGE_TIME, float(cap))
+		var reached := int(floor(blast_charge + 0.0001))
+		if reached > int(floor(before + 0.0001)):
+			events.append(["charged", reached])
+			if reached < cap:
+				events.append(["charge_start", reached + 1])
+	elif _both_held:
+		var level := int(floor(blast_charge + 0.0001))
+		if level >= 1 and can_charge:
+			power = maxf(0.0, power - BLAST_COST * level)
+			_since_blast = 0.0
+			var start := Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BLAST_H * 0.5)
+			blasts.append({"pos": start, "level": level, "hits_left": level})
+			events.append(["blast", [start, level]])
 		blast_charge = 0.0
-	_both_held = both
+	if not can_charge:
+		blast_charge = 0.0
+	_both_held = both and can_charge
 	# Move blasts and resolve their single hit.
 	for i in range(blasts.size() - 1, -1, -1):
 		var b: Dictionary = blasts[i]
 		var pos: Vector2 = b.pos
 		var travel := BLAST_SPEED * dt
 		var n := maxi(1, ceili(travel / MAX_SUBSTEP))
-		var hit := -1
+		var last_hit := -1
+		var done := false
+		var w := blast_width(int(b.level))
 		for k in n:
 			pos.y -= travel / n
-			var rect := Rect2(pos - Vector2(BLAST_W, BLAST_H) * 0.5, Vector2(BLAST_W, BLAST_H))
+			var rect := Rect2(pos - Vector2(w, BLAST_H) * 0.5, Vector2(w, BLAST_H))
+			# Each brick/enemy touched uses one hit; the blast pierces until spent.
 			var foe := _enemy_hit_by_rect(rect)
 			if foe != -1:
 				_destroy_enemy(foe)
-				hit = -2  # consumed by an enemy (not a brick)
-				break
-			for j in bricks.size():
-				if bricks[j].alive and rect.intersects(bricks[j].rect):
-					hit = j
-					break
-			if hit != -1 or pos.y - BLAST_H * 0.5 < FIELD.position.y:
+				b.hits_left -= 1
+				last_hit = -1
+			else:
+				for j in bricks.size():
+					if bricks[j].alive and rect.intersects(bricks[j].rect):
+						b.hits_left -= 1
+						last_hit = j
+						if _damage_brick(j):
+							done = true  # new rack: blasts were cleared
+						break
+			if done:
+				return
+			if b.hits_left <= 0 or pos.y - BLAST_H * 0.5 < FIELD.position.y:
 				break
 		b.pos = pos
-		if hit != -1 or pos.y - BLAST_H * 0.5 < FIELD.position.y:
+		if b.hits_left <= 0 or pos.y - BLAST_H * 0.5 < FIELD.position.y:
 			blasts.remove_at(i)
-			events.append(["blast_end", [pos, maxi(hit, -1)]])
-			if hit >= 0:
-				_damage_brick(hit)
+			events.append(["blast_end", [pos, last_hit, int(b.level)]])
+
+
+## Blast hitbox width by level (bigger blasts are wider).
+static func blast_width(level: int) -> float:
+	return BLAST_W * [0.75, 1.0, 1.3][clampi(level, 1, 3) - 1]
 
 
 ## One hit on a brick (plasma or blast). Returns true if a new rack was built.

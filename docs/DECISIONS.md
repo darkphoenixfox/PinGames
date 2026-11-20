@@ -522,3 +522,19 @@
   - **Tetrahedron:** `Sim.ENEMY_R` is 0.31 (it now fits through a single-brick gap). `make_tetrahedron` takes one texture, and the edge and explosion colours match it. The wormhole is scaled down to 1.7.
   - **Cap:** `ENEMY_MAX` stays at 2, unchanged.
 - **Status:** Accepted
+
+### D-054 — Three-level charged blast; no blasts before firing; faster ball speed-up
+- **Date:** 2026-11-20
+- **Decision (director):**
+  - Charge time is cut by 20%.
+  - The charge has up to 3 levels: blue particles, then a small blue sphere; yellow particles, then a medium yellow sphere; red particles, then a full-size red sphere. Each level takes the same time and has its own sounds, and enough power must be available for each level.
+  - The "level reached" sound is a hum, not a beep.
+  - No blasts while the plasma isn't in play.
+  - The ball speeds up slightly on every ship touch, up to a reasonable maximum.
+- **Implementation:**
+  - **Charging:** `BLAST_CHARGE_TIME` is 0.8 s per level. `blast_charge` is measured in levels, capped by `affordable_level()` (floor(power / ⅓)). The events are `charge_start(level)` and `charged(level)`. Charging and firing are only allowed in `State.PLAY`.
+  - **Firing:** level n costs n/3 power. **Assumed (director didn't specify):** a level-n blast pierces up to n bricks or enemies (`hits_left`), with hitbox width scaling 0.75/1.0/1.3 × `BLAST_W`, and a bigger, brighter bolt.
+  - **View:** particle tint per level (`CPUParticles3D.color`), with `Fx.tint_plasma` and the sphere scale 0.5/0.75/1.0 showing the reached level. Sounds: `tb_charge1-3` (rising sweeps), `tb_level1-3` (low sine/triangle hums with vibrato and echo, pitch rising by level) and `tb_blast1-3`.
+  - **Ball:** `SPEEDUP_PER_PADDLE_HIT` is 0.25 (was 0.12, too subtle) and `BALL_MAX_SPEED` is 13.5 (was 15).
+  - **Tests:** `Sim.freeze_ball` is a test hook so long charge holds don't drain the plasma.
+- **Status:** Accepted (blast-level effect is an assumption to confirm)
