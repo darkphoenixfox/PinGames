@@ -322,3 +322,8 @@
 - **Why:** The director's call. The director accepts the model licenses for the project. Claude flagged Hunyuan3D's territory restrictions in D-034, and they should be re-checked before any commercial release in excluded regions.
 - **Consequences:** Generation requests default to Qwen-Image for 2D, Hunyuan3D for models (alongside Meshy, D-020) and MiniMax H3 for video. Each asset's CREDITS.md row records the model, the workflow and the date.
 - **Status:** Accepted
+
+### D-036 — Hunyuan3D license restrictions accepted
+- **Date:** 2026-11-20
+- **Decision:** The director has reviewed Hunyuan3D's license restrictions (territory and conditions) and accepts them for PinGames. The re-check note in D-035 is closed.
+- **Status:** Accepted
