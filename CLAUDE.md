@@ -32,6 +32,8 @@ The Godot binary is at `C:\Users\Phoenixfox\Dev\Godot\Godot_v4.7.2-stable_win64_
 - A Control that anchors itself in `_ready()` must call `set_anchors_and_offsets_preset()`. `set_anchors_preset()` keeps its zero size.
 - `ConfigFile.get_value(section, key, null)` logs an error when the key is missing. Check `has_section_key` first.
 - Tests flag any ALL_CAPS_WITH_UNDERSCORE string literal that isn't a translation key, comments included.
+- Never store masks or data in PNG alpha. Godot's "fix alpha border" import bleeds colour into low-alpha pixels, so use a separate greyscale texture.
+- Don't name a class or inner class after a Godot built-in (e.g. `Engine`): it fails to parse.
 - Screenshot runs use the real `user://` data (settings and scores). Don't leave runs that save anything there.
 
 ## Commit and push

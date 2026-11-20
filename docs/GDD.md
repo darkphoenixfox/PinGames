@@ -66,10 +66,10 @@ Rules:
 **Controls**
 | Input | Action |
 |---|---|
-| Flippers (hold) | Move paddle left / right. Speed ramps up while held. |
-| Launch | Serve the ball; fire lasers when that power-up is active |
+| Flippers (hold) | Move the ship left / right. Speed ramps up while held. |
+| Launch | Fire the plasma shot; fire lasers when that power-up is active |
 | Both flippers | Release a caught ball (magnet power-up) |
-| Magna L/R (opt.) | Paddle dash: a quick burst in that direction |
+| Magna L/R (opt.) | Dash: a quick engine burst in that direction |
 
 **Mechanics**
 - 3 balls (operator setting). Extra balls at score thresholds.
@@ -98,9 +98,16 @@ Rules:
 
 **Camera:** orthographic, leaning 20° towards the player (D-040).
 
-**DMD:** score, ball count, "MULTIBALL!", power-up names, brick count left.
+**DMD:** score, charges, "MULTIBALL!", power-up names, brick count left.
 **Backglass:** world art, boss portrait and health bar, power-up legend.
-**Art direction [PROPOSAL]:** glossy neon. Bricks and paddle are cel-shaded 3D models with outlines, on animated sprite backgrounds.
+**Fiction and art direction (director, D-041):**
+- **The bricks** are a sentient, self-replicating alien race of nanomachines. Each brick is a 16-bit-style circuit board: substrate dither, coloured traces, gold pads and IC chips, each chip with a glowing "eye". LEDs and traces pulse in waves across the swarm. Destroyed bricks burst into glowing cubes. There are six colour families, one per row.
+- **The player** flies a spaceship (the paddle, `paddle.glb`).
+  - It **banks** up to about 18° when moving. The hitbox stays a fixed rectangle.
+  - **Blue flame particles** come from the side rocket engines, with the engine opposite the direction of travel thrusting harder. Dashes flare the engines.
+- **The ball** is a **plasma shot** fired from the ship with Launch. It has a white-hot core, a swirling halo, electric arcs and a fading trail. While waiting to fire it charges on the ship's nose.
+- **Rebounds:** the ship's **energy shield** flashes in front of the hull, with a ripple from the impact point, and deflects the plasma back at the swarm.
+- **Lives** are the ship's **energy charges** ("CHARGES", "CHARGE LOST").
 
 ### 5.2 SKY STRIKER — vertical shmup (TATE) (M3)
 **Genre feel:** a WWII-to-near-future air combat scrolling shooter. TATE is its natural format.

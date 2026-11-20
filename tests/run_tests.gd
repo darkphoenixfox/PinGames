@@ -22,6 +22,7 @@ func _initialize() -> void:
 	test_synth()
 	test_dot_font()
 	test_translation_keys()
+	test_all_scripts_compile()
 	test_ball_physics()
 	test_breakout_sim()
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -124,6 +125,16 @@ func test_translation_keys() -> void:
 		used["ACTION_" + String(a).to_upper()] = "CabinetInput.ACTIONS"
 	for key in used:
 		check(en.has(key), "missing translation key %s (%s)" % [key, used[key]])
+
+
+## Every script in the project must parse/compile (catches errors in scenes the
+## other tests never load, e.g. game modules).
+func test_all_scripts_compile() -> void:
+	for path in _gd_files("res://"):
+		if path.begins_with("res://tests/"):
+			continue
+		var s: Script = load(path)
+		check(s != null and s.can_instantiate(), "script compiles: %s" % path)
 
 
 func test_ball_physics() -> void:
