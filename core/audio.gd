@@ -7,16 +7,32 @@ const Synth = preload("res://core/util/synth.gd")
 const BUSES := ["Music", "SFX", "Callouts"]
 const POOL := 8
 
-## Built-in UI sounds: name -> synth segments (see core/util/synth.gd).
+## Built-in UI sounds, 16-bit style (D-050): name -> synth spec (core/util/synth.gd).
+const ECHO := [0.09, 0.32, 0.6]
 const UI_SOUNDS := {
-	"move": [[880.0, 880.0, 0.035, "square", 0.18]],
-	"select": [[660.0, 660.0, 0.05], [990.0, 990.0, 0.09]],
-	"back": [[660.0, 440.0, 0.1]],
-	"coin": [[988.0, 988.0, 0.07], [1319.0, 1319.0, 0.3]],
-	"error": [[160.0, 120.0, 0.25, "square", 0.3]],
-	"start": [[523.0, 523.0, 0.07], [659.0, 659.0, 0.07], [784.0, 784.0, 0.07], [1047.0, 1047.0, 0.2]],
-	"letter": [[1200.0, 1200.0, 0.03, "triangle", 0.3]],
-	"fanfare": [[784.0, 784.0, 0.1], [784.0, 784.0, 0.1], [1047.0, 1047.0, 0.12], [1319.0, 1319.0, 0.35]],
+	"move": {"voices": [[{"f": [1320.0, 1320.0], "t": 0.035, "w": "pulse12", "v": 0.2}]],
+		"echo": [0.06, 0.25, 0.5]},
+	"select": {"voices": [[{"f": [880.0, 880.0], "t": 0.14, "w": "pulse25", "v": 0.22, "arp": [0, 7, 12], "arp_rate": 28.0}]],
+		"echo": ECHO},
+	"back": {"voices": [[{"f": [880.0, 440.0], "t": 0.12, "w": "pulse25", "v": 0.22}]], "echo": [0.07, 0.25, 0.5]},
+	"coin": {"voices": [[{"f": [988.0, 988.0], "t": 0.07, "w": "square", "v": 0.22, "env": "hold"},
+		{"f": [1319.0, 1319.0], "t": 0.45, "w": "square", "v": 0.22}]], "echo": ECHO},
+	"error": {"voices": [[{"f": [140.0, 120.0], "t": 0.28, "w": "saw", "v": 0.3, "vib": [18.0, 0.6], "lp": 0.3, "env": "lin"}]]},
+	"start": {"voices": [
+		[{"f": [523.0, 523.0], "t": 0.07, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [659.0, 659.0], "t": 0.07, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [784.0, 784.0], "t": 0.07, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [1047.0, 1047.0], "t": 0.4, "w": "pulse25", "v": 0.22, "vib": [6.0, 0.25]}],
+		[{"f": [131.0, 131.0], "t": 0.21, "w": "triangle", "v": 0.35, "env": "hold"},
+		 {"f": [262.0, 262.0], "t": 0.4, "w": "triangle", "v": 0.35}]], "echo": ECHO},
+	"letter": {"voices": [[{"f": [1568.0, 1568.0], "t": 0.035, "w": "triangle", "v": 0.35}]]},
+	"fanfare": {"voices": [
+		[{"f": [784.0, 784.0], "t": 0.1, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [784.0, 784.0], "t": 0.1, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [1047.0, 1047.0], "t": 0.12, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [1319.0, 1319.0], "t": 0.6, "w": "pulse25", "v": 0.22, "vib": [6.0, 0.3]}],
+		[{"f": [196.0, 196.0], "t": 0.2, "w": "triangle", "v": 0.35, "env": "hold"},
+		 {"f": [262.0, 262.0], "t": 0.72, "w": "triangle", "v": 0.35}]], "echo": ECHO},
 }
 
 ## Shared music (D-033). Game-specific tracks live in each game module.

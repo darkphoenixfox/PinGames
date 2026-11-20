@@ -68,7 +68,7 @@ Rules:
 |---|---|
 | Flippers (hold) | Move the ship left / right. Speed ramps up while held. |
 | Launch (or Start) | Fire the plasma shot; fire lasers when that power-up is active |
-| Both flippers | Release a caught ball (magnet power-up) |
+| Both flippers (hold 1 s, release) | Energy blast straight up (costs ⅓ power); also releases a caught ball (magnet power-up) |
 | Magna L/R (opt.) | Dash: a quick engine burst in that direction |
 
 **Mechanics**
@@ -108,7 +108,10 @@ Rules:
   - The side engines are **afterburners** (D-042). Both are off at rest. While moving, only the trailing one burns: a cone of blue flame, white-hot at the nozzle and tapering to a point, that grows with speed and flares on a dash.
 - **The ball** is a **plasma shot**. It is invisible until fired. Launch or Start fires it from the ship, with a firing sound, a muzzle flash and a recoil kick and shake of the ship (D-042). In flight it has a white-hot core, a swirling halo, electric arcs and a fading trail.
 - **Rebounds:** the ship's **energy shield** flashes in front of the hull, with a ripple from the impact point, and deflects the plasma back at the swarm.
-- **Lives** are the ship's **energy charges**. They show as **plasma-ball icons** at the top right of the TABLE (a used charge becomes a faint ring). The DMD and backglass show "CHARGES n", and losing one says "CHARGE LOST" (D-047).
+- **Lives** are the ship's **energy charges**. Losing one says "CHARGE LOST".
+- **Status only on the DMD (D-051):** big score, the remaining charges as plasma dots, and the blast power bar (3 cells). The TABLE has no HUD, and the backglass shows the title art.
+- **Energy blast (D-051):** hold **both flippers for 1 s** (a charge glow grows on the nose, with a rising tone and a "ready" ping), then release. The ship fires an energy bolt straight up. It hits the first brick in its path like one plasma hit, then dissolves (or dissolves at the top boundary). Each blast costs ⅓ of the power bar, so a full bar holds 3 blasts. Power starts recharging slowly 1 s after the last blast (full in about 15 s). Releasing with too little power gives a "LOW POWER" buzz. The ship can't move while charging.
+- **Sound (D-050):** 16-bit-era effects synthesized in code (pulse waves, LFSR noise, arpeggios, vibrato, SNES-style echo).
 - **Setting (D-043):** the ship is in orbit. The horizon of an **earth-like planet** runs across the bottom of the TABLE: so huge that its curve is barely visible, out of focus (soft, low-detail shading), with a glowing atmospheric rim and haze. It has oceans, continents and drifting clouds. Plasma that gets past the ship falls past the horizon: an **explosion sound**, a **fireball**, and the planet's surface **lights up where it would have hit**, with a shockwave spreading along the horizon. The ship sits higher to make room.
 - **Space (D-049):** a pixel-art starfield (three parallax layers of square stars that twinkle) fills the background. It swings around a pivot far below the screen as the ship moves, like the ship moving along its orbit. There are **no visible walls**: invisible boundaries sit a little inside the screen edges, and a rebound there flashes an energy shield (the same effect as the ship's) where the plasma hits.
 - **Game over (D-044):** when the last charge is lost, the explosion grows until it fills the whole screen, with a bigger, longer blast. The screen fades to black, then **GAME OVER** and the **final score** show on the TABLE, DMD and backglass. After about 4 s (or Launch/Start to skip) the game goes to high-score entry or back to the picker.

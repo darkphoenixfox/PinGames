@@ -194,6 +194,37 @@ func test_breakout_sim() -> void:
 	var after_dash: float = d.paddle_x
 	d.step(0.05, false, false, false, 1)
 	check(after_dash > 0.5 and d.events.filter(func(e): return e[0] == "dash").is_empty(), "dash + cooldown")
+	# Energy blast (D-051): hold both 1 s, release -> blast; costs 1/3; 3 per bar.
+	var bl = Sim.new()
+	bl.setup(3)
+	var tally := {"blast": 0, "blast_fail": 0, "hits": 0}
+	var stepper := func(both: bool) -> void:
+		bl.step(1.0 / 60.0, both, both, false, 0)
+		for e in bl.events:
+			if e[0] == "blast" or e[0] == "blast_fail":
+				tally[e[0]] += 1
+			elif e[0] == "blast_end" and e[1][1] != -1:
+				tally.hits += 1
+	for shot in 4:
+		for k in 70:  # hold both ~1.17 s
+			stepper.call(true)
+		stepper.call(false)  # release
+	for k in 120:
+		stepper.call(false)
+	check(tally.blast == 3, "full bar = 3 blasts (%d)" % tally.blast)
+	check(tally.blast_fail == 1, "4th blast fails on empty bar")
+	check(tally.hits == 3, "each blast hits one brick (%d)" % tally.hits)
+	check(bl.blasts.is_empty(), "blasts dissolve")
+	var p0: float = bl.power
+	for k in 60 * 5:
+		bl.step(1.0 / 60.0, false, false, false, 0)
+	check(bl.power > p0 + 0.2 and bl.power < p0 + 0.4, "slow recharge after delay (%.2f -> %.2f)" % [p0, bl.power])
+	var short = Sim.new()
+	short.setup(3)
+	for k in 30:
+		short.step(1.0 / 60.0, true, true, false, 0)
+	short.step(1.0 / 60.0, false, false, false, 0)
+	check(short.blasts.is_empty() and is_equal_approx(short.power, 1.0), "short hold does not fire")
 
 
 func _gd_files(dir: String) -> Array[String]:

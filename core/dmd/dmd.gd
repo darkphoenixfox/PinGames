@@ -92,6 +92,19 @@ func show_score(score: int, left: String = "", right: String = "", score_color: 
 		_elements.append(_el(right, y, _unit, "right", DIM))
 
 
+## Game status for games that keep the TABLE clean (D-051): big score on top;
+## bottom row = `lives` plasma dots (out of `max_lives`, spent ones dim) on the
+## left, and a segmented power bar (0..1, `segments` cells) on the right.
+func show_status(score: int, lives: int, max_lives: int, power: float, segments: int = 3,
+		score_color: Variant = null, power_color: Variant = null) -> void:
+	show_score(score, "", "", score_color)
+	var y := size.y - 7 * _unit
+	_elements.append({"type": "lives", "y": y, "lives": lives, "max": max_lives,
+		"color": CYAN})
+	_elements.append({"type": "bar", "y": y + _unit, "value": clampf(power, 0.0, 1.0),
+		"segments": segments, "color": power_color if power_color != null else YELLOW})
+
+
 ## Temporary blinking callout over whatever is shown (e.g. "MULTIBALL!").
 func flash(text: String, duration: float = 1.5, flash_color: Variant = null) -> void:
 	var c: Color = flash_color if flash_color != null else YELLOW
@@ -127,6 +140,13 @@ func _on_draw() -> void:
 			return  # blink off-phase
 		list = _overlay
 	for el in list:
+		match el.get("type", "text"):
+			"lives":
+				_draw_lives(el)
+				continue
+			"bar":
+				_draw_bar(el)
+				continue
 		var w := DotFont.measure(el.text, el.scale)
 		var x := 0.0
 		if w > size.x - 4:
@@ -141,3 +161,49 @@ func _on_draw() -> void:
 				_:
 					x = floorf((size.x - w) / 2.0)
 		DotFont.draw(_canvas, el.text, Vector2(x, el.y), el.scale, el.color)
+
+
+## Plasma-ball dots: 5x5 rounded pixels with a white core (spent = dim outline).
+func _draw_lives(el: Dictionary) -> void:
+	var u := _unit
+	const DOT := ["01110", "11111", "11111", "11111", "01110"]
+	for i in int(el.max):
+		var x0 := 2 * u + i * 7 * u
+		var alive := i < int(el.lives)
+		for r in 5:
+			for c in 5:
+				if DOT[r][c] == "0":
+					continue
+				var edge := r == 0 or r == 4 or c == 0 or c == 4
+				var col: Color
+				if alive:
+					col = Color.WHITE if (r == 2 and c == 2) else el.color
+				else:
+					if not edge:
+						continue
+					col = el.color * 0.35
+				_canvas.draw_rect(Rect2(x0 + c * u, el.y + r * u, u, u), col)
+
+
+## Segmented power bar anchored to the right edge; the partly filled cell blinks
+## while recharging.
+func _draw_bar(el: Dictionary) -> void:
+	var u := _unit
+	var segs := int(el.segments)
+	var cell_w := 12 * u
+	var gap := 2 * u
+	var h := 4 * u
+	var total := segs * cell_w + (segs - 1) * gap
+	var x0 := size.x - 2 * u - total
+	var filled: float = float(el.value) * segs
+	for i in segs:
+		var x := x0 + i * (cell_w + gap)
+		var r := Rect2(x, el.y, cell_w, h)
+		_canvas.draw_rect(r, el.color * 0.25)  # empty cell
+		var f := clampf(filled - i, 0.0, 1.0)
+		if f >= 1.0:
+			_canvas.draw_rect(r, el.color)
+		elif f > 0.0:
+			var w := floorf(cell_w * f / u) * u
+			var c: Color = el.color * (0.55 if fmod(_time, 0.6) < 0.3 else 0.8)
+			_canvas.draw_rect(Rect2(x, el.y, w, h), c)

@@ -462,3 +462,28 @@
   - **Boundaries:** `Sim.FIELD` is now (-4.1, -7.1, 8.2, 15.1), 0.4 inside the 9-unit screen. `wall` events carry `[side, hit]`. Each side has a flat shield strip using `shield.gdshader`, with the ripple at the hit point. The wall boxes and the `tb_wall` sound were removed.
   - **Dev:** `--tb-show-shields` keeps the edge shields lit, for visual checks.
 - **Status:** Accepted
+
+### D-050 — 16-bit era sound effects, synthesized
+- **Date:** 2026-11-20
+- **Decision (director):** better, 16-bit-era sound effects.
+- **Implementation:** `core/util/synth.gd` was rewritten. It renders at 32 kHz (SNES rate) and supports:
+  - **waves:** square, 25 % and 12.5 % pulse, triangle, saw, sine, white noise, NES-style 15-bit LFSR noise;
+  - **segments:** exponential pitch glide, arpeggios, vibrato, attack plus exp/lin/hold envelopes, one-pole low-pass;
+  - **sound level:** layered voices, SNES-style feedback echo, bit-crushing, soft clipping.
+
+  Sounds are cached per spec. All UI sounds (`Audio.UI_SOUNDS`) and Tilt Breaker sounds were redesigned. The legacy array format still works.
+- **Why synthesize rather than download:** no licence tracking (D-032), a consistent sound across the bundle, and easy tweaking.
+- **Status:** Accepted
+
+### D-051 — Tilt Breaker energy blast, power bar, status only on the DMD (supersedes D-047's TABLE icons)
+- **Date:** 2026-11-20
+- **Decision (director):**
+  - Holding L+R for 1 s and then releasing fires a blast straight up. It counts as one hit on a brick, then dissolves.
+  - Each blast uses energy from a power bar. A full bar holds 3 shots, and recharging starts slowly 1 s after the last shot.
+  - Lives, score and remaining power are shown only on the DMD.
+- **Implementation:**
+  - **Sim** (`sim.gd`, tested): `power`, `blast_charge` and `blasts`, plus the events `charge_start`, `charged`, `blast`, `blast_fail` and `blast_end`. Recharge runs at 1/15 per second after a 1 s delay. Brick damage is shared through `_damage_brick()`.
+  - **DMD:** `Dmd.show_status()` draws a big score, life dots (5×5 plasma pixels) and a segmented power bar; the partly charged cell blinks.
+  - **Visuals:** `blast.gdshader` bolt, a nose charge glow (a small plasma ball), recoil on firing, and a pixel explosion where the blast ends.
+  - **Removed:** the TABLE HUD and the backglass score and charges.
+- **Status:** Accepted

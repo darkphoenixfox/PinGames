@@ -15,7 +15,7 @@ const ScoreTable = preload("res://core/util/score_table.gd")
 const BRICK_SHADER = preload("res://games/breakout/shaders/brick_circuit.gdshader")
 const SHIELD_SHADER = preload("res://games/breakout/shaders/shield.gdshader")
 const EXPLOSION_SHADER = preload("res://games/breakout/shaders/pixel_explosion.gdshader")
-const LIFE_ICON_SHADER = preload("res://games/breakout/shaders/plasma_icon.gdshader")
+const BLAST_SHADER = preload("res://games/breakout/shaders/blast.gdshader")
 const STARFIELD_SHADER = preload("res://games/breakout/shaders/starfield.gdshader")
 
 const ACCENT := Color("3ec7ff")
@@ -58,14 +58,46 @@ const STAR_SPIN_PER_SPEED := 0.006
 const STAR_SPIN_RESPONSE := 3.0
 const STAR_DRIFT := 0.004
 
+## 16-bit style sound effects (D-050), synthesized by core/util/synth.gd.
+const ECHO := [0.085, 0.3, 0.55]
 const SOUNDS := {
-	"tb_shield": [[520.0, 900.0, 0.06, "triangle", 0.3], [900.0, 700.0, 0.05, "noise", 0.08]],
-	"tb_brick": [[880.0, 1320.0, 0.05, "square", 0.18], [1400.0, 300.0, 0.08, "noise", 0.12]],
-	"tb_explode": [[900.0, 60.0, 0.9, "noise", 0.45]],
-	"tb_explode_big": [[1400.0, 40.0, 0.4, "noise", 0.6], [500.0, 25.0, 1.8, "noise", 0.55]],
-	"tb_dash": [[200.0, 900.0, 0.08, "noise", 0.15]],
-	"tb_fire": [[1600.0, 300.0, 0.18, "square", 0.22], [600.0, 200.0, 0.12, "noise", 0.12]],
-	"tb_rack": [[523.0, 523.0, 0.08], [784.0, 784.0, 0.08], [1047.0, 1047.0, 0.08], [1568.0, 1568.0, 0.3]],
+	"tb_fire": {"voices": [  # plasma shot: laser zap + breathy burst
+		[{"f": [2400.0, 260.0], "t": 0.22, "w": "pulse12", "v": 0.22}],
+		[{"f": [3000.0, 600.0], "t": 0.1, "w": "noise", "v": 0.12, "lp": 0.4}]], "echo": ECHO},
+	"tb_shield": {"voices": [  # energy shield "bwong"
+		[{"f": [330.0, 880.0], "t": 0.14, "w": "triangle", "v": 0.4, "vib": [30.0, 0.5]}],
+		[{"f": [1760.0, 1760.0], "t": 0.1, "w": "pulse25", "v": 0.08, "arp": [0, 12, 7], "arp_rate": 40.0}]],
+		"echo": [0.06, 0.25, 0.5]},
+	"tb_brick": {"voices": [  # crunchy chip break
+		[{"f": [5000.0, 700.0], "t": 0.13, "w": "lfsr", "v": 0.2}],
+		[{"f": [880.0, 1760.0], "t": 0.05, "w": "square", "v": 0.14}]], "crush": 8},
+	"tb_explode": {"voices": [
+		[{"f": [1600.0, 70.0], "t": 0.9, "w": "lfsr", "v": 0.4, "lp": 0.55}],
+		[{"f": [90.0, 30.0], "t": 0.6, "w": "sine", "v": 0.5}]], "echo": [0.11, 0.3, 0.5]},
+	"tb_explode_big": {"voices": [
+		[{"f": [2200.0, 40.0], "t": 2.0, "w": "lfsr", "v": 0.45, "lp": 0.6, "env": "lin"}],
+		[{"f": [110.0, 25.0], "t": 1.6, "w": "sine", "v": 0.6}],
+		[{"f": [600.0, 50.0], "t": 1.2, "w": "noise", "v": 0.2, "lp": 0.8}]], "echo": [0.14, 0.4, 0.6]},
+	"tb_dash": {"voices": [[{"f": [400.0, 3000.0], "t": 0.14, "w": "noise", "v": 0.18, "lp": 0.5, "env": "lin"}]]},
+	"tb_rack": {"voices": [  # victory jingle
+		[{"f": [523.0, 523.0], "t": 0.08, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [659.0, 659.0], "t": 0.08, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [784.0, 784.0], "t": 0.08, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [1047.0, 1047.0], "t": 0.08, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [1568.0, 1568.0], "t": 0.5, "w": "pulse25", "v": 0.22, "vib": [7.0, 0.3]}],
+		[{"f": [131.0, 131.0], "t": 0.32, "w": "triangle", "v": 0.35, "env": "hold"},
+		 {"f": [196.0, 196.0], "t": 0.5, "w": "triangle", "v": 0.35}]], "echo": ECHO},
+	"tb_charge": {"voices": [  # rising charge-up while both flippers are held
+		[{"f": [180.0, 900.0], "t": 1.0, "w": "pulse25", "v": 0.14, "vib": [14.0, 0.4], "env": "hold", "a": 0.05}],
+		[{"f": [90.0, 450.0], "t": 1.0, "w": "triangle", "v": 0.25, "env": "hold", "a": 0.05}]]},
+	"tb_charged": {"voices": [[{"f": [1760.0, 1760.0], "t": 0.25, "w": "triangle", "v": 0.35, "arp": [0, 12], "arp_rate": 30.0}]],
+		"echo": ECHO},
+	"tb_blast": {"voices": [  # big energy blast
+		[{"f": [1800.0, 140.0], "t": 0.4, "w": "saw", "v": 0.25, "lp": 0.2}],
+		[{"f": [3200.0, 400.0], "t": 0.25, "w": "lfsr", "v": 0.15, "lp": 0.3}],
+		[{"f": [120.0, 60.0], "t": 0.3, "w": "sine", "v": 0.4}]], "echo": ECHO},
+	"tb_low_power": {"voices": [[{"f": [220.0, 220.0], "t": 0.08, "w": "pulse25", "v": 0.2, "env": "hold", "gap": 0.04},
+		{"f": [165.0, 165.0], "t": 0.16, "w": "pulse25", "v": 0.2}]]},
 }
 
 var sim: Sim
@@ -86,11 +118,9 @@ var _halo: MeshInstance3D
 var _trail: Fx.Trail
 var _brick_nodes: Array[MeshInstance3D] = []
 var _brick_mats := {}  # colour -> ShaderMaterial
-var _life_icons: Array[ColorRect] = []
-var _hud_score: Label
 var _hint: Label
-var _bg_score: Label
-var _bg_charges: Label
+var _blast_nodes: Array[Node3D] = []
+var _charge_glow: Node3D
 var _launch := false
 var _dash := 0
 var _dash_glow := 0.0
@@ -173,6 +203,21 @@ func _handle_events() -> void:
 			"dash":
 				Audio.sfx("tb_dash")
 				_dash_glow = 1.0
+			"charge_start":
+				Audio.sfx("tb_charge")
+			"charged":
+				Audio.sfx("tb_charged")
+			"blast":
+				Audio.sfx("tb_blast")
+				_recoil = 0.7
+				_spawn_blast_node()
+			"blast_fail":
+				Audio.sfx("tb_low_power")
+				Dmd.flash(tr("TB_LOW_POWER"), 1.0, Dmd.RED)
+			"blast_end":
+				var end_pos: Vector2 = e[1][0]
+				var colour := _row_glow(sim.bricks[e[1][1]].row) if e[1][1] != -1 else Color(0.5, 0.8, 1.0)
+				_explode_brick(Vector3(end_pos.x, 0.0, end_pos.y), colour)
 			"rack_clear":
 				Audio.sfx("tb_rack")
 				Dmd.flash(tr("DMD_RACK_CLEAR"), 2.0, Dmd.GREEN)
@@ -197,16 +242,15 @@ func _handle_events() -> void:
 		_refresh_status()
 
 
+## Score, lives (plasma dots) and blast power are shown only on the DMD (D-051).
 func _refresh_status() -> void:
-	_shown_score = sim.score
-	score_changed.emit(0, sim.score)
-	var score_txt := ScoreTable.format_score(sim.score)
-	var charges := tr("TB_CHARGES") % sim.balls_left
-	_hud_score.text = score_txt
-	_update_life_icons()
-	_bg_score.text = score_txt
-	_bg_charges.text = charges
-	Dmd.show_score(sim.score, tr("DMD_PLAYER_1"), charges, ACCENT)
+	if _shown_score != sim.score:
+		_shown_score = sim.score
+		score_changed.emit(0, sim.score)
+	if _finale_t >= 0.0:
+		return  # the finale owns the DMD
+	Dmd.show_status(sim.score, sim.balls_left, int(Config.get_value("operator", "balls_per_game")),
+		sim.power, 3, ACCENT)
 
 
 # --- game-over finale (D-044) -----------------------------------------------------------
@@ -228,8 +272,6 @@ func _finale(delta: float) -> void:
 		add_to_table(col)
 		col.create_tween().tween_property(col, "modulate:a", 1.0, 0.5)
 		_finale_text = col
-		_bg_score.text = tr("DMD_GAME_OVER")
-		_bg_charges.text = ScoreTable.format_score(sim.score)
 		Dmd.show_text(tr("DMD_GAME_OVER"), ScoreTable.format_score(sim.score), Dmd.RED, Dmd.YELLOW)
 	if _finale_t >= FINALE_END_AT:
 		_finale_t = -1.0
@@ -250,6 +292,8 @@ func _animate(delta: float) -> void:
 	var burn := absf(push) + _dash_glow * 0.6
 	_engines[0].set_thrust(burn if push > 0.0 else 0.0)
 	_engines[1].set_thrust(burn if push < 0.0 else 0.0)
+	_refresh_status()  # DMD power bar changes continuously
+	_animate_blasts(delta)
 	# Edge shields (dev: --tb-show-shields keeps them lit mid-ripple for checks)
 	for side in _edge_shields:
 		var sh: Dictionary = _edge_shields[side]
@@ -439,6 +483,11 @@ func _build_ship(fallback_mat: Material) -> void:
 	shield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	shield.position = Vector3(0.0, 0.08, -Sim.PADDLE_H * 0.5 - 0.2)
 	_ship.add_child(shield)
+	# Blast charge glow on the nose (hidden unless both flippers are held).
+	_charge_glow = Fx.make_plasma_ball(Sim.BALL_R * 1.4)
+	_charge_glow.position = Vector3(0.0, 0.1, -Sim.PADDLE_H * 0.5 - 0.15)
+	_charge_glow.visible = false
+	_ship.add_child(_charge_glow)
 	# A soft blue key light so the white hull reads under the darker scene.
 	var key := OmniLight3D.new()
 	key.light_color = Color(0.7, 0.85, 1.0)
@@ -558,30 +607,8 @@ func _box(size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
 
 
 # --- 2D overlays ---------------------------------------------------------------------
+## The TABLE stays clean: status lives on the DMD (D-051); only the fire hint here.
 func _build_hud() -> void:
-	var bar := HBoxContainer.new()
-	bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	bar.offset_left = 40
-	bar.offset_right = -40
-	bar.offset_top = 14
-	add_to_table(bar)
-	_hud_score = UI.label("0", 56, UI.YELLOW, HORIZONTAL_ALIGNMENT_LEFT)
-	_hud_score.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.add_child(_hud_score)
-	# Lives = plasma charges, shown as plasma-ball icons (D-047).
-	var icons := HBoxContainer.new()
-	icons.add_theme_constant_override("separation", 6)
-	bar.add_child(icons)
-	_life_icons.clear()
-	for i in maxi(sim.balls_left, 1):
-		var icon := ColorRect.new()
-		icon.custom_minimum_size = Vector2(64, 64)
-		var im := ShaderMaterial.new()
-		im.shader = LIFE_ICON_SHADER
-		im.set_shader_parameter("time_offset", i * 0.7)
-		icon.material = im
-		icons.add_child(icon)
-		_life_icons.append(icon)
 	_hint = UI.label(tr("TB_PRESS_LAUNCH"), 52, UI.WHITE)
 	_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_hint.offset_top = -560
@@ -590,17 +617,40 @@ func _build_hud() -> void:
 	add_to_table(_hint)
 
 
-func _update_life_icons() -> void:
-	for i in _life_icons.size():
-		(_life_icons[i].material as ShaderMaterial).set_shader_parameter("spent", 0.0 if i < sim.balls_left else 1.0)
+# --- energy blast visuals (D-051) -------------------------------------------------------
+func _spawn_blast_node() -> void:
+	var m := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(Sim.BLAST_W * 2.4, Sim.BLAST_H * 2.2)
+	m.mesh = plane
+	var mat := ShaderMaterial.new()
+	mat.shader = BLAST_SHADER
+	m.material_override = mat
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_root.add_child(m)
+	_blast_nodes.append(m)
 
 
+func _animate_blasts(_delta: float) -> void:
+	# One node per live sim blast; finished blasts are removed from the front.
+	while _blast_nodes.size() > sim.blasts.size():
+		_blast_nodes.pop_front().queue_free()
+	for i in sim.blasts.size():
+		var p: Vector2 = sim.blasts[i].pos
+		# Nose leads: shift the drawn bolt so its tail trails behind the hitbox.
+		_blast_nodes[i].position = Vector3(p.x, 0.12, p.y + Sim.BLAST_H * 0.55)
+	# Charge glow on the ship's nose while both flippers are held.
+	var c := clampf(sim.blast_charge, 0.0, 1.0)
+	_charge_glow.visible = c > 0.0
+	if c > 0.0:
+		var ready := sim.blast_charge >= 1.0
+		var pulse := 1.0 + (0.15 * sin(Time.get_ticks_msec() * 0.03) if ready else 0.0)
+		_charge_glow.scale = Vector3.ONE * (0.3 + 0.7 * c) * pulse
+
+
+## Backglass: title art only (status is on the DMD, D-051).
 func _build_backglass() -> void:
 	add_to_backglass(UI.fill(ACCENT.darkened(0.85)))
 	var col := UI.vstack(30)
 	add_to_backglass(col)
-	col.add_child(UI.label(tr("GAME_BREAKOUT_TITLE"), 150, ACCENT))
-	_bg_score = UI.label("0", 130, UI.YELLOW)
-	col.add_child(_bg_score)
-	_bg_charges = UI.label("", 64, UI.CYAN)
-	col.add_child(_bg_charges)
+	col.add_child(UI.label(tr("GAME_BREAKOUT_TITLE"), 170, ACCENT))

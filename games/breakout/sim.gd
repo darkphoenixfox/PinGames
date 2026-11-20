@@ -38,6 +38,14 @@ const BRICK_H := 0.4
 const BRICK_GAP := 0.05
 const BRICK_POINTS := [120, 100, 80, 60, 50, 40]  # per row, top row first
 const RACK_BONUS := 1000
+# --- energy blast (D-051) ---------------------------------------------------------
+const BLAST_CHARGE_TIME := 1.0     # hold both flippers this long, then release
+const BLAST_COST := 1.0 / 3.0      # a full power bar = 3 blasts
+const POWER_RECHARGE_DELAY := 1.0  # after the last blast
+const POWER_RECHARGE_RATE := 1.0 / 15.0  # per second (full bar in 15 s)
+const BLAST_SPEED := 20.0
+const BLAST_W := 0.36
+const BLAST_H := 0.7
 
 enum State { SERVE, PLAY, OVER }
 
@@ -57,11 +65,22 @@ var ball_vel := Vector2.ZERO
 var ball_speed := BALL_START_SPEED
 var _held_time := 0.0
 
+## Energy blast power 0..1 and the charge progress of the held flippers 0..1+.
+var power := 1.0
+var blast_charge := 0.0
+var _since_blast := 99.0
+var _both_held := false
+## Live blasts: {pos: Vector2}. Each hits one brick (like a single plasma hit),
+## then dissolves; otherwise it dissolves at the top boundary.
+var blasts: Array = []
+
 ## Each brick: {rect: Rect2, hp: int, alive: bool, row: int, points: int}
 var bricks: Array = []
 ## Events produced by the last step(): [name, data]. Names: serve, paddle, wall,
 ## wall (data = [side "l"|"r"|"t", hit position]), brick (data = index),
-## rack_clear, lost (data = x where the plasma left), over, dash.
+## rack_clear, lost (data = x where the plasma left), over, dash,
+## charge_start, charged, blast (data = start pos), blast_fail (low power),
+## blast_end (data = [pos, brick index or -1]).
 var events: Array = []
 
 
@@ -101,6 +120,7 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 	events.clear()
 	if state == State.OVER:
 		return
+	_update_power_and_blast(dt, left and right)
 	_move_paddle(dt, left, right, dash)
 	if state == State.SERVE:
 		ball_pos = Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BALL_R - 0.01)
@@ -114,6 +134,75 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 	for i in n:
 		if not _ball_substep(h):
 			break
+
+
+## Holding both flippers charges; releasing after BLAST_CHARGE_TIME fires a blast
+## if there is enough power. Power recharges slowly after a short delay.
+func _update_power_and_blast(dt: float, both: bool) -> void:
+	_since_blast += dt
+	if _since_blast >= POWER_RECHARGE_DELAY:
+		power = minf(1.0, power + POWER_RECHARGE_RATE * dt)
+	if both:
+		if not _both_held:
+			events.append(["charge_start", null])
+		var before := blast_charge
+		blast_charge += dt / BLAST_CHARGE_TIME
+		if before < 1.0 and blast_charge >= 1.0:
+			events.append(["charged", null])
+	elif _both_held:
+		if blast_charge >= 1.0:
+			if power >= BLAST_COST - 0.0001:
+				power -= BLAST_COST
+				_since_blast = 0.0
+				var start := Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BLAST_H * 0.5)
+				blasts.append({"pos": start})
+				events.append(["blast", start])
+			else:
+				events.append(["blast_fail", null])
+		blast_charge = 0.0
+	_both_held = both
+	# Move blasts and resolve their single hit.
+	for i in range(blasts.size() - 1, -1, -1):
+		var b: Dictionary = blasts[i]
+		var pos: Vector2 = b.pos
+		var travel := BLAST_SPEED * dt
+		var n := maxi(1, ceili(travel / MAX_SUBSTEP))
+		var hit := -1
+		for k in n:
+			pos.y -= travel / n
+			var rect := Rect2(pos - Vector2(BLAST_W, BLAST_H) * 0.5, Vector2(BLAST_W, BLAST_H))
+			for j in bricks.size():
+				if bricks[j].alive and rect.intersects(bricks[j].rect):
+					hit = j
+					break
+			if hit != -1 or pos.y - BLAST_H * 0.5 < FIELD.position.y:
+				break
+		b.pos = pos
+		if hit != -1 or pos.y - BLAST_H * 0.5 < FIELD.position.y:
+			blasts.remove_at(i)
+			events.append(["blast_end", [pos, hit]])
+			if hit != -1:
+				_damage_brick(hit)
+
+
+## One hit on a brick (plasma or blast). Returns true if a new rack was built.
+func _damage_brick(i: int) -> bool:
+	var b: Dictionary = bricks[i]
+	b.hp -= 1
+	if b.hp > 0:
+		return false
+	b.alive = false
+	score += b.points
+	events.append(["brick", i])
+	if bricks_alive() == 0:
+		score += RACK_BONUS
+		rack += 1
+		events.append(["rack_clear", rack])
+		build_rack()
+		blasts.clear()
+		_reset_serve()
+		return true
+	return false
 
 
 func _move_paddle(dt: float, left: bool, right: bool, dash: int) -> void:
@@ -185,19 +274,8 @@ func _ball_substep(h: float) -> bool:
 	if best != -1:
 		ball_pos += best_c.normal * best_c.depth
 		ball_vel = BP.reflect(ball_vel, best_c.normal)
-		var b: Dictionary = bricks[best]
-		b.hp -= 1
-		if b.hp <= 0:
-			b.alive = false
-			score += b.points
-			events.append(["brick", best])
-			if bricks_alive() == 0:
-				score += RACK_BONUS
-				rack += 1
-				events.append(["rack_clear", rack])
-				build_rack()
-				_reset_serve()
-				return false
+		if _damage_brick(best):
+			return false
 	# Paddle
 	var pr := paddle_rect()
 	var pc := BP.collide_circle_rect(ball_pos, BALL_R, pr)
