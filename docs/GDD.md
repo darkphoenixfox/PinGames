@@ -44,7 +44,7 @@ Layouts are `3screen`, `2screen` (DMD inside the backglass) and `windowed` (thre
 Rules:
 - Holding both flippers counts as a third input ("chord"). Games may use it but must show it on screen.
 - Anything mapped to a magna save must also be reachable another way, or be a pure bonus.
-- **Operator menu** [PROPOSAL]: hold Start + Exit for 3 s, or hold Exit for 5 s on the picker. Inside it, flippers move, Launch selects and Exit goes back.
+- **Operator menu** (approved, D-024): hold Start + Exit for 3 s, or hold Exit for 5 s on the picker. Inside it, flippers move, Launch selects and Exit goes back.
 - **High-score initials:** flippers cycle the letter, Launch confirms, Exit deletes.
 
 ## 4. Shared systems (M1)
@@ -55,7 +55,7 @@ Rules:
 - **Credits:** free play by default. In coin mode, Coin adds a credit and Start spends one.
 - **High scores:** top 10 per game in `user://scores.cfg`, plus a grand champion. They are shown in attract on all three screens.
 - **DMD scripting:** a small API for text, score display, scrolling and short frame animations. Shared fonts and transitions give the bundle one consistent DMD style.
-- **Audio:** buses for Music, SFX and Callouts. Music is chiptune / arcade style (OGG streams; tracker modules later if a player addon is adopted).
+- **Audio:** buses for Music, SFX and Callouts. Music is chiptune / arcade style and comes from a mix of sources (D-023): AI-generated tracks, tracker modules and royalty-free packs. **The game plays only OGG Vorbis.** Tracker modules (.xm/.it/.mod) are kept as source files and rendered to OGG with `openmpt123` by a script, so no native audio plugin is needed.
 - **Attract mode:** after 60 s idle, the shell cycles each game's attract demo.
 
 ## 5. Games
@@ -75,31 +75,38 @@ Rules:
 - 3 balls (operator setting). Extra balls at score thresholds.
 - Bricks: normal, multi-hit, metal (indestructible), explosive, moving.
 - Capsules: Expand, Laser, Catch (magnet), Multiball (3), Slow, Extra Ball, Warp (skip stage).
-- A **pinball-flavoured twist**: two small **flipper bumpers** at the bottom corners, worked by the same flipper buttons, can save a ball that gets past the paddle. They use some energy and recharge over time. This ties the game to the cabinet. *(Director: approve or cut.)*
-- 32 stages in 4 worlds, with a boss stage every 8. Stages are stored as text (e.g. `games/breakout/levels/*.txt` grids) so they can be authored without an editor.
+- **Flippers in some levels** (director, D-021). Some stages contain real pinball flippers worked by the flipper buttons. They can be anywhere in the stage, not only below the paddle: guarding side lanes, sitting next to brick clusters, or on upper floors.
+  - The same button moves the paddle and fires that side's flipper **at the same moment**, so stages are designed around that.
+  - *Open:* should flipper stages change how the paddle moves (for example, the paddle drifts back to centre)? Decide during M2 playtests.
+- **Multiple paddles** (director). Some stages have 2 or more paddles at different heights. All paddles move together from the same buttons.
+- **Multi-height stages** (director). Some stages are taller than one screen and split into floors, like a video-pinball table stacked vertically (Xenotilt is the reference for the structure only, not the game type).
+  - The camera follows the ball between floors.
+  - Each floor can have its own paddle(s), flippers and bricks.
+  - Ramps, gaps and kickers send the ball up a floor. A ball that drops off an upper floor falls to the floor below instead of being lost. Only the bottom floor's drain costs a ball.
+- The previous idea of "flipper bumpers below the paddle in every stage" is replaced by the points above.
+- 32 stages in 4 worlds, with a boss stage every 8. Stages are stored as text (e.g. `games/breakout/levels/*.txt`) so they can be written without an editor. The format supports several floors, and places paddles and flippers per floor.
 
 **DMD:** score, ball count, "MULTIBALL!", power-up names, brick count left.
 **Backglass:** world art, boss portrait and health bar, power-up legend.
 **Art direction [PROPOSAL]:** glossy neon. Bricks and paddle are cel-shaded 3D models with outlines, on animated sprite backgrounds.
 
-### 5.2 SKY STRIKER — vertical shmup (TATE) — [PROPOSAL] (M3)
+### 5.2 SKY STRIKER — vertical shmup (TATE) (M3)
 **Genre feel:** a WWII-to-near-future air combat scrolling shooter. TATE is its natural format.
 
-**Controls**
-| Input | Action |
-|---|---|
-| Flippers (hold) | Move ship left / right |
-| Fire | **Automatic** (always shooting) |
-| Launch | Bomb (screen clear, limited stock) |
-| Both flippers (hold) | Focus mode: slower, precise movement and a concentrated forward shot |
-| Magna L/R (opt.) | Move ship forward / back |
+**Controls** (director, D-022)
+| Input | 2+1 cabinet | 4+1 cabinet |
+|---|---|---|
+| Flippers (hold) | Move ship left / right (**horizontal only**) | same |
+| Fire | **Automatic** | **Manual**: hold either magna save |
+| Both flippers held 3 s | **Bomb** | same |
+| Launch | *Open* (proposal: lock in a sub-weapon from pickups, or start/continue) | same |
 
-**Vertical movement — OPEN QUESTION for the director.** With 2+1 buttons the ship can only move sideways. Options:
-- (a) The ship stays on a fixed band at the bottom, like Galaga. This is the simplest and most readable.
-- (b) Magna saves move it up and down on 4+1 cabinets. On 2+1 cabinets the ship stays on the band from (a).
-- (c) A "dodge roll" on Launch-tap moves vertically, and the bomb moves to the chord.
-
-The current proposal is **(b)**.
+- **Bomb charge:** holding both flippers starts a 3-second buildup. It has a rising sound, a charge ring around the ship, the DMD counting up and the screen tinting. Releasing either flipper early cancels it with no cost. While charging, the ship can't move (both buttons are held), which makes the bomb a deliberate risk.
+- Stages are built for a ship that only moves sideways. Enemy patterns and bullets are dodged left and right, and some lanes can be blocked.
+- **How the game knows 2 vs 4 buttons:** the operator setting `operator.cabinet_buttons` is `auto`, `2` or `4`.
+  - With `auto` (the default), the game starts in auto-fire. The first time a magna save is pressed, it switches to manual fire for the rest of that game.
+  - The DMD shows "MANUAL FIRE" when it switches.
+  - *Proposal; confirm.*
 
 **Mechanics:** weapon levels from power-up pickups, plus sub-weapons, and a scoring medal chain. 5 stages, each with a mid-boss and a boss. Big bosses are shown on the BACKGLASS during their intro.
 **Art direction [PROPOSAL]:** pre-rendered-look 3D planes with a toon shader, over parallax sprite terrain.
@@ -133,13 +140,12 @@ The current proposal is **(b)**.
 | **M6** | Art and audio pass, language files |
 
 ## 7. Open questions
-1. How should Sky Striker handle vertical movement? (§5.2)
-2. Keep or cut Block Breaker's flipper-bumper twist? (§5.1)
-3. Final names for the bundle and each game.
-4. Should the operator menu use the proposed button combo? (§3)
-5. Should we support multiplayer (alternating players, as in pinball)? The shell is ready for `start(players)`.
+1. Final names for the bundle and each game (director is thinking about it).
+2. Sky Striker: what does Launch do? (§5.2)
+3. Sky Striker: is the `cabinet_buttons = auto` switch to manual fire OK? (§5.2)
+4. Block Breaker: should the paddle behave differently in stages with flippers? (§5.1, decide in playtests)
+5. Should multiplayer work like pinball (players take turns)? The shell is ready for `start(players)`.
 6. Should nudge or an analog plunger be used at all (they aren't guaranteed)?
-7. How do you want music made: AI-generated tracks, tracker modules, or royalty-free packs?
 
 ## 8. Asset pipeline
 ### 3D models (D-020)

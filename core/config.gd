@@ -38,6 +38,8 @@ const DEFAULTS := {
 		"language": "en",
 		"free_play": true,
 		"balls_per_game": 3,
+		# auto | 2 | 4 — number of side buttons (D-022)
+		"cabinet_buttons": "auto",
 		"attract_sounds": false,
 	},
 	"input": {},  # filled from CabinetInput.DEFAULT_BINDINGS when missing

@@ -185,3 +185,28 @@
   - Each model gets a row in `assets/CREDITS.md` recording the Meshy plan or license it was made under, because the license terms depend on the plan.
   - Animated models (Meshy rigging) are allowed. Animations are played by name from code.
 - **Status:** Accepted
+
+### D-021 — Block breaker: flippers, multiple paddles, multi-floor stages
+- **Date:** 2026-11-20
+- **Decision:** Some stages have pinball flippers worked by the flipper buttons, placed anywhere in the stage. The same button moves the paddle and fires that side's flipper at the same moment. Some stages have several paddles at different heights, all moving together. Some stages are multi-floor and taller than the screen: the camera follows the ball, and a ball that drops off an upper floor falls to the floor below. These replace the earlier "flipper bumpers below the paddle" proposal.
+- **Why:** The director's design.
+- **Consequences:** The stage file format must support several floors, and paddles and flippers on each floor. Flippers need proper physics against the ball (rotating kinematic bodies with speed transferred to the ball). The camera system must handle tall stages. See GDD §5.1.
+- **Status:** Accepted
+
+### D-022 — Shmup: horizontal-only movement, fire and bomb controls
+- **Date:** 2026-11-20
+- **Decision:** The ship moves only left and right, on the flippers. On 2+1 cabinets it fires automatically. On 4+1 cabinets, holding either magna save fires manually. Holding both flippers for 3 seconds sets off a bomb, with a buildup effect and sound; letting go early cancels it. Launch has no role yet (still open). Cabinet type comes from `operator.cabinet_buttons` (`auto`/`2`/`4`). `auto` is proposed: start with auto-fire and switch to manual on the first magna save press.
+- **Why:** The director's design. It keeps the game fully playable on 2+1 cabinets.
+- **Status:** Accepted (the `auto` detection behaviour is a proposal)
+
+### D-023 — Music comes from mixed sources; the game plays OGG only
+- **Date:** 2026-11-20
+- **Decision:** Music comes from AI-generated tracks, tracker modules and royalty-free packs. The game only ever plays OGG Vorbis. Tracker modules are committed as source files under `assets/audio/src/` and rendered to OGG with `openmpt123` by a script (to be written in M1 or M6).
+- **Why:** The director wants a mix of all three. Rendering to OGG avoids a native GDExtension module player, which would complicate the no-editor, cross-platform builds.
+- **Consequences:** Every track needs a row in CREDITS.md. Loop points are set in OGG import options (in the `.import` text file) or in code.
+- **Status:** Accepted
+
+### D-024 — Operator menu access approved
+- **Date:** 2026-11-20
+- **Decision:** Open the operator menu by holding Start + Exit for 3 seconds, or by holding Exit for 5 seconds on the picker.
+- **Status:** Accepted
