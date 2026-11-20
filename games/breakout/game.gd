@@ -23,7 +23,13 @@ const ENGINE_X := 0.74           # engine nozzles, after scaling to PADDLE_W
 const FAMILIES := ["crimson", "amber", "gold", "verdant", "azure", "violet"]
 const ROW_COLORS := [Color("ff4f6d"), Color("ff9a3e"), Color("ffd23e"), Color("4fff7a"), Color("3ec7ff"), Color("b36bff")]
 const TEXTURE_VARIANTS := 4
-const GAME_OVER_SECONDS := 2.5
+## Game-over finale (D-044): explosion fills the screen, fade to black, then
+## GAME OVER + score; Launch/Start may skip once the score is shown.
+const FINALE_FADE_AT := 0.9
+const FINALE_FADE_TIME := 0.8
+const FINALE_TEXT_AT := 1.9
+const FINALE_SKIP_AT := 2.6
+const FINALE_END_AT := 6.0
 ## Camera lean towards the player (0 = straight down) (D-040).
 const CAMERA_TILT_DEG := 20.0
 ## Ship banking (visual only; the hitbox is always the sim's rectangle).
@@ -45,6 +51,7 @@ const SOUNDS := {
 	"tb_wall": [[300.0, 300.0, 0.025, "triangle", 0.25]],
 	"tb_brick": [[880.0, 1320.0, 0.05, "square", 0.18], [1400.0, 300.0, 0.08, "noise", 0.12]],
 	"tb_explode": [[900.0, 60.0, 0.9, "noise", 0.45]],
+	"tb_explode_big": [[1400.0, 40.0, 0.4, "noise", 0.6], [500.0, 25.0, 1.8, "noise", 0.55]],
 	"tb_dash": [[200.0, 900.0, 0.08, "noise", 0.15]],
 	"tb_fire": [[1600.0, 300.0, 0.18, "square", 0.22], [600.0, 200.0, 0.12, "noise", 0.12]],
 	"tb_rack": [[523.0, 523.0, 0.08], [784.0, 784.0, 0.08], [1047.0, 1047.0, 0.08], [1568.0, 1568.0, 0.3]],
@@ -74,7 +81,9 @@ var _dash := 0
 var _dash_glow := 0.0
 var _fire_flash := 0.0
 var _recoil := 0.0
-var _over_left := -1.0
+var _finale_t := -1.0
+var _finale_black: ColorRect
+var _finale_text: Control
 var _shown_score := -1
 
 
@@ -97,6 +106,9 @@ func start(_players: int) -> void:
 func on_action(action: StringName, pressed: bool) -> void:
 	if not pressed:
 		return
+	if _finale_t >= FINALE_SKIP_AT and (action == &"launch" or action == &"start"):
+		_finale_t = FINALE_END_AT
+		return
 	match action:
 		&"launch", &"start":
 			_launch = true
@@ -109,11 +121,9 @@ func on_action(action: StringName, pressed: bool) -> void:
 func _process(delta: float) -> void:
 	if sim == null:
 		return
-	if _over_left > 0.0:
-		_over_left -= delta
+	if _finale_t >= 0.0:
+		_finale(delta)
 		_animate(delta)
-		if _over_left <= 0.0:
-			finished.emit([sim.score])
 		return
 	sim.step(minf(delta, 0.05), CabinetInput.is_down(&"flip_l"), CabinetInput.is_down(&"flip_r"), _launch, _dash)
 	_launch = false
@@ -155,16 +165,17 @@ func _handle_events() -> void:
 				_trail.clear()
 				_hint.visible = true
 			"lost":
-				Audio.sfx("tb_explode")
-				_planet.impact(Vector3(e[1], 0.0, Sim.DRAIN_Y), -_cam.global_transform.basis.z)
+				var last := sim.state == Sim.State.OVER
+				Audio.sfx("tb_explode_big" if last else "tb_explode")
+				_planet.impact(Vector3(e[1], 0.0, Sim.DRAIN_Y), -_cam.global_transform.basis.z, last)
 				_trail.clear()
 				if sim.state != Sim.State.OVER:
 					Dmd.flash(tr("TB_CHARGE_LOST"), 1.5, Dmd.RED)
 					_hint.visible = true
 				_refresh_status()
 			"over":
-				Dmd.flash(tr("DMD_GAME_OVER"), GAME_OVER_SECONDS, Dmd.RED)
-				_over_left = GAME_OVER_SECONDS
+				_finale_t = 0.0
+				_hint.visible = false
 	if sim.score != _shown_score:
 		_refresh_status()
 
@@ -179,6 +190,33 @@ func _refresh_status() -> void:
 	_bg_score.text = score_txt
 	_bg_charges.text = charges
 	Dmd.show_score(sim.score, tr("DMD_PLAYER_1"), charges, ACCENT)
+
+
+# --- game-over finale (D-044) -----------------------------------------------------------
+func _finale(delta: float) -> void:
+	var before := _finale_t
+	_finale_t += delta
+	if before < FINALE_FADE_AT and _finale_t >= FINALE_FADE_AT:
+		_finale_black = UI.fill(Color(0, 0, 0, 0))
+		add_to_table(_finale_black)
+		var tw := _finale_black.create_tween()
+		tw.tween_property(_finale_black, "color:a", 1.0, FINALE_FADE_TIME)
+	if before < FINALE_TEXT_AT and _finale_t >= FINALE_TEXT_AT:
+		var col := UI.vstack(40)
+		col.add_child(UI.label(tr("DMD_GAME_OVER"), 140, UI.RED))
+		col.add_child(UI.spacer(40))
+		col.add_child(UI.label(tr("TB_FINAL_SCORE"), 60, UI.WHITE))
+		col.add_child(UI.label(ScoreTable.format_score(sim.score), 130, UI.YELLOW))
+		col.modulate.a = 0.0
+		add_to_table(col)
+		col.create_tween().tween_property(col, "modulate:a", 1.0, 0.5)
+		_finale_text = col
+		_bg_score.text = tr("DMD_GAME_OVER")
+		_bg_charges.text = ScoreTable.format_score(sim.score)
+		Dmd.show_text(tr("DMD_GAME_OVER"), ScoreTable.format_score(sim.score), Dmd.RED, Dmd.YELLOW)
+	if _finale_t >= FINALE_END_AT:
+		_finale_t = -1.0
+		finished.emit([sim.score])
 
 
 # --- per-frame visuals ----------------------------------------------------------------

@@ -225,7 +225,8 @@ class Planet:
 		position = target + up * (rim_v - radius) + fwd * depth_behind
 
 	## Lights the surface where a ray from `from` along `dir` meets the planet.
-	func impact(from: Vector3, dir: Vector3) -> void:
+	## big = the final, screen-filling explosion (D-044).
+	func impact(from: Vector3, dir: Vector3, big: bool = false) -> void:
 		var oc := from - position
 		var b := oc.dot(dir)
 		var c := oc.dot(oc) - radius * radius
@@ -234,10 +235,14 @@ class Planet:
 		var hit := from + dir * t
 		_mat.set_shader_parameter("impact_point", hit)
 		_impact_age = 0.0
-		_spawn_fireball(hit - dir * 2.0)  # just in front of the surface
+		if big:
+			_spawn_fireball(hit - dir * 2.0, 18.0, 1.1, 99.0)
+		else:
+			_spawn_fireball(hit - dir * 2.0, 1.4, 0.5, 0.15)
 
-	## Short additive fireball billboard at the impact (reads at the grazing angle).
-	func _spawn_fireball(at: Vector3) -> void:
+	## Additive fireball billboard at the impact (reads at the grazing angle).
+	## Grows to `max_scale` over `grow` s; starts fading after `hold` s.
+	func _spawn_fireball(at: Vector3, max_scale: float, grow: float, hold: float) -> void:
 		var fb := MeshInstance3D.new()
 		var quad := QuadMesh.new()
 		quad.size = Vector2(2.2, 2.2)
@@ -247,6 +252,7 @@ class Planet:
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		m.billboard_keep_scale = true  # otherwise billboards ignore node scale
 		m.no_depth_test = true
 		var tex := GradientTexture2D.new()
 		tex.fill = GradientTexture2D.FILL_RADIAL
@@ -265,9 +271,10 @@ class Planet:
 		get_parent().add_child(fb)
 		var tw := fb.create_tween()
 		tw.set_parallel(true)
-		tw.tween_property(fb, "scale", Vector3.ONE * 1.4, 0.5).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
-		tw.tween_property(m, "albedo_color:a", 0.0, 0.7).set_delay(0.15)
-		tw.chain().tween_callback(fb.queue_free)
+		tw.tween_property(fb, "scale", Vector3.ONE * max_scale, grow).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+		if hold < 10.0:
+			tw.tween_property(m, "albedo_color:a", 0.0, 0.7).set_delay(hold)
+			tw.chain().tween_callback(fb.queue_free)
 
 	func _process(delta: float) -> void:
 		if _impact_age < 10.0:

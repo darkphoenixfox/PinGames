@@ -401,3 +401,14 @@
   - **Sim:** `PADDLE_Y` is 5.9 and `DRAIN_Y` is 7.3 (the horizon line). The `lost` event now carries the exit x.
   - **Impact:** a ray from the exit point along the camera direction meets the sphere. The shader lights a wide area (it's seen at a grazing angle) with an expanding shockwave, plus a short additive fireball billboard and the `tb_explode` sound.
 - **Status:** Accepted
+
+### D-044 — Tilt Breaker game-over finale
+- **Date:** 2026-11-20
+- **Decision (director):** when the last plasma is lost, the explosion covers the whole screen, fades to black, then shows game over and the score.
+- **Implementation:**
+  - The last `lost` event calls `Planet.impact(..., big=true)`: a fireball that grows to 18× (about 40 units, covering the TABLE) over 1.1 s, with `tb_explode_big`.
+  - At 0.9 s a black overlay fades in over 0.8 s.
+  - At 1.9 s GAME OVER, "FINAL SCORE" and the score fade in on the TABLE, and the DMD and backglass switch to the same.
+  - At 6 s the module emits `finished` (high-score entry or the picker). From 2.6 s, Launch/Start skips ahead.
+  - Fix found on the way: billboard materials need `billboard_keep_scale`, otherwise every fireball stayed at its base size.
+- **Status:** Accepted

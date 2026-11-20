@@ -34,6 +34,8 @@ The Godot binary is at `C:\Users\Phoenixfox\Dev\Godot\Godot_v4.7.2-stable_win64_
 - Tests flag any ALL_CAPS_WITH_UNDERSCORE string literal that isn't a translation key, comments included.
 - Never store masks or data in PNG alpha. Godot's "fix alpha border" import bleeds colour into low-alpha pixels, so use a separate greyscale texture.
 - Don't name a class or inner class after a Godot built-in (e.g. `Engine`): it fails to parse.
+- Billboard materials ignore node scale unless `billboard_keep_scale = true`.
+- `GPUParticles3D` particles didn't move in our TABLE SubViewport setup; use `CPUParticles3D` for small emitters.
 - Screenshot runs use the real `user://` data (settings and scores). Don't leave runs that save anything there.
 
 ## Commit and push
