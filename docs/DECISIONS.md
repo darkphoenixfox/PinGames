@@ -294,3 +294,19 @@
   - **Music playback:** `Audio.play_music(path, fade)` loops OGG and fades out the previous track. `Audio.MUSIC_MAIN` plays on the picker, and in attract mode only when `attract_sounds` is on. Games stop the shell music on start and play their own tracks (`MUSIC` const in the module).
 - **Why:** The director asked Claude to organise the assets. Only named files are imported because the director stages future assets in the same folder.
 - **Status:** Accepted
+
+### D-034 — Local ComfyUI is an asset source
+- **Date:** 2026-11-20
+- **Decision:** ComfyUI on the director's PC (`http://127.0.0.1:8188`, RTX 5080) can generate assets:
+  - images: Qwen-Image 2.1, FLUX.2 klein 4B, FLUX.1-dev
+  - 3D: Hunyuan3D 2.x image-to-3D
+  - video: MiniMax H3
+  - audio: Stable Audio 3 medium
+
+  Claude may call its API to generate assets **only when the director asks**. Results go through `scripts/tools/` (background cutout, scaling, OGG conversion) into `assets/`.
+- **Licensing (D-032):** a model's license applies to its output, so check it before shipping that output. Until each one is verified:
+  - **Preferred:** models with permissive licenses (Apache 2.0, for example), to be confirmed per model.
+  - **Avoid for shipping assets:** FLUX.1-dev (non-commercial model license).
+  - **Check carefully before use:** Hunyuan3D (Tencent community license, which has territory exclusions and conditions), Stable Audio (Stability community license, with revenue thresholds) and MiniMax H3.
+  - **Record:** each generated asset's CREDITS.md row names the model, the workflow and the date.
+- **Status:** Accepted (per-model license verification pending)
