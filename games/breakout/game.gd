@@ -34,12 +34,17 @@ const SHIELD_FADE := 0.45
 const RECOIL_SECONDS := 0.3
 const RECOIL_KICK := 0.18
 const RECOIL_SHAKE := 0.05
+## Backdrop planet (D-043): radius (bigger = flatter horizon), where its horizon
+## sits on screen (units above the bottom edge), and depth-of-field focus.
+const PLANET_RADIUS := 100.0
+const PLANET_RIM_ABOVE_BOTTOM := 1.7
+const PLANET_DEPTH_BEHIND := 30.0
 
 const SOUNDS := {
 	"tb_shield": [[520.0, 900.0, 0.06, "triangle", 0.3], [900.0, 700.0, 0.05, "noise", 0.08]],
 	"tb_wall": [[300.0, 300.0, 0.025, "triangle", 0.25]],
 	"tb_brick": [[880.0, 1320.0, 0.05, "square", 0.18], [1400.0, 300.0, 0.08, "noise", 0.12]],
-	"tb_lost": [[440.0, 110.0, 0.5, "square", 0.25]],
+	"tb_explode": [[900.0, 60.0, 0.9, "noise", 0.45]],
 	"tb_dash": [[200.0, 900.0, 0.08, "noise", 0.15]],
 	"tb_fire": [[1600.0, 300.0, 0.18, "square", 0.22], [600.0, 200.0, 0.12, "noise", 0.12]],
 	"tb_rack": [[523.0, 523.0, 0.08], [784.0, 784.0, 0.08], [1047.0, 1047.0, 0.08], [1568.0, 1568.0, 0.3]],
@@ -47,6 +52,8 @@ const SOUNDS := {
 
 var sim: Sim
 var _root: Node3D
+var _cam: Camera3D
+var _planet: Fx.Planet
 var _paddle: Node3D       # follows the sim position
 var _ship: Node3D         # child of _paddle; banks visually
 var _engines: Array = []  # [left, right] Fx.ShipEngine
@@ -148,7 +155,8 @@ func _handle_events() -> void:
 				_trail.clear()
 				_hint.visible = true
 			"lost":
-				Audio.sfx("tb_lost")
+				Audio.sfx("tb_explode")
+				_planet.impact(Vector3(e[1], 0.0, Sim.DRAIN_Y), -_cam.global_transform.basis.z)
 				_trail.clear()
 				if sim.state != Sim.State.OVER:
 					Dmd.flash(tr("TB_CHARGE_LOST"), 1.5, Dmd.RED)
@@ -217,7 +225,7 @@ func _build_world() -> void:
 	var env := WorldEnvironment.new()
 	env.environment = Environment.new()
 	env.environment.background_mode = Environment.BG_COLOR
-	env.environment.background_color = Color(0.02, 0.025, 0.05)
+	env.environment.background_color = Color(0.008, 0.01, 0.025)
 	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.environment.ambient_light_color = Color(0.45, 0.5, 0.65)
 	env.environment.ambient_light_energy = 0.6
@@ -243,19 +251,25 @@ func _build_world() -> void:
 	var target := Vector3(0, 0, 0.6)
 	cam.position = target + Vector3(0, cos(t), sin(t)) * 20.0
 	cam.near = 1.0
-	cam.far = 60.0
+	cam.far = 260.0
+	# Depth of field: the playfield (~20 units away) stays sharp, the planet blurs.
+	var attrs := CameraAttributesPractical.new()
+	attrs.dof_blur_far_enabled = true
+	attrs.dof_blur_far_distance = 26.0
+	attrs.dof_blur_far_transition = 8.0
+	attrs.dof_blur_amount = 0.12
+	cam.attributes = attrs
 	_root.add_child(cam)
 	cam.look_at(target, Vector3.UP)
 	cam.current = true
+	_cam = cam
 
-	# Floor and walls
-	var floor_mat := StandardMaterial3D.new()
-	floor_mat.albedo_color = Color(0.015, 0.02, 0.05)
-	floor_mat.roughness = 1.0
-	# Orthographic camera + directional light = uniform specular sheen on flat
-	# surfaces (looks like grey fog), so the floor has no specular at all.
-	floor_mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-	_root.add_child(_box(Vector3(10, 0.1, 17), Vector3(0, -0.5, 0.3), floor_mat))
+	# No floor: the ship flies in orbit above an earth-like planet (D-043).
+	_planet = Fx.Planet.new(PLANET_RADIUS)
+	_root.add_child(_planet)
+	_planet.place(cam.global_transform.basis, target, -cam.size * 0.5 + PLANET_RIM_ABOVE_BOTTOM, PLANET_DEPTH_BEHIND)
+
+	# Walls
 	var wall_mat := StandardMaterial3D.new()
 	wall_mat.albedo_color = Color(0.05, 0.08, 0.12)
 	wall_mat.emission_enabled = true
@@ -263,7 +277,7 @@ func _build_world() -> void:
 	wall_mat.emission_energy_multiplier = 0.45
 	wall_mat.metallic_specular = 0.1
 	var f := Sim.FIELD
-	var wall_len := Sim.DRAIN_Y - f.position.y + 1.0
+	var wall_len := Sim.DRAIN_Y - f.position.y
 	var wall_cz := f.position.y + wall_len * 0.5
 	_root.add_child(_box(Vector3(0.3, 0.5, wall_len), Vector3(f.position.x - 0.15, 0, wall_cz), wall_mat))
 	_root.add_child(_box(Vector3(0.3, 0.5, wall_len), Vector3(f.end.x + 0.15, 0, wall_cz), wall_mat))

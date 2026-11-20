@@ -90,6 +90,7 @@ Rules:
 | Setting | Value | Meaning |
 |---|---|---|
 | Paddle width | 1.5 | about 1/6 of the playfield |
+| Ship line / drain line | z = 5.9 / 7.3 | the plasma is lost once it passes the planet's horizon |
 | Paddle top speed / accel / stop | 11 / 70 / 90 per s | crosses the field in ~0.8 s |
 | Dash (magna save) | 26 u/s for 0.12 s, 0.6 s cooldown | |
 | Ball start / max speed | 8.5 → 15 u/s | +0.12 per paddle hit |
@@ -108,6 +109,7 @@ Rules:
 - **The ball** is a **plasma shot**. It is invisible until fired. Launch or Start fires it from the ship, with a firing sound, a muzzle flash and a recoil kick and shake of the ship (D-042). In flight it has a white-hot core, a swirling halo, electric arcs and a fading trail.
 - **Rebounds:** the ship's **energy shield** flashes in front of the hull, with a ripple from the impact point, and deflects the plasma back at the swarm.
 - **Lives** are the ship's **energy charges** ("CHARGES", "CHARGE LOST").
+- **Setting (D-043):** the ship is in orbit. The horizon of an **earth-like planet** runs across the bottom of the TABLE: so huge that its curve is barely visible, out of focus (depth of field), with a glowing atmospheric rim and haze. It has oceans, continents and drifting clouds. Plasma that gets past the ship falls past the horizon: an **explosion sound**, a **fireball**, and the planet's surface **lights up where it would have hit**, with a shockwave spreading along the horizon. The ship sits higher to make room.
 
 ### 5.2 SKY STRIKER — vertical shmup (TATE) (M3)
 **Genre feel:** a WWII-to-near-future air combat scrolling shooter. TATE is its natural format.

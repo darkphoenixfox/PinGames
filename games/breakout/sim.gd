@@ -7,9 +7,10 @@ const BP = preload("res://games/breakout/ball_physics.gd")
 
 # --- playfield -----------------------------------------------------------------
 const FIELD := Rect2(-4.3, -7.2, 8.6, 15.2)  # inner walls: left, top, width, height
-const DRAIN_Y := 8.3
+## The plasma is lost once it passes the planet's horizon line (D-043).
+const DRAIN_Y := 7.3
 # --- paddle --------------------------------------------------------------------
-const PADDLE_Y := 6.6
+const PADDLE_Y := 5.9
 const PADDLE_W := 1.5
 const PADDLE_H := 0.42
 const PADDLE_MAX_SPEED := 11.0
@@ -57,7 +58,8 @@ var _held_time := 0.0
 ## Each brick: {rect: Rect2, hp: int, alive: bool, row: int, points: int}
 var bricks: Array = []
 ## Events produced by the last step(): [name, data]. Names: serve, paddle, wall,
-## brick (data = index), rack_clear, lost, over, dash.
+## brick (data = index), rack_clear, lost (data = x where the plasma left),
+## over, dash.
 var events: Array = []
 
 
@@ -216,7 +218,7 @@ func _ball_substep(h: float) -> bool:
 
 func _lose_ball() -> void:
 	balls_left -= 1
-	events.append(["lost", balls_left])
+	events.append(["lost", ball_pos.x])
 	if balls_left <= 0:
 		state = State.OVER
 		events.append(["over", score])

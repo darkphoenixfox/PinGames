@@ -171,3 +171,105 @@ class ShipEngine:
 		_particles.initial_velocity_min = 2.8 + k * 3.2
 		_particles.initial_velocity_max = 3.2 + k * 3.6
 		_light.light_energy = 0.4 + k * 1.6
+
+
+## Backdrop planet (D-043): an earth-like world so large that only a gently curved
+## slice of its horizon shows across the bottom of the TABLE, far behind the
+## playfield (blurred by the camera's depth of field). impact() lights up the spot
+## where a lost plasma shot would hit.
+class Planet:
+	extends Node3D
+
+	const PLANET_SHADER = preload("res://games/breakout/shaders/planet.gdshader")
+	const ATMOSPHERE_SHADER = preload("res://games/breakout/shaders/atmosphere.gdshader")
+
+	var radius := 100.0
+	var _mat: ShaderMaterial
+	var _impact_age := 99.0
+
+	func _init(p_radius: float) -> void:
+		radius = p_radius
+		var body := MeshInstance3D.new()
+		var sphere := SphereMesh.new()
+		sphere.radius = radius
+		sphere.height = radius * 2.0
+		sphere.radial_segments = 192
+		sphere.rings = 96
+		body.mesh = sphere
+		_mat = ShaderMaterial.new()
+		_mat.shader = PLANET_SHADER
+		body.material_override = _mat
+		body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(body)
+		var haze := MeshInstance3D.new()
+		var shell := SphereMesh.new()
+		shell.radius = radius * 1.007
+		shell.height = radius * 2.014
+		shell.radial_segments = 192
+		shell.rings = 96
+		haze.mesh = shell
+		var haze_mat := ShaderMaterial.new()
+		haze_mat.shader = ATMOSPHERE_SHADER
+		haze.material_override = haze_mat
+		haze.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(haze)
+		# A random-ish but fixed orientation so a coastline sits under the playfield.
+		rotation = Vector3(0.4, 1.1, 0.2)
+
+	## Orthographic placement: the silhouette's top lands `rim_v` units above the
+	## view centre (`target`), with the centre `depth_behind` units further from
+	## the camera than the target, so the visible surface is behind the playfield.
+	func place(cam_basis: Basis, target: Vector3, rim_v: float, depth_behind: float) -> void:
+		var up := cam_basis.y
+		var fwd := -cam_basis.z
+		position = target + up * (rim_v - radius) + fwd * depth_behind
+
+	## Lights the surface where a ray from `from` along `dir` meets the planet.
+	func impact(from: Vector3, dir: Vector3) -> void:
+		var oc := from - position
+		var b := oc.dot(dir)
+		var c := oc.dot(oc) - radius * radius
+		var disc := b * b - c
+		var t := -b - sqrt(disc) if disc >= 0.0 else -b
+		var hit := from + dir * t
+		_mat.set_shader_parameter("impact_point", hit)
+		_impact_age = 0.0
+		_spawn_fireball(hit - dir * 2.0)  # just in front of the surface
+
+	## Short additive fireball billboard at the impact (reads at the grazing angle).
+	func _spawn_fireball(at: Vector3) -> void:
+		var fb := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(2.2, 2.2)
+		fb.mesh = quad
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		m.no_depth_test = true
+		var tex := GradientTexture2D.new()
+		tex.fill = GradientTexture2D.FILL_RADIAL
+		tex.fill_from = Vector2(0.5, 0.5)
+		tex.fill_to = Vector2(1.0, 0.5)
+		var g := Gradient.new()
+		g.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+		g.colors = PackedColorArray([Color(1, 0.95, 0.8, 1), Color(1, 0.55, 0.15, 0.8), Color(0.8, 0.2, 0.05, 0)])
+		tex.gradient = g
+		m.albedo_texture = tex
+		m.albedo_color = Color(1.6, 1.6, 1.6, 1.0)
+		fb.material_override = m
+		fb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		fb.position = at
+		fb.scale = Vector3.ONE * 0.2
+		get_parent().add_child(fb)
+		var tw := fb.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(fb, "scale", Vector3.ONE * 1.4, 0.5).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+		tw.tween_property(m, "albedo_color:a", 0.0, 0.7).set_delay(0.15)
+		tw.chain().tween_callback(fb.queue_free)
+
+	func _process(delta: float) -> void:
+		if _impact_age < 10.0:
+			_impact_age += delta
+			_mat.set_shader_parameter("impact_age", _impact_age)

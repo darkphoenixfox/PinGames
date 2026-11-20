@@ -387,3 +387,17 @@
   - **Firing:** Launch **and** Start fire, since the director said "start button" and Launch was specified earlier. The shot gives a recoil kick of 0.18 units towards the player plus a 0.05-unit shake, decaying over 0.3 s, and a muzzle-flash halo.
   - **Dev:** `--press` gained `down:`/`up:` steps and `--screenshot-delay=N`, to capture mid-action frames.
 - **Status:** Accepted (confirm whether Start should fire in addition to Launch)
+
+### D-043 — Tilt Breaker: planet backdrop and impacts
+- **Date:** 2026-11-20
+- **Decision (director):**
+  - An earth-like planet's surface runs across the bottom of the screen: huge (minimal curvature), out of focus, glowing. The ship moves up to make room.
+  - A lost plasma shot plays an explosion sound and lights up the planet where it would have hit.
+- **Implementation:**
+  - **Placement:** `Fx.Planet` is a sphere of radius 100 (vs a 9-unit field), placed by orthographic maths so its silhouette sits 1.7 units above the screen bottom, with its centre 30 units behind the playfield.
+  - **Look:** `planet.gdshader` draws procedural fbm oceans, land and clouds. The rim term is raised to a high power (14), because only a thin slice near the silhouette is ever visible; a low power makes the whole slice glow. A slightly larger additive shell (`atmosphere.gdshader`) adds haze above the horizon.
+  - **Focus:** `CameraAttributesPractical` far DOF (from 26 units) blurs the planet and keeps the playfield sharp.
+  - **No floor:** the opaque floor was removed (space background), and the walls now end at the horizon.
+  - **Sim:** `PADDLE_Y` is 5.9 and `DRAIN_Y` is 7.3 (the horizon line). The `lost` event now carries the exit x.
+  - **Impact:** a ray from the exit point along the camera direction meets the sphere. The shader lights a wide area (it's seen at a grazing angle) with an expanding shockwave, plus a short additive fireball billboard and the `tb_explode` sound.
+- **Status:** Accepted
