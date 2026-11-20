@@ -298,7 +298,7 @@ func test_breakout_sim() -> void:
 		stepper.call(true)
 	stepper.call(false)
 	check(tally.blast == 3 and tally.blast_fail >= 1, "empty bar: no 4th blast, LOW POWER")
-	check(Sim.BLAST_CHARGE_TIME < 0.85, "charge time cut by 20%")
+	check(Sim.BLAST_CHARGE_TIME < 0.7, "charge time cut (0.8 -> 0.68)")
 	var lv = Sim.new()
 	lv.setup(3)
 	lv.step(1.0 / 60.0, false, false, true, 0)  # plasma in play

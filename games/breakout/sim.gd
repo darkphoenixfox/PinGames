@@ -39,7 +39,7 @@ const BRICK_GAP := 0.05
 const BRICK_POINTS := [120, 100, 80, 60, 50, 40]  # per row, top row first
 const RACK_BONUS := 1000
 # --- energy blast (D-051) ---------------------------------------------------------
-const BLAST_CHARGE_TIME := 0.8     # per charge level (director: -20%, D-054)
+const BLAST_CHARGE_TIME := 0.68    # per charge level (director: -20% D-054, then -15% D-056)
 const BLAST_MAX_LEVEL := 3         # levels 1..3, each needs one more power cell
 const BLAST_COST := 1.0 / 3.0      # per level; a full power bar = 3 levels
 const POWER_RECHARGE_DELAY := 1.0  # after the last blast
@@ -110,7 +110,7 @@ var bricks: Array = []
 ## blast (data = [start pos, level]), blast_fail (low power),
 ## blast_end (data = [pos, brick index or -1, level]),
 ## enemy_spawn (data = [id, pos]), enemy_ready (id),
-## enemy_destroyed (data = [id, pos]), ship_destroyed (data = ship pos).
+## enemy_destroyed (data = [id, pos, shot_down]), ship_destroyed (data = ship pos).
 var events: Array = []
 
 
@@ -463,7 +463,7 @@ func _destroy_enemy(i: int, award: bool = true) -> void:
 	enemies.remove_at(i)
 	if award:
 		score += ENEMY_POINTS
-	events.append(["enemy_destroyed", [en.id, en.pos]])
+	events.append(["enemy_destroyed", [en.id, en.pos, award]])  # award = shot down
 
 
 func _destroy_ship() -> void:

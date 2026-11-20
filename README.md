@@ -36,6 +36,7 @@ scripts\test.ps1                                 # headless smoke tests
 | `--mode=operator\|attract\|initials` | Open a shell mode directly (development aid) |
 | `--press=flip_r,launch,hold:start+exit:3.5` | Simulate button presses (development aid) |
 | `--mode=viewer --model=res://assets/models/<…>.glb` | Model viewer: flippers rotate, Launch toggles spin, Start changes view, Exit leaves |
+| `--tb-enemy-now`, `--tb-dmd-anim=<name>`, `--tb-show-shields` | Tilt Breaker dev aids: early enemy, loop a DMD animation, show the edge shields |
 | `--screenshot=<dir>` | Save PNGs of every screen and window, then quit (development aid) |
 
 ### Settings

@@ -16,6 +16,7 @@ const BRICK_SHADER = preload("res://games/breakout/shaders/brick_circuit.gdshade
 const SHIELD_SHADER = preload("res://games/breakout/shaders/shield.gdshader")
 const EXPLOSION_SHADER = preload("res://games/breakout/shaders/pixel_explosion.gdshader")
 const BLAST_SHADER = preload("res://games/breakout/shaders/blast.gdshader")
+const DmdAnims = preload("res://games/breakout/dmd_anims.gd")
 const STARFIELD_SHADER = preload("res://games/breakout/shaders/starfield.gdshader")
 
 const ACCENT := Color("3ec7ff")
@@ -163,6 +164,7 @@ var _hint: Label
 var _blast_nodes: Array[Node3D] = []
 var _enemy_nodes := {}  # enemy id -> {root, body, spin: Vector3, hole, colour: Color}
 var _circuit_textures: Array = []
+var _dmd_anims := DmdAnims.new()
 var _charge_glow: Node3D
 var _charge_particles: CPUParticles3D
 var _charge_level_shown := 0
@@ -217,6 +219,8 @@ func _process(delta: float) -> void:
 		_finale(delta)
 		_animate(delta)
 		return
+	if Config.cli.has("tb-dmd-anim") and not Dmd.is_animating():  # dev: loop one DMD animation
+		_dmd_anim(str(Config.cli["tb-dmd-anim"]))
 	sim.step(minf(delta, 0.05), CabinetInput.is_down(&"flip_l"), CabinetInput.is_down(&"flip_r"), _launch, _dash)
 	_launch = false
 	_dash = 0
@@ -269,6 +273,7 @@ func _handle_events() -> void:
 			"enemy_spawn":
 				_spawn_enemy_node(e[1][0], e[1][1])
 				Audio.sfx("tb_wormhole")
+				_dmd_anim("incoming")
 			"enemy_ready":
 				_close_wormhole(e[1])
 			"enemy_destroyed":
@@ -277,6 +282,9 @@ func _handle_events() -> void:
 				var ep: Vector2 = e[1][1]
 				_explode_brick(Vector3(ep.x, 0.2, ep.y), ecol, 1.2)
 				Audio.sfx("tb_enemy_die")
+				if e[1][2]:  # shot down (not a ship collision)
+					_dmd_anims.enemy_color = ecol
+					_dmd_anim("tetra_hit")
 			"ship_destroyed":
 				var sp: Vector2 = e[1]
 				Audio.sfx("tb_ship_die")
@@ -285,11 +293,11 @@ func _handle_events() -> void:
 				if sim.state == Sim.State.OVER:
 					_planet._spawn_fireball(Vector3(sp.x, 0.5, sp.y), 18.0, 1.1, 99.0)
 				else:
-					Dmd.flash(tr("TB_SHIP_DESTROYED"), 1.6, Dmd.RED)
+					_dmd_anim("ship_destroyed")
 					_hint.visible = true
 			"rack_clear":
 				Audio.sfx("tb_rack")
-				Dmd.flash(tr("DMD_RACK_CLEAR"), 2.0, Dmd.GREEN)
+				_dmd_anim("rack_clear")
 				for n in _brick_nodes:
 					n.visible = true
 					_randomize_crop(n)
@@ -301,7 +309,7 @@ func _handle_events() -> void:
 				_planet.impact(Vector3(e[1], 0.0, Sim.DRAIN_Y), -_cam.global_transform.basis.z, last)
 				_trail.clear()
 				if sim.state != Sim.State.OVER:
-					Dmd.flash(tr("TB_CHARGE_LOST"), 1.5, Dmd.RED)
+					_dmd_anim("charge_lost")
 					_hint.visible = true
 				_refresh_status()
 			"over":
@@ -696,6 +704,22 @@ func _build_hud() -> void:
 	_hint.offset_left = -400
 	_hint.offset_right = 400
 	add_to_table(_hint)
+
+
+## Plays one of the Tilt Breaker DMD pixel animations (D-056), unless the
+## game-over finale owns the DMD.
+func _dmd_anim(name: String) -> void:
+	if _finale_t >= 0.0 or sim.state == Sim.State.OVER:
+		return
+	_dmd_anims.texts = {
+		"plus_enemy": "+%d" % Sim.ENEMY_POINTS,
+		"incoming": tr("TB_DMD_INCOMING"),
+		"charge_lost": tr("TB_CHARGE_LOST"),
+		"ship_destroyed": tr("TB_SHIP_DESTROYED"),
+		"rack_clear": tr("DMD_RACK_CLEAR"),
+		"plus_rack": "+%d" % Sim.RACK_BONUS,
+	}
+	Dmd.play(Callable(_dmd_anims, name), DmdAnims.DURATIONS[name])
 
 
 # --- tetrahedron enemies (D-052) ------------------------------------------------------

@@ -29,6 +29,10 @@ var _overlay: Array = []
 var _overlay_left := 0.0
 var _time := 0.0
 var _unit := 1  # font scale multiplier for larger DMDs (64 dots high -> 2)
+var _anim := Callable()
+var _anim_t := 0.0
+var _anim_len := 0.0
+var _painter: Painter
 
 
 func _ready() -> void:
@@ -51,6 +55,11 @@ func _ready() -> void:
 	_canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_canvas.draw.connect(_on_draw)
 	viewport.add_child(_canvas)
+	_painter = Painter.new()
+	_painter.canvas = _canvas
+	_painter.unit = _unit
+	_painter.width = size.x / _unit
+	_painter.height = size.y / _unit
 
 	if str(Config.get_value("display", "dmd_sink")) == "hardware":
 		_hardware = HardwareSink.new(
@@ -117,6 +126,65 @@ func texture() -> Texture2D:
 	return viewport.get_texture()
 
 
+## Short pixel animation over everything else (D-056). `anim` is called every
+## frame as anim.call(painter: Dmd.Painter, t: float) with t = seconds since start;
+## it draws in logical 128x32 dot coordinates. A new animation replaces the
+## current one.
+func play(anim: Callable, duration: float) -> void:
+	_anim = anim
+	_anim_t = 0.0
+	_anim_len = duration
+
+
+func is_animating() -> bool:
+	return _anim.is_valid()
+
+
+## Drawing helpers handed to DMD animations (logical dots; scaled for big DMDs).
+class Painter:
+	extends RefCounted
+
+	var canvas: CanvasItem
+	var unit := 1
+	var width := 128
+	var height := 32
+
+	func dot(x: float, y: float, c: Color) -> void:
+		var ix := floori(x)
+		var iy := floori(y)
+		if ix < 0 or iy < 0 or ix >= width or iy >= height:
+			return
+		canvas.draw_rect(Rect2(ix * unit, iy * unit, unit, unit), c)
+
+	func line(x0: float, y0: float, x1: float, y1: float, c: Color) -> void:
+		var steps := maxi(1, ceili(maxf(absf(x1 - x0), absf(y1 - y0))))
+		for i in steps + 1:
+			var t := float(i) / steps
+			dot(roundf(lerpf(x0, x1, t)), roundf(lerpf(y0, y1, t)), c)
+
+	func disc(cx: float, cy: float, r: float, c: Color) -> void:
+		var ir := ceili(r)
+		for dy in range(-ir, ir + 1):
+			for dx in range(-ir, ir + 1):
+				if dx * dx + dy * dy <= r * r + 0.3:
+					dot(cx + dx, cy + dy, c)
+
+	func ring(cx: float, cy: float, r: float, c: Color, y_scale: float = 1.0) -> void:
+		var steps := maxi(8, ceili(r * 7.0))
+		for i in steps:
+			var a := TAU * i / steps
+			dot(roundf(cx + cos(a) * r), roundf(cy + sin(a) * r * y_scale), c)
+
+	func text(s: String, x: float, y: float, scale: int, c: Color) -> void:
+		DotFont.draw(canvas, s, Vector2(floorf(x) * unit, floorf(y) * unit), scale * unit, c)
+
+	func text_center(s: String, y: float, scale: int, c: Color) -> void:
+		text(s, (width - DotFont.measure(s, scale)) / 2.0, y, scale, c)
+
+	func text_width(s: String, scale: int = 1) -> int:
+		return DotFont.measure(s, scale)
+
+
 # --- internals ---------------------------------------------------------------------
 func _el(text: String, y: int, scale: int, align: String, c: Color) -> Dictionary:
 	return {"text": text, "y": y, "scale": scale, "align": align, "color": c}
@@ -128,12 +196,19 @@ func _process(delta: float) -> void:
 		_overlay_left -= delta
 		if _overlay_left <= 0.0:
 			_overlay = []
+	if _anim.is_valid():
+		_anim_t += delta
+		if _anim_t >= _anim_len:
+			_anim = Callable()
 	_canvas.queue_redraw()
 	if _hardware != null:
 		_hardware.send_frame(viewport.get_texture().get_image())
 
 
 func _on_draw() -> void:
+	if _anim.is_valid():
+		_anim.call(_painter, _anim_t)
+		return
 	var list := _elements
 	if not _overlay.is_empty():
 		if fmod(_time, 0.4) < 0.12:

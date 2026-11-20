@@ -543,3 +543,15 @@
 - **Date:** 2026-11-20
 - **Decision (director):** a level 1 blast breaks 1 block or enemy. Level 2 carries on after 1 hit (2 in total). Level 3 carries on after the second impact (3 in total). This is what `hits_left = level` already implements.
 - **Status:** Accepted
+
+### D-056 — Shorter charge; DMD pixel animations
+- **Date:** 2026-11-20
+- **Decision (director):**
+  - Charge time is 15% shorter.
+  - Add short DMD pixel animations, for example a tetra hit by a ball and exploding.
+- **Implementation:**
+  - **Charge time:** `BLAST_CHARGE_TIME` is 0.68 s per level.
+  - **Animation API:** `Dmd.play(anim: Callable, duration)` draws `anim(painter, t)` every frame over everything else, and a new animation replaces the current one. `Dmd.Painter` offers `dot`, `line`, `disc`, `ring`, `text` and `text_center` in logical 128×32 dots, scaled for bigger DMDs. Any game can use it.
+  - **Tilt Breaker clips** (`games/breakout/dmd_anims.gd`, durations in `DURATIONS`): `tetra_hit` (only when shot down; `enemy_destroyed` now carries a shot-down flag), `incoming`, `charge_lost`, `ship_destroyed` and `rack_clear`. They replace the earlier text flashes and are skipped while the game-over finale owns the DMD.
+  - **Dev:** `--tb-dmd-anim=<name>` loops one clip.
+- **Status:** Accepted

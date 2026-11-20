@@ -110,7 +110,7 @@ Rules:
 - **Rebounds:** the ship's **energy shield** flashes in front of the hull, with a ripple from the impact point, and deflects the plasma back at the swarm.
 - **Lives** are the ship's **energy charges**. Losing one says "CHARGE LOST".
 - **Status only on the DMD (D-051):** big score, the remaining charges as plasma dots, and the blast power bar (3 cells). The TABLE has no HUD, and the backglass shows the title art.
-- **Energy blast (D-051, D-053, D-054):** only while the plasma is in play (not while waiting to fire it). Hold **both flippers** to charge in up to **3 levels**, 0.8 s each:
+- **Energy blast (D-051, D-053, D-054):** only while the plasma is in play (not while waiting to fire it). Hold **both flippers** to charge in up to **3 levels**, 0.68 s each (D-056):
   - **Level 1:** blue particles gather in front of the ship, then a small blue sphere appears.
   - **Level 2:** yellow particles, then a medium yellow sphere.
   - **Level 3:** red particles, then a full-size red sphere.
@@ -126,6 +126,7 @@ Rules:
   - **Destroyed by** plasma attacks: the ball (which rebounds off it) and energy blasts (which dissolve on it). Pixel explosion, 500 points.
   - **Touching the ship destroys the ship** (one charge lost) and the enemy self-destructs. The ship respawns blinking and is invulnerable for 2 s. Losing the last charge this way triggers the game-over finale.
   - **Spawning:** the first arrives about 10 s into play, then one every 14–22 s, **at most 2 on screen at a time**.
+- **DMD pixel animations (D-056):** short clips (about 1.3–1.8 s) over the DMD status. **Tetra shot down:** the ball hits a spinning wireframe tetra, which explodes, with "+500". **Enemy incoming:** a vortex opens and a tetra emerges, with "INCOMING". **Charge lost:** the ball falls onto the planet, with a blast dome. **Ship destroyed:** a tetra dives into the pixel ship. **Rack clear:** a mini brick wall pops apart, with "+1000".
 - **Game over (D-044):** when the last charge is lost, the explosion grows until it fills the whole screen, with a bigger, longer blast. The screen fades to black, then **GAME OVER** and the **final score** show on the TABLE, DMD and backglass. After about 4 s (or Launch/Start to skip) the game goes to high-score entry or back to the picker.
 
 ### 5.2 SKY STRIKER — vertical shmup (TATE) (M3)
