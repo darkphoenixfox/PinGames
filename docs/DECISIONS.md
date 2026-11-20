@@ -310,3 +310,15 @@
   - **Check carefully before use:** Hunyuan3D (Tencent community license, which has territory exclusions and conditions), Stable Audio (Stability community license, with revenue thresholds) and MiniMax H3.
   - **Record:** each generated asset's CREDITS.md row names the model, the workflow and the date.
 - **Status:** Accepted (per-model license verification pending)
+
+### D-035 — Approved generation models (refines D-034)
+- **Date:** 2026-11-20
+- **Decision:** The director approves these models for PinGames assets:
+  - **Images:** Qwen-Image 2.1 (incl. turbo)
+  - **3D:** Hunyuan3D 2.0 / 2.1
+  - **Video:** MiniMax H3, if we render any videos
+
+  Other installed models (FLUX.1-dev, FLUX.2 klein, Stable Audio) are not used for shipping assets unless the director approves them later.
+- **Why:** The director's call. The director accepts the model licenses for the project. Claude flagged Hunyuan3D's territory restrictions in D-034, and they should be re-checked before any commercial release in excluded regions.
+- **Consequences:** Generation requests default to Qwen-Image for 2D, Hunyuan3D for models (alongside Meshy, D-020) and MiniMax H3 for video. Each asset's CREDITS.md row records the model, the workflow and the date.
+- **Status:** Accepted
