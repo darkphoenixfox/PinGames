@@ -23,9 +23,10 @@ const MODEL_PADDLE_WIDTH := 1.9  # paddle.glb's native length along X
 const ENGINE_X := 0.74           # engine nozzles, after scaling to PADDLE_W
 ## Brick textures (D-045): the director's circuit_<colour>.png, downsampled to
 ## 512 px (scripts/tools/prepare_circuit_textures.py). Each brick shows its own
-## random rectangle. Rows top->bottom: red, red, green, green, blue, blue.
-const CIRCUIT_COLOURS := ["red", "red", "green", "green", "blue", "blue"]
-const CIRCUIT_GLOW := {"red": Color("ff5a32"), "green": Color("4dff6a"), "blue": Color("3ec7ff")}
+## random rectangle. Rows top->bottom (until stage layouts, M2 step 3):
+## red, red, yellow, green, blue, blue.
+const CIRCUIT_COLOURS := ["red", "red", "yellow", "green", "blue", "blue"]
+const CIRCUIT_GLOW := {"red": Color("ff5a32"), "yellow": Color("ffd23e"), "green": Color("4dff6a"), "blue": Color("3ec7ff")}
 const CIRCUIT_TEXELS := 512.0
 const BRICK_TEXELS_W := 64.0  # texels across one brick (chunky pixel size)
 ## Game-over finale (D-044): explosion fills the screen, fade to black, then

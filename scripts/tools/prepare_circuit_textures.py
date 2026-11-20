@@ -14,7 +14,7 @@ import sys
 from PIL import Image
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
-COLOURS = ["red", "green", "blue"]
+COLOURS = ["red", "yellow", "green", "blue"]
 SIZE = 512
 
 

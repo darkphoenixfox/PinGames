@@ -23,9 +23,10 @@
 ```powershell
 scripts\test.ps1                                   # import + headless tests (must pass before commit)
 scripts\run.ps1 [--layout=...] [--game=...]        # run
-& $env:GODOT_BIN --path . -- --screenshot=<dir>     # capture all screens for visual checks (D-017)
-& $env:GODOT_BIN --path . -- --mode=operator --press=launch,flip_r --screenshot=<dir>   # drive + capture (D-030)
+scripts/dev_run.sh --game=breakout --press=launch --screenshot=<dir>   # Claude's test runs (D-048)
 ```
+**Always use `scripts/dev_run.sh` (bash) for visual test runs.** It imports new assets, opens the windows without taking focus and on the second monitor, renders at full resolution, and accepts every dev flag (`--mode`, `--press`, `--screenshot`, `--screenshot-delay`; D-017, D-030). Don't launch the game in the foreground while the director is working.
+
 The Godot binary is at `C:\Users\Phoenixfox\Dev\Godot\Godot_v4.7.2-stable_win64_console.exe`, unless `GODOT_BIN` overrides it.
 
 ## Gotchas

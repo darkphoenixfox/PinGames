@@ -439,3 +439,14 @@
 - **Decision (director):** remaining lives (charges) are shown as plasma-ball icons at the top of the screen.
 - **Implementation:** `plasma_icon.gdshader` is a canvas shader matching the in-game plasma look. The HUD has one 64 px icon per starting charge, and a spent charge becomes a faint ring. The DMD and backglass still show "CHARGES n" as text.
 - **Status:** Accepted
+
+### D-048 — Yellow circuit texture; quiet test runs
+- **Date:** 2026-11-20
+- **Decision:**
+  - **Yellow:** `circuit_yellow.png` (director) is added as a fourth brick colour. Rows are red, red, yellow, green, blue, blue until stage layouts (M2 step 3) set colours per stage.
+  - **Quiet test runs:** Claude's visual test runs use `scripts/dev_run.sh`. It does three things:
+    - writes a temporary, git-ignored `override.cfg` with `display/window/size/no_focus=true` for that run only, so the windows don't take focus from the director;
+    - puts the windowed layout on monitor index 1 (`PINGAMES_DEV_MONITOR`), the director's secondary screen, with `render_scale=1.0` so screenshots stay full resolution;
+    - runs a headless import first, so new assets load.
+- **Why:** The director asked that test runs not come to the foreground.
+- **Status:** Accepted (no_focus behaviour to be confirmed by the director)

@@ -102,7 +102,7 @@ Rules:
 **DMD:** score, charges, "MULTIBALL!", power-up names, brick count left.
 **Backglass:** world art, boss portrait and health bar, power-up legend.
 **Fiction and art direction (director, D-041):**
-- **The bricks** are a sentient, self-replicating alien race of nanomachines (D-045). Each brick is a unique rectangle cut from a random spot of the director's 16-bit circuit textures (red, green and blue; two rows each, top to bottom), shown as chunky low-res pixels with a 1-texel bevel. Their lit LEDs and traces pulse in waves across the swarm. Destroyed bricks blow up in a **pixel-art explosion**: a dithered blast in white, yellow, orange and the brick colour, plus a spray of square pixel particles (D-046).
+- **The bricks** are a sentient, self-replicating alien race of nanomachines (D-045). Each brick is a unique rectangle cut from a random spot of the director's 16-bit circuit textures (red, yellow, green and blue; rows are currently red, red, yellow, green, blue, blue until stage layouts arrive), shown as chunky low-res pixels with a 1-texel bevel. Their lit LEDs and traces pulse in waves across the swarm. Destroyed bricks blow up in a **pixel-art explosion**: a dithered blast in white, yellow, orange and the brick colour, plus a spray of square pixel particles (D-046).
 - **The player** flies a spaceship (the paddle, `paddle.glb`).
   - It **banks** up to about 18° when moving. The hitbox stays a fixed rectangle.
   - The side engines are **afterburners** (D-042). Both are off at rest. While moving, only the trailing one burns: a cone of blue flame, white-hot at the nozzle and tapering to a point, that grows with speed and flares on a dash.
