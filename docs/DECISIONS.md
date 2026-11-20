@@ -327,3 +327,10 @@
 - **Date:** 2026-11-20
 - **Decision:** The director has reviewed Hunyuan3D's license restrictions (territory and conditions) and accepts them for PinGames. The re-check note in D-035 is closed.
 - **Status:** Accepted
+
+### D-037 — The block breaker is named "TILT BREAKER"
+- **Date:** 2026-11-20
+- **Decision:** The block breaker is called **TILT BREAKER**. The game id stays `breakout`. "Flipanoid" was rejected: an itch.io brick breaker by StrictPossum (2022) already uses that name, and "-anoid" echoes Taito's Arkanoid trademark.
+- **Why:** The director's choice. Web searches on 2026-11-20 found no game called "Tilt Breaker", "TiltBreaker" or "Tilt-Breaker". The nearest titles were a jam game "TILT-out" (GameDevJS 2025) and the iOS "Tilt 'n' Tumble". "TILT" is also pinball's penalty word, which fits the pinball theme.
+- **Consequences:** Do a proper trademark search before any commercial release; the web searches don't count as legal clearance.
+- **Status:** Accepted

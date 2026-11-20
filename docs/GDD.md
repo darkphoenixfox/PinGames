@@ -2,7 +2,7 @@
 
 > Living document. Sections marked **[PROPOSAL]** wait for the director's approval.
 > When a proposal is approved or changed, update it here and log a decision in `DECISIONS.md`.
-> Working titles (BLOCK BREAKER, SKY STRIKER, TURBO RUN) are placeholders.
+> Names: **TILT BREAKER** is chosen (D-037). SKY STRIKER and TURBO RUN are still working titles.
 
 ## 1. Vision
 PinGames is a bundle of short, loud, readable arcade games built for virtual pinball cabinets. The player stands at the cabinet, looks down at a portrait playfield, and has only pinball buttons. Scores, combos and callouts appear on the DMD. The BACKGLASS shows art and live attract content. A game should feel at home in a pinball frontend next to VPX tables.
@@ -60,7 +60,7 @@ Rules:
 
 ## 5. Games
 
-### 5.1 BLOCK BREAKER — [PROPOSAL] — first vertical slice (M2)
+### 5.1 TILT BREAKER (block breaker) — first vertical slice (M2)
 **Genre feel:** paddle-and-ball brick breaking with capsule power-ups, which fits a portrait playfield naturally.
 
 **Controls**
@@ -140,7 +140,7 @@ Rules:
 | **M6** | Art and audio pass, language files |
 
 ## 7. Open questions
-1. Final names for the bundle and each game (director is thinking about it).
+1. Final names for the bundle, the shmup and the racer. The block breaker is TILT BREAKER (D-037).
 2. Sky Striker: is the `cabinet_buttons = auto` switch to manual fire OK? (§5.2)
 3. Block Breaker: should the paddle behave differently in stages with flippers? (§5.1, decide in playtests)
 4. Should multiplayer work like pinball (players take turns)? The shell is ready for `start(players)`.
