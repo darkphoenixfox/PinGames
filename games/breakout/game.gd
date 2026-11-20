@@ -96,6 +96,18 @@ const SOUNDS := {
 		[{"f": [1800.0, 140.0], "t": 0.4, "w": "saw", "v": 0.25, "lp": 0.2}],
 		[{"f": [3200.0, 400.0], "t": 0.25, "w": "lfsr", "v": 0.15, "lp": 0.3}],
 		[{"f": [120.0, 60.0], "t": 0.3, "w": "sine", "v": 0.4}]], "echo": ECHO},
+	"tb_wormhole": {"voices": [  # warping teleport whoosh
+		[{"f": [180.0, 1300.0], "t": 1.1, "w": "sine", "v": 0.3, "vib": [9.0, 2.0], "env": "hold", "a": 0.25}],
+		[{"f": [90.0, 650.0], "t": 1.1, "w": "pulse25", "v": 0.07, "vib": [13.0, 1.0], "env": "hold", "a": 0.35}]],
+		"echo": ECHO},
+	"tb_enemy_die": {"voices": [
+		[{"f": [3500.0, 150.0], "t": 0.45, "w": "lfsr", "v": 0.3, "lp": 0.2}],
+		[{"f": [1200.0, 1200.0], "t": 0.3, "w": "square", "v": 0.12, "arp": [0, -5, -12, -17], "arp_rate": 24.0}]],
+		"echo": ECHO, "crush": 9},
+	"tb_ship_die": {"voices": [
+		[{"f": [1800.0, 50.0], "t": 1.2, "w": "lfsr", "v": 0.45, "lp": 0.5}],
+		[{"f": [140.0, 30.0], "t": 1.0, "w": "sine", "v": 0.55}],
+		[{"f": [880.0, 110.0], "t": 0.6, "w": "saw", "v": 0.15, "vib": [20.0, 1.0]}]], "echo": [0.12, 0.35, 0.6]},
 	"tb_low_power": {"voices": [[{"f": [220.0, 220.0], "t": 0.08, "w": "pulse25", "v": 0.2, "env": "hold", "gap": 0.04},
 		{"f": [165.0, 165.0], "t": 0.16, "w": "pulse25", "v": 0.2}]]},
 }
@@ -120,6 +132,8 @@ var _brick_nodes: Array[MeshInstance3D] = []
 var _brick_mats := {}  # colour -> ShaderMaterial
 var _hint: Label
 var _blast_nodes: Array[Node3D] = []
+var _enemy_nodes := {}  # enemy id -> {root: Node3D, body: Node3D, spin: Vector3, hole: MeshInstance3D}
+var _circuit_textures: Array = []
 var _charge_glow: Node3D
 var _launch := false
 var _dash := 0
@@ -141,6 +155,8 @@ func start(_players: int) -> void:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
 	sim = Sim.new()
 	sim.setup(int(Config.get_value("operator", "balls_per_game")))
+	if Config.cli.has("tb-enemy-now"):  # dev: first enemy right after firing
+		sim._enemy_timer = 0.3
 	_build_world()
 	_build_bricks()
 	_build_hud()
@@ -218,6 +234,26 @@ func _handle_events() -> void:
 				var end_pos: Vector2 = e[1][0]
 				var colour := _row_glow(sim.bricks[e[1][1]].row) if e[1][1] != -1 else Color(0.5, 0.8, 1.0)
 				_explode_brick(Vector3(end_pos.x, 0.0, end_pos.y), colour)
+			"enemy_spawn":
+				_spawn_enemy_node(e[1][0], e[1][1])
+				Audio.sfx("tb_wormhole")
+			"enemy_ready":
+				_close_wormhole(e[1])
+			"enemy_destroyed":
+				_remove_enemy_node(e[1][0])
+				var ep: Vector2 = e[1][1]
+				_explode_brick(Vector3(ep.x, 0.2, ep.y), Color(0.75, 0.4, 1.0), 1.8)
+				Audio.sfx("tb_enemy_die")
+			"ship_destroyed":
+				var sp: Vector2 = e[1]
+				Audio.sfx("tb_ship_die")
+				_explode_brick(Vector3(sp.x, 0.2, sp.y), Color(0.4, 0.8, 1.0), 2.6)
+				_trail.clear()
+				if sim.state == Sim.State.OVER:
+					_planet._spawn_fireball(Vector3(sp.x, 0.5, sp.y), 18.0, 1.1, 99.0)
+				else:
+					Dmd.flash(tr("TB_SHIP_DESTROYED"), 1.6, Dmd.RED)
+					_hint.visible = true
 			"rack_clear":
 				Audio.sfx("tb_rack")
 				Dmd.flash(tr("DMD_RACK_CLEAR"), 2.0, Dmd.GREEN)
@@ -294,6 +330,13 @@ func _animate(delta: float) -> void:
 	_engines[1].set_thrust(burn if push < 0.0 else 0.0)
 	_refresh_status()  # DMD power bar changes continuously
 	_animate_blasts(delta)
+	_animate_enemies(delta)
+	# Ship respawn: hidden briefly after being destroyed, then blinks while invulnerable.
+	if sim.ship_invulnerable > 0.0:
+		var since := Sim.SHIP_INVULNERABLE - sim.ship_invulnerable
+		_paddle.visible = since > 0.6 and fmod(Time.get_ticks_msec() / 1000.0, 0.2) < 0.13
+	else:
+		_paddle.visible = true
 	# Edge shields (dev: --tb-show-shields keeps them lit mid-ripple for checks)
 	for side in _edge_shields:
 		var sh: Dictionary = _edge_shields[side]
@@ -540,10 +583,10 @@ func _randomize_crop(n: MeshInstance3D) -> void:
 
 ## Pixel-art explosion (D-046): a dithered, stepped-palette blast billboard plus a
 ## spray of square "pixel" particles in white/yellow/orange/brick colour.
-func _explode_brick(pos: Vector3, color: Color) -> void:
+func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void:
 	var blast := MeshInstance3D.new()
 	var quad := QuadMesh.new()
-	quad.size = Vector2(1.3, 1.3)
+	quad.size = Vector2(1.3, 1.3) * size_scale
 	blast.mesh = quad
 	var bm := ShaderMaterial.new()
 	bm.shader = EXPLOSION_SHADER
@@ -559,7 +602,7 @@ func _explode_brick(pos: Vector3, color: Color) -> void:
 
 	var p := CPUParticles3D.new()
 	p.one_shot = true
-	p.amount = 28
+	p.amount = int(28 * size_scale)
 	p.lifetime = 0.6
 	p.explosiveness = 1.0
 	p.direction = Vector3(0, 1, 0)
@@ -570,7 +613,7 @@ func _explode_brick(pos: Vector3, color: Color) -> void:
 	p.damping_min = 2.0
 	p.damping_max = 3.0
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	p.emission_box_extents = Vector3(0.3, 0.05, 0.12)
+	p.emission_box_extents = Vector3(0.3, 0.05, 0.12) * size_scale
 	var palette := Gradient.new()  # each particle picks one flat colour
 	palette.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
 	palette.offsets = PackedFloat32Array([0.0, 0.25, 0.5, 0.75])
@@ -615,6 +658,60 @@ func _build_hud() -> void:
 	_hint.offset_left = -400
 	_hint.offset_right = 400
 	add_to_table(_hint)
+
+
+# --- tetrahedron enemies (D-052) ------------------------------------------------------
+func _spawn_enemy_node(id: int, pos: Vector2) -> void:
+	if _circuit_textures.is_empty():
+		for c in ["red", "yellow", "green", "blue"]:
+			_circuit_textures.append(load("res://assets/textures/breakout/circuit_%s.png" % c))
+	var root := Node3D.new()
+	root.position = Vector3(pos.x, 0.3, pos.y)
+	var body := Fx.make_tetrahedron(Sim.ENEMY_R * 1.5, _circuit_textures, Color(0.75, 0.45, 1.0))
+	body.scale = Vector3.ONE * 0.01
+	root.add_child(body)
+	_root.add_child(root)
+	var hole := Fx.make_wormhole(3.0)
+	hole.position = Vector3(pos.x, 0.25, pos.y)
+	_root.add_child(hole)
+	var tw := hole.create_tween()
+	tw.tween_method(func(o: float): hole.set_instance_shader_parameter("open", o), 0.0, 1.0, 0.5) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var spin := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized() * randf_range(1.2, 2.2)
+	_enemy_nodes[id] = {"root": root, "body": body, "spin": spin, "hole": hole}
+
+
+func _close_wormhole(id: int) -> void:
+	if not _enemy_nodes.has(id) or _enemy_nodes[id].hole == null:
+		return
+	var hole: MeshInstance3D = _enemy_nodes[id].hole
+	_enemy_nodes[id].hole = null
+	var tw := hole.create_tween()
+	tw.tween_method(func(o: float): hole.set_instance_shader_parameter("open", o), 1.0, 0.0, 0.4)
+	tw.tween_callback(hole.queue_free)
+
+
+func _remove_enemy_node(id: int) -> void:
+	if not _enemy_nodes.has(id):
+		return
+	_close_wormhole(id)
+	_enemy_nodes[id].root.queue_free()
+	_enemy_nodes.erase(id)
+
+
+func _animate_enemies(delta: float) -> void:
+	for en in sim.enemies:
+		if not _enemy_nodes.has(en.id):
+			continue
+		var n: Dictionary = _enemy_nodes[en.id]
+		var p: Vector2 = en.pos
+		n.root.position = Vector3(p.x, 0.3, p.y)
+		var body: Node3D = n.body
+		var spin: Vector3 = n.spin
+		body.rotate(spin.normalized(), spin.length() * delta)
+		# Emerges from the wormhole over the last part of WORMHOLE_TIME.
+		var emerge := clampf((en.t - 0.3) / (Sim.WORMHOLE_TIME - 0.3), 0.0, 1.0) if en.state == "wormhole" else 1.0
+		body.scale = Vector3.ONE * maxf(0.01, emerge)
 
 
 # --- energy blast visuals (D-051) -------------------------------------------------------

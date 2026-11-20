@@ -114,6 +114,13 @@ Rules:
 - **Sound (D-050):** 16-bit-era effects synthesized in code (pulse waves, LFSR noise, arpeggios, vibrato, SNES-style echo).
 - **Setting (D-043):** the ship is in orbit. The horizon of an **earth-like planet** runs across the bottom of the TABLE: so huge that its curve is barely visible, out of focus (soft, low-detail shading), with a glowing atmospheric rim and haze. It has oceans, continents and drifting clouds. Plasma that gets past the ship falls past the horizon: an **explosion sound**, a **fireball**, and the planet's surface **lights up where it would have hit**, with a shockwave spreading along the horizon. The ship sits higher to make room.
 - **Space (D-049):** a pixel-art starfield (three parallax layers of square stars that twinkle) fills the background. It swings around a pivot far below the screen as the ship moves, like the ship moving along its orbit. There are **no visible walls**: invisible boundaries sit a little inside the screen edges, and a rebound there flashes an energy shield (the same effect as the ship's) where the plasma hits.
+- **Enemy: tetrahedron (D-052).** A polygonal tetrahedron about two bricks wide, its faces textured with circuit crops like the bricks, with glowing edges, tumbling in 3D.
+  - **Arrival:** it teleports in through a swirling **wormhole** in the top 10% of the screen and can't be hit while emerging.
+  - **Movement:** wide horizontal sine sweeps, slowly descending. It needs a gap through the bricks at least as wide as itself to get down; otherwise it stays in the top area.
+  - **At the ship's height:** it flies wide elliptical circles around the bottom, which may or may not cross the ship.
+  - **Destroyed by** plasma attacks: the ball (which rebounds off it) and energy blasts (which dissolve on it). Pixel explosion, 500 points.
+  - **Touching the ship destroys the ship** (one charge lost) and the enemy self-destructs. The ship respawns blinking and is invulnerable for 2 s. Losing the last charge this way triggers the game-over finale.
+  - **Spawning:** the first arrives about 10 s into play, then one every 14–22 s, at most 2 at a time.
 - **Game over (D-044):** when the last charge is lost, the explosion grows until it fills the whole screen, with a bigger, longer blast. The screen fades to black, then **GAME OVER** and the **final score** show on the TABLE, DMD and backglass. After about 4 s (or Launch/Start to skip) the game goes to high-score entry or back to the picker.
 
 ### 5.2 SKY STRIKER — vertical shmup (TATE) (M3)

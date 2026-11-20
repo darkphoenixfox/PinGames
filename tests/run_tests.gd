@@ -127,6 +127,77 @@ func test_translation_keys() -> void:
 		check(en.has(key), "missing translation key %s (%s)" % [key, used[key]])
 
 
+## Tetrahedron enemy (D-052): blocked by a full rack, descends through a gap,
+## orbits at the bottom, dies to the plasma, destroys the ship on contact.
+func test_breakout_enemies(Sim) -> void:
+	seed(42)
+	var blocked = Sim.new()
+	blocked.setup(3)
+	blocked.spawn_enemy(0.0)
+	var max_y := -99.0
+	for k in 60 * 20:
+		blocked._held_time = 0.0  # no auto-serve
+		blocked.step(1.0 / 60.0, false, false, false, 0)
+		if not blocked.enemies.is_empty():
+			max_y = maxf(max_y, blocked.enemies[0].pos.y)
+	check(not blocked.enemies.is_empty() and max_y < Sim.BRICK_TOP, "enemy stays above a full rack (max y %.2f)" % max_y)
+	# Open a 3-brick-wide corridor through every row: the enemy gets down and orbits.
+	var gap = Sim.new()
+	gap.setup(3)
+	for bi in gap.bricks.size():
+		var col: int = bi % Sim.BRICK_COLS
+		if col >= 4 and col <= 6:
+			gap.bricks[bi].alive = false
+	gap.spawn_enemy(0.0)
+	var orbited := false
+	for k in 60 * 60:
+		gap.paddle_x = -3.0  # keep the ship out of the way
+		gap._held_time = 0.0  # no auto-serve: the plasma would kill the enemy
+		gap.step(1.0 / 60.0, false, false, false, 0)
+		if not gap.enemies.is_empty() and gap.enemies[0].state == "orbit":
+			orbited = true
+			break
+	check(orbited, "enemy descends through a gap and starts orbiting")
+	# The plasma destroys an enemy.
+	var shot = Sim.new()
+	shot.setup(3)
+	shot.spawn_enemy(0.0)
+	for k in 80:
+		shot.step(1.0 / 60.0, false, false, false, 0)
+	shot.state = Sim.State.PLAY
+	shot.enemies[0].pos = Vector2(0.0, 2.0)
+	shot.enemies[0].state = "orbit"
+	shot.enemies[0].center = Vector2(0.0, 2.0)
+	shot.ball_pos = Vector2(0.0, 3.0)
+	shot.ball_vel = Vector2(0.0, -8.0)
+	var s0: int = shot.score
+	var killed := false
+	var rebounded := false
+	for k in 30:
+		shot.step(1.0 / 60.0, false, false, false, 0)
+		for e in shot.events:
+			if e[0] == "enemy_destroyed" and not killed:
+				killed = true
+				rebounded = shot.ball_vel.y > 0.0
+	check(killed and rebounded and shot.score >= s0 + Sim.ENEMY_POINTS, "plasma destroys enemy and rebounds")
+	# Contact with the ship destroys the ship (one charge) and the enemy.
+	var crash = Sim.new()
+	crash.setup(3)
+	crash.spawn_enemy(0.0)
+	for k in 80:
+		crash.step(1.0 / 60.0, false, false, false, 0)
+	crash.enemies[0].state = "orbit"
+	crash.enemies[0].center = Vector2(crash.paddle_x, Sim.PADDLE_Y)
+	crash.enemies[0].pos = Vector2(crash.paddle_x, Sim.PADDLE_Y)
+	var ship_hit := false
+	for k in 5:
+		crash.step(1.0 / 60.0, false, false, false, 0)
+		for e in crash.events:
+			if e[0] == "ship_destroyed":
+				ship_hit = true
+	check(ship_hit and crash.balls_left == 2 and crash.enemies.is_empty(), "enemy destroys the ship and itself")
+
+
 ## Every script in the project must parse/compile (catches errors in scenes the
 ## other tests never load, e.g. game modules).
 func test_all_scripts_compile() -> void:
@@ -225,6 +296,7 @@ func test_breakout_sim() -> void:
 		short.step(1.0 / 60.0, true, true, false, 0)
 	short.step(1.0 / 60.0, false, false, false, 0)
 	check(short.blasts.is_empty() and is_equal_approx(short.power, 1.0), "short hold does not fire")
+	test_breakout_enemies(Sim)
 
 
 func _gd_files(dir: String) -> Array[String]:

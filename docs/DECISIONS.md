@@ -487,3 +487,27 @@
   - **Visuals:** `blast.gdshader` bolt, a nose charge glow (a small plasma ball), recoil on firing, and a pixel explosion where the blast ends.
   - **Removed:** the TABLE HUD and the backglass score and charges.
 - **Status:** Accepted
+
+### D-052 — Tilt Breaker enemy: tetrahedron
+- **Date:** 2026-11-20
+- **Decision (director):** a polygonal tetrahedron enemy.
+  - It teleports in through a wormhole in the top 10% of the screen.
+  - It is about 2 bricks in size, with brick-style circuit textures on its faces, and rotates in 3D.
+  - It moves in wide horizontal waves while slowly descending, and needs a path through the bricks or it stays at the top.
+  - Plasma attacks (the ball and blasts) destroy it. Touching the ship destroys the ship, and the enemy self-destructs in a pixel explosion.
+  - At ship height it circles widely around the bottom.
+- **Implementation:**
+  - **Sim** (`sim.gd`, tested):
+    - **Enemy data:** `enemies` entries with states `wormhole` (1.2 s, not collidable), `sweep` and `orbit`.
+    - **Sweep:** x = sin(phase) × 3.2, reversing when bricks block. It descends at 0.45 u/s only where the circle (r = 0.62) clears all bricks.
+    - **Orbit:** starts at `PADDLE_Y - 1.1`, an ellipse with radii (2.6, 0.9).
+    - **Collisions:** ball vs enemy is circle-circle, and the ball reflects. Blast vs enemy is rect-circle, and the blast is consumed. Enemy vs ship is circle-rect, triggering `_destroy_ship()`: lose a charge, 2 s invulnerability, reset the serve, or the game-over finale.
+    - **Spawning:** first after 10 s of play, then every 14–22 s, at most 2 at once.
+    - **Rack:** `BRICK_TOP` moved to -5.55, so the top area fits the enemy.
+  - **View:**
+    - **Body:** `Fx.make_tetrahedron` builds 4 faces, each a random crop of a random circuit colour (nearest filtering, emissive), plus glowing line edges, with a random spin axis.
+    - **Wormhole:** `wormhole.gdshader`, a billboard vortex whose `open` (an instance uniform) is tweened open and closed.
+    - **Death and respawn:** bigger pixel explosions, and the ship blinks during invulnerability.
+    - **Sounds:** `tb_wormhole`, `tb_enemy_die`, `tb_ship_die`.
+  - **Dev:** `--tb-enemy-now` brings the first enemy in 0.3 s after firing.
+- **Status:** Accepted

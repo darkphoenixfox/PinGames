@@ -33,7 +33,7 @@ const MAX_SUBSTEP := 0.05  # world units per collision substep (no tunnelling)
 # --- bricks --------------------------------------------------------------------
 const BRICK_ROWS := 6
 const BRICK_COLS := 11
-const BRICK_TOP := -6.0
+const BRICK_TOP := -5.55  # leaves the top 10% free for enemies (D-052)
 const BRICK_H := 0.4
 const BRICK_GAP := 0.05
 const BRICK_POINTS := [120, 100, 80, 60, 50, 40]  # per row, top row first
@@ -46,6 +46,21 @@ const POWER_RECHARGE_RATE := 1.0 / 15.0  # per second (full bar in 15 s)
 const BLAST_SPEED := 20.0
 const BLAST_W := 0.36
 const BLAST_H := 0.7
+# --- tetrahedron enemy (D-052) -----------------------------------------------------
+const ENEMY_R := 0.62                # hitbox radius (~2 bricks wide)
+const ENEMY_POINTS := 500
+const ENEMY_FIRST_SPAWN := 10.0      # seconds of play before the first one
+const ENEMY_INTERVAL := Vector2(14.0, 22.0)
+const ENEMY_MAX := 2
+const WORMHOLE_TIME := 1.2           # emerging: not collidable yet
+const ENEMY_SPAWN_Y := -6.4          # top 10% of the screen
+const ENEMY_SWEEP_AMP := 3.2         # wide horizontal sine sweeps
+const ENEMY_SWEEP_SPEED := 0.6       # rad/s
+const ENEMY_DESCENT := 0.45          # units/s when the way down is clear
+const ENEMY_ORBIT_START_Y := PADDLE_Y - 1.1
+const ENEMY_ORBIT_R := Vector2(2.6, 0.9)
+const ENEMY_ORBIT_SPEED := 0.9       # rad/s
+const SHIP_INVULNERABLE := 2.0       # after the ship is destroyed and respawns
 
 enum State { SERVE, PLAY, OVER }
 
@@ -74,13 +89,22 @@ var _both_held := false
 ## then dissolves; otherwise it dissolves at the top boundary.
 var blasts: Array = []
 
+## Tetrahedron enemies: {id, pos, state ("wormhole"|"sweep"|"orbit"), t, phase,
+## dir, center: Vector2 (orbit), angle (orbit)}.
+var enemies: Array = []
+var ship_invulnerable := 0.0
+var _enemy_timer := ENEMY_FIRST_SPAWN
+var _next_enemy_id := 1
+
 ## Each brick: {rect: Rect2, hp: int, alive: bool, row: int, points: int}
 var bricks: Array = []
 ## Events produced by the last step(): [name, data]. Names: serve, paddle, wall,
 ## wall (data = [side "l"|"r"|"t", hit position]), brick (data = index),
 ## rack_clear, lost (data = x where the plasma left), over, dash,
 ## charge_start, charged, blast (data = start pos), blast_fail (low power),
-## blast_end (data = [pos, brick index or -1]).
+## blast_end (data = [pos, brick index or -1]),
+## enemy_spawn (data = [id, pos]), enemy_ready (id),
+## enemy_destroyed (data = [id, pos]), ship_destroyed (data = ship pos).
 var events: Array = []
 
 
@@ -122,6 +146,9 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 		return
 	_update_power_and_blast(dt, left and right)
 	_move_paddle(dt, left, right, dash)
+	_update_enemies(dt)
+	if state == State.OVER:
+		return
 	if state == State.SERVE:
 		ball_pos = Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BALL_R - 0.01)
 		_held_time += dt
@@ -171,6 +198,11 @@ func _update_power_and_blast(dt: float, both: bool) -> void:
 		for k in n:
 			pos.y -= travel / n
 			var rect := Rect2(pos - Vector2(BLAST_W, BLAST_H) * 0.5, Vector2(BLAST_W, BLAST_H))
+			var foe := _enemy_hit_by_rect(rect)
+			if foe != -1:
+				_destroy_enemy(foe)
+				hit = -2  # consumed by an enemy (not a brick)
+				break
 			for j in bricks.size():
 				if bricks[j].alive and rect.intersects(bricks[j].rect):
 					hit = j
@@ -180,8 +212,8 @@ func _update_power_and_blast(dt: float, both: bool) -> void:
 		b.pos = pos
 		if hit != -1 or pos.y - BLAST_H * 0.5 < FIELD.position.y:
 			blasts.remove_at(i)
-			events.append(["blast_end", [pos, hit]])
-			if hit != -1:
+			events.append(["blast_end", [pos, maxi(hit, -1)]])
+			if hit >= 0:
 				_damage_brick(hit)
 
 
@@ -276,6 +308,18 @@ func _ball_substep(h: float) -> bool:
 		ball_vel = BP.reflect(ball_vel, best_c.normal)
 		if _damage_brick(best):
 			return false
+	# Enemies: the plasma destroys them and rebounds.
+	for k in enemies.size():
+		var en: Dictionary = enemies[k]
+		if en.state == "wormhole":
+			continue
+		var dv: Vector2 = ball_pos - en.pos
+		if dv.length() < ENEMY_R + BALL_R:
+			var nrm := dv.normalized() if dv.length_squared() > 1e-8 else Vector2.UP
+			ball_vel = BP.reflect(ball_vel, nrm)
+			ball_pos = en.pos + nrm * (ENEMY_R + BALL_R + 0.01)
+			_destroy_enemy(k)
+			break
 	# Paddle
 	var pr := paddle_rect()
 	var pc := BP.collide_circle_rect(ball_pos, BALL_R, pr)
@@ -294,6 +338,111 @@ func _ball_substep(h: float) -> bool:
 		_lose_ball()
 		return false
 	return true
+
+
+# --- enemies (D-052) ------------------------------------------------------------------
+## Spawns a tetrahedron through a wormhole at x (random if NAN). Public for tests.
+func spawn_enemy(x: float = NAN) -> int:
+	var lim := FIELD.size.x * 0.5 - ENEMY_R - 0.2
+	if is_nan(x):
+		x = randf_range(-lim, lim)
+	var id := _next_enemy_id
+	_next_enemy_id += 1
+	var pos := Vector2(clampf(x, -lim, lim), ENEMY_SPAWN_Y)
+	enemies.append({"id": id, "pos": pos, "state": "wormhole", "t": 0.0,
+		"phase": asin(clampf(pos.x / ENEMY_SWEEP_AMP, -1.0, 1.0)),
+		"dir": 1.0 if randf() < 0.5 else -1.0, "center": Vector2.ZERO, "angle": 0.0})
+	events.append(["enemy_spawn", [id, pos]])
+	return id
+
+
+func _update_enemies(dt: float) -> void:
+	ship_invulnerable = maxf(0.0, ship_invulnerable - dt)
+	if state == State.PLAY:
+		_enemy_timer -= dt
+		if _enemy_timer <= 0.0:
+			_enemy_timer = randf_range(ENEMY_INTERVAL.x, ENEMY_INTERVAL.y)
+			if enemies.size() < ENEMY_MAX:
+				spawn_enemy()
+	var lim := FIELD.size.x * 0.5 - ENEMY_R
+	for i in range(enemies.size() - 1, -1, -1):
+		var en: Dictionary = enemies[i]
+		en.t += dt
+		match en.state:
+			"wormhole":
+				if en.t >= WORMHOLE_TIME:
+					en.state = "sweep"
+					events.append(["enemy_ready", en.id])
+				continue
+			"sweep":
+				var pos: Vector2 = en.pos
+				# Wide horizontal sine sweep; reverse when bricks block the way.
+				var ph: float = en.phase + ENEMY_SWEEP_SPEED * en.dir * dt
+				var nx := clampf(sin(ph) * ENEMY_SWEEP_AMP, -lim, lim)
+				if _enemy_blocked(Vector2(nx, pos.y)):
+					en.dir = -en.dir
+				else:
+					en.phase = ph
+					pos.x = nx
+				# Descend only where the way down is clear of bricks.
+				var ny := pos.y + ENEMY_DESCENT * dt
+				if not _enemy_blocked(Vector2(pos.x, ny)):
+					pos.y = ny
+				en.pos = pos
+				if pos.y >= ENEMY_ORBIT_START_Y:
+					en.state = "orbit"
+					en.center = Vector2(clampf(pos.x, -lim + ENEMY_ORBIT_R.x, lim - ENEMY_ORBIT_R.x),
+						pos.y + ENEMY_ORBIT_R.y)
+					en.angle = asin(clampf((pos.x - en.center.x) / ENEMY_ORBIT_R.x, -1.0, 1.0))
+					en.dir = 1.0 if pos.x <= en.center.x else -1.0
+			"orbit":
+				# Wide circles around the bottom (may or may not cross the ship).
+				en.angle += ENEMY_ORBIT_SPEED * en.dir * dt
+				var target: Vector2 = en.center + Vector2(sin(en.angle) * ENEMY_ORBIT_R.x, -cos(en.angle) * ENEMY_ORBIT_R.y)
+				en.pos = en.pos.lerp(target, 1.0 - exp(-6.0 * dt))
+		# Ship collision: the ship is destroyed and the enemy self-destructs.
+		if en.state != "wormhole" and ship_invulnerable <= 0.0 \
+				and not BP.collide_circle_rect(en.pos, ENEMY_R * 0.85, paddle_rect()).is_empty():
+			_destroy_enemy(i, false)
+			_destroy_ship()
+			if state == State.OVER:
+				return
+
+
+func _enemy_blocked(pos: Vector2) -> bool:
+	for b in bricks:
+		if b.alive and not BP.collide_circle_rect(pos, ENEMY_R, b.rect).is_empty():
+			return true
+	return false
+
+
+func _enemy_hit_by_rect(rect: Rect2) -> int:
+	for k in enemies.size():
+		var en: Dictionary = enemies[k]
+		if en.state != "wormhole" and not BP.collide_circle_rect(en.pos, ENEMY_R, rect).is_empty():
+			return k
+	return -1
+
+
+func _destroy_enemy(i: int, award: bool = true) -> void:
+	var en: Dictionary = enemies[i]
+	enemies.remove_at(i)
+	if award:
+		score += ENEMY_POINTS
+	events.append(["enemy_destroyed", [en.id, en.pos]])
+
+
+func _destroy_ship() -> void:
+	events.append(["ship_destroyed", Vector2(paddle_x, PADDLE_Y)])
+	blasts.clear()
+	blast_charge = 0.0
+	ship_invulnerable = SHIP_INVULNERABLE
+	balls_left -= 1
+	if balls_left <= 0:
+		state = State.OVER
+		events.append(["over", score])
+	else:
+		_reset_serve()
 
 
 func _lose_ball() -> void:

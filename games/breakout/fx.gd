@@ -3,6 +3,7 @@
 extends RefCounted
 
 const PLASMA_SHADER = preload("res://games/breakout/shaders/plasma.gdshader")
+const WORMHOLE_SHADER = preload("res://games/breakout/shaders/wormhole.gdshader")
 
 
 ## Plasma ball: hot core sphere + billboard halo. Returns the root Node3D.
@@ -32,6 +33,75 @@ static func make_plasma_ball(radius: float) -> Node3D:
 	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(halo)
 	return root
+
+
+## Tetrahedron enemy body (D-052): circumradius `radius`; each face shows a
+## random texel-snapped crop of a circuit texture (like the bricks), chunky
+## nearest-filtered pixels with glowing LEDs, plus bright glowing edges.
+static func make_tetrahedron(radius: float, textures: Array, edge_color: Color) -> Node3D:
+	var root := Node3D.new()
+	root.name = "Tetrahedron"
+	var k := radius / sqrt(3.0)
+	var v := [Vector3(1, 1, 1) * k, Vector3(1, -1, -1) * k, Vector3(-1, 1, -1) * k, Vector3(-1, -1, 1) * k]
+	var faces := [[0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2]]
+	var crop := 72.0 / 512.0
+	for f in faces:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var a: Vector3 = v[f[0]]
+		var b: Vector3 = v[f[1]]
+		var c: Vector3 = v[f[2]]
+		var n := ((a + b + c) / 3.0).normalized()  # outward for a centred tetrahedron
+		var off := Vector2(randi() % 440, randi() % 440) / 512.0
+		var uvs := [off + Vector2(0.0, 1.0) * crop, off + Vector2(0.5, 0.0) * crop, off + Vector2(1.0, 1.0) * crop]
+		var pts := [a, b, c]
+		for i in 3:
+			st.set_normal(n)
+			st.set_uv(uvs[i])
+			st.add_vertex(pts[i])
+		var mesh := st.commit()
+		var tex: Texture2D = textures[randi() % textures.size()]
+		var m := StandardMaterial3D.new()
+		m.albedo_texture = tex
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		m.emission_enabled = true
+		m.emission_texture = tex
+		m.emission_energy_multiplier = 1.4
+		m.roughness = 0.45
+		m.metallic = 0.35
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		var mi := MeshInstance3D.new()
+		mi.mesh = mesh
+		mi.material_override = m
+		root.add_child(mi)
+	# Glowing edges
+	var lines := ImmediateMesh.new()
+	lines.surface_begin(Mesh.PRIMITIVE_LINES)
+	for e in [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]:
+		lines.surface_add_vertex(v[e[0]] * 1.01)
+		lines.surface_add_vertex(v[e[1]] * 1.01)
+	lines.surface_end()
+	var lm := StandardMaterial3D.new()
+	lm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	lm.albedo_color = edge_color * 2.5
+	var li := MeshInstance3D.new()
+	li.mesh = lines
+	li.material_override = lm
+	root.add_child(li)
+	return root
+
+
+## Wormhole vortex billboard (D-052). Drive "open" (0..1) as an instance uniform.
+static func make_wormhole(size: float) -> MeshInstance3D:
+	var m := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(size, size)
+	m.mesh = quad
+	var mat := ShaderMaterial.new()
+	mat.shader = WORMHOLE_SHADER
+	m.material_override = mat
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return m
 
 
 ## Ribbon trail that follows a moving point. Call update(pos) every frame and
