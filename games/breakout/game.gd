@@ -132,9 +132,10 @@ var _brick_nodes: Array[MeshInstance3D] = []
 var _brick_mats := {}  # colour -> ShaderMaterial
 var _hint: Label
 var _blast_nodes: Array[Node3D] = []
-var _enemy_nodes := {}  # enemy id -> {root: Node3D, body: Node3D, spin: Vector3, hole: MeshInstance3D}
+var _enemy_nodes := {}  # enemy id -> {root, body, spin: Vector3, hole, colour: Color}
 var _circuit_textures: Array = []
 var _charge_glow: Node3D
+var _charge_particles: CPUParticles3D
 var _launch := false
 var _dash := 0
 var _dash_glow := 0.0
@@ -240,9 +241,10 @@ func _handle_events() -> void:
 			"enemy_ready":
 				_close_wormhole(e[1])
 			"enemy_destroyed":
+				var ecol: Color = _enemy_nodes[e[1][0]].colour if _enemy_nodes.has(e[1][0]) else Color(0.75, 0.4, 1.0)
 				_remove_enemy_node(e[1][0])
 				var ep: Vector2 = e[1][1]
-				_explode_brick(Vector3(ep.x, 0.2, ep.y), Color(0.75, 0.4, 1.0), 1.8)
+				_explode_brick(Vector3(ep.x, 0.2, ep.y), ecol, 1.2)
 				Audio.sfx("tb_enemy_die")
 			"ship_destroyed":
 				var sp: Vector2 = e[1]
@@ -526,9 +528,14 @@ func _build_ship(fallback_mat: Material) -> void:
 	shield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	shield.position = Vector3(0.0, 0.08, -Sim.PADDLE_H * 0.5 - 0.2)
 	_ship.add_child(shield)
-	# Blast charge glow on the nose (hidden unless both flippers are held).
+	# Blast charge (D-053): particles gather at a point in front of the nose while
+	# charging; once charged, the plasma ball appears there until release.
+	var charge_point := Vector3(0.0, 0.1, -Sim.PADDLE_H * 0.5 - 0.3)
+	_charge_particles = Fx.make_charge_particles(0.9, Color(0.45, 0.8, 1.0))
+	_charge_particles.position = charge_point
+	_ship.add_child(_charge_particles)
 	_charge_glow = Fx.make_plasma_ball(Sim.BALL_R * 1.4)
-	_charge_glow.position = Vector3(0.0, 0.1, -Sim.PADDLE_H * 0.5 - 0.15)
+	_charge_glow.position = charge_point
 	_charge_glow.visible = false
 	_ship.add_child(_charge_glow)
 	# A soft blue key light so the white hull reads under the darker scene.
@@ -667,18 +674,21 @@ func _spawn_enemy_node(id: int, pos: Vector2) -> void:
 			_circuit_textures.append(load("res://assets/textures/breakout/circuit_%s.png" % c))
 	var root := Node3D.new()
 	root.position = Vector3(pos.x, 0.3, pos.y)
-	var body := Fx.make_tetrahedron(Sim.ENEMY_R * 1.5, _circuit_textures, Color(0.75, 0.45, 1.0))
+	# One circuit colour per enemy (D-053).
+	var pick := randi() % _circuit_textures.size()
+	var colour: Color = CIRCUIT_GLOW[["red", "yellow", "green", "blue"][pick]]
+	var body := Fx.make_tetrahedron(Sim.ENEMY_R * 1.5, _circuit_textures[pick], colour)
 	body.scale = Vector3.ONE * 0.01
 	root.add_child(body)
 	_root.add_child(root)
-	var hole := Fx.make_wormhole(3.0)
+	var hole := Fx.make_wormhole(1.7)
 	hole.position = Vector3(pos.x, 0.25, pos.y)
 	_root.add_child(hole)
 	var tw := hole.create_tween()
 	tw.tween_method(func(o: float): hole.set_instance_shader_parameter("open", o), 0.0, 1.0, 0.5) \
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	var spin := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized() * randf_range(1.2, 2.2)
-	_enemy_nodes[id] = {"root": root, "body": body, "spin": spin, "hole": hole}
+	_enemy_nodes[id] = {"root": root, "body": body, "spin": spin, "hole": hole, "colour": colour}
 
 
 func _close_wormhole(id: int) -> void:
@@ -736,13 +746,14 @@ func _animate_blasts(_delta: float) -> void:
 		var p: Vector2 = sim.blasts[i].pos
 		# Nose leads: shift the drawn bolt so its tail trails behind the hitbox.
 		_blast_nodes[i].position = Vector3(p.x, 0.12, p.y + Sim.BLAST_H * 0.55)
-	# Charge glow on the ship's nose while both flippers are held.
-	var c := clampf(sim.blast_charge, 0.0, 1.0)
-	_charge_glow.visible = c > 0.0
-	if c > 0.0:
-		var ready := sim.blast_charge >= 1.0
-		var pulse := 1.0 + (0.15 * sin(Time.get_ticks_msec() * 0.03) if ready else 0.0)
-		_charge_glow.scale = Vector3.ONE * (0.3 + 0.7 * c) * pulse
+	# Charging (D-053): particles converge while charging; the ball shows once charged.
+	var charging := sim.blast_charge > 0.0 and sim.blast_charge < 1.0
+	var charged := sim.blast_charge >= 1.0
+	if _charge_particles.emitting != charging:
+		_charge_particles.emitting = charging
+	_charge_glow.visible = charged
+	if charged:
+		_charge_glow.scale = Vector3.ONE * (1.0 + 0.15 * sin(Time.get_ticks_msec() * 0.03))
 
 
 ## Backglass: title art only (status is on the DMD, D-051).

@@ -35,10 +35,10 @@ static func make_plasma_ball(radius: float) -> Node3D:
 	return root
 
 
-## Tetrahedron enemy body (D-052): circumradius `radius`; each face shows a
-## random texel-snapped crop of a circuit texture (like the bricks), chunky
-## nearest-filtered pixels with glowing LEDs, plus bright glowing edges.
-static func make_tetrahedron(radius: float, textures: Array, edge_color: Color) -> Node3D:
+## Tetrahedron enemy body (D-052, D-053): circumradius `radius`; each face shows
+## a random texel-snapped crop of ONE circuit texture (a single colour per enemy),
+## chunky nearest-filtered pixels with glowing LEDs, plus glowing edges.
+static func make_tetrahedron(radius: float, texture: Texture2D, edge_color: Color) -> Node3D:
 	var root := Node3D.new()
 	root.name = "Tetrahedron"
 	var k := radius / sqrt(3.0)
@@ -60,7 +60,7 @@ static func make_tetrahedron(radius: float, textures: Array, edge_color: Color) 
 			st.set_uv(uvs[i])
 			st.add_vertex(pts[i])
 		var mesh := st.commit()
-		var tex: Texture2D = textures[randi() % textures.size()]
+		var tex: Texture2D = texture
 		var m := StandardMaterial3D.new()
 		m.albedo_texture = tex
 		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
@@ -89,6 +89,54 @@ static func make_tetrahedron(radius: float, textures: Array, edge_color: Color) 
 	li.material_override = lm
 	root.add_child(li)
 	return root
+
+
+## Charge-up particles (D-053): glowing square pixels that spawn on a ring around
+## the emitter and are pulled into its centre, shrinking as they arrive.
+## Toggle `emitting` while charging.
+static func make_charge_particles(ring_radius: float, color: Color) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.amount = 36
+	p.lifetime = 0.35
+	p.local_coords = true
+	p.emitting = false
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	p.emission_ring_axis = Vector3.UP
+	p.emission_ring_radius = ring_radius
+	p.emission_ring_inner_radius = ring_radius * 0.7
+	p.emission_ring_height = 0.1
+	p.direction = Vector3.ZERO
+	p.spread = 0.0
+	p.gravity = Vector3.ZERO
+	p.initial_velocity_min = 0.0
+	p.initial_velocity_max = 0.0
+	# Reach the centre at about the end of the lifetime: r = 0.5 * a * t^2.
+	var pull := 2.0 * ring_radius * 0.85 / (p.lifetime * p.lifetime)
+	p.radial_accel_min = -pull * 1.1
+	p.radial_accel_max = -pull * 0.9
+	p.tangential_accel_min = 2.0  # slight swirl
+	p.tangential_accel_max = 4.0
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 0.6))
+	curve.add_point(Vector2(0.6, 1.0))
+	curve.add_point(Vector2(1.0, 0.2))
+	p.scale_amount_curve = curve
+	var fade := Gradient.new()
+	fade.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+	fade.colors = PackedColorArray([Color(color, 0.0), Color(color, 1.0), Color(1, 1, 1, 1)])
+	p.color_ramp = fade
+	var px := QuadMesh.new()
+	px.size = Vector2(0.07, 0.07)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.vertex_color_use_as_albedo = true
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.albedo_color = Color(2.0, 2.0, 2.0, 1.0)  # HDR so the glow picks them up
+	px.material = m
+	p.mesh = px
+	return p
 
 
 ## Wormhole vortex billboard (D-052). Drive "open" (0..1) as an instance uniform.

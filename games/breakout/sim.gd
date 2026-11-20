@@ -47,7 +47,7 @@ const BLAST_SPEED := 20.0
 const BLAST_W := 0.36
 const BLAST_H := 0.7
 # --- tetrahedron enemy (D-052) -----------------------------------------------------
-const ENEMY_R := 0.62                # hitbox radius (~2 bricks wide)
+const ENEMY_R := 0.31                # hitbox radius (director: 50% smaller, D-053)
 const ENEMY_POINTS := 500
 const ENEMY_FIRST_SPAWN := 10.0      # seconds of play before the first one
 const ENEMY_INTERVAL := Vector2(14.0, 22.0)

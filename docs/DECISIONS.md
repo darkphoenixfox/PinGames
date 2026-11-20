@@ -511,3 +511,14 @@
     - **Sounds:** `tb_wormhole`, `tb_enemy_die`, `tb_ship_die`.
   - **Dev:** `--tb-enemy-now` brings the first enemy in 0.3 s after firing.
 - **Status:** Accepted
+
+### D-053 — Blast charge particles; smaller single-colour tetrahedrons
+- **Date:** 2026-11-20
+- **Decision (director):**
+  - While charging, particles are collected towards a single point in front of the ship. Once charged, the plasma ball shows there.
+  - The tetrahedron is 50% smaller, uses one texture colour per enemy, and at most 2 are on screen at the same time.
+- **Implementation:**
+  - **Charge particles:** `Fx.make_charge_particles` creates CPU particles on a ring (radius 0.9) with negative radial acceleration, tuned to reach the centre within their 0.35 s lifetime, plus a slight swirl. They emit only while `0 < blast_charge < 1`. The plasma ball (`_charge_glow`) shows only when fully charged.
+  - **Tetrahedron:** `Sim.ENEMY_R` is 0.31 (it now fits through a single-brick gap). `make_tetrahedron` takes one texture, and the edge and explosion colours match it. The wormhole is scaled down to 1.7.
+  - **Cap:** `ENEMY_MAX` stays at 2, unchanged.
+- **Status:** Accepted
