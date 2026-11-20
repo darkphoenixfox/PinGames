@@ -33,16 +33,38 @@ scripts\test.ps1                                 # headless smoke tests
 | `--game=<breakout\|shmup\|racer>` | Skip the picker. Exit returns to the frontend. |
 | `--lang=<locale>` | UI language |
 | `--section.key=value` | Override any setting for this run, e.g. `--display.table_rotation=90` |
-| `--screenshot=<dir>` | Save PNGs of every screen, then quit (development aid) |
+| `--mode=operator\|attract\|initials` | Open a shell mode directly (development aid) |
+| `--press=flip_r,launch,hold:start+exit:3.5` | Simulate button presses (development aid) |
+| `--screenshot=<dir>` | Save PNGs of every screen and window, then quit (development aid) |
 
 ### Settings
 Settings live in `%APPDATA%\PinGames\pingames.cfg` on Windows, or `~/.local/share/PinGames/pingames.cfg` on Linux. It's a plain INI-style file, and every key has a default in `core/config.gd`. Main keys:
 - `[display]`: layout, monitor index per screen, rotation per screen (0/90/180/270, -1 = auto), DMD sink, render scale
 - `[dmd]`: dot resolution, colour, hardware host/port
 - `[input]`: bindings per action, e.g. `flip_l=["key:Shift@left", "joy:9"]`
-- `[operator]`: language, free play, balls per game
+- `[dmd]` also has `mono`: `false` = full-colour LEDs, `true` = classic single-colour look
+- `[operator]`: language, free play, balls per game, number of side buttons, attract delay, volumes
 
-The cabinet-friendly operator menu, driven by the buttons, arrives in M1.
+High scores are in `scores.cfg` in the same folder.
+
+### Operator menu (no keyboard needed)
+To open it, **hold Start + Exit for 3 seconds**, or **hold Exit for 5 seconds** on the game picker. Flippers move, Launch selects or edits, and Exit goes back.
+
+| Page | What it does |
+|---|---|
+| Display Setup | Layout; monitor and rotation for each screen; DMD output (own monitor / inside backglass / LED hardware); render scale. **Identify monitors** shows a number on each screen. **Apply** shows the result and undoes it after 15 s unless you press Launch. |
+| Controls | Select an action, then press the new button within 6 s. Reset to defaults. |
+| Game Settings | Free play, balls/lives, side buttons (auto/2/4), attract delay, DMD style (colour/mono) |
+| Audio | Master, music and effects volume; attract sounds |
+| Language | UI language (any column in `strings.csv`) |
+| Reset High Scores | Per game or all; press twice to confirm |
+| System Info | Engine version, layout, monitors, render size, settings folder |
+
+### Picker and game flow
+- **Picker:** flippers choose a game, and Launch or Start plays it. Exit quits the app.
+- After 60 s idle, the picker switches to attract mode (title and high-score pages).
+- **Game over:** a top-10 score asks for initials. Flippers pick the letter, Launch confirms it and Exit goes back.
+- **Coin mode** (Free play OFF): Coin adds a credit, and starting a game uses one.
 
 ### Default controls
 | Action | Keyboard | Controller |
@@ -56,13 +78,14 @@ The cabinet-friendly operator menu, driven by the buttons, arrives in M1.
 
 ## Repository layout
 ```
-core/            shared framework (autoloads: Config, I18n, CabinetInput, Dmd, Screens)
+core/            shared framework (autoloads: Config, I18n, CabinetInput, Audio, Credits, HighScores, Dmd, Screens)
+  ui/            shared UI helpers + button-driven menu
   util/          pure helpers (CLI, bindings, CSV i18n) — unit-tested headless
   dmd/           DMD viewport + sinks (hardware sink is a stub)
   locale/        strings.csv — translation keys (column per language)
   shaders/       shared shaders (DMD dots)
   game_module.gd base script every game extends
-shell/           boot, picker, game lifecycle
+shell/           boot + modes (picker, attract, game, initials, operator), dev flags
 games/<id>/      one folder per game (game.gd + its content)
 assets/          shared assets; licenses in assets/CREDITS.md (Git LFS)
 scripts/         run / test scripts

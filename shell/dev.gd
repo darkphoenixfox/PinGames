@@ -1,0 +1,69 @@
+## Development aids driven by CLI flags, so changes can be verified without a human
+## at the cabinet (D-017):
+##   --press=flip_r,flip_r,launch   simulate cabinet actions, one every 12 frames
+##                                  (use "wait" to skip a slot, "hold:start+exit:3.5"
+##                                   to hold actions for N seconds)
+##   --screenshot=<dir>             after presses + 30 frames, save PNGs and quit
+extends Node
+
+const STEP_FRAMES := 12
+
+
+func _ready() -> void:
+	if not (Config.cli.has("press") or Config.cli.has("screenshot")):
+		queue_free()
+		return
+	_run.call_deferred()
+
+
+func _run() -> void:
+	await _frames(20)
+	var presses := str(Config.cli.get("press", ""))
+	if not presses.is_empty():
+		for step in presses.split(","):
+			await _do_step(step.strip_edges())
+	if Config.cli.has("screenshot"):
+		await _frames(30)
+		_capture(str(Config.cli["screenshot"]))
+		get_tree().quit()
+
+
+func _do_step(step: String) -> void:
+	if step == "wait" or step.is_empty():
+		await _frames(STEP_FRAMES)
+		return
+	if step.begins_with("hold:"):
+		var parts := step.split(":")
+		var actions := parts[1].split("+")
+		var seconds := parts[2].to_float() if parts.size() > 2 else 1.0
+		for a in actions:
+			Input.action_press(a)
+		await get_tree().create_timer(seconds).timeout
+		for a in actions:
+			Input.action_release(a)
+		await _frames(STEP_FRAMES)
+		return
+	Input.action_press(step)
+	await _frames(3)
+	Input.action_release(step)
+	await _frames(STEP_FRAMES)
+
+
+func _frames(n: int) -> void:
+	for i in n:
+		await get_tree().process_frame
+
+
+func _capture(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	Screens.table.get_texture().get_image().save_png(dir.path_join("table.png"))
+	Screens.backglass.get_texture().get_image().save_png(dir.path_join("backglass.png"))
+	Dmd.texture().get_image().save_png(dir.path_join("dmd.png"))
+	get_viewport().get_texture().get_image().save_png(dir.path_join("window_table.png"))
+	# Secondary OS windows as actually displayed (e.g. DMD with the dot shader).
+	for child in Screens.get_children():
+		if child is Window:
+			var w := child as Window
+			var file := "window_" + w.title.get_slice(" - ", 1).to_lower().replace(" ", "_") + ".png"
+			w.get_texture().get_image().save_png(dir.path_join(file))
+	print("Dev: screenshots saved to %s" % dir)

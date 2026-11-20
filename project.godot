@@ -18,6 +18,9 @@ run/low_processor_mode=false
 Config="*res://core/config.gd"
 I18n="*res://core/i18n.gd"
 CabinetInput="*res://core/cabinet_input.gd"
+Audio="*res://core/audio.gd"
+Credits="*res://core/credits.gd"
+HighScores="*res://core/high_scores.gd"
 Dmd="*res://core/dmd/dmd.gd"
 Screens="*res://core/screens.gd"
 

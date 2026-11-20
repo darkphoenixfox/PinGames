@@ -161,6 +161,7 @@ func _add_view(win: Window, tex: Texture2D, rot: int, dmd: bool) -> Control:
 		mat.shader = DMD_SHADER
 		mat.set_shader_parameter("dots", Vector2(Dmd.size))
 		mat.set_shader_parameter("tint", Dmd.color)
+		mat.set_shader_parameter("mono", Dmd.mono)
 		v.material = mat
 	if win == get_window():
 		add_child(v)  # Screens itself lives in the root window
@@ -168,6 +169,45 @@ func _add_view(win: Window, tex: Texture2D, rot: int, dmd: bool) -> Control:
 	else:
 		win.add_child(v)  # freed together with its window
 	return v
+
+
+## Shows a big number on every monitor for a few seconds (Display Setup wizard).
+## Numbers are 1-based, matching the operator menu.
+func identify_monitors(seconds: float = 4.0) -> void:
+	if is_headless():
+		return
+	for i in DisplayServer.get_screen_count():
+		var r := _monitor_rect(i)
+		var sz := Vector2i(560, 380)
+		var w := Window.new()
+		w.title = "PinGames monitor %d" % (i + 1)
+		w.borderless = true
+		w.always_on_top = true
+		w.unfocusable = true
+		w.position = r.position + (r.size - sz) / 2
+		w.size = sz
+		var bg := ColorRect.new()
+		bg.color = Color("ffd23e")
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		w.add_child(bg)
+		var l := Label.new()
+		l.text = "%d\n%dx%d" % [i + 1, r.size.x, r.size.y]
+		l.set_anchors_preset(Control.PRESET_FULL_RECT)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		l.add_theme_font_size_override("font_size", 110)
+		l.add_theme_color_override("font_color", Color.BLACK)
+		w.add_child(l)
+		add_child(w)
+		get_tree().create_timer(seconds).timeout.connect(w.queue_free)
+
+
+func monitor_count() -> int:
+	return DisplayServer.get_screen_count()
+
+
+func monitor_size(i: int) -> Vector2i:
+	return DisplayServer.screen_get_size(i)
 
 
 ## Sets the TABLE internal resolution to match the output (render_scale=auto) or a fixed factor.

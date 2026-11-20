@@ -54,7 +54,7 @@ Rules:
   - Language, free play / coin, balls/lives, difficulty, volume, attract sounds on/off, reset high scores.
 - **Credits:** free play by default. In coin mode, Coin adds a credit and Start spends one.
 - **High scores:** top 10 per game in `user://scores.cfg`, plus a grand champion. They are shown in attract on all three screens.
-- **DMD scripting:** a small API for text, score display, scrolling and short frame animations. Shared fonts and transitions give the bundle one consistent DMD style.
+- **DMD** (D-026, D-027): a full-colour dot matrix, one colour per dot. The API is `Dmd.show_text(top, bottom, colours)`, `Dmd.show_score(score, left, right)` and `Dmd.flash(text, seconds)`. Long text scrolls automatically. Games may also draw anything 2D into `Dmd.viewport`, at 128x32 dots by default. A shared palette gives the bundle one DMD style.
 - **Audio:** buses for Music, SFX and Callouts. Music is chiptune / arcade style and comes from a mix of sources (D-023): AI-generated tracks, tracker modules and royalty-free packs. **The game plays only OGG Vorbis.** Tracker modules (.xm/.it/.mod) are kept as source files and rendered to OGG with `openmpt123` by a script, so no native audio plugin is needed.
 - **Attract mode:** after 60 s idle, the shell cycles each game's attract demo.
 
@@ -99,7 +99,7 @@ Rules:
 | Flippers (hold) | Move ship left / right (**horizontal only**) | same |
 | Fire | **Automatic** | **Manual**: hold either magna save |
 | Both flippers held 3 s | **Bomb** | same |
-| Launch | *Open* (proposal: lock in a sub-weapon from pickups, or start/continue) | same |
+| Launch | Unassigned (D-025): hands stay on the flippers | same |
 
 - **Bomb charge:** holding both flippers starts a 3-second buildup. It has a rising sound, a charge ring around the ship, the DMD counting up and the screen tinting. Releasing either flipper early cancels it with no cost. While charging, the ship can't move (both buttons are held), which makes the bomb a deliberate risk.
 - Stages are built for a ship that only moves sideways. Enemy patterns and bullets are dodged left and right, and some lanes can be blocked.
@@ -132,7 +132,7 @@ Rules:
 | Milestone | Content |
 |---|---|
 | **M0** ✅ | Repo, docs, bootable 3-window shell, game stubs, tests |
-| **M1** | Core shell: operator menu, Display Setup wizard, remapping, attract mode, high scores, credits, audio buses, DMD API and pixel font |
+| **M1** ✅ | Core shell: operator menu, Display Setup wizard, remapping, attract mode, high scores, credits, audio buses, DMD API and pixel font. Still to do: music playback in attract, per-game attract demos (they need real games) |
 | **M2** | Block Breaker vertical slice: one complete world, then all of it |
 | **M3** | Sky Striker |
 | **M4** | Turbo Run (road renderer spike first) |
@@ -141,11 +141,10 @@ Rules:
 
 ## 7. Open questions
 1. Final names for the bundle and each game (director is thinking about it).
-2. Sky Striker: what does Launch do? (§5.2)
-3. Sky Striker: is the `cabinet_buttons = auto` switch to manual fire OK? (§5.2)
-4. Block Breaker: should the paddle behave differently in stages with flippers? (§5.1, decide in playtests)
-5. Should multiplayer work like pinball (players take turns)? The shell is ready for `start(players)`.
-6. Should nudge or an analog plunger be used at all (they aren't guaranteed)?
+2. Sky Striker: is the `cabinet_buttons = auto` switch to manual fire OK? (§5.2)
+3. Block Breaker: should the paddle behave differently in stages with flippers? (§5.1, decide in playtests)
+4. Should multiplayer work like pinball (players take turns)? The shell is ready for `start(players)`.
+5. Should nudge or an analog plunger be used at all (they aren't guaranteed)?
 
 ## 8. Asset pipeline
 ### 3D models (D-020)

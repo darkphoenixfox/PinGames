@@ -2,6 +2,7 @@
 ## Gameplay code listens to `action_pressed` / `action_released` with logical
 ## action names and never reads keys/buttons directly (D-007).
 ## Polls the global Input singleton, so it works whichever window has focus.
+## Also provides hold timing (operator combos, bomb charge) and remap capture.
 extends Node
 
 signal action_pressed(action: StringName)
@@ -29,8 +30,13 @@ const DEFAULT_BINDINGS := {
 	"exit": ["key:Backspace", "joy:2"],         # Square
 }
 
+var _down_since := {}  # action -> ticks msec when pressed
+var _muted := false
+var _capture := Callable()
+
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	apply_bindings()
 
 
@@ -40,8 +46,7 @@ func apply_bindings() -> void:
 			InputMap.action_erase_events(action)
 		else:
 			InputMap.add_action(action, 0.5)
-		var list: Array = Config.get_value("input", String(action), DEFAULT_BINDINGS[String(action)])
-		for b in list:
+		for b in get_bindings(action):
 			var ev := Bindings.to_event(str(b))
 			if ev == null:
 				push_warning("CabinetInput: bad binding '%s' for %s" % [b, action])
@@ -49,13 +54,96 @@ func apply_bindings() -> void:
 			InputMap.action_add_event(action, ev)
 
 
-func _process(_delta: float) -> void:
-	for action in ACTIONS:
-		if Input.is_action_just_pressed(action):
-			action_pressed.emit(action)
-		elif Input.is_action_just_released(action):
-			action_released.emit(action)
+func get_bindings(action: StringName) -> Array:
+	var list: Variant = Config.get_value("input", String(action), DEFAULT_BINDINGS[String(action)])
+	return (list as Array).duplicate() if list is Array else []
+
+
+## Adds a binding to an action, replacing that action's bindings of the same kind
+## (keyboard vs joypad) and removing it from any other action that used it.
+func set_binding(action: StringName, binding: String) -> void:
+	var kind := Bindings.kind(binding)
+	for a in ACTIONS:
+		if a == action:
+			continue
+		var other := get_bindings(a)
+		if binding in other:
+			other.erase(binding)
+			Config.set_value("input", String(a), other)
+	var list := get_bindings(action).filter(func(b): return Bindings.kind(str(b)) != kind)
+	list.append(binding)
+	Config.set_value("input", String(action), list)
+	apply_bindings()
+
+
+func reset_bindings() -> void:
+	for a in ACTIONS:
+		Config.set_value("input", String(a), (DEFAULT_BINDINGS[String(a)] as Array).duplicate())
+	apply_bindings()
+
+
+func describe_bindings(action: StringName) -> String:
+	var parts: PackedStringArray = []
+	for b in get_bindings(action):
+		parts.append(Bindings.describe(str(b)))
+	return ", ".join(parts)
+
+
+## Seconds the action has been held (0 if up).
+func held_time(action: StringName) -> float:
+	if not Input.is_action_pressed(action) or not _down_since.has(action):
+		return 0.0
+	return (Time.get_ticks_msec() - int(_down_since[action])) / 1000.0
 
 
 func is_down(action: StringName) -> bool:
 	return Input.is_action_pressed(action)
+
+
+## Suppresses action signals until every action is released (used after mode
+## switches and remap capture so the triggering press does not leak).
+func mute_until_release() -> void:
+	_muted = true
+
+
+## Calls `callback(binding: String)` with the next physical press.
+func capture_next(callback: Callable) -> void:
+	_capture = callback
+	_muted = true
+
+
+func cancel_capture() -> void:
+	_capture = Callable()
+
+
+func is_capturing() -> bool:
+	return _capture.is_valid()
+
+
+func _input(event: InputEvent) -> void:
+	if not _capture.is_valid():
+		return
+	var b := Bindings.from_event(event)
+	if b.is_empty():
+		return
+	var cb := _capture
+	_capture = Callable()
+	get_viewport().set_input_as_handled()
+	cb.call(b)
+
+
+func _process(_delta: float) -> void:
+	var any_down := false
+	for action in ACTIONS:
+		if Input.is_action_pressed(action):
+			any_down = true
+		if Input.is_action_just_pressed(action):
+			_down_since[action] = Time.get_ticks_msec()
+			if not _muted:
+				action_pressed.emit(action)
+		elif Input.is_action_just_released(action):
+			_down_since.erase(action)
+			if not _muted:
+				action_released.emit(action)
+	if _muted and not any_down and not _capture.is_valid():
+		_muted = false

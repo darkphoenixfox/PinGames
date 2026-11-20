@@ -24,8 +24,15 @@
 scripts\test.ps1                                   # import + headless tests (must pass before commit)
 scripts\run.ps1 [--layout=...] [--game=...]        # run
 & $env:GODOT_BIN --path . -- --screenshot=<dir>     # capture all screens for visual checks (D-017)
+& $env:GODOT_BIN --path . -- --mode=operator --press=launch,flip_r --screenshot=<dir>   # drive + capture (D-030)
 ```
 The Godot binary is at `C:\Users\Phoenixfox\Dev\Godot\Godot_v4.7.2-stable_win64_console.exe`, unless `GODOT_BIN` overrides it.
+
+## Gotchas
+- A Control that anchors itself in `_ready()` must call `set_anchors_and_offsets_preset()`. `set_anchors_preset()` keeps its zero size.
+- `ConfigFile.get_value(section, key, null)` logs an error when the key is missing. Check `has_section_key` first.
+- Tests flag any ALL_CAPS_WITH_UNDERSCORE string literal that isn't a translation key, comments included.
+- Screenshot runs use the real `user://` data (settings and scores). Don't leave runs that save anything there.
 
 ## Commit and push
 - The repo is private on GitHub (`darkphoenixfox/PinGames`, branch `main`).

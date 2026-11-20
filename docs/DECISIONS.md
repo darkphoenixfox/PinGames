@@ -210,3 +210,52 @@
 - **Date:** 2026-11-20
 - **Decision:** Open the operator menu by holding Start + Exit for 3 seconds, or by holding Exit for 5 seconds on the picker.
 - **Status:** Accepted
+
+### D-025 — Shmup: Launch stays unassigned
+- **Date:** 2026-11-20
+- **Decision:** Sky Striker uses only the flippers (movement, and both held for the bomb) and the magna saves (manual fire on 4+1 cabinets). Launch has no gameplay role.
+- **Why:** The director's call. Players won't have time to move a hand to Launch while dodging.
+- **Status:** Accepted
+
+### D-026 — The DMD is full colour, with a single colour per dot
+- **Date:** 2026-11-20
+- **Decision:** The DMD simulates an RGB LED panel such as ZeDMD. Every dot shows exactly one colour at a time: the colour of its source pixel, with no sub-dot blending. Games and the shell may use any colours. A shared palette (`Dmd.ORANGE/YELLOW/CYAN/RED/GREEN/WHITE/DIM`) keeps the bundle consistent. Setting `dmd.mono = true` (the operator's "DMD STYLE" option) switches to a classic single-colour plasma look, where everything is tinted `dmd.color` by brightness.
+- **Why:** The director's requirement.
+- **Consequences:** `dmd_dots.gdshader` samples each dot's centre pixel. The hardware sink (M5) must send RGB frames, which RGB panels such as ZeDMD support. Monochrome panels need a colour-to-shade conversion.
+- **Status:** Accepted
+
+### D-027 — Built-in 5x7 dot font for the DMD
+- **Date:** 2026-11-20
+- **Decision:** DMD text is drawn dot by dot with a built-in 5x7 font (`core/dmd/dot_font.gd`) at 1x or 2x size. The font is uppercase only, and accented Latin letters fold to their base letter. Ñ has its own glyph. Text too wide for the DMD scrolls as a marquee automatically.
+- **Why:** It needs no font asset or licence, the dots stay crisp, and long translations stay legible.
+- **Consequences:** Languages that aren't Latin-based (CJK, Cyrillic and so on) will need a pixel font asset rendered into the DMD viewport. Revisit this when such a language is requested. DMD strings in `strings.csv` should be ≤ 21 characters, or they will scroll.
+- **Status:** Accepted
+
+### D-028 — Shell flow and `--game` behaviour (refines D-003)
+- **Date:** 2026-11-20
+- **Decision:**
+  - The shell runs one mode at a time: picker, attract, game, initials or operator.
+  - On the picker, Start, Launch and Exit act on *release*, and only for taps under 0.9 s. This lets holding Start+Exit for 3 s, or Exit for 5 s, open the operator menu without side effects (D-024).
+  - Exit during a game aborts it with no high-score entry.
+  - When started with `--game=<id>`, Exit during the game quits the app. After game over (and initials entry, if earned), a picker locked to that game asks "PLAY AGAIN?", and Exit there quits.
+  - Attract starts after `operator.attract_delay` seconds idle, but only in the unlocked picker.
+- **Status:** Accepted
+
+### D-029 — Operator menu behaviour
+- **Date:** 2026-11-20
+- **Decision:**
+  - **Display changes** are staged, then applied with a 15-second "keep or undo" countdown. Launch keeps them, and Exit or the timeout reverts. A wrong monitor choice can't strand the cabinet.
+  - **Identify monitors** shows each monitor's 1-based number and resolution.
+  - **Remapping** captures the next physical press within 6 s. The new binding replaces that action's bindings of the same kind (keyboard vs joypad) and is removed from any other action. "Reset to defaults" restores D-019.
+  - **Destructive actions**, such as resetting high scores, need a second press.
+  - **Saving:** settings are saved on "Save and exit" or when Exit leaves the main page.
+- **Status:** Accepted
+
+### D-030 — Dev automation flags (extends D-017)
+- **Date:** 2026-11-20
+- **Decision:**
+  - `--mode=operator|attract|initials` opens a shell mode directly.
+  - `--press=a,b,c` simulates cabinet actions, one every 12 frames. `wait` skips a slot, and `hold:start+exit:3.5` holds actions for a set time.
+  - `--screenshot=<dir>` now also saves every secondary window as it is displayed (`window_dmd.png` shows the dot shader).
+  - Placeholder games give fake points (Launch = +1000) and end the game on Start, so the game-over → high-score flow can be tested.
+- **Status:** Accepted

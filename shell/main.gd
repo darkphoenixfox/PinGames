@@ -1,149 +1,125 @@
-## Shell: boots the screens, shows the game picker (attract placeholder) and runs
-## game modules. `--game=<id>` launches a game directly; Exit then quits the app,
-## so cabinet frontends (PinUP Popper, PinballX) get control back (D-003).
+## Shell: boots the screens and runs exactly one mode at a time:
+##   picker <-> attract, picker -> game -> (initials) -> picker, picker/attract -> operator
+## `--game=<id>` launches a game directly; the picker is then locked to that game,
+## and Exit quits back to the cabinet frontend (D-003, D-028).
+## Coin is handled globally. Operator menu combos are checked here (D-024).
 extends Node
 
-## Order shown in the picker. id -> module script.
-const GAMES := [
-	["breakout", "res://games/breakout/game.gd"],
-	["shmup", "res://games/shmup/game.gd"],
-	["racer", "res://games/racer/game.gd"],
-]
+const Registry = preload("res://shell/game_registry.gd")
+const Picker = preload("res://shell/modes/picker.gd")
+const Attract = preload("res://shell/modes/attract.gd")
+const GameMode = preload("res://shell/modes/game_mode.gd")
+const Initials = preload("res://shell/modes/initials.gd")
+const Operator = preload("res://shell/modes/operator.gd")
+const Dev = preload("res://shell/dev.gd")
 
-var _game: Node
-var _direct_launch := false
+const COMBO_SECONDS := 3.0
+const EXIT_HOLD_SECONDS := 5.0
+
+var mode: Node
+var direct_game := ""
 var _picker_index := 0
-var _picker_root: Control
-var _picker_labels: Array[Label] = []
-var _backglass_root: Control
 
 
 func _ready() -> void:
 	Screens.setup(Config.layout())
-	CabinetInput.action_pressed.connect(_on_action.bind(true))
-	CabinetInput.action_released.connect(_on_action.bind(false))
-	if Config.cli.has("screenshot"):
-		_capture_and_quit(str(Config.cli["screenshot"]))
+	CabinetInput.action_pressed.connect(_on_pressed)
+	CabinetInput.action_released.connect(_on_released)
+	add_child(Dev.new())
+
 	var requested := Config.requested_game()
 	if not requested.is_empty():
-		_direct_launch = true
-		if not start_game(requested):
+		if not Registry.has(requested):
 			push_error("Unknown game '%s'" % requested)
 			get_tree().quit(2)
+			return
+		direct_game = requested
+		start_game(requested)
 		return
-	show_picker()
+	match str(Config.cli.get("mode", "")):
+		"operator":
+			open_operator()
+		"attract":
+			goto_attract()
+		"initials":
+			switch_to(Initials.new(Registry.ids()[0], 123456))
+		_:
+			goto_picker()
 
 
-func _on_action(action: StringName, pressed: bool) -> void:
-	if _game != null:
-		if action == &"exit" and pressed:
-			end_game()
-		else:
-			_game.on_action(action, pressed)
+func switch_to(new_mode: Node) -> void:
+	if mode != null:
+		if mode.has_method("selected_index"):
+			_picker_index = mode.selected_index()
+		mode.queue_free()
+	mode = new_mode
+	mode.shell = self
+	add_child(mode)
+	mode.enter()
+
+
+func _on_pressed(action: StringName) -> void:
+	if action == &"coin":
+		Credits.add_coin()
+		Audio.sfx("coin")
+		Dmd.flash(Credits.status_text(), 1.2, Dmd.GREEN)
 		return
-	if not pressed:
+	if mode:
+		mode.on_action(action, true)
+
+
+func _on_released(action: StringName) -> void:
+	if mode:
+		mode.on_action(action, false)
+
+
+func _process(_delta: float) -> void:
+	if mode == null or not mode.allows_operator_combo():
 		return
-	match action:
-		&"flip_l", &"magna_l":
-			_select(_picker_index - 1)
-		&"flip_r", &"magna_r":
-			_select(_picker_index + 1)
-		&"launch", &"start":
-			start_game(GAMES[_picker_index][0])
-		&"exit":
-			get_tree().quit()
+	var combo := CabinetInput.held_time(&"start") >= COMBO_SECONDS \
+		and CabinetInput.held_time(&"exit") >= COMBO_SECONDS
+	if combo or CabinetInput.held_time(&"exit") >= EXIT_HOLD_SECONDS:
+		open_operator()
 
 
-# --- picker ---------------------------------------------------------------------
-func show_picker() -> void:
-	_picker_root = VBoxContainer.new()
-	_picker_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	(_picker_root as VBoxContainer).alignment = BoxContainer.ALIGNMENT_CENTER
-	_picker_root.add_theme_constant_override("separation", 48)
-	Screens.table.add_child(_picker_root)
-	_picker_root.add_child(_label(tr("APP_TITLE"), 120, Color("ffd23e")))
-	_picker_root.add_child(_label(tr("PICKER_TITLE"), 64, Color.WHITE))
-	_picker_labels.clear()
-	for g in GAMES:
-		var probe: Node = load(g[1]).new()
-		var info: Dictionary = probe.get_info()
-		probe.free()
-		var l := _label(tr(info.title_key), 72, Color.WHITE)
-		_picker_root.add_child(l)
-		_picker_labels.append(l)
-	_picker_root.add_child(_label(tr("PICKER_HINT"), 40, Color(0.7, 0.7, 0.7)))
-
-	_backglass_root = _label(tr("APP_TITLE"), 220, Color("ffd23e"))
-	_backglass_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	(_backglass_root as Label).vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	Screens.backglass.add_child(_backglass_root)
-
-	var credit_key := "DMD_FREE_PLAY" if Config.get_value("operator", "free_play") else "DMD_INSERT_COIN"
-	Dmd.show_text(tr("APP_TITLE"), tr(credit_key))
-	_select(_picker_index)
+# --- transitions -------------------------------------------------------------------
+func goto_picker() -> void:
+	switch_to(Picker.new(direct_game, _picker_index))
 
 
-func hide_picker() -> void:
-	if _picker_root:
-		_picker_root.queue_free()
-		_picker_root = null
-	if _backglass_root:
-		_backglass_root.queue_free()
-		_backglass_root = null
-	_picker_labels.clear()
+func goto_attract() -> void:
+	switch_to(Attract.new())
 
 
-func _select(i: int) -> void:
-	_picker_index = posmod(i, GAMES.size())
-	for j in _picker_labels.size():
-		var on := j == _picker_index
-		_picker_labels[j].add_theme_color_override("font_color", Color("3ec7ff") if on else Color(0.5, 0.5, 0.5))
-		_picker_labels[j].scale = Vector2.ONE
+func open_operator() -> void:
+	CabinetInput.mute_until_release()
+	switch_to(Operator.new())
 
 
-# --- game lifecycle -------------------------------------------------------------
 func start_game(id: String) -> bool:
-	for g in GAMES:
-		if g[0] == id:
-			hide_picker()
-			_game = load(g[1]).new()
-			_game.name = "Game_" + id
-			add_child(_game)
-			_game.finished.connect(func(_scores): end_game())
-			_game.start(1)
-			print("Shell: started game '%s'" % id)
-			return true
-	return false
+	if not Credits.try_start():
+		Audio.sfx("error")
+		Dmd.flash(tr("DMD_INSERT_COIN"), 1.5, Dmd.RED)
+		return false
+	CabinetInput.mute_until_release()
+	switch_to(GameMode.new(id))
+	return true
 
 
-func end_game() -> void:
-	if _game:
-		_game.queue_free()
-		_game = null
-	if _direct_launch:
+## Player pressed Exit during a game.
+func abort_game() -> void:
+	CabinetInput.mute_until_release()
+	if not direct_game.is_empty():
 		get_tree().quit()
+		return
+	goto_picker()
+
+
+## Called by GameMode when the module reports game over.
+func game_finished(id: String, best_score: int) -> void:
+	CabinetInput.mute_until_release()
+	if HighScores.qualifies(id, best_score):
+		switch_to(Initials.new(id, best_score))
 	else:
-		show_picker()
-
-
-## Dev aid (--screenshot=<dir>): after a short warm-up, saves TABLE, BACKGLASS, DMD
-## content and the TABLE window as PNGs, then quits. Lets sessions verify visuals.
-func _capture_and_quit(dir: String) -> void:
-	for i in 30:
-		await get_tree().process_frame
-	DirAccess.make_dir_recursive_absolute(dir)
-	Screens.table.get_texture().get_image().save_png(dir.path_join("table.png"))
-	Screens.backglass.get_texture().get_image().save_png(dir.path_join("backglass.png"))
-	Dmd.texture().get_image().save_png(dir.path_join("dmd.png"))
-	get_viewport().get_texture().get_image().save_png(dir.path_join("window_table.png"))
-	print("Shell: screenshots saved to %s" % dir)
-	get_tree().quit()
-
-
-func _label(text: String, size: int, color: Color) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", color)
-	return l
+		Dmd.flash(tr("DMD_GAME_OVER"), 2.0, Dmd.RED)
+		goto_picker()

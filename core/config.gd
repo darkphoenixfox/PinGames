@@ -9,7 +9,7 @@ const PATH := "user://pingames.cfg"
 
 const DEFAULTS := {
 	"display": {
-		# windowed | 2screen | 3screen   (see docs/DECISIONS.md D-006, D-013)
+		# windowed | 2screen | 3screen   (D-006, D-013)
 		"layout": "windowed",
 		"windowed_monitor": 0,
 		"table_monitor": 0,
@@ -31,6 +31,8 @@ const DEFAULTS := {
 		"width": 128,
 		"height": 32,
 		"color": "ff7319",
+		# false = full colour RGB DMD (D-026); true = classic single-colour look
+		"mono": false,
 		"hardware_host": "127.0.0.1",
 		"hardware_port": 6789,
 	},
@@ -40,10 +42,17 @@ const DEFAULTS := {
 		"balls_per_game": 3,
 		# auto | 2 | 4 — number of side buttons (D-022)
 		"cabinet_buttons": "auto",
+		"attract_delay": 60,
 		"attract_sounds": false,
+		"volume_master": 8,
+		"volume_music": 7,
+		"volume_sfx": 8,
 	},
 	"input": {},  # filled from CabinetInput.DEFAULT_BINDINGS when missing
 }
+
+## CLI shortcut -> setting it overrides.
+const CLI_SHORTCUTS := {"layout": "display.layout", "lang": "operator.language"}
 
 var cli: Dictionary = {}
 var _file := ConfigFile.new()
@@ -53,23 +62,29 @@ func _init() -> void:
 	var args := OS.get_cmdline_args()
 	args.append_array(OS.get_cmdline_user_args())
 	cli = CliUtil.parse(args)
+	for shortcut in CLI_SHORTCUTS:
+		if cli.has(shortcut):
+			cli[CLI_SHORTCUTS[shortcut]] = cli[shortcut]
 	var err := _file.load(PATH)
 	if err != OK and err != ERR_FILE_NOT_FOUND:
 		push_warning("Config: could not read %s (error %d), using defaults" % [PATH, err])
 
 
 func get_value(section: String, key: String, fallback: Variant = null) -> Variant:
-	var cli_key := "%s.%s" % [section, key]
-	if cli.has(cli_key):
-		return cli[cli_key]
 	var def: Variant = fallback
 	if DEFAULTS.has(section) and DEFAULTS[section].has(key):
 		def = DEFAULTS[section][key]
+	var cli_key := "%s.%s" % [section, key]
+	if cli.has(cli_key):
+		return coerce(cli[cli_key], def)
 	return _file.get_value(section, key, def)
 
 
+## Setting a value also drops any CLI override for it, so operator-menu changes
+## take effect even when the app was launched with overrides.
 func set_value(section: String, key: String, value: Variant) -> void:
 	_file.set_value(section, key, value)
+	cli.erase("%s.%s" % [section, key])
 
 
 func save() -> void:
@@ -79,8 +94,22 @@ func save() -> void:
 
 
 func layout() -> String:
-	return str(cli.get("layout", get_value("display", "layout")))
+	return str(get_value("display", "layout"))
 
 
 func requested_game() -> String:
 	return str(cli.get("game", ""))
+
+
+## CLI values are strings; convert them to the type of the default.
+static func coerce(v: Variant, like: Variant) -> Variant:
+	if typeof(v) != TYPE_STRING:
+		return v
+	match typeof(like):
+		TYPE_BOOL:
+			return (v as String).to_lower() in ["1", "true", "yes", "on"]
+		TYPE_INT:
+			return (v as String).to_int()
+		TYPE_FLOAT:
+			return (v as String).to_float()
+	return v
