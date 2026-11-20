@@ -35,6 +35,7 @@ scripts\test.ps1                                 # headless smoke tests
 | `--section.key=value` | Override any setting for this run, e.g. `--display.table_rotation=90` |
 | `--mode=operator\|attract\|initials` | Open a shell mode directly (development aid) |
 | `--press=flip_r,launch,hold:start+exit:3.5` | Simulate button presses (development aid) |
+| `--mode=viewer --model=res://assets/models/<…>.glb` | Model viewer: flippers rotate, Launch toggles spin, Start changes view, Exit leaves |
 | `--screenshot=<dir>` | Save PNGs of every screen and window, then quit (development aid) |
 
 ### Settings

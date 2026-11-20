@@ -334,3 +334,11 @@
 - **Why:** The director's choice. Web searches on 2026-11-20 found no game called "Tilt Breaker", "TiltBreaker" or "Tilt-Breaker". The nearest titles were a jam game "TILT-out" (GameDevJS 2025) and the iOS "Tilt 'n' Tumble". "TILT" is also pinball's penalty word, which fits the pinball theme.
 - **Consequences:** Do a proper trademark search before any commercial release; the web searches don't count as legal clearance.
 - **Status:** Accepted
+
+### D-038 — Model viewer and Blender for headless model processing
+- **Date:** 2026-11-20
+- **Decision:**
+  - **Model viewer:** `--mode=viewer --model=res://...glb` shows a model on the TABLE screen, auto-framed, with its size and triangle count. Flippers rotate it, Launch toggles the spin, Start cycles views (3/4, front, top, side) and Exit leaves. With `--screenshot` it serves both director reviews and Claude's checks.
+  - **Blender:** Blender 5.3 at `C:\dev\Blender\blender.exe` is available for headless (`--background --python`) model processing: decimating over-budget meshes, fixing orientation and scale, resizing textures, and pre-rendering sprites from 3D (GDD §8). Scripts go in `scripts/tools/`, and the director never needs to open Blender.
+- **Why:** The director has no editor workflow (D-004), but models still need review and processing.
+- **Status:** Accepted

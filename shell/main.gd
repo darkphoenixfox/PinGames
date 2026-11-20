@@ -11,6 +11,7 @@ const Attract = preload("res://shell/modes/attract.gd")
 const GameMode = preload("res://shell/modes/game_mode.gd")
 const Initials = preload("res://shell/modes/initials.gd")
 const Operator = preload("res://shell/modes/operator.gd")
+const Viewer = preload("res://shell/modes/viewer.gd")
 const Dev = preload("res://shell/dev.gd")
 
 const COMBO_SECONDS := 3.0
@@ -41,6 +42,8 @@ func _ready() -> void:
 			open_operator()
 		"attract":
 			goto_attract()
+		"viewer":
+			switch_to(Viewer.new(str(Config.cli.get("model", ""))))
 		"initials":
 			switch_to(Initials.new(Registry.ids()[0], 123456))
 		_:
