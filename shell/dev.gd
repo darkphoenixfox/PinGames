@@ -2,8 +2,10 @@
 ## at the cabinet (D-017):
 ##   --press=flip_r,flip_r,launch   simulate cabinet actions, one every 12 frames
 ##                                  (use "wait" to skip a slot, "hold:start+exit:3.5"
-##                                   to hold actions for N seconds)
+##                                   to hold actions for N seconds; "down:flip_l" /
+##                                   "up:flip_l" to press/release without waiting)
 ##   --screenshot=<dir>             after presses + 30 frames, save PNGs and quit
+##   --screenshot-delay=N           frames to wait before the screenshot (default 30)
 extends Node
 
 const STEP_FRAMES := 12
@@ -23,7 +25,7 @@ func _run() -> void:
 		for step in presses.split(","):
 			await _do_step(step.strip_edges())
 	if Config.cli.has("screenshot"):
-		await _frames(30)
+		await _frames(int(str(Config.cli.get("screenshot-delay", "30"))))
 		_capture(str(Config.cli["screenshot"]))
 		get_tree().quit()
 
@@ -31,6 +33,12 @@ func _run() -> void:
 func _do_step(step: String) -> void:
 	if step == "wait" or step.is_empty():
 		await _frames(STEP_FRAMES)
+		return
+	if step.begins_with("down:"):
+		Input.action_press(step.trim_prefix("down:"))
+		return
+	if step.begins_with("up:"):
+		Input.action_release(step.trim_prefix("up:"))
 		return
 	if step.begins_with("hold:"):
 		var parts := step.split(":")

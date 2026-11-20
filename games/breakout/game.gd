@@ -1,7 +1,7 @@
 ## TILT BREAKER (D-037): block breaker for pinball cabinets. This module renders the
 ## pure simulation (sim.gd) in 3D on the TABLE, shows status on DMD + BACKGLASS, and
 ## maps cabinet actions (D-007):
-##   flippers (hold) = move ship   Launch = fire plasma   magna saves = dash
+##   flippers (hold) = move ship   Launch/Start = fire plasma   magna saves = dash
 ## Fiction (D-041): the bricks are a sentient, self-replicating nanomachine swarm.
 ## The player's ship fires a plasma shot; its energy shield deflects the plasma
 ## back at the swarm. Lives are the ship's energy charges.
@@ -30,6 +30,10 @@ const CAMERA_TILT_DEG := 20.0
 const MAX_BANK_DEG := 18.0
 const BANK_RESPONSE := 10.0
 const SHIELD_FADE := 0.45
+## Firing recoil: the ship kicks back towards the player and shakes (D-042).
+const RECOIL_SECONDS := 0.3
+const RECOIL_KICK := 0.18
+const RECOIL_SHAKE := 0.05
 
 const SOUNDS := {
 	"tb_shield": [[520.0, 900.0, 0.06, "triangle", 0.3], [900.0, 700.0, 0.05, "noise", 0.08]],
@@ -62,6 +66,7 @@ var _launch := false
 var _dash := 0
 var _dash_glow := 0.0
 var _fire_flash := 0.0
+var _recoil := 0.0
 var _over_left := -1.0
 var _shown_score := -1
 
@@ -86,7 +91,7 @@ func on_action(action: StringName, pressed: bool) -> void:
 	if not pressed:
 		return
 	match action:
-		&"launch":
+		&"launch", &"start":
 			_launch = true
 		&"magna_l":
 			_dash = -1
@@ -129,6 +134,7 @@ func _handle_events() -> void:
 			"serve":
 				Audio.sfx("tb_fire")
 				_fire_flash = 1.0
+				_recoil = 1.0
 				_trail.clear()
 				_hint.visible = false
 			"dash":
@@ -174,24 +180,31 @@ func _animate(delta: float) -> void:
 	var target_bank := -sim.paddle_vx / Sim.PADDLE_MAX_SPEED * deg_to_rad(MAX_BANK_DEG)
 	target_bank = clampf(target_bank, -deg_to_rad(MAX_BANK_DEG) * 1.4, deg_to_rad(MAX_BANK_DEG) * 1.4)
 	_ship.rotation.z = lerp_angle(_ship.rotation.z, target_bank, 1.0 - exp(-BANK_RESPONSE * delta))
-	# Engines: the one opposite the direction of travel pushes harder.
+	# Afterburners (D-042): off at rest; only the trailing engine burns while moving
+	# (moving right = left engine), harder with speed, flaring on a dash.
 	_dash_glow = maxf(0.0, _dash_glow - delta * 4.0)
 	var push := sim.paddle_vx / Sim.PADDLE_MAX_SPEED
-	_engines[0].set_thrust(maxf(push, 0.0) + _dash_glow * (1.0 if push > 0.0 else 0.0))
-	_engines[1].set_thrust(maxf(-push, 0.0) + _dash_glow * (1.0 if push < 0.0 else 0.0))
+	var burn := absf(push) + _dash_glow * 0.6
+	_engines[0].set_thrust(burn if push > 0.0 else 0.0)
+	_engines[1].set_thrust(burn if push < 0.0 else 0.0)
 	# Shield flash
 	_shield_age += delta
 	_shield_mat.set_shader_parameter("age", _shield_age)
 	_shield_mat.set_shader_parameter("strength", clampf(1.0 - _shield_age / SHIELD_FADE, 0.0, 1.0))
-	# Plasma: charging on the ship's nose while held, then flying with a trail.
+	# Firing recoil: kick back towards the player + decaying shake.
+	_recoil = maxf(0.0, _recoil - delta / RECOIL_SECONDS)
+	var r := _recoil * _recoil
+	_ship.position = Vector3(randf_range(-1.0, 1.0) * RECOIL_SHAKE * r, 0.0,
+		RECOIL_KICK * r + randf_range(-1.0, 1.0) * RECOIL_SHAKE * r)
+	# Plasma: only exists once fired (hidden while waiting), flies with a trail.
+	var flying := sim.state == Sim.State.PLAY
+	_ball.visible = flying
+	_trail.visible = flying
 	var pos := Vector3(sim.ball_pos.x, 0.05, sim.ball_pos.y)
 	_ball.position = pos
 	_fire_flash = maxf(0.0, _fire_flash - delta * 5.0)
-	var pulse := 1.0
-	if sim.state == Sim.State.SERVE:
-		pulse = 0.75 + 0.2 * sin(Time.get_ticks_msec() * 0.012)
-	_halo.scale = Vector3.ONE * (pulse + _fire_flash * 1.2)
-	if sim.state == Sim.State.PLAY:
+	_halo.scale = Vector3.ONE * (1.0 + _fire_flash * 1.5)
+	if flying:
 		_trail.update(pos)
 
 

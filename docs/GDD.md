@@ -67,7 +67,7 @@ Rules:
 | Input | Action |
 |---|---|
 | Flippers (hold) | Move the ship left / right. Speed ramps up while held. |
-| Launch | Fire the plasma shot; fire lasers when that power-up is active |
+| Launch (or Start) | Fire the plasma shot; fire lasers when that power-up is active |
 | Both flippers | Release a caught ball (magnet power-up) |
 | Magna L/R (opt.) | Dash: a quick engine burst in that direction |
 
@@ -104,8 +104,8 @@ Rules:
 - **The bricks** are a sentient, self-replicating alien race of nanomachines. Each brick is a 16-bit-style circuit board: substrate dither, coloured traces, gold pads and IC chips, each chip with a glowing "eye". LEDs and traces pulse in waves across the swarm. Destroyed bricks burst into glowing cubes. There are six colour families, one per row.
 - **The player** flies a spaceship (the paddle, `paddle.glb`).
   - It **banks** up to about 18° when moving. The hitbox stays a fixed rectangle.
-  - **Blue flame particles** come from the side rocket engines, with the engine opposite the direction of travel thrusting harder. Dashes flare the engines.
-- **The ball** is a **plasma shot** fired from the ship with Launch. It has a white-hot core, a swirling halo, electric arcs and a fading trail. While waiting to fire it charges on the ship's nose.
+  - The side engines are **afterburners** (D-042). Both are off at rest. While moving, only the trailing one burns: a cone of blue flame, white-hot at the nozzle and tapering to a point, that grows with speed and flares on a dash.
+- **The ball** is a **plasma shot**. It is invisible until fired. Launch or Start fires it from the ship, with a firing sound, a muzzle flash and a recoil kick and shake of the ship (D-042). In flight it has a white-hot core, a swirling halo, electric arcs and a fading trail.
 - **Rebounds:** the ship's **energy shield** flashes in front of the hull, with a ripple from the impact point, and deflects the plasma back at the swarm.
 - **Lives** are the ship's **energy charges** ("CHARGES", "CHARGE LOST").
 

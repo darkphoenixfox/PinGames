@@ -96,51 +96,44 @@ class Trail:
 		_imesh.surface_end()
 
 
-## One side engine: blue flame particles blowing outward along `dir_x` (-1/+1)
-## plus a small blue light on the hull. set_thrust(0..1.5) every frame.
+## One side afterburner (D-042): OFF at rest; when on, a tight cone of blue flame
+## attached to the nozzle, pointing outward along `dir_x` (-1/+1): big white-hot
+## blobs at the nozzle shrinking to a point, length/brightness scaled by thrust.
+## Plus a blue light on the hull while burning. Call set_thrust(0..1.5) every frame.
+## (CPU particles: two tiny emitters; GPU particles did not move here.)
 class ShipEngine:
 	extends Node3D
 
-	var _particles: GPUParticles3D
-	var _process: ParticleProcessMaterial
+	const ON_THRESHOLD := 0.08
+
+	var _particles: CPUParticles3D
 	var _light: OmniLight3D
 
 	func _init(dir_x: float) -> void:
-		_particles = GPUParticles3D.new()
-		_particles.amount = 64
-		_particles.lifetime = 0.3
-		_particles.local_coords = false
-		_particles.randomness = 0.4
-		_particles.visibility_aabb = AABB(Vector3(-3, -1, -3), Vector3(6, 2, 6))
-		_process = ParticleProcessMaterial.new()
-		_process.direction = Vector3(dir_x, 0.0, 0.0)
-		_process.spread = 14.0
-		_process.gravity = Vector3.ZERO
-		_process.initial_velocity_min = 1.6
-		_process.initial_velocity_max = 2.6
-		_process.damping_min = 2.0
-		_process.damping_max = 4.0
-		_process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-		_process.emission_sphere_radius = 0.035
-		_process.scale_min = 0.7
-		_process.scale_max = 1.1
-		var curve := Curve.new()
+		_particles = CPUParticles3D.new()
+		_particles.amount = 40
+		_particles.lifetime = 0.26
+		_particles.local_coords = true  # the flame stays attached to the nozzle
+		_particles.emitting = false
+		_particles.direction = Vector3(dir_x, 0.0, 0.0)
+		_particles.spread = 3.0  # narrow: the cone shape comes from shrinking particles
+		_particles.gravity = Vector3.ZERO
+		_particles.initial_velocity_min = 3.0
+		_particles.initial_velocity_max = 3.6
+		_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		_particles.emission_sphere_radius = 0.015
+		var curve := Curve.new()  # wide at the nozzle -> point at the tip
 		curve.add_point(Vector2(0.0, 1.0))
-		curve.add_point(Vector2(1.0, 0.1))
-		var curve_tex := CurveTexture.new()
-		curve_tex.curve = curve
-		_process.scale_curve = curve_tex
+		curve.add_point(Vector2(1.0, 0.0))
+		_particles.scale_amount_curve = curve
 		var grad := Gradient.new()
-		grad.offsets = PackedFloat32Array([0.0, 0.25, 0.65, 1.0])
-		grad.colors = PackedColorArray([Color(1, 1, 1, 1), Color(0.45, 0.8, 1.0, 0.95),
-			Color(0.15, 0.35, 1.0, 0.55), Color(0.05, 0.1, 0.6, 0.0)])
-		var grad_tex := GradientTexture1D.new()
-		grad_tex.gradient = grad
-		_process.color_ramp = grad_tex
-		_particles.process_material = _process
+		grad.offsets = PackedFloat32Array([0.0, 0.1, 0.45, 1.0])
+		grad.colors = PackedColorArray([Color(0.9, 0.95, 1.0, 0.7), Color(0.45, 0.8, 1.0, 0.6),
+			Color(0.15, 0.4, 1.0, 0.4), Color(0.05, 0.12, 0.7, 0.0)])
+		_particles.color_ramp = grad
 
 		var quad := QuadMesh.new()
-		quad.size = Vector2(0.2, 0.2)
+		quad.size = Vector2(0.26, 0.26)
 		var m := StandardMaterial3D.new()
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -156,19 +149,25 @@ class ShipEngine:
 		dot.gradient = dg
 		m.albedo_texture = dot
 		quad.material = m
-		_particles.draw_pass_1 = quad
+		_particles.mesh = quad
 		add_child(_particles)
 
 		_light = OmniLight3D.new()
 		_light.light_color = Color(0.35, 0.6, 1.0)
 		_light.omni_range = 1.4
-		_light.light_energy = 0.6
-		_light.position = Vector3(-dir_x * 0.25, 0.35, 0.0)
+		_light.light_energy = 0.0
+		_light.position = Vector3(dir_x * 0.15, 0.35, 0.0)
 		add_child(_light)
 
 	func set_thrust(t: float) -> void:
 		var k := clampf(t, 0.0, 1.5)
-		_particles.amount_ratio = clampf(0.35 + k * 0.65, 0.0, 1.0)
-		_process.initial_velocity_min = 1.2 + k * 2.2
-		_process.initial_velocity_max = 2.0 + k * 3.0
-		_light.light_energy = 0.5 + k * 1.6
+		var on := k > ON_THRESHOLD
+		if _particles.emitting != on:
+			_particles.emitting = on
+		if not on:
+			_light.light_energy = 0.0
+			return
+		# Longer, faster flame with more thrust (cone length ~ velocity * lifetime).
+		_particles.initial_velocity_min = 2.8 + k * 3.2
+		_particles.initial_velocity_max = 3.2 + k * 3.6
+		_light.light_energy = 0.4 + k * 1.6

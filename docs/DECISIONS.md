@@ -376,3 +376,14 @@
   - **Visual only:** none of the effects read back into the sim (D-040).
 - **Also:** the tests now compile every project script. This caught two errors that the gameplay tests didn't load, including an inner class named `Engine`, which clashes with Godot's built-in `Engine`.
 - **Status:** Accepted
+
+### D-042 — Tilt Breaker: afterburners, firing and recoil (refines D-041)
+- **Date:** 2026-11-20
+- **Decision (director):**
+  - **Afterburners:** the side engines are off when the ship is still. While moving, only the trailing side burns (moving right = left engine), as a cone of particles.
+  - **Plasma:** invisible until fired. Pressing the button shoots it from the ship, with a sound and a ship shake.
+- **Implementation:**
+  - **Engines:** `CPUParticles3D` in local coordinates, with a 3° spread and a 1→0 scale curve, which gives the cone shape. Length and light grow with speed. `GPUParticles3D` was tried first, but its particles didn't move in this setup, so CPU particles are used (two small emitters cost almost nothing).
+  - **Firing:** Launch **and** Start fire, since the director said "start button" and Launch was specified earlier. The shot gives a recoil kick of 0.18 units towards the player plus a 0.05-unit shake, decaying over 0.3 s, and a muzzle-flash halo.
+  - **Dev:** `--press` gained `down:`/`up:` steps and `--screenshot-delay=N`, to capture mid-action frames.
+- **Status:** Accepted (confirm whether Start should fire in addition to Launch)
