@@ -1,7 +1,7 @@
 ## Shell: boots the screens and runs exactly one mode at a time:
 ##   picker <-> attract, picker -> game -> (initials) -> picker, picker/attract -> operator
-## `--game=<id>` launches a game directly; the picker is then locked to that game,
-## and Exit quits back to the cabinet frontend (D-003, D-028).
+## `--game=<id>` launches a game directly; the picker is then locked to that game.
+## Quitting the app always needs a confirmation (D-003, D-028, D-031).
 ## Coin is handled globally. Operator menu combos are checked here (D-024).
 extends Node
 
@@ -106,11 +106,12 @@ func start_game(id: String) -> bool:
 	return true
 
 
-## Player pressed Exit during a game.
+## Player pressed Exit during a game. With --game, go to the locked picker with
+## the quit confirmation already open (D-031).
 func abort_game() -> void:
 	CabinetInput.mute_until_release()
 	if not direct_game.is_empty():
-		get_tree().quit()
+		switch_to(Picker.new(direct_game, 0, true))
 		return
 	goto_picker()
 

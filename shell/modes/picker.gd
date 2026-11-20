@@ -1,4 +1,5 @@
-## Game picker. Flippers choose, Launch/Start play, Exit quits the app.
+## Game picker. Flippers choose, Launch/Start play, Exit asks to quit the app
+## (Launch/Start = yes, Exit/flipper/timeout = no — D-031).
 ## Start/Launch/Exit act on *release* and only after a short press, so holding
 ## Start+Exit (or Exit) for the operator menu never triggers them (D-024).
 ## When the app was launched with --game, the picker is locked to that game
@@ -7,8 +8,12 @@ extends "res://shell/modes/mode.gd"
 
 const ScoreTable = preload("res://core/util/score_table.gd")
 const TAP_MAX_MS := 900
+const QUIT_CONFIRM_SECONDS := 5.0
 
 var locked_game := ""
+var _open_quit := false
+var _quit_left := 0.0
+var _quit_overlay: Control
 var _ids: Array = []
 var _index := 0
 var _labels: Array[Label] = []
@@ -20,9 +25,10 @@ var _press_ms := {}
 var _idle := 0.0
 
 
-func _init(p_locked_game: String = "", start_index: int = 0) -> void:
+func _init(p_locked_game: String = "", start_index: int = 0, open_quit_confirm: bool = false) -> void:
 	locked_game = p_locked_game
 	_index = start_index
+	_open_quit = open_quit_confirm
 
 
 func allows_operator_combo() -> bool:
@@ -62,12 +68,18 @@ func enter() -> void:
 
 	Credits.changed.connect(_refresh)
 	_refresh()
+	if _open_quit:
+		_show_quit_confirm()
 
 
 func on_action(action: StringName, pressed: bool) -> void:
 	_idle = 0.0
 	if pressed:
 		_press_ms[action] = Time.get_ticks_msec()
+		if _quit_left > 0.0:
+			if action in [&"flip_l", &"flip_r", &"magna_l", &"magna_r"]:
+				_hide_quit_confirm()
+			return
 		match action:
 			&"flip_l", &"magna_l":
 				_move(-1)
@@ -80,17 +92,53 @@ func on_action(action: StringName, pressed: bool) -> void:
 	if held > TAP_MAX_MS or (action == &"start" and CabinetInput.is_down(&"exit")) \
 			or (action == &"exit" and CabinetInput.is_down(&"start")):
 		return
+	if _quit_left > 0.0:
+		match action:
+			&"launch", &"start":
+				Audio.sfx("back")
+				get_tree().quit()
+			&"exit":
+				_hide_quit_confirm()
+		return
 	match action:
 		&"launch", &"start":
 			shell.start_game(_ids[_index])
 		&"exit":
-			get_tree().quit()
+			_show_quit_confirm()
 
 
 func _process(delta: float) -> void:
 	_idle += delta
+	if _quit_left > 0.0:
+		_quit_left -= delta
+		if _quit_left <= 0.0:
+			_hide_quit_confirm()
+		return
 	if locked_game.is_empty() and _idle >= float(Config.get_value("operator", "attract_delay")):
 		shell.goto_attract()
+
+
+func _show_quit_confirm() -> void:
+	_quit_left = QUIT_CONFIRM_SECONDS
+	if _quit_overlay == null:
+		_quit_overlay = add_table(UI.fill(Color(0, 0, 0, 0.88))) as Control
+		var col := UI.vstack(50)
+		col.add_child(UI.label(tr("QUIT_CONFIRM"), 110, UI.YELLOW))
+		var hint := UI.label(tr("QUIT_HINT"), 56, UI.WHITE)
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		col.add_child(hint)
+		_quit_overlay.add_child(col)
+	_quit_overlay.visible = true
+	Audio.sfx("error")
+	Dmd.show_text(tr("QUIT_CONFIRM"), tr("DMD_QUIT_HINT"), Dmd.YELLOW, Dmd.WHITE)
+
+
+func _hide_quit_confirm() -> void:
+	_quit_left = 0.0
+	if _quit_overlay:
+		_quit_overlay.visible = false
+	Audio.sfx("back")
+	_refresh()
 
 
 func _move(d: int) -> void:

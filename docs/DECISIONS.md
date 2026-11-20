@@ -259,3 +259,9 @@
   - `--screenshot=<dir>` now also saves every secondary window as it is displayed (`window_dmd.png` shows the dot shader).
   - Placeholder games give fake points (Launch = +1000) and end the game on Start, so the game-over → high-score flow can be tested.
 - **Status:** Accepted
+
+### D-031 — Quitting the app needs confirmation (refines D-028)
+- **Date:** 2026-11-20
+- **Decision:** Tapping Exit on the picker opens a "QUIT?" overlay on the TABLE and DMD. Launch or Start quits; Exit, any flipper or magna save, or 5 s without input cancels. When the app was started with `--game`, Exit during a game no longer quits straight away. It goes to the locked "PLAY AGAIN?" picker with the quit confirmation already open, so one Launch press returns to the frontend.
+- **Why:** The director asked for this. It prevents quitting by accident from the cabinet.
+- **Status:** Accepted
