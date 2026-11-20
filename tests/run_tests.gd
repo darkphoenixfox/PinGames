@@ -22,6 +22,8 @@ func _initialize() -> void:
 	test_synth()
 	test_dot_font()
 	test_translation_keys()
+	test_ball_physics()
+	test_breakout_sim()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	quit(1 if _failures > 0 else 0)
 
@@ -122,6 +124,65 @@ func test_translation_keys() -> void:
 		used["ACTION_" + String(a).to_upper()] = "CabinetInput.ACTIONS"
 	for key in used:
 		check(en.has(key), "missing translation key %s (%s)" % [key, used[key]])
+
+
+func test_ball_physics() -> void:
+	var BP = load("res://games/breakout/ball_physics.gd")
+	var rect := Rect2(0, 0, 2, 1)
+	var c: Dictionary = BP.collide_circle_rect(Vector2(1, -0.1), 0.2, rect)
+	check(not c.is_empty() and c.normal.is_equal_approx(Vector2.UP) and is_equal_approx(c.depth, 0.1), "circle hits rect top")
+	check(BP.collide_circle_rect(Vector2(1, -0.5), 0.2, rect).is_empty(), "circle misses rect")
+	var inside: Dictionary = BP.collide_circle_rect(Vector2(0.05, 0.5), 0.1, rect)
+	check(not inside.is_empty() and inside.normal == Vector2.LEFT, "centre inside pushes out shallow side")
+	check(BP.reflect(Vector2(1, 1), Vector2.UP).is_equal_approx(Vector2(1, -1)), "reflect")
+	check(BP.reflect(Vector2(1, -1), Vector2.UP).is_equal_approx(Vector2(1, -1)), "no reflect when leaving")
+	var mid: Vector2 = BP.paddle_bounce(0.0, 0.0, 1.0, 10.0, 0.0)
+	check(mid.is_equal_approx(Vector2(0, -10)), "centre hit goes straight up")
+	var edge: Vector2 = BP.paddle_bounce(1.0, 0.0, 1.0, 10.0, 0.0)
+	check(edge.x > 8.0 and edge.y < 0.0 and is_equal_approx(edge.length(), 10.0), "edge hit goes steep right")
+	var flat: Vector2 = BP.enforce_min_vertical(Vector2(10, 0.1), 10.0, 0.28)
+	check(absf(flat.normalized().y) >= 0.279 and is_equal_approx(flat.length(), 10.0), "min vertical enforced")
+
+
+## Autopilot plays Tilt Breaker headless: the ball must never leave the walls,
+## bricks must break, and the game must end or keep going without errors.
+func test_breakout_sim() -> void:
+	var Sim = load("res://games/breakout/sim.gd")
+	seed(1234)
+	var sim = Sim.new()
+	sim.setup(3)
+	check(sim.bricks.size() == Sim.BRICK_ROWS * Sim.BRICK_COLS, "rack built")
+	var dt := 1.0 / 120.0
+	var escaped := false
+	var bricks_broken := 0
+	var paddle_hits := 0
+	for i in int(180.0 / dt):  # 3 simulated minutes
+		var target: float = sim.ball_pos.x + 0.35 * sin(i * 0.01)  # imperfect autopilot
+		var left: bool = target < sim.paddle_x - 0.15
+		var right: bool = target > sim.paddle_x + 0.15
+		sim.step(dt, left, right, i % 240 == 0, 0)
+		for e in sim.events:
+			if e[0] == "brick":
+				bricks_broken += 1
+			elif e[0] == "paddle":
+				paddle_hits += 1
+		var f: Rect2 = Sim.FIELD
+		if sim.ball_pos.x < f.position.x - 0.01 or sim.ball_pos.x > f.end.x + 0.01 \
+				or sim.ball_pos.y < f.position.y - 0.01 or is_nan(sim.ball_pos.x):
+			escaped = true
+		if sim.state == Sim.State.OVER:
+			break
+	check(not escaped, "ball never escapes the walls")
+	check(bricks_broken > 20, "autopilot broke bricks (%d)" % bricks_broken)
+	check(paddle_hits > 10, "paddle returned the ball (%d)" % paddle_hits)
+	check(sim.score > 0, "score increased (%d)" % sim.score)
+	# Dash moves faster than walking and respects the cooldown.
+	var d = Sim.new()
+	d.setup(3)
+	d.step(0.05, false, false, false, 1)
+	var after_dash: float = d.paddle_x
+	d.step(0.05, false, false, false, 1)
+	check(after_dash > 0.5 and d.events.filter(func(e): return e[0] == "dash").is_empty(), "dash + cooldown")
 
 
 func _gd_files(dir: String) -> Array[String]:

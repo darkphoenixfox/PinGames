@@ -348,3 +348,16 @@
 - **Decision:** If the director hands over an asset without naming a source, it was made by the director with one of: ComfyUI (approved models, D-035), Gemini Pro or Meshy Pro. These are paid or approved tools, so they're cleared for commercial use. Record it in CREDITS.md as "Director-made". Ask about the source only when the director names a third-party source (a website, an artist or a pack), which then needs the usual license check (D-032).
 - **Why:** The director's instruction. It saves a round trip for every asset.
 - **Status:** Accepted
+
+### D-040 — Tilt Breaker architecture: pure sim + 3D view
+- **Date:** 2026-11-20
+- **Decision:**
+  - **Split:** gameplay lives in `games/breakout/sim.gd`, a pure simulation with no nodes. It uses custom circle-vs-rect collision (`ball_physics.gd`) with substeps of at most 0.05 units, so the ball can't tunnel through anything. `game.gd` renders the sim in 3D and turns cabinet actions into sim inputs.
+  - **Camera:** orthographic, leaning 20° towards the player, with 16 units fitted to the TABLE height (9 units wide).
+  - **Lighting:** linear tonemapping, to keep arcade colours saturated. Flat surfaces get no or low specular, because an orthographic camera turns specular into a uniform grey sheen.
+  - **Placeholders:** the paddle is the director's `paddle.glb`, scaled to the gameplay width. Bricks are coloured boxes until the art pass.
+- **Why:**
+  - Deterministic, frame-rate-independent physics that can be tuned and tested headless: an autopilot plays 3 minutes in the tests.
+  - Godot's physics engine is unnecessary for arcade ball rules and harder to make exact.
+- **Consequences:** Later features (flippers, multiple paddles, floors, power-ups) go into the sim first, with tests, and the view follows.
+- **Status:** Accepted

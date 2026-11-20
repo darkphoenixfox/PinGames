@@ -86,6 +86,18 @@ Rules:
 - The previous idea of "flipper bumpers below the paddle in every stage" is replaced by the points above.
 - 32 stages in 4 worlds, with a boss stage every 8. Stages are stored as text (e.g. `games/breakout/levels/*.txt`) so they can be written without an editor. The format supports several floors, and places paddles and flippers per floor.
 
+**Tuning (M2 step 1, in `games/breakout/sim.gd`; numbers are in playfield units, which are 9 wide × 16 tall):**
+| Setting | Value | Meaning |
+|---|---|---|
+| Paddle width | 1.5 | about 1/6 of the playfield |
+| Paddle top speed / accel / stop | 11 / 70 / 90 per s | crosses the field in ~0.8 s |
+| Dash (magna save) | 26 u/s for 0.12 s, 0.6 s cooldown | |
+| Ball start / max speed | 8.5 → 15 u/s | +0.12 per paddle hit |
+| Paddle return angle | up to 60° from vertical | by hit position, plus a little paddle "english" |
+| Auto-serve | 6 s | the ball launches by itself if Launch isn't pressed |
+
+**Camera:** orthographic, leaning 20° towards the player (D-040).
+
 **DMD:** score, ball count, "MULTIBALL!", power-up names, brick count left.
 **Backglass:** world art, boss portrait and health bar, power-up legend.
 **Art direction [PROPOSAL]:** glossy neon. Bricks and paddle are cel-shaded 3D models with outlines, on animated sprite backgrounds.
