@@ -538,3 +538,8 @@
   - **Ball:** `SPEEDUP_PER_PADDLE_HIT` is 0.25 (was 0.12, too subtle) and `BALL_MAX_SPEED` is 13.5 (was 15).
   - **Tests:** `Sim.freeze_ball` is a test hook so long charge holds don't drain the plasma.
 - **Status:** Accepted (blast-level effect is an assumption to confirm)
+
+### D-055 — Blast level effect confirmed (closes the assumption in D-054)
+- **Date:** 2026-11-20
+- **Decision (director):** a level 1 blast breaks 1 block or enemy. Level 2 carries on after 1 hit (2 in total). Level 3 carries on after the second impact (3 in total). This is what `hits_left = level` already implements.
+- **Status:** Accepted
