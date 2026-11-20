@@ -265,3 +265,15 @@
 - **Decision:** Tapping Exit on the picker opens a "QUIT?" overlay on the TABLE and DMD. Launch or Start quits; Exit, any flipper or magna save, or 5 s without input cancels. When the app was started with `--game`, Exit during a game no longer quits straight away. It goes to the locked "PLAY AGAIN?" picker with the quit confirmation already open, so one Launch press returns to the frontend.
 - **Why:** The director asked for this. It prevents quitting by accident from the cabinet.
 - **Status:** Accepted
+
+### D-032 — Asset licensing: commercial-safe only
+- **Date:** 2026-11-20
+- **Decision:** PinGames may be distributed commercially, so **every asset must allow commercial use and modification**. This covers music, SFX, models, textures, fonts and AI-generated output.
+  - **Preferred:** CC0, then CC BY (credit given in the format below).
+  - **Case by case, with the director's approval:** CC BY-SA (edited versions must use the same license), and permissive font licenses such as SIL OFL.
+  - **Not allowed:** NonCommercial (-NC), NoDerivatives (-ND), "personal use only", or unclear and missing licenses.
+  - **AI tools** (Meshy, music generators and others): the plan or terms in force when the asset was generated must grant commercial rights. Record the plan in CREDITS.md. Free tiers often don't grant them.
+  - **Attribution format (TASL):** "Title" by Author (source URL), licensed under LICENSE (license URL), plus any changes made, e.g. "looped and trimmed". Keep proof of the license, such as a screenshot or saved page dated at download, in `assets/licenses/` (not shipped).
+- **Why:** This is the director's call; commercial distribution is possible.
+- **Consequences:** The game will have an in-game credits screen (attract page and operator System Info), generated from `assets/CREDITS.md` data (M6). Before any commercial release, every row in CREDITS.md is re-checked.
+- **Status:** Accepted
