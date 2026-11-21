@@ -1,9 +1,9 @@
-// Tilt Breaker explosion (D-083, replaces the pixel blast of D-046): a smooth
-// camera-facing fireball. A noisy soft-edged core expands with an ease-out,
-// its heat runs white -> yellow -> orange -> `tint` -> out, and a faint
-// shockwave ring travels just ahead of it. `age` (instance uniform) runs 0..1.
+// Tilt Breaker explosion (D-083, revised D-087): a smooth camera-facing fireball
+// in the brick's own colour. Normal (not additive) blending so it reads as a
+// solid burst over the bricks: white-hot core -> bright `tint` -> deep `tint`,
+// a billowing noisy edge, and a dissolve only at the end. `age` runs 0..1.
 shader_type spatial;
-render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
 
 uniform vec4 tint : source_color = vec4(0.3, 0.8, 1.0, 1.0);
 instance uniform float age = 0.0;      // 0 = just exploded, 1 = gone
@@ -34,22 +34,19 @@ void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
 	float d = length(p);
 	float grow = 1.0 - pow(1.0 - age, 3.0);            // fast burst, slow finish
-	float radius = mix(0.18, 0.85, grow);
-	// Billowing edge: noise drifts outwards as it grows.
+	float radius = mix(0.2, 0.8, grow);
 	float n = fbm(p * 3.2 - normalize(p + 1e-4) * age * 2.0 + seed);
-	float shape = d / radius + (n - 0.5) * 0.55;
-	float body = smoothstep(1.0, 0.55, shape);
-	// Heat falls off towards the edge and over time; the core cools first.
-	float heat = clamp((1.0 - shape) * 1.4 * (1.0 - age) + (n - 0.5) * 0.25, 0.0, 1.0);
-	vec3 col = mix(tint.rgb * 0.8, vec3(1.0, 0.45, 0.12), smoothstep(0.1, 0.4, heat));
-	col = mix(col, vec3(1.0, 0.85, 0.35), smoothstep(0.4, 0.7, heat));
-	col = mix(col, vec3(1.0, 0.98, 0.9), smoothstep(0.7, 0.95, heat));
-	float fade = pow(1.0 - age, 1.6);
-	// Shockwave ring ahead of the fireball
-	float ring_r = mix(0.25, 1.0, grow);
-	float ring = exp(-pow((d - ring_r) / 0.05, 2.0)) * pow(1.0 - age, 2.0) * 0.5;
-	vec3 c = col * body * fade * 1.3 + mix(vec3(1.0), tint.rgb, 0.5) * ring;
-	c *= smoothstep(1.0, 0.9, d);                        // never touch the quad edge
-	ALBEDO = c;
-	ALPHA = clamp(max(body * fade, ring), 0.0, 1.0);
+	float shape = d / radius + (n - 0.5) * 0.5;
+	float body = smoothstep(1.0, 0.8, shape);           // fairly crisp edge
+	// Heat: hottest in the middle early on, cooling outward and over time.
+	float heat = clamp((1.0 - shape) * 1.6 * (1.0 - age * 0.9) + (n - 0.5) * 0.3, 0.0, 1.0);
+	vec3 bright = mix(tint.rgb, vec3(1.0), 0.35);
+	vec3 deep = tint.rgb * 0.45;
+	vec3 col = mix(deep, bright, smoothstep(0.05, 0.45, heat));
+	col = mix(col, vec3(1.0, 0.98, 0.92), smoothstep(0.6, 0.95, heat));
+	// Solid most of its life; holes open up from the noise as it dies.
+	float dissolve = smoothstep(age * 1.25 - 0.15, age * 1.25 + 0.05, n + 0.25 * (1.0 - shape));
+	float a = body * mix(1.0, dissolve, smoothstep(0.35, 0.75, age)) * (1.0 - smoothstep(0.85, 1.0, age));
+	ALBEDO = col * 1.25;
+	ALPHA = clamp(a, 0.0, 1.0);
 }

@@ -810,8 +810,8 @@ func _randomize_crop(n: MeshInstance3D) -> void:
 		Vector2(randi() % int(CIRCUIT_TEXELS), randi() % int(CIRCUIT_TEXELS)) / CIRCUIT_TEXELS)
 
 
-## Explosion (D-083): a smooth noisy fireball billboard plus a spray of soft
-## glowing sparks that cool from white to the brick colour as they fade.
+## Explosion (D-083, D-087): a smooth fireball billboard in the brick's colour plus
+## tumbling brick-coloured debris shards.
 func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void:
 	var blast := MeshInstance3D.new()
 	var quad := QuadMesh.new()
@@ -829,68 +829,59 @@ func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void
 	tw.tween_method(func(a: float): blast.set_instance_shader_parameter("age", a), 0.0, 1.0, 0.55)
 	tw.tween_callback(blast.queue_free)
 
+	# Debris (D-087): tumbling brick-coloured shards that shrink away.
 	var p := CPUParticles3D.new()
 	p.one_shot = true
-	p.amount = int(28 * size_scale)
-	p.lifetime = 0.6
+	p.amount = int(16 * size_scale)
+	p.lifetime = 0.8
 	p.explosiveness = 1.0
 	p.direction = Vector3(0, 1, 0)
-	p.spread = 85.0
+	p.spread = 80.0
 	p.initial_velocity_min = 2.0
-	p.initial_velocity_max = 4.5
-	p.gravity = Vector3(0, -5, 0)
-	p.damping_min = 2.0
-	p.damping_max = 3.0
+	p.initial_velocity_max = 4.8
+	p.gravity = Vector3(0, -6, 0)
+	p.damping_min = 1.5
+	p.damping_max = 2.5
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 	p.emission_box_extents = Vector3(0.3, 0.05, 0.12) * size_scale
-	# Sparks cool smoothly over their life: white -> yellow -> orange -> brick colour.
-	var cool := Gradient.new()
-	cool.offsets = PackedFloat32Array([0.0, 0.2, 0.45, 0.75, 1.0])
-	cool.colors = PackedColorArray([Color(1, 1, 0.95, 1), Color(1.0, 0.85, 0.35, 1), Color(1.0, 0.45, 0.12, 0.9),
-		Color(color.r, color.g, color.b, 0.6), Color(color.r, color.g, color.b, 0.0)])
-	p.color_ramp = cool
+	p.particle_flag_rotate_y = true
+	p.angle_min = 0.0
+	p.angle_max = 360.0
+	p.angular_velocity_min = -720.0
+	p.angular_velocity_max = 720.0
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.5
 	var shrink := Curve.new()
 	shrink.add_point(Vector2(0.0, 1.0))
-	shrink.add_point(Vector2(1.0, 0.3))
+	shrink.add_point(Vector2(0.6, 0.85))
+	shrink.add_point(Vector2(1.0, 0.0))
 	p.scale_amount_curve = shrink
-	p.scale_amount_min = 0.7
-	p.scale_amount_max = 1.3
-	var px := QuadMesh.new()  # soft round glow
-	px.size = Vector2(0.1, 0.1)
-	p.mesh = px
-	p.material_override = _spark_material()
+	var shard := BoxMesh.new()
+	shard.size = Vector3(0.13, 0.05, 0.09)
+	p.mesh = shard
+	p.material_override = _debris_material(color)
 	p.position = pos
 	_root.add_child(p)
 	p.emitting = true
 	get_tree().create_timer(0.9).timeout.connect(p.queue_free)
 
 
-var _spark_mat: StandardMaterial3D
+var _debris_mats := {}
 
 
-## Shared material for explosion sparks: additive soft radial dot.
-func _spark_material() -> StandardMaterial3D:
-	if _spark_mat == null:
-		var g := Gradient.new()
-		g.offsets = PackedFloat32Array([0.0, 0.15, 0.45, 1.0])
-		g.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.7), Color(1, 1, 1, 0.12), Color(1, 1, 1, 0)])
-		var tex := GradientTexture2D.new()
-		tex.gradient = g
-		tex.fill = GradientTexture2D.FILL_RADIAL
-		tex.fill_from = Vector2(0.5, 0.5)
-		tex.fill_to = Vector2(0.5, 0.0)
-		tex.width = 64
-		tex.height = 64
-		_spark_mat = StandardMaterial3D.new()
-		_spark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_spark_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		_spark_mat.billboard_keep_scale = true
-		_spark_mat.vertex_color_use_as_albedo = true
-		_spark_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_spark_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		_spark_mat.albedo_texture = tex
-		_spark_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
-	return _spark_mat
+## Debris material per brick colour (D-087): the brick's hue, lit, with a glow.
+func _debris_material(color: Color) -> StandardMaterial3D:
+	var key := color.to_html()
+	if not _debris_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = color.darkened(0.35)
+		m.emission_enabled = true
+		m.emission = color
+		m.emission_energy_multiplier = 0.9
+		m.metallic = 0.4
+		m.roughness = 0.45
+		_debris_mats[key] = m
+	return _debris_mats[key]
 
 
 func _box(size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:

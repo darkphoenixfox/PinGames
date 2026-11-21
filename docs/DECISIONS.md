@@ -809,3 +809,11 @@
 - **Decision (director):** make the 2-screen DMD 20 % bigger.
 - **Implementation:** the default `dmd_region` changes from `0.25,0.78,0.5,0.18` to `0.2,0.755,0.6,0.216`. The DMD is about 933×233 px at backglass base resolution (it was 777×194), and its frame keeps a ~15 px margin above the bottom edge.
 - **Status:** Accepted (refines D-080)
+
+### D-087 — Explosions revised: solid brick-coloured fireball, shard debris
+- **Date:** 2026-11-21
+- **Decision (director):** after D-083, the fireball transparency was too strong and created a weird hue; the particles were tiny dots that didn't feel like debris; debris should match the brick colour.
+- **Implementation:**
+  - **Fireball:** `explosion.gdshader` switches from additive to normal blending, so it reads solid over the bricks. Its palette is white-hot core → brightened brick colour → deep brick colour, with no orange stage. Noise holes open up only in the second half of its life.
+  - **Debris:** 16 tumbling box shards (0.13×0.05×0.09, scale 0.5–1.5) in a lit, glowing material in the brick's colour (cached per colour). They spin up to ±720°/s and shrink to nothing over 0.8 s.
+- **Status:** Accepted (supersedes the look of D-083)
