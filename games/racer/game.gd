@@ -34,6 +34,8 @@ const TITLE_FONT := "sunset"
 ## Director's pick: "8-bit Music Pack (Loopable)" by CodeManu, CC BY 3.0 (D-033).
 ## Director's pick (D-093): the five "action" loops for attract and race. Each
 ## race starts on the next one, and every checkpoint (new stage) moves on again.
+## Attract and the first race play action_3 (director's pick).
+const FIRST_TRACK := 2
 const MUSIC_TRACKS := [
 	"res://assets/audio/music/racer/codemanu_action_1.ogg",
 	"res://assets/audio/music/racer/codemanu_action_2.ogg",
@@ -107,7 +109,7 @@ var _car_body: Node3D            # model; yaws/rolls/spins
 var _car_tex: Texture2D
 var _car_mat: ShaderMaterial
 var _car_outline: ArrayMesh
-var _music_i := -1    # race track index; _begin_race steps it
+var _music_i := FIRST_TRACK - 1    # race track index; _begin_race steps it
 var _traffic_nodes: Array = []   # pool of Node3D
 var _smoke: Array = []           # CPUParticles3D at the rear wheels
 var _flames: Array = []          # nitro flame meshes
@@ -222,7 +224,7 @@ func _enter_attract() -> void:
 	sim.autopilot = true
 	sim.state = Sim.State.RACE
 	sim.v = 60.0
-	Audio.play_music(MUSIC_TRACKS[MUSIC_TRACKS.size() - 1])
+	Audio.play_music(MUSIC_TRACKS[FIRST_TRACK])
 	_hud.visible = false
 	_attract_ui = UI.vstack(60)
 	_attract_ui.add_child(UI.spacer(200))
@@ -552,9 +554,16 @@ func _build_chunk(k: int) -> Node3D:
 	var cols := LATERAL.size()
 	for i in n + 1:
 		var s := s0 + i * Track.SAMPLE
+		# On the inside of a curve the ground stops well short of the centre of
+		# the turn, or it would fold back over the road (D-094).
+		var c := tr_.curvature(s)
+		var inside_max := 1e9 if absf(c) < 1e-5 else 0.75 / absf(c)
 		for lx in LATERAL:
-			st.set_uv(Vector2(lx, s))
-			st.add_vertex(tr_.point(s, lx))
+			var x: float = lx
+			if signf(lx) == -signf(c):   # left turn (c > 0): inside is -x
+				x = signf(lx) * minf(absf(lx), maxf(inside_max, Track.ROAD_HALF + Track.RUMBLE + 4.0))
+			st.set_uv(Vector2(x, s))
+			st.add_vertex(tr_.point(s, x))
 	for i in n:
 		for j in cols - 1:
 			var a := i * cols + j

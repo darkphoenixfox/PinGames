@@ -562,6 +562,27 @@ func test_racer_sim() -> void:
 		if absf(a.track.curvature(i * 2.5)) > 1.0 / 120.0:
 			curves += 1
 	check(hills > 5.0 and curves > 0, "racer track has hills (%.1f m) and sharp curves" % hills)
+	# The road never doubles back: heading stays within the limit and no stretch
+	# passes near an earlier one (hillsides would cross the track, D-094).
+	for seed_i in [1, 7, 42]:
+		var t = load("res://games/racer/track.gd").new()
+		t.setup(seed_i)
+		t.ensure(30000.0)
+		var max_h := 0.0
+		var near := false
+		for i in 6000:
+			max_h = maxf(max_h, absf(t.heading(i * 5.0)))
+		for i in range(0, 6000, 4):
+			var p: Vector3 = t.center(i * 5.0)
+			for j in range(i + 80, 6000, 4):   # 400 m or more further along
+				var q: Vector3 = t.center(j * 5.0)
+				if Vector2(p.x - q.x, p.z - q.z).length() < 160.0:
+					near = true
+					break
+			if near:
+				break
+		check(max_h < deg_to_rad(85.0) and not near,
+			"racer road (seed %d) never doubles back (max heading %.0f deg)" % [seed_i, rad_to_deg(max_h)])
 	# Countdown, then automatic throttle.
 	var c = Sim.new()
 	c.setup(7)

@@ -883,3 +883,18 @@
   - Each race starts on the next action track in turn, and every checkpoint (new stage) fades to the following one.
   - `codemanu_menu.ogg` stays in the repo but is no longer used by the racer.
 - **Status:** Accepted
+
+### D-094 — Turbo Run: no hillsides across the road
+- **Date:** 2026-11-21
+- **Problem (director):** at some point a green hill went across the track.
+- **Cause:** the ground strip reaches 140 m to each side and rises away from the road. On the inside of tight curves (radius ~75 m) it folded back over the road. Long curve sections could also turn up to ~320°, so the road looped back and one stretch's hillside landed on another.
+- **Fix:**
+  - **Track:** a curve section turns at most 110°, and the overall heading stays within 80° of the start direction. If a curve would pass that, it turns the other way or is shortened. The road always makes forward progress and never doubles back.
+  - **View:** on the inside of a curve the ground stops at 0.75 × radius, with a floor at the kerb plus 4 m.
+  - **Test:** for 3 seeds over 30 km each, the heading stays within the limit and no stretch comes within 160 m of road 400 m or more earlier.
+- **Status:** Accepted
+
+### D-095 — Turbo Run music starts on action_3 (amends D-093)
+- **Date:** 2026-11-21
+- **Decision (director):** attract and the first race play `codemanu_action_3`. Later races and checkpoints step on from there (4, 5, 1, 2, …).
+- **Status:** Accepted

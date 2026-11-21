@@ -12,6 +12,8 @@ const ROAD_HALF := 7.5         # 4 lanes of 3.75 m
 const LANES := [-5.625, -1.875, 1.875, 5.625]
 const RUMBLE := 1.2            # red/white kerb outside the road edge
 const START_STRAIGHT := 400.0
+const MAX_TURN := deg_to_rad(110.0)      # per curve section
+const MAX_HEADING := deg_to_rad(80.0)    # overall, from the start direction
 ## Roadside objects: [kind, collision radius]. Kinds are drawn by the view.
 const OBJ_RADIUS := {"palm": 0.6, "rock": 1.5, "chevron": 0.5, "lamp": 0.35, "gate": 0.0}
 
@@ -61,6 +63,17 @@ func _random_section() -> void:
 		radius = _rng.randf_range(75.0, 105.0)      # hairpin-ish: drift or brake
 	var c := 0.0 if radius == 0.0 else (1.0 / radius) * (1.0 if _rng.randf() < 0.5 else -1.0)
 	var len := _rng.randf_range(180.0, 420.0)
+	if c != 0.0:
+		# A section turns at most MAX_TURN, and the road's overall heading stays
+		# within MAX_HEADING of the start, so the road never loops back over
+		# itself (its hillsides would cross the track, D-094). The eased
+		# curvature integrates to ~0.7 of c * len.
+		len = minf(len, MAX_TURN / (absf(c) * 0.7))
+		var y := yaw[yaw.size() - 1]
+		if absf(y + c * len * 0.7) > MAX_HEADING:
+			c = -c
+		if absf(y + c * len * 0.7) > MAX_HEADING:
+			len = maxf(60.0, (MAX_HEADING - absf(y)) / (absf(c) * 0.7))
 	var dh := 0.0
 	if _rng.randf() < 0.7:
 		dh = _rng.randf_range(-1.0, 1.0) * len * 0.1
