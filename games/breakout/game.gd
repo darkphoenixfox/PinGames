@@ -17,6 +17,8 @@ const SHIELD_SHADER = preload("res://games/breakout/shaders/shield.gdshader")
 const EXPLOSION_SHADER = preload("res://games/breakout/shaders/pixel_explosion.gdshader")
 const BLAST_SHADER = preload("res://games/breakout/shaders/blast.gdshader")
 const DmdAnims = preload("res://games/breakout/dmd_anims.gd")
+const BackglassLights = preload("res://games/breakout/backglass_lights.gd")
+const BACKGLASS_SHADER = preload("res://games/breakout/shaders/backglass_lights.gdshader")
 const STARFIELD_SHADER = preload("res://games/breakout/shaders/starfield.gdshader")
 
 const ACCENT := Color("3ec7ff")
@@ -165,6 +167,8 @@ var _blast_nodes: Array[Node3D] = []
 var _enemy_nodes := {}  # enemy id -> {root, body, spin: Vector3, hole, colour: Color}
 var _circuit_textures: Array = []
 var _dmd_anims := DmdAnims.new()
+var _lights := BackglassLights.new()
+var _backglass_mat: ShaderMaterial
 var _charge_glow: Node3D
 var _charge_particles: CPUParticles3D
 var _charge_level_shown := 0
@@ -235,6 +239,7 @@ func _handle_events() -> void:
 		match e[0]:
 			"paddle":
 				Audio.sfx("tb_shield")
+				_lights.pulse(BackglassLights.SHOTS, 0.3, 16.0, 0.7)
 				_shield_age = 0.0
 				_shield_mat.set_shader_parameter("hit_x",
 					clampf((sim.ball_pos.x - sim.paddle_x) / (Sim.PADDLE_W * 0.5), -1.0, 1.0))
@@ -245,9 +250,11 @@ func _handle_events() -> void:
 				var n := _brick_nodes[e[1]]
 				n.visible = false
 				_explode_brick(n.position, _row_glow(sim.bricks[e[1]].row))
+				_lights.pulse(BackglassLights.IMPACTS, 0.35, 14.0)
 				Audio.sfx("tb_brick")
 			"serve":
 				Audio.sfx("tb_fire")
+				_lights.pulse(BackglassLights.SHOTS, 0.7, 12.0)
 				_fire_flash = 1.0
 				_recoil = 1.0
 				_trail.clear()
@@ -264,6 +271,7 @@ func _handle_events() -> void:
 				Audio.sfx("tb_blast%d" % blevel)
 				_recoil = 0.5 + 0.25 * blevel
 				_spawn_blast_node(blevel)
+				_lights.pulse(BackglassLights.SHOTS + BackglassLights.IMPACTS, 0.5 + 0.2 * blevel, 10.0)
 			"blast_fail":
 				Audio.sfx("tb_low_power")
 				Dmd.flash(tr("TB_LOW_POWER"), 1.0, Dmd.RED)
@@ -283,12 +291,14 @@ func _handle_events() -> void:
 				var ep: Vector2 = e[1][1]
 				_explode_brick(Vector3(ep.x, 0.2, ep.y), ecol, 1.2)
 				Audio.sfx("tb_enemy_die")
+				_lights.pulse(BackglassLights.IMPACTS + BackglassLights.SHOTS, 0.8, 10.0)
 				if e[1][2]:  # shot down (not a ship collision)
 					_dmd_anims.enemy_color = ecol
 					_dmd_anim("tetra_hit")
 			"ship_destroyed":
 				var sp: Vector2 = e[1]
 				Audio.sfx("tb_ship_die")
+				_lights.pulse(BackglassLights.ALL, 1.3, 8.0)
 				_explode_brick(Vector3(sp.x, 0.2, sp.y), Color(0.4, 0.8, 1.0), 2.6)
 				_trail.clear()
 				if sim.state == Sim.State.OVER:
@@ -298,6 +308,7 @@ func _handle_events() -> void:
 					_hint.visible = true
 			"rack_clear":
 				Audio.sfx("tb_rack")
+				_lights.chase(1.8)
 				_dmd_anim("rack_clear")
 				for n in _brick_nodes:
 					n.visible = true
@@ -307,6 +318,7 @@ func _handle_events() -> void:
 			"lost":
 				var last := sim.state == Sim.State.OVER
 				Audio.sfx("tb_explode_big" if last else "tb_explode")
+				_lights.pulse(BackglassLights.ALL, 1.2, 8.0)
 				_planet.impact(Vector3(e[1], 0.0, Sim.DRAIN_Y), -_cam.global_transform.basis.z, last)
 				_trail.clear()
 				if sim.state != Sim.State.OVER:
@@ -340,7 +352,10 @@ func _finale(delta: float) -> void:
 		add_to_table(_finale_black)
 		var tw := _finale_black.create_tween()
 		tw.tween_property(_finale_black, "color:a", 1.0, FINALE_FADE_TIME)
+	if before < FINALE_FADE_AT and _finale_t >= FINALE_FADE_AT:
+		_lights.pulse(BackglassLights.ALL, FINALE_TEXT_AT - FINALE_FADE_AT, 6.0)
 	if before < FINALE_TEXT_AT and _finale_t >= FINALE_TEXT_AT:
+		_lights.set_dark(true)
 		var col := UI.vstack(40)
 		col.add_child(UI.label(tr("DMD_GAME_OVER"), 140, UI.RED))
 		col.add_child(UI.spacer(40))
@@ -371,6 +386,7 @@ func _animate(delta: float) -> void:
 	_engines[0].set_thrust(burn if push > 0.0 else 0.0)
 	_engines[1].set_thrust(burn if push < 0.0 else 0.0)
 	_refresh_status()  # DMD power bar changes continuously
+	_update_backglass_lights(delta)
 	_animate_blasts(delta)
 	_animate_enemies(delta)
 	# Ship respawn: hidden briefly after being destroyed, then blinks while invulnerable.
@@ -840,9 +856,29 @@ func _animate_blasts(_delta: float) -> void:
 		_charge_level_shown = 0
 
 
-## Backglass: title art only (status is on the DMD, D-051).
+## Backglass (D-058): the director's art; three light groups (engines, shots,
+## impacts) blink with game events. Status stays on the DMD (D-051).
 func _build_backglass() -> void:
-	add_to_backglass(UI.fill(ACCENT.darkened(0.85)))
-	var col := UI.vstack(30)
-	add_to_backglass(col)
-	col.add_child(UI.label(tr("GAME_BREAKOUT_TITLE"), 170, ACCENT))
+	add_to_backglass(UI.fill(Color.BLACK))
+	var art := TextureRect.new()
+	art.set_anchors_preset(Control.PRESET_FULL_RECT)
+	art.texture = load("res://assets/textures/breakout/backglass_off.png")
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_backglass_mat = ShaderMaterial.new()
+	_backglass_mat.shader = BACKGLASS_SHADER
+	_backglass_mat.set_shader_parameter("on_tex", load("res://assets/textures/breakout/backglass_on.png"))
+	_backglass_mat.set_shader_parameter("mask_tex", load("res://assets/textures/breakout/backglass_mask.png"))
+	art.material = _backglass_mat
+	add_to_backglass(art)
+
+
+func _update_backglass_lights(delta: float) -> void:
+	if _backglass_mat == null:
+		return
+	_lights.engine_drive = clampf(absf(sim.paddle_vx) / Sim.PADDLE_MAX_SPEED, 0.0, 1.0)
+	_lights.charge = clampf(sim.blast_charge / Sim.BLAST_MAX_LEVEL, 0.0, 1.0)
+	var lv := _lights.levels(delta)
+	if Config.cli.has("tb-lights-on"):  # dev: hold every light group fully lit
+		lv = Vector3.ONE
+	_backglass_mat.set_shader_parameter("levels", lv)

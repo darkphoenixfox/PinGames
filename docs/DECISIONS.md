@@ -566,3 +566,14 @@
   - **Robustness:** `_animate_blasts` now creates missing blast nodes instead of indexing past them.
   - **Dev:** `--press` gained `key:<Name>` for raw keyboard taps.
 - **Status:** Accepted
+
+### D-058 — Tilt Breaker backglass art with event-driven lights
+- **Date:** 2026-11-21
+- **Decision (director):** use `breaker_lights_off` / `breaker_lights_on` for the backglass. The "on" image has some areas lit, and game events make those lights blink on and off.
+- **Implementation:**
+  - **Prep:** `scripts/tools/prepare_backglass_lights.py` keeps the originals in `assets/source/breakout/` and writes 1920×1080 off/on images plus an RGB group mask. It differences the two images, then assigns connected lit regions by their centre: R = engines (exhaust), G = shots (plasma comets), B = impacts (hits and lightning). The result was 3/6/9 regions.
+  - **Display:** `backglass_lights.gdshader` cross-fades off→on per group by `levels` (vec3), with a small extra boost on lit pixels.
+  - **Light logic:** `backglass_lights.gd` holds idle engine breathing, engine drive from ship speed, shots glow while charging, `pulse(groups, dur, hz)` square-wave blinks that fade, `chase()`, and `set_dark()`.
+  - **Event hooks:** fire → shots; shield → shots (short); brick → impacts; enemy kill and blast → shots + impacts; lost charge or ship → all (alarm); rack clear → chase; game over → all blink, then dark.
+  - **Dev:** `--tb-lights-on` holds all groups lit, for mapping checks.
+- **Status:** Accepted
