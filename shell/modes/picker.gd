@@ -16,12 +16,14 @@ var _quit_left := 0.0
 var _quit_overlay: Control
 var _ids: Array = []
 var _index := 0
-var _labels: Array[Label] = []
+var _labels: Array[Control] = []  # per game: logo TextureRect, or styled name Label
 var _hiscore: Label
 var _credits: Label
 var _bg_title: Label
 var _bg_fill: ColorRect
-var _logo: TextureRect     # selected game's logo (D-063)
+## Logo sizes in the list (D-063): selected vs other entries.
+const LOGO_SELECTED := Vector2(700, 540)
+const LOGO_OTHER := Vector2(400, 300)
 var _bg_logo: TextureRect
 var _press_ms := {}
 var _idle := 0.0
@@ -45,16 +47,22 @@ func enter() -> void:
 	add_table(col)
 	col.add_child(UI.label(tr("APP_TITLE"), 130, UI.YELLOW))
 	col.add_child(UI.label(tr("PICKER_TITLE") if locked_game.is_empty() else tr("PICKER_PLAY_AGAIN"), 60))
-	_logo = _logo_rect(Vector2(900, 690))
-	col.add_child(_logo)
 	col.add_child(UI.spacer(10))
 	_labels.clear()
 	for id in _ids:
+		# A game's logo replaces its name in the list; otherwise its styled title.
 		var info := Registry.info(id)
 		var font: String = info.get("font", "")
-		var l := UI.styled_label(tr(info.title_key), font, 2) if not font.is_empty() else UI.label(tr(info.title_key), 78)
-		col.add_child(l)
-		_labels.append(l)
+		var item: Control
+		if info.has("logo"):
+			item = _logo_rect(LOGO_OTHER)
+			(item as TextureRect).texture = load(info.logo)
+		elif not font.is_empty():
+			item = UI.styled_label(tr(info.title_key), font, 2)
+		else:
+			item = UI.label(tr(info.title_key), 78)
+		col.add_child(item)
+		_labels.append(item)
 	col.add_child(UI.spacer(30))
 	_hiscore = UI.label("", 46, UI.WHITE)
 	col.add_child(_hiscore)
@@ -182,9 +190,12 @@ func _refresh() -> void:
 	var accent: Color = info.get("color", UI.CYAN)
 	for i in _labels.size():
 		var sel := i == _index
-		_labels[i].text = ("> %s <" if sel else "%s") % tr(Registry.info(_ids[i]).title_key)
-		_labels[i].modulate = Color.WHITE if sel else Color(0.45, 0.45, 0.5)
-		_labels[i].scale = Vector2.ONE
+		var item := _labels[i]
+		if item is TextureRect:
+			item.custom_minimum_size = LOGO_SELECTED if sel else LOGO_OTHER
+		elif item is Label:
+			(item as Label).text = ("> %s <" if sel else "%s") % tr(Registry.info(_ids[i]).title_key)
+		item.modulate = Color.WHITE if sel else Color(0.45, 0.45, 0.5)
 	var best: Array = HighScores.get_table(id)[0]
 	_hiscore.text = tr("PICKER_HISCORE") % [best[0], ScoreTable.format_score(int(best[1]))]
 	_credits.text = Credits.status_text()
@@ -192,8 +203,6 @@ func _refresh() -> void:
 	UI.set_color(_bg_title, accent)
 	_bg_fill.color = accent.darkened(0.85)
 	var logo: Texture2D = load(info.logo) if info.has("logo") else null
-	_logo.texture = logo
-	_logo.visible = logo != null
 	_bg_logo.texture = logo
 	_bg_title.visible = logo == null
 	if info.has("dmd_logo"):

@@ -643,3 +643,9 @@
   - **Shader:** takes `vec4 levels` (engines, shots, impacts, logo).
   - **Light logic:** the logo is steady on in play and blinks slowly in attract. ALL pulses make it flicker, and the rack-clear chase now cycles four steps.
 - **Status:** Accepted
+
+### D-065 — In the picker, a game's logo replaces its name (refines D-063)
+- **Date:** 2026-11-21
+- **Decision (director):** the logo replaces the "TILT BREAKER" text in the game select menu; it isn't an extra image above the list. Logos for the other two games will follow.
+- **Implementation:** each list entry is the game's logo if `get_info()` has `"logo"`, otherwise its styled title. The selected logo is 700×540 at full brightness; others are 400×300 and dimmed. The backglass (logo) and the DMD (pixel logo) still follow the selection. The vertical layout shifts slightly while only some games have logos, and it will be stable once all three do.
+- **Status:** Accepted
