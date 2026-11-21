@@ -75,6 +75,7 @@ Every run through `scripts/run.ps1` or the Godot binary is a debug build. Export
 |---|---|
 | **P** | Pause / resume the whole game |
 | **F** | Tilt Breaker: a free piercing plasma bolt that destroys everything in a vertical line above the ship |
+| **C** | Tilt Breaker: clear the current level instantly (level-complete sequence) |
 
 ### Default controls
 | Action | Keyboard | Controller |

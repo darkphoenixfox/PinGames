@@ -30,7 +30,8 @@ const ENGINE_X := 0.74           # engine nozzles, after scaling to PADDLE_W
 ## 512 px (scripts/tools/prepare_circuit_textures.py). Each brick shows its own
 ## random rectangle. Rows top->bottom (until stage layouts, M2 step 3):
 ## red, red, yellow, green, blue, blue.
-const CIRCUIT_COLOURS := ["red", "red", "yellow", "green", "blue", "blue"]
+## Brick colour letters in level files (D-068) -> circuit texture colour.
+const LETTER_COLOUR := {"R": "red", "Y": "yellow", "G": "green", "B": "blue"}
 const CIRCUIT_GLOW := {"red": Color("ff5a32"), "yellow": Color("ffd23e"), "green": Color("4dff6a"), "blue": Color("3ec7ff")}
 const CIRCUIT_TEXELS := 512.0
 const BRICK_TEXELS_W := 64.0  # texels across one brick (chunky pixel size)
@@ -267,6 +268,10 @@ func _process(delta: float) -> void:
 		_animate(delta)
 		_intro()
 		return
+	if _phase == "outro":
+		_animate(delta)
+		_outro()
+		return
 	if _finale_t >= 0.0:
 		_finale(delta)
 		_animate(delta)
@@ -296,7 +301,7 @@ func _handle_events() -> void:
 			"brick":
 				var n := _brick_nodes[e[1]]
 				n.visible = false
-				_explode_brick(n.position, _row_glow(sim.bricks[e[1]].row))
+				_explode_brick(n.position, _brick_glow(sim.bricks[e[1]]))
 				_lights.pulse(BackglassLights.IMPACTS, 0.35, 14.0)
 				Audio.sfx("tb_brick")
 			"serve":
@@ -360,11 +365,8 @@ func _handle_events() -> void:
 				Audio.sfx("tb_rack")
 				_lights.chase(1.8)
 				_dmd_anim("rack_clear")
-				for n in _brick_nodes:
-					n.visible = true
-					_randomize_crop(n)
 				_trail.clear()
-				_hint.visible = true
+				_begin_outro()
 			"lost":
 				var last := sim.state == Sim.State.OVER
 				Audio.sfx("tb_explode_big" if last else "tb_explode")
@@ -666,8 +668,8 @@ func _build_ship(fallback_mat: Material) -> void:
 	_paddle.add_child(key)
 
 
-func _row_glow(row: int) -> Color:
-	return CIRCUIT_GLOW[CIRCUIT_COLOURS[row % CIRCUIT_COLOURS.size()]]
+func _brick_glow(b: Dictionary) -> Color:
+	return CIRCUIT_GLOW[LETTER_COLOUR.get(b.get("colour", "B"), "blue")]
 
 
 func _brick_material(colour: String, brick_size: Vector3) -> ShaderMaterial:
@@ -686,13 +688,15 @@ func _brick_material(colour: String, brick_size: Vector3) -> ShaderMaterial:
 
 
 func _build_bricks() -> void:
+	for n in _brick_nodes:
+		n.queue_free()
 	_brick_nodes.clear()
 	for i in sim.bricks.size():
 		var b: Dictionary = sim.bricks[i]
 		var r: Rect2 = b.rect
-		var col := i % Sim.BRICK_COLS
+		var col: int = b.get("col", i % Sim.BRICK_COLS)
 		var size := Vector3(r.size.x, 0.3, r.size.y)
-		var colour: String = CIRCUIT_COLOURS[int(b.row) % CIRCUIT_COLOURS.size()]
+		var colour: String = LETTER_COLOUR.get(b.get("colour", "B"), "blue")
 		var n := _box(size, Vector3(r.get_center().x, 0, r.get_center().y), _brick_material(colour, size))
 		_randomize_crop(n)
 		# Pulse ripples diagonally across the swarm, with a little jitter.
@@ -788,6 +792,10 @@ func _build_hud() -> void:
 
 ## Debug keys (D-057): F = piercing plasma along the ship's vertical line.
 func _on_debug_action(action: StringName) -> void:
+	if action == &"clear_level" and sim != null and _phase == "play":
+		sim.debug_clear_level()
+		_handle_events()  # events raised between steps must be handled now
+		return
 	if action == &"fire_line" and sim != null and sim.state != Sim.State.OVER:
 		# Called between frames, so react here (sim events are cleared on the next step).
 		sim.debug_fire_line()
@@ -850,8 +858,10 @@ func _begin_intro() -> void:
 		_attract_ui.queue_free()
 	Audio.sfx("start")
 	Dmd.play(Callable(), 0.0)
-	Dmd.show_text(tr("TB_GET_READY"), tr("DMD_PLAYER_1"), Dmd.YELLOW, Dmd.WHITE)
-	_ready_label = UI.styled_label(tr("TB_GET_READY"), TITLE_FONT, 3)
+	# Level 1 says GET READY; later levels announce their number (D-068).
+	var title: String = tr("TB_GET_READY") if sim.level == 1 else tr("TB_LEVEL") % sim.level
+	Dmd.show_text(title, tr("TB_GET_READY") if sim.level > 1 else tr("DMD_PLAYER_1"), Dmd.YELLOW, Dmd.WHITE)
+	_ready_label = UI.styled_label(title, TITLE_FONT, 3)
 	_ready_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_ready_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	add_to_table(_ready_label)
@@ -905,6 +915,8 @@ func _enter_play() -> void:
 		_brick_nodes[i].position = Vector3(r.get_center().x, 0.0, r.get_center().y)
 		_brick_nodes[i].rotation = Vector3.ZERO
 	_belly_engine.set_thrust(0.0)
+	_paddle.scale = Vector3.ONE
+	_paddle.rotation = Vector3.ZERO
 	if is_instance_valid(_ready_label):
 		_ready_label.queue_free()
 	if is_instance_valid(_attract_ui):
@@ -912,6 +924,70 @@ func _enter_play() -> void:
 	_hint.visible = true
 	_shown_score = -1
 	_refresh_status()
+
+
+# --- level complete (D-068) -------------------------------------------------------------
+const OUTRO_LIFT_AT := 0.5     # ship starts flying away
+const OUTRO_LIFT_TIME := 1.4
+const OUTRO_FADE_AT := 1.5     # fade to black
+const OUTRO_FADE_TIME := 0.6
+const OUTRO_NEXT_AT := 2.3     # next level loads (behind the black)
+var _outro_black: ColorRect
+var _outro_lifted := false
+
+
+## Level complete: remaining enemies already exploded (sim); the ship flies off
+## towards the top and towards the screen, fade to black, then the next level
+## plays the same intro (bricks drop in, ship blasts in).
+func _begin_outro() -> void:
+	_phase = "outro"
+	_phase_t = 0.0
+	_outro_lifted = false
+	_hint.visible = false
+
+
+func _outro() -> void:
+	var t := _phase_t
+	# Ship flies away: up the screen (-z) and up towards the camera (+y). The
+	# camera is orthographic, so growing scale sells "towards the screen".
+	var k := clampf((t - OUTRO_LIFT_AT) / OUTRO_LIFT_TIME, 0.0, 1.0)
+	if k > 0.0 and not _outro_lifted:
+		_outro_lifted = true
+		Audio.sfx("tb_ship_arrive")
+	var e := k * k
+	_paddle.visible = true
+	_paddle.position = Vector3(sim.paddle_x, 7.0 * e, Sim.PADDLE_Y - 13.0 * e)
+	_paddle.scale = Vector3.ONE * (1.0 + 2.2 * e)
+	_paddle.rotation = Vector3(-0.5 * k, 0.0, 0.0)
+	_belly_engine.set_thrust(1.5 if k > 0.0 and k < 1.0 else 0.0)
+	if t >= OUTRO_FADE_AT and _outro_black == null:
+		_outro_black = UI.fill(Color(0, 0, 0, 0))
+		add_to_table(_outro_black)
+		_outro_black.create_tween().tween_property(_outro_black, "color:a", 1.0, OUTRO_FADE_TIME)
+	if t >= OUTRO_NEXT_AT:
+		_load_next_level()
+
+
+func _load_next_level() -> void:
+	sim.next_level()
+	_build_bricks()
+	for n in _brick_nodes:
+		n.visible = false
+	_paddle.visible = false
+	_paddle.scale = Vector3.ONE
+	_paddle.rotation = Vector3.ZERO
+	_belly_engine.set_thrust(0.0)
+	for id in _enemy_nodes.keys():
+		_remove_enemy_node(id)
+	_begin_intro()
+	# Fade back in over the new level's intro.
+	var black := _outro_black
+	_outro_black = null
+	if is_instance_valid(black):
+		black.move_to_front()
+		var tw := black.create_tween()
+		tw.tween_property(black, "color:a", 0.0, 0.5)
+		tw.tween_callback(black.queue_free)
 
 
 static func _ease_out_bounce(x: float) -> float:
@@ -940,7 +1016,7 @@ func _dmd_anim(name: String) -> void:
 		"incoming": tr("TB_DMD_INCOMING"),
 		"charge_lost": tr("TB_CHARGE_LOST"),
 		"ship_destroyed": tr("TB_SHIP_DESTROYED"),
-		"rack_clear": tr("DMD_RACK_CLEAR"),
+		"rack_clear": tr("TB_LEVEL_CLEAR"),
 		"plus_rack": "" if _phase == "attract" else "+%d" % Sim.RACK_BONUS,
 	}
 	Dmd.play(Callable(_dmd_anims, name), DmdAnims.DURATIONS[name])

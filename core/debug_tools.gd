@@ -2,6 +2,7 @@
 ## debug builds (any run through the Godot binary / scripts; exported release
 ## builds ignore them, so cabinets are unaffected).
 ##   P  pause / resume the whole game (shows PAUSED on the TABLE)
+##   C  game-specific "clear the level" (Tilt Breaker: instant level complete)
 ##   F  game-specific debug action (`debug_action` signal, e.g. Tilt Breaker's
 ##      piercing plasma that destroys everything in a vertical line)
 extends Node
@@ -33,6 +34,10 @@ func _input(event: InputEvent) -> void:
 		KEY_F:
 			if not get_tree().paused:
 				debug_action.emit(&"fire_line")
+			get_viewport().set_input_as_handled()
+		KEY_C:
+			if not get_tree().paused:
+				debug_action.emit(&"clear_level")
 			get_viewport().set_input_as_handled()
 
 

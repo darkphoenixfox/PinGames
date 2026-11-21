@@ -31,12 +31,18 @@ const MIN_VERTICAL := 0.28
 const AUTO_SERVE_SECONDS := 6.0
 const MAX_SUBSTEP := 0.05  # world units per collision substep (no tunnelling)
 # --- bricks --------------------------------------------------------------------
-const BRICK_ROWS := 6
+const BRICK_ROWS := 10   # max rows a level may use
 const BRICK_COLS := 11
+## Levels (D-068): text grids, one char per brick (R/Y/G/B = colour, . = empty).
+## After the last file the levels loop.
+const LEVEL_FILES := [
+	"res://games/breakout/levels/level_01.txt",
+	"res://games/breakout/levels/level_02.txt",
+]
+const COLOUR_POINTS := {"R": 120, "Y": 100, "G": 80, "B": 60}
 const BRICK_TOP := -5.55  # leaves the top 10% free for enemies (D-052)
 const BRICK_H := 0.4
 const BRICK_GAP := 0.05
-const BRICK_POINTS := [120, 100, 80, 60, 50, 40]  # per row, top row first
 const RACK_BONUS := 1000
 # --- energy blast (D-051) ---------------------------------------------------------
 const BLAST_CHARGE_TIME := 0.68    # per charge level (director: -20% D-054, then -15% D-056)
@@ -63,12 +69,12 @@ const ENEMY_ORBIT_R := Vector2(2.6, 0.9)
 const ENEMY_ORBIT_SPEED := 0.9       # rad/s
 const SHIP_INVULNERABLE := 2.0       # after the ship is destroyed and respawns
 
-enum State { SERVE, PLAY, OVER }
+enum State { SERVE, PLAY, LEVEL_CLEAR, OVER }
 
 var state := State.SERVE
 var score := 0
 var balls_left := 3
-var rack := 1
+var level := 1
 
 var paddle_x := 0.0
 var paddle_vx := 0.0
@@ -105,7 +111,8 @@ var _next_enemy_id := 1
 var bricks: Array = []
 ## Events produced by the last step(): [name, data]. Names: serve, paddle, wall,
 ## wall (data = [side "l"|"r"|"t", hit position]), brick (data = index),
-## rack_clear, lost (data = x where the plasma left), over, dash,
+## rack_clear (data = cleared level; state becomes LEVEL_CLEAR until the game
+## calls next_level()), lost (data = x where the plasma left), over, dash,
 ## charge_start (data = level being charged), charged (data = level reached),
 ## blast (data = [start pos, level]), blast_fail (low power),
 ## blast_end (data = [pos, brick index or -1, level]),
@@ -117,19 +124,50 @@ var events: Array = []
 func setup(balls: int) -> void:
 	balls_left = maxi(1, balls)
 	score = 0
-	rack = 1
+	level = 1
 	build_rack()
 	_reset_serve()
 
 
+## Builds the bricks of the current level from its text file.
 func build_rack() -> void:
 	bricks.clear()
+	var layout := level_layout(level)
 	var w := FIELD.size.x / BRICK_COLS
-	for row in BRICK_ROWS:
-		for col in BRICK_COLS:
+	for row in mini(layout.size(), BRICK_ROWS):
+		var line: String = layout[row]
+		for col in mini(line.length(), BRICK_COLS):
+			var ch := line[col].to_upper()
+			if not COLOUR_POINTS.has(ch):
+				continue
 			var rect := Rect2(FIELD.position.x + col * w + BRICK_GAP * 0.5,
 				BRICK_TOP + row * BRICK_H + BRICK_GAP * 0.5, w - BRICK_GAP, BRICK_H - BRICK_GAP)
-			bricks.append({"rect": rect, "hp": 1, "alive": true, "row": row, "points": BRICK_POINTS[row]})
+			bricks.append({"rect": rect, "hp": 1, "alive": true, "row": row, "col": col,
+				"colour": ch, "points": COLOUR_POINTS[ch]})
+
+
+## Rows of level n (1-based; loops over LEVEL_FILES). Comment lines start with #.
+static func level_layout(n: int) -> Array:
+	var path: String = LEVEL_FILES[(n - 1) % LEVEL_FILES.size()]
+	var rows := []
+	for line in FileAccess.get_file_as_string(path).split("\n"):
+		var l := line.strip_edges()
+		if l.is_empty() or l.begins_with("#"):
+			continue
+		rows.append(l)
+	return rows
+
+
+## Loads the next level after LEVEL_CLEAR (the game calls this once its
+## level-complete sequence has faded out).
+func next_level() -> void:
+	level += 1
+	build_rack()
+	enemies.clear()
+	blasts.clear()
+	blast_charge = 0.0
+	_enemy_timer = ENEMY_FIRST_SPAWN
+	_reset_serve()
 
 
 func bricks_alive() -> int:
@@ -148,7 +186,7 @@ func paddle_rect() -> Rect2:
 ## frame. dash: -1/+1 if a magna save was pressed this frame, else 0.
 func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 	events.clear()
-	if state == State.OVER:
+	if state == State.OVER or state == State.LEVEL_CLEAR:
 		return
 	_update_power_and_blast(dt, left and right)
 	_move_paddle(dt, left, right, dash)
@@ -255,6 +293,16 @@ func debug_fire_line() -> void:
 	blasts.append({"pos": start, "level": 3, "hits_left": 9999})
 
 
+## Debug (D-068): destroys every remaining brick (triggers level complete).
+func debug_clear_level() -> void:
+	if state != State.PLAY and state != State.SERVE:
+		return
+	events.clear()
+	for i in bricks.size():
+		if bricks[i].alive and _damage_brick(i):
+			return
+
+
 ## Blast hitbox width by level (bigger blasts are wider).
 static func blast_width(level: int) -> float:
 	return BLAST_W * [0.75, 1.0, 1.3][clampi(level, 1, 3) - 1]
@@ -271,11 +319,14 @@ func _damage_brick(i: int) -> bool:
 	events.append(["brick", i])
 	if bricks_alive() == 0:
 		score += RACK_BONUS
-		rack += 1
-		events.append(["rack_clear", rack])
-		build_rack()
+		# Level complete (D-068): every enemy left explodes; play pauses until
+		# the game runs its outro and calls next_level().
+		while not enemies.is_empty():
+			_destroy_enemy(0, false)
 		blasts.clear()
-		_reset_serve()
+		blast_charge = 0.0
+		state = State.LEVEL_CLEAR
+		events.append(["rack_clear", level])
 		return true
 	return false
 

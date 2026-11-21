@@ -1,0 +1,6 @@
+# Tilt Breaker level 1 (D-068). One line per brick row, 11 columns.
+# R = red, Y = yellow, G = green, B = blue, . = empty. Lines starting with # are comments.
+RRRRRRRRRRR
+YYYYYYYYYYY
+GGGGGGGGGGG
+BBBBBBBBBBB

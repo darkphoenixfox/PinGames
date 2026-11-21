@@ -129,6 +129,25 @@ func test_translation_keys() -> void:
 
 ## Tetrahedron enemy (D-052): blocked by a full rack, descends through a gap,
 ## orbits at the bottom, dies to the plasma, destroys the ship on contact.
+## Level complete (D-068): enemies explode, play pauses, next_level loads level 2.
+func test_breakout_levels(Sim) -> void:
+	var lv = Sim.new()
+	lv.setup(3)
+	lv.spawn_enemy(0.0)
+	lv.step(1.0 / 60.0, false, false, true, 0)
+	for b in lv.bricks:
+		b.alive = false
+	lv.bricks[0].alive = true
+	var cleared: bool = lv._damage_brick(0)
+	check(cleared and lv.state == Sim.State.LEVEL_CLEAR and lv.enemies.is_empty(), "level clear: enemies explode, play pauses")
+	check(lv.events.filter(func(e): return e[0] == "enemy_destroyed").size() == 1, "remaining enemy exploded")
+	lv.step(1.0 / 60.0, true, false, true, 0)
+	check(lv.state == Sim.State.LEVEL_CLEAR, "sim waits during the level-complete sequence")
+	lv.next_level()
+	check(lv.level == 2 and lv.state == Sim.State.SERVE and lv.bricks.size() == lv.bricks_alive() and lv.bricks.size() > 20,
+		"next_level loads level 2 (%d bricks)" % lv.bricks.size())
+
+
 func test_breakout_enemies(Sim) -> void:
 	seed(42)
 	var blocked = Sim.new()
@@ -233,7 +252,9 @@ func test_breakout_sim() -> void:
 	seed(1234)
 	var sim = Sim.new()
 	sim.setup(3)
-	check(sim.bricks.size() == Sim.BRICK_ROWS * Sim.BRICK_COLS, "rack built")
+	check(sim.bricks.size() == 44, "level 1 built from its file (%d bricks)" % sim.bricks.size())
+	var l2: Array = Sim.level_layout(2)
+	check(l2.size() >= 5 and l2[0] != l2[l2.size() - 1], "level 2 is not a rectangle")
 	var dt := 1.0 / 120.0
 	var escaped := false
 	var bricks_broken := 0
@@ -252,6 +273,8 @@ func test_breakout_sim() -> void:
 		if sim.ball_pos.x < f.position.x - 0.01 or sim.ball_pos.x > f.end.x + 0.01 \
 				or sim.ball_pos.y < f.position.y - 0.01 or is_nan(sim.ball_pos.x):
 			escaped = true
+		if sim.state == Sim.State.LEVEL_CLEAR:
+			sim.next_level()
 		if sim.state == Sim.State.OVER:
 			break
 	check(not escaped, "ball never escapes the walls")
@@ -338,7 +361,8 @@ func test_breakout_sim() -> void:
 	for k in 90:
 		dbg.step(1.0 / 60.0, false, false, false, 0)
 		broken += dbg.events.filter(func(e): return e[0] == "brick").size()
-	check(broken >= Sim.BRICK_ROWS, "debug line destroys a full column (%d)" % broken)
+	check(broken >= 4, "debug line destroys a full column (%d)" % broken)
+	test_breakout_levels(Sim)
 	test_breakout_enemies(Sim)
 
 

@@ -665,3 +665,16 @@
   - **Sound:** `Audio.sfx()` now returns its player, and `Audio.stop_sfx(player, name)` stops it only if that player is still playing that sound. Tilt Breaker keeps the charge sound and stops it on a new `charge_start`, on `blast`, and whenever the charge drops to zero.
   - **Particles:** the charge particles are hidden immediately when charging stops, and `restart()` clears them when a new charge begins.
 - **Status:** Accepted
+
+### D-068 — Levels from text files; level-complete sequence
+- **Date:** 2026-11-21
+- **Decision (director):**
+  - When a level is completed, all remaining enemies explode, the ship flies away toward the top and toward the screen (3D), the screen fades to black, and the next level loads with the same brick-in and ship blast-in animations.
+  - Level 1 is shorter (fewer bricks), and level 2 is a different pattern (not a rectangle).
+- **Implementation:**
+  - **Level files:** text in `games/breakout/levels/level_NN.txt` (R/Y/G/B/., `#` comments), listed in `Sim.LEVEL_FILES`, looping. Bricks carry `colour`/`col`, and points come from the colour (R 120, Y 100, G 80, B 60). Level 1 is 4×11 (44 bricks); level 2 is a 7-row stepped pyramid.
+  - **Sim:** clearing the last brick adds `RACK_BONUS`, destroys the remaining enemies (no points), clears blasts and charge, and enters `State.LEVEL_CLEAR`, which freezes the sim. `next_level()` builds the next layout and resets the serve and the enemy timer. Tested.
+  - **Game (`outro` phase):** at 0.5–1.9 s the ship rises (+y) and moves up the screen (-z) with ease-in, scales to 3.2× (the camera is orthographic) and pitches, on the belly afterburner, with a roar sound. It fades to black at 1.5 s. At 2.3 s it rebuilds the bricks and runs the intro, labelled "LEVEL n" (the DMD says LEVEL n / GET READY), fading back in. The DMD clip text is now "LEVEL CLEAR!".
+  - **Debug:** a new key **C** (debug builds) clears the level instantly.
+  - **Export note (M5):** level `.txt` files are non-resource files and must be added to the export include filter.
+- **Status:** Accepted
