@@ -22,8 +22,9 @@ const DEFAULTS := {
 		"dmd_rotation": 0,
 		# window | backglass | hardware   (2screen forces backglass unless hardware)
 		"dmd_sink": "window",
-		# DMD region inside the backglass, as fractions x,y,w,h
-		"dmd_region": "0.0,0.78,1.0,0.22",
+		# Box for the DMD inside the backglass, as fractions x,y,w,h. The DMD keeps
+		# its dot aspect, centred in the box, with a frame around it (D-080).
+		"dmd_region": "0.25,0.78,0.5,0.18",
 		# "auto" or a number (1.0 = base resolution 1080x1920 for the table)
 		"render_scale": "auto",
 	},

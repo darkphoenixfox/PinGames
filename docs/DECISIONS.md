@@ -754,3 +754,12 @@
 - **Decision (director):** add a bit of reverb to the bounce and explosion sound effects.
 - **Implementation:** the synth gets a `reverb: [decay_s, wet]` option, a small Schroeder room (4 damped feedback combs at 29.7/37.1/41.1/43.7 ms plus 2 allpasses) that extends the sample by its tail. Applied to `tb_shield` (ball bounce, 0.6 s / 0.3), `tb_explode` (1.0 s / 0.35), `tb_enemy_die` (0.9 s), `tb_explode_big` and `tb_ship_die` (1.4 s). These are rendered once at game load, which adds about 1.3 s of load time; there's no cost during play.
 - **Status:** Accepted
+
+### D-080 — 2-screen backglass: dedicated art, framed DMD at the bottom centre
+- **Date:** 2026-11-21
+- **Decision (director):** add `_2screen` versions of the backglass (on/off). On 2-screen cabinets, place the DMD at the bottom of the second screen, centred, with a frame around it.
+- **Implementation:**
+  - **Setting:** the existing operator layout setting (Windowed / 2 screens / 3 screens, D-006) chooses the mode. `Screens.dmd_in_backglass` is true for 2 screens, or whenever DMD output = backglass. The windowed dev layout honours it too, as a preview (`--display.dmd_sink=backglass`).
+  - **Placement:** the backglass art is no longer squashed above a strip; it fills the screen. The DMD keeps its dot aspect, centred in `dmd_region`, whose default changes to `0.25,0.78,0.5,0.18`. Around it there is a bezel: a gunmetal border with a bright bevel, a drop shadow, and a thin cyan glowing inner trim.
+  - **Art:** Tilt Breaker loads `backglass_{off,on,mask,mask_logo}_2screen.png` in that mode. `prepare_backglass_lights.py` gains a suffix argument with grouping tuned for the higher framing: engines below 42 % height, the logo above 22 %, and a comet touching the logo split off into shots.
+- **Status:** Accepted (supersedes the full-width DMD strip of D-013)

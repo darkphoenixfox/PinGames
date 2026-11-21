@@ -1367,14 +1367,16 @@ func _build_backglass() -> void:
 	add_to_backglass(UI.fill(Color.BLACK))
 	var art := TextureRect.new()
 	art.set_anchors_preset(Control.PRESET_FULL_RECT)
-	art.texture = load("res://assets/textures/breakout/backglass_off.png")
+	# 2-screen cabinets: art framed with room for the DMD at the bottom (D-080).
+	var sfx_2 := "_2screen" if Screens.dmd_in_backglass else ""
+	art.texture = load("res://assets/textures/breakout/backglass_off%s.png" % sfx_2)
 	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_backglass_mat = ShaderMaterial.new()
 	_backglass_mat.shader = BACKGLASS_SHADER
-	_backglass_mat.set_shader_parameter("on_tex", load("res://assets/textures/breakout/backglass_on.png"))
-	_backglass_mat.set_shader_parameter("mask_tex", load("res://assets/textures/breakout/backglass_mask.png"))
-	_backglass_mat.set_shader_parameter("logo_mask_tex", load("res://assets/textures/breakout/backglass_mask_logo.png"))
+	_backglass_mat.set_shader_parameter("on_tex", load("res://assets/textures/breakout/backglass_on%s.png" % sfx_2))
+	_backglass_mat.set_shader_parameter("mask_tex", load("res://assets/textures/breakout/backglass_mask%s.png" % sfx_2))
+	_backglass_mat.set_shader_parameter("logo_mask_tex", load("res://assets/textures/breakout/backglass_mask_logo%s.png" % sfx_2))
 	art.material = _backglass_mat
 	add_to_backglass(art)
 

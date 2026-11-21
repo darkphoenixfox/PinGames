@@ -2,7 +2,8 @@
 ## them (plus the DMD) on OS windows according to the layout (D-006, D-013):
 ##   windowed : 3 separate windows tiled on one monitor (current dev default)
 ##   3screen  : TABLE = main window, BACKGLASS and DMD in their own fullscreen windows
-##   2screen  : TABLE = main window, DMD drawn as a region of the BACKGLASS window
+##   2screen  : TABLE = main window, DMD framed at the bottom centre of the BACKGLASS
+##              (games show their *_2screen backglass art, D-080)
 ## Games add their nodes to `table` / `backglass` (base coordinates, any render scale).
 extends Node
 
@@ -16,6 +17,9 @@ const TITLE_BAR := 40  # allowance for OS window decorations in windowed mode
 var table: SubViewport
 var backglass: SubViewport
 var current_layout := ""
+## True when the DMD is drawn inside the backglass (2 screens, or DMD output =
+## backglass). Games then use art composed with room for it (D-080).
+var dmd_in_backglass := false
 var _outputs: Array[Node] = []
 
 
@@ -46,6 +50,8 @@ func setup(layout_name: String) -> void:
 		o.queue_free()
 	_outputs.clear()
 	current_layout = layout_name
+	var sink := str(Config.get_value("display", "dmd_sink"))
+	dmd_in_backglass = sink != "hardware" and (layout_name == "2screen" or sink == "backglass")
 	if is_headless():
 		print("Screens: headless, layout '%s' not shown" % layout_name)
 		return
@@ -87,13 +93,18 @@ func _setup_windowed() -> void:
 	var right_x := x0 + table_size.x + 12
 	var bgw := _make_window("PinGames - BACKGLASS", Rect2i(Vector2i(right_x, y0), bg_size), false)
 	_add_view(bgw, backglass.get_texture(), 0, false)
+	if dmd_in_backglass:  # preview of the 2-screen cabinet look (D-080)
+		_add_framed_dmd(bgw)
+		return
+	if str(Config.get_value("display", "dmd_sink")) == "hardware":
+		return
 	var dmw := _make_window("PinGames - DMD",
 		Rect2i(Vector2i(right_x, y0 + bg_size.y + TITLE_BAR), dmd_size), false)
 	_add_view(dmw, Dmd.texture(), 0, true)
 
 
 # --- cabinet: fullscreen windows on separate monitors -------------------------
-func _setup_cabinet(dmd_in_backglass: bool) -> void:
+func _setup_cabinet(_two_screens: bool) -> void:
 	var t_mon := _clamp_monitor(int(Config.get_value("display", "table_monitor")))
 	var b_mon := _clamp_monitor(int(Config.get_value("display", "backglass_monitor")))
 	var t_rect := _monitor_rect(t_mon)
@@ -117,23 +128,71 @@ func _setup_cabinet(dmd_in_backglass: bool) -> void:
 	var sink := str(Config.get_value("display", "dmd_sink"))
 	if sink == "hardware":
 		return
-	if dmd_in_backglass or sink == "backglass":
-		var r := str(Config.get_value("display", "dmd_region")).split_floats(",")
-		if r.size() == 4:
-			b_view.anchor_bottom = r[1]  # backglass art sits above the DMD strip
-			var dv := _add_view(bgw, Dmd.texture(), 0, true)
-			dv.anchor_left = r[0]
-			dv.anchor_top = r[1]
-			dv.anchor_right = r[0] + r[2]
-			dv.anchor_bottom = r[1] + r[3]
-			dv.offset_left = 0
-			dv.offset_top = 0
-			dv.offset_right = 0
-			dv.offset_bottom = 0
+	if dmd_in_backglass:
+		_add_framed_dmd(bgw)
 		return
 	var d_mon := _clamp_monitor(int(Config.get_value("display", "dmd_monitor")))
 	var dmw := _make_window("PinGames DMD", _monitor_rect(d_mon), true)
 	_add_view(dmw, Dmd.texture(), int(Config.get_value("display", "dmd_rotation")), true)
+
+
+## The DMD inside the backglass window (D-080): full-screen art behind, the DMD
+## at its dot aspect centred in the `dmd_region` box, in a bezel frame.
+func _add_framed_dmd(win: Window) -> void:
+	var r := str(Config.get_value("display", "dmd_region")).split_floats(",")
+	if r.size() != 4:
+		r = PackedFloat64Array([0.25, 0.78, 0.5, 0.18])
+	var ws := Vector2(win.size)
+	var box := Rect2(r[0] * ws.x, r[1] * ws.y, r[2] * ws.x, r[3] * ws.y)
+	var aspect := float(Dmd.size.x) / float(Dmd.size.y)
+	var dsize := Vector2(box.size.x, box.size.x / aspect)
+	if dsize.y > box.size.y:
+		dsize = Vector2(box.size.y * aspect, box.size.y)
+	var drect := Rect2(box.get_center() - dsize * 0.5, dsize)
+	var u := ws.y / 1080.0  # frame sizes in backglass base pixels
+	# Outer bezel: gunmetal with a dark drop shadow.
+	var bezel := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.0, 0.0, 0.0)
+	sb.border_color = Color(0.2, 0.23, 0.29)
+	sb.set_border_width_all(int(round(10 * u)))
+	sb.set_corner_radius_all(int(round(10 * u)))
+	sb.shadow_color = Color(0, 0, 0, 0.75)
+	sb.shadow_size = int(round(14 * u))
+	sb.anti_aliasing = true
+	bezel.add_theme_stylebox_override("panel", sb)
+	bezel.position = drect.position - Vector2(16, 16) * u
+	bezel.size = drect.size + Vector2(32, 32) * u
+	win.add_child(bezel)
+	# Bright bevel on the bezel's outer edge.
+	var bevel := Panel.new()
+	var bv := StyleBoxFlat.new()
+	bv.draw_center = false
+	bv.border_color = Color(0.55, 0.6, 0.7)
+	bv.set_border_width_all(maxi(1, int(round(2 * u))))
+	bv.set_corner_radius_all(int(round(10 * u)))
+	bv.anti_aliasing = true
+	bevel.add_theme_stylebox_override("panel", bv)
+	bevel.position = bezel.position
+	bevel.size = bezel.size
+	win.add_child(bevel)
+	# Thin glowing inner trim around the glass.
+	var trim := Panel.new()
+	var tb := StyleBoxFlat.new()
+	tb.draw_center = false
+	tb.border_color = Color(0.3, 0.75, 1.0, 0.85)
+	tb.set_border_width_all(maxi(1, int(round(2 * u))))
+	tb.set_corner_radius_all(int(round(3 * u)))
+	tb.shadow_color = Color(0.3, 0.75, 1.0, 0.35)
+	tb.shadow_size = int(round(5 * u))
+	trim.add_theme_stylebox_override("panel", tb)
+	trim.position = drect.position - Vector2(5, 5) * u
+	trim.size = drect.size + Vector2(10, 10) * u
+	win.add_child(trim)
+	var dv := _add_view(win, Dmd.texture(), 0, true)
+	dv.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	dv.position = drect.position
+	dv.size = drect.size
 
 
 # --- helpers ------------------------------------------------------------------

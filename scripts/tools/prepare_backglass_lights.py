@@ -16,8 +16,13 @@ assigned to a group by where their centre is (tuned for Tilt Breaker's art):
   centre x < 25% width or y > 66% height    -> engines (exhaust flames)
   otherwise                                 -> shots (plasma comets)
 
-Usage: python scripts/tools/prepare_backglass_lights.py <inbox_dir> <base_name> <game>
+Usage: python scripts/tools/prepare_backglass_lights.py <inbox_dir> <base_name> <game> [suffix]
   e.g. ... "C:/Users/Phoenixfox/Dev/PinGamesAssets" breaker_lights breakout
+  The optional suffix (e.g. _2screen, D-080) reads <base>_off<suffix>.png and
+  writes every output with the same suffix (backglass_off_2screen.png, ...).
+  The 2-screen art is framed higher, so its engine flames sit mid-height:
+  for it, regions centred below 42% height (outside the impact zone) are engines,
+  and the logo zone ends at 22% height (a plasma comet sits just below it).
 """
 import os
 import shutil
@@ -55,29 +60,32 @@ def components(mask: Image.Image):
     return comps
 
 
-def group_of(cx: float, cy: float, w: int, h: int) -> int:
-    if cy < 0.3 * h and 0.25 * w < cx < 0.7 * w:
+def group_of(cx: float, cy: float, w: int, h: int, engine_y: float = 0.66, logo_y: float = 0.3) -> int:
+    if cy < logo_y * h and 0.25 * w < cx < 0.7 * w:
         return 3  # logo
     if cx > 0.66 * w:
         return 2  # impacts
-    if cx < 0.25 * w or cy > 0.66 * h:
+    if cx < 0.25 * w or cy > engine_y * h:
         return 0  # engines
     return 1  # shots
 
 
 def main():
     inbox, base, game = sys.argv[1], sys.argv[2], sys.argv[3]
+    suffix = sys.argv[4] if len(sys.argv) > 4 else ""
+    engine_y = 0.42 if suffix == "_2screen" else 0.66
+    logo_y = 0.22 if suffix == "_2screen" else 0.3
     src_dir = os.path.join(ROOT, "assets", "source", game)
     out_dir = os.path.join(ROOT, "assets", "textures", game)
     os.makedirs(src_dir, exist_ok=True)
     os.makedirs(out_dir, exist_ok=True)
     imgs = {}
     for state in ("off", "on"):
-        name = f"{base}_{state}.png"
+        name = f"{base}_{state}{suffix}.png"
         kept = os.path.join(src_dir, name)
         shutil.copyfile(os.path.join(inbox, name), kept)
         img = Image.open(kept).convert("RGB").resize(OUT_SIZE, Image.LANCZOS)
-        img.save(os.path.join(out_dir, f"backglass_{state}.png"), optimize=True)
+        img.save(os.path.join(out_dir, f"backglass_{state}{suffix}.png"), optimize=True)
         imgs[state] = img
     diff = ImageChops.difference(imgs["off"].resize(WORK), imgs["on"].resize(WORK)).convert("L")
     lit = diff.point(lambda v: 255 if v > THRESHOLD else 0).filter(ImageFilter.MaxFilter(3))
@@ -89,14 +97,15 @@ def main():
             continue
         cx = sum(p[0] for p in pts) / len(pts)
         cy = sum(p[1] for p in pts) / len(pts)
-        g = group_of(cx, cy, *WORK)
+        g = group_of(cx, cy, *WORK, engine_y, logo_y)
         counts[g] += 1
         for x, y in pts:
-            gpx[g][x, y] = 255
+            # A comet touching the logo joins its region: split it off by height.
+            gpx[1 if g == 3 and y > logo_y * WORK[1] else g][x, y] = 255
     channels = [g.resize(OUT_SIZE, Image.BILINEAR).filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.GaussianBlur(6))
                 for g in groups]
-    Image.merge("RGB", channels[:3]).save(os.path.join(out_dir, "backglass_mask.png"), optimize=True)
-    channels[3].save(os.path.join(out_dir, "backglass_mask_logo.png"), optimize=True)
+    Image.merge("RGB", channels[:3]).save(os.path.join(out_dir, f"backglass_mask{suffix}.png"), optimize=True)
+    channels[3].save(os.path.join(out_dir, f"backglass_mask_logo{suffix}.png"), optimize=True)
     print(f"regions: engines={counts[0]} shots={counts[1]} impacts={counts[2]} logo={counts[3]}")
 
 
