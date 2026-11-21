@@ -852,3 +852,25 @@
 - **Cost:** player plus 10 pooled traffic cars is about 120k tris, trivial for the cabinet GPU.
 - **Lesson:** don't collapse-decimate textured AI meshes blindly. Render a before/after check (Blender workbench) before shipping a reduced model.
 - **Status:** Accepted
+
+### D-091 — Turbo Run: cel-shading render style
+- **Date:** 2026-11-21
+- **Decision (director approved Claude's recommendation):** cel-shade the racer.
+  - **Cars:** `car.gdshader` has a custom `light()` with 3 flat diffuse bands and one hard highlight; metallic is off.
+  - **Props:** the scenery material uses Godot's toon diffuse with specular disabled.
+  - **Outlines:** an inverted hull (`games/racer/toon.gd`, `shaders/outline.gdshader`) on the cars and roadside props. It is pushed along normals averaged per position, so UV seams and hard edges don't crack it. The width grows with distance, so it stays about 2–3 px on screen.
+  - **Left unoutlined:** road, sky and mountains, so the distance stays clean through the fog.
+- **Why an inverted hull, not a screen-space edge pass:** it is cheap, works with pooled traffic and MultiMesh props, and doesn't produce noisy edges on the pixel textures.
+- **Consequences:**
+  - Mirrored transforms would flip the hull's culling, so props are never mirrored. Left lamps are turned 180°, and left chevrons are a separate mesh (`chevron_l`) with flipped UVs.
+  - The dev flag `--rc-no-toon` shows the plain look for comparison.
+- **Status:** Accepted (prototype look, pending director review)
+
+### D-092 — Turbo Run: cars turn like 32-angle sprites, steering turns the nose on straights
+- **Date:** 2026-11-21
+- **Decision (director):** instead of smooth realistic turning, cars behave as if there were only 32 views of the car around 360° (simulated sprites). Steering left or right on a straight should visibly turn the car a bit, not only in corners.
+- **Implementation:**
+  - `game.gd` snaps each car's yaw *relative to the camera view* to steps of 11.25° (`SPRITE_ANGLES` = 32), so the car pops between views like a pre-rendered sprite set. This covers the player (steer, drift and crash spin) and traffic.
+  - Full steer adds 0.3 rad of nose turn (`STEER_YAW`, about 1.5 steps). It used to be 0.08 rad, which was below one sprite step.
+  - Body roll is removed, since a sprite can't lean. Pitch still follows the hills.
+- **Status:** Accepted (prototype)

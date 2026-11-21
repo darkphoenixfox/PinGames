@@ -13,6 +13,7 @@ extends "res://core/game_module.gd"
 const Sim = preload("res://games/racer/sim.gd")
 const Track = preload("res://games/racer/track.gd")
 const Scenery = preload("res://games/racer/scenery.gd")
+const Toon = preload("res://games/racer/toon.gd")
 const UI = preload("res://core/ui/ui.gd")
 const Synth = preload("res://core/util/synth.gd")
 const ScoreTable = preload("res://core/util/score_table.gd")
@@ -22,6 +23,10 @@ const MOUNTAIN_SHADER = preload("res://games/racer/shaders/mountains.gdshader")
 const CAR_MODEL := "res://assets/models/racer/red_car.glb"
 ## The model's nose points +Z; turn it to face down the road (-Z).
 const MODEL_TURN := Basis(Vector3.UP, PI)
+## Cars snap to 32 views around the camera, like a sprite set (D-092).
+const SPRITE_ANGLES := 32
+## Nose turn at full steer (rad): ~1.5 sprite steps, visible on straights.
+const STEER_YAW := 0.3
 const CAR_TEXTURE := "res://assets/models/racer/red_car_albedo.png"
 
 const ACCENT := Color("ffd23e")
@@ -94,6 +99,7 @@ var _car: Node3D                 # player car (road frame)
 var _car_body: Node3D            # model; yaws/rolls/spins
 var _car_tex: Texture2D
 var _car_mat: ShaderMaterial
+var _car_outline: ArrayMesh
 var _traffic_nodes: Array = []   # pool of Node3D
 var _smoke: Array = []           # CPUParticles3D at the rear wheels
 var _flames: Array = []          # nitro flame meshes
@@ -132,6 +138,8 @@ func start(_players: int) -> void:
 	for s in SOUNDS:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
 	_manual_locked = str(Config.get_value("operator", "cabinet_buttons")) == "4"
+	# Cel shading (D-091); --rc-no-toon shows the plain look for comparison.
+	Toon.enabled = not Config.cli.has("rc-no-toon")
 	_build_world()
 	_build_hud()
 	_build_backglass()
@@ -418,8 +426,16 @@ func _car_instance(hue: float) -> Node3D:
 			_car_mat = ShaderMaterial.new()
 			_car_mat.shader = CAR_SHADER
 			_car_mat.set_shader_parameter("tex", _car_tex)
+			_car_mat.set_shader_parameter("toon", Toon.enabled)
 		mi.material_override = _car_mat
 		mi.set_instance_shader_parameter("hue", hue)
+		if Toon.enabled:
+			if _car_outline == null:
+				_car_outline = Toon.outline_mesh(mi.mesh)
+			var ol := MeshInstance3D.new()
+			ol.mesh = _car_outline
+			ol.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mi.add_child(ol)
 	return node
 
 
@@ -549,9 +565,11 @@ func _build_chunk(k: int) -> Node3D:
 	# Props, one MultiMesh per kind.
 	var by_kind := {}
 	for o in tr_.objects_between(s0, s0 + CHUNK):
-		if not by_kind.has(o.kind):
-			by_kind[o.kind] = []
-		by_kind[o.kind].append(o)
+		# Chevron arrows point the way the road turns: one mesh per direction.
+		var key: String = o.kind if o.kind != "chevron" or o.dir < 0.0 else "chevron_l"
+		if not by_kind.has(key):
+			by_kind[key] = []
+		by_kind[key].append(o)
 	for kind in by_kind:
 		var list: Array = by_kind[kind]
 		var mm := MultiMesh.new()
@@ -568,10 +586,11 @@ func _build_chunk(k: int) -> Node3D:
 					f.basis = f.basis * Basis(Vector3.UP, h * TAU).scaled(Vector3.ONE * (0.85 + h * 0.4))
 				"rock":
 					f.basis = f.basis * Basis(Vector3.UP, h * TAU).scaled(Vector3.ONE * (0.8 + h * 0.6))
-				"chevron":
-					f.basis = f.basis.scaled(Vector3(-o.dir, 1.0, 1.0))
 				"lamp":
-					f.basis = f.basis.scaled(Vector3(signf(o.x), 1.0, 1.0))
+					# Arm over the road: turn (not mirror, which would flip the
+					# outline's culling) the left-side lamps.
+					if o.x < 0.0:
+						f.basis = f.basis * Basis(Vector3.UP, PI)
 			f.origin.y -= 0.05
 			mm.set_instance_transform(i, f)
 		var mmi := MultiMeshInstance3D.new()
@@ -627,19 +646,36 @@ func _build_gate(parent: Node3D, s: float, text: String) -> void:
 
 
 # --- per-frame visuals ----------------------------------------------------------------
+## Horizontal yaw of the chase camera's view (same convention as Track: 0 = -Z).
+func _camera_yaw() -> float:
+	var tr_ := sim.track
+	var d := tr_.point(sim.s + CAM_LOOK, _cam_x * 0.9) - tr_.point(sim.s - CAM_BACK, _cam_x * 0.85)
+	return atan2(-d.x, -d.z)
+
+
+## Simulated sprite car (D-092): the 3D model only ever shows one of
+## SPRITE_ANGLES views relative to the camera, like a pre-rendered sprite set.
+func _sprite_yaw(world_yaw: float, cam_yaw: float) -> float:
+	var step := TAU / SPRITE_ANGLES
+	return cam_yaw + roundf((world_yaw - cam_yaw) / step) * step
+
+
 func _animate(delta: float) -> void:
 	var tr_ := sim.track
 	# Player car on the road frame, yawed by drift/steer, spinning on a crash.
 	var f := tr_.frame(sim.s, sim.x)
 	_car.transform = f
-	var yaw := deg_to_rad(sim.drift_angle) - sim.steer * 0.08
+	# Steering visibly turns the nose even on straights (D-092).
+	var yaw := deg_to_rad(sim.drift_angle) - sim.steer * STEER_YAW
 	if sim.spin_t > 0.0:
 		yaw += (1.0 - sim.spin_t / Sim.SPIN_TIME) * TAU * 1.5
-	var roll := -sim.steer * 0.04 - deg_to_rad(sim.drift_angle) * 0.08
+	var cam_yaw := _camera_yaw()
+	yaw = _sprite_yaw(tr_.heading(sim.s) + yaw, cam_yaw) - tr_.heading(sim.s)
 	var bounce := 0.0
 	if sim.offroad and sim.v > 5.0:
 		bounce = sin(_phase_t * 40.0) * 0.05
-	_car_body.transform = Transform3D(Basis(Vector3.UP, yaw) * Basis(Vector3.BACK, roll) * MODEL_TURN, Vector3(0, bounce, 0))
+	# No roll: a sprite can't lean.
+	_car_body.transform = Transform3D(Basis(Vector3.UP, yaw) * MODEL_TURN, Vector3(0, bounce, 0))
 	var smoking := sim.drifting or sim.spin_t > 0.0 or (sim.offroad and sim.v > 12.0)
 	for p in _smoke:
 		var cp := p as CPUParticles3D
@@ -658,7 +694,8 @@ func _animate(delta: float) -> void:
 			var t: Dictionary = sim.traffic[i]
 			node.visible = true
 			node.transform = tr_.frame(t.s, t.x)
-			node.basis = node.basis * MODEL_TURN
+			var h := tr_.heading(t.s)
+			node.basis = node.basis * Basis(Vector3.UP, _sprite_yaw(h, cam_yaw) - h) * MODEL_TURN
 			for m in node.find_children("*", "MeshInstance3D", true, false):
 				(m as MeshInstance3D).set_instance_shader_parameter("hue", t.hue)
 		else:

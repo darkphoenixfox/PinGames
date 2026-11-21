@@ -1,7 +1,10 @@
 ## TURBO RUN scenery meshes (D-089): PS2-budget low-poly props built in code,
 ## textured from one tiny procedural 16-bit atlas (nearest filtering).
 ## Atlas: 5 tiles of 32x32 in a row: trunk, frond, rock, chevron, metal.
+## Cel shading (D-091): toon diffuse + an inverted-hull outline surface per mesh.
 extends RefCounted
+
+const Toon = preload("res://games/racer/toon.gd")
 
 const TILE := 32
 const TILES := 5
@@ -18,6 +21,9 @@ static func material() -> StandardMaterial3D:
 		_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 		_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 		_material.roughness = 0.9
+		if Toon.enabled:
+			_material.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
+			_material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 	return _material
 
 
@@ -28,11 +34,15 @@ static func mesh(kind: String) -> Mesh:
 		match kind:
 			"palm": _palm(st)
 			"rock": _rock(st)
-			"chevron": _chevron(st)
+			"chevron": _chevron(st, false)
+			"chevron_l": _chevron(st, true)
 			"lamp": _lamp(st)
 		st.generate_normals()
 		var m := st.commit()
 		m.surface_set_material(0, material())
+		if Toon.enabled:
+			m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, Toon.outline_arrays(m, 0))
+			m.surface_set_material(1, Toon.outline_material())
 		_meshes[kind] = m
 	return _meshes[kind]
 
@@ -153,11 +163,14 @@ static func _rock(st: SurfaceTool) -> void:
 		st.add_vertex(Vector3(v.x * 2.2, maxf(v.y, -0.2) * 1.5 + 0.3, v.z * 1.8) * n)
 
 
-static func _chevron(st: SurfaceTool) -> void:
+## Arrows point right (+x); mirrored UVs (not a mirrored transform, which would
+## flip the outline's culling) for left.
+static func _chevron(st: SurfaceTool, left: bool) -> void:
 	_box(st, Vector3(0.0, 0.8, 0.0), Vector3(0.14, 1.6, 0.14), T.METAL)
 	var y0 := 1.4
 	var y1 := 2.6
-	_quad(st, Vector3(-1.3, y1, 0.08), Vector3(1.3, y1, 0.08), Vector3(1.3, y0, 0.08), Vector3(-1.3, y0, 0.08), T.CHEVRON)
+	_quad(st, Vector3(-1.3, y1, 0.08), Vector3(1.3, y1, 0.08), Vector3(1.3, y0, 0.08), Vector3(-1.3, y0, 0.08), T.CHEVRON,
+		1.0 if left else 0.0, 0.0 if left else 1.0)
 	_box(st, Vector3(0.0, 2.0, -0.02), Vector3(2.6, 1.2, 0.12), T.METAL)
 
 
