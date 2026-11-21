@@ -22,6 +22,7 @@ const BACKGLASS_SHADER = preload("res://games/breakout/shaders/backglass_lights.
 const STARFIELD_SHADER = preload("res://games/breakout/shaders/starfield.gdshader")
 
 const ACCENT := Color("3ec7ff")
+const TITLE_FONT := "nano"  # D-062
 const PADDLE_MODEL := "res://assets/models/breakout/paddle.glb"
 const MODEL_PADDLE_WIDTH := 1.9  # paddle.glb's native length along X
 const ENGINE_X := 0.74           # engine nozzles, after scaling to PADDLE_W
@@ -208,7 +209,7 @@ var _landed := 0
 
 
 func get_info() -> Dictionary:
-	return {"id": "breakout", "title_key": "GAME_BREAKOUT_TITLE", "color": ACCENT, "buttons_min": 3}
+	return {"id": "breakout", "title_key": "GAME_BREAKOUT_TITLE", "color": ACCENT, "font": TITLE_FONT, "buttons_min": 3}
 
 
 func start(_players: int) -> void:
@@ -399,10 +400,10 @@ func _finale(delta: float) -> void:
 	if before < FINALE_TEXT_AT and _finale_t >= FINALE_TEXT_AT:
 		_lights.set_dark(true)
 		var col := UI.vstack(40)
-		col.add_child(UI.label(tr("DMD_GAME_OVER"), 140, UI.RED))
+		col.add_child(UI.styled_label(tr("DMD_GAME_OVER"), TITLE_FONT, 3))
 		col.add_child(UI.spacer(40))
-		col.add_child(UI.label(tr("TB_FINAL_SCORE"), 60, UI.WHITE))
-		col.add_child(UI.label(ScoreTable.format_score(sim.score), 130, UI.YELLOW))
+		col.add_child(UI.styled_label(tr("TB_FINAL_SCORE"), TITLE_FONT, 2))
+		col.add_child(UI.styled_label(ScoreTable.format_score(sim.score), TITLE_FONT, 2))
 		col.modulate.a = 0.0
 		add_to_table(col)
 		col.create_tween().tween_property(col, "modulate:a", 1.0, 0.5)
@@ -770,7 +771,7 @@ func _box(size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
 # --- 2D overlays ---------------------------------------------------------------------
 ## The TABLE stays clean: status lives on the DMD (D-051); only the fire hint here.
 func _build_hud() -> void:
-	_hint = UI.label(tr("TB_PRESS_LAUNCH"), 56, UI.CYAN)
+	_hint = UI.styled_label(tr("TB_PRESS_LAUNCH"), TITLE_FONT, 2)
 	_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_hint.offset_top = -560
 	_hint.offset_left = -400
@@ -795,8 +796,8 @@ func _enter_attract() -> void:
 		n.visible = false
 	_paddle.visible = false
 	_attract_ui = UI.vstack(60)
-	_attract_ui.add_child(UI.label(tr("GAME_BREAKOUT_TITLE"), 132, ACCENT))
-	_attract_blink = UI.label(tr("TB_PRESS_START"), 72, UI.WHITE)
+	_attract_ui.add_child(UI.styled_label(tr("GAME_BREAKOUT_TITLE"), TITLE_FONT, 3))
+	_attract_blink = UI.styled_label(tr("TB_PRESS_START"), TITLE_FONT, 2)
 	_attract_ui.add_child(_attract_blink)
 	add_to_table(_attract_ui)
 	_build_attract_steps()
@@ -842,7 +843,7 @@ func _begin_intro() -> void:
 	Audio.sfx("start")
 	Dmd.play(Callable(), 0.0)
 	Dmd.show_text(tr("TB_GET_READY"), tr("DMD_PLAYER_1"), Dmd.YELLOW, Dmd.WHITE)
-	_ready_label = UI.label(tr("TB_GET_READY"), 108, UI.YELLOW)
+	_ready_label = UI.styled_label(tr("TB_GET_READY"), TITLE_FONT, 3)
 	_ready_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_ready_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	add_to_table(_ready_label)

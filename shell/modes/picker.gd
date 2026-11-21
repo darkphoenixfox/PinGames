@@ -46,7 +46,9 @@ func enter() -> void:
 	col.add_child(UI.spacer(30))
 	_labels.clear()
 	for id in _ids:
-		var l := UI.label(tr(Registry.info(id).title_key), 78)
+		var info := Registry.info(id)
+		var font: String = info.get("font", "")
+		var l := UI.styled_label(tr(info.title_key), font, 2) if not font.is_empty() else UI.label(tr(info.title_key), 78)
 		col.add_child(l)
 		_labels.append(l)
 	col.add_child(UI.spacer(30))
@@ -159,8 +161,10 @@ func _refresh() -> void:
 	var info := Registry.info(id)
 	var accent: Color = info.get("color", UI.CYAN)
 	for i in _labels.size():
-		UI.set_color(_labels[i], accent if i == _index else UI.GREY)
-		_labels[i].text = ("> %s <" if i == _index else "%s") % tr(Registry.info(_ids[i]).title_key)
+		var sel := i == _index
+		_labels[i].text = ("> %s <" if sel else "%s") % tr(Registry.info(_ids[i]).title_key)
+		_labels[i].modulate = Color.WHITE if sel else Color(0.45, 0.45, 0.5)
+		_labels[i].scale = Vector2.ONE
 	var best: Array = HighScores.get_table(id)[0]
 	_hiscore.text = tr("PICKER_HISCORE") % [best[0], ScoreTable.format_score(int(best[1]))]
 	_credits.text = Credits.status_text()

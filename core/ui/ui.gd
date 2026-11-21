@@ -3,6 +3,8 @@
 ## must stay readable at cabinet distance (GDD pillar 4).
 extends RefCounted
 
+const StyledFonts = preload("res://core/ui/styled_fonts.gd")
+
 const YELLOW := Color("ffd23e")
 const CYAN := Color("3ec7ff")
 const RED := Color("ff4f6d")
@@ -28,6 +30,23 @@ static func label(text: String, size: int, color: Color = WHITE,
 	l.add_theme_color_override("font_color", color)
 	l.add_theme_constant_override("outline_size", maxi(4, ps / 6))  # 2 font pixels
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	return l
+
+
+## Label in a per-game styled title font (D-062): colours are baked into the
+## font, so no tint/outline; `scale` is the whole-number pixel multiple.
+static func styled_label(text: String, style: String, scale: int = 2,
+		align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_CENTER) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.horizontal_alignment = align
+	var f: FontFile = StyledFonts.get_font(style)
+	if f == null:
+		return label(text, 48 * scale, WHITE, align)
+	l.add_theme_font_override("font", f)
+	l.add_theme_font_size_override("font_size", f.fixed_size * maxi(1, scale))
+	l.add_theme_color_override("font_color", Color.WHITE)
+	l.add_theme_constant_override("outline_size", 0)
 	return l
 
 

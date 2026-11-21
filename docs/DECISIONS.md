@@ -610,3 +610,17 @@
   - **Dev:** `--tb-skip-intro`.
   - **Note:** in coin mode, the credit is still spent when the game is chosen on the picker (shell), not on the in-game Start.
 - **Status:** Accepted
+
+### D-062 — Per-game styled pixel title fonts
+- **Date:** 2026-11-21
+- **Decision (director):** a "retro pixel" style font (the director's reference: gradient fill, highlight, 3D drop), fitted to each game's theme, with a separate font per game. PinPixel (D-060) stays as the plain UI font.
+- **Implementation:**
+  - **Generator:** `scripts/tools/gen_title_fonts.py` renders PinPixel's glyph shapes at 3 atlas pixels per font pixel. Each glyph gets a vertical gradient, a 1 px top highlight, a softer left highlight, darker bottom/right edges, dither shading in the lower half, a 3 px extrusion down-right (3 shades) and a 1 px dark outline. Output is an RGBA atlas plus JSON metrics (47 px cells).
+  - **Styles:**
+    - `nano` (Tilt Breaker): white→cyan→blue→violet with a bright band, violet extrusion.
+    - `squadron` (Sky Striker): yellow→orange→red.
+    - `sunset` (Turbo Run): chrome pink/white over blue/cyan with a hard horizon split.
+  - **Loader:** `core/ui/styled_fonts.gd` builds a fixed-size `FontFile` (`FIXED_SIZE_SCALE_INTEGER_ONLY`, so it scales only by whole multiples). RGBA8 atlas glyphs keep their baked colours.
+  - **Usage:** `UI.styled_label(text, style, scale)`. Games expose `"font"` in `get_info()`, and the picker shows each game's name in its own font, dimmed when not selected. Tilt Breaker uses it for the attract title, PRESS START, GET READY, PLASMA CANNON READY and GAME OVER / FINAL SCORE.
+  - **Shapes:** for now all three styles share PinPixel's letter shapes. Per-game letterforms can follow if the director wants them.
+- **Status:** Accepted

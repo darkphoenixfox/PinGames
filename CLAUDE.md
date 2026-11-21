@@ -38,6 +38,7 @@ The Godot binary is at `C:\Users\Phoenixfox\Dev\Godot\Godot_v4.7.2-stable_win64_
 - Billboard materials ignore node scale unless `billboard_keep_scale = true`.
 - `GPUParticles3D` particles didn't move in our TABLE SubViewport setup; use `CPUParticles3D` for small emitters.
 - Actions fired from outside `sim.step()` (debug keys, UI) must update the view directly, because sim events are cleared at the start of each step.
+- Big game text (titles, GET READY, GAME OVER) uses that game's styled title font through `UI.styled_label(text, style, scale)` (D-062). Tilt Breaker = `nano`, Sky Striker = `squadron`, Turbo Run = `sunset`. Regenerate with `scripts/tools/gen_title_fonts.py`.
 - UI text uses PinPixel (D-060). Create labels with `UI.label()`, which snaps sizes to multiples of 12 for crisp pixels. Keep the font's `.import` with `antialiasing=0`, `hinting=0` and `subpixel_positioning=0`.
 - Tilt Breaker starts in its attract mode (D-061). Test runs that need gameplay straight away pass `--tb-skip-intro`.
 - Screenshot runs use the real `user://` data (settings and scores). Don't leave runs that save anything there.

@@ -6,3 +6,4 @@ func _init() -> void:
 	game_id = "shmup"
 	title_key = "GAME_SHMUP_TITLE"
 	accent = Color("ff4f6d")
+	title_font = "squadron"

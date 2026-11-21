@@ -10,13 +10,14 @@ const UI = preload("res://core/ui/ui.gd")
 var game_id := ""
 var title_key := ""
 var accent := Color.WHITE
+var title_font := ""  # styled title font (D-062)
 var score := 0
 var _log: Label
 var _score_label: Label
 
 
 func get_info() -> Dictionary:
-	return {"id": game_id, "title_key": title_key, "color": accent, "buttons_min": 3}
+	return {"id": game_id, "title_key": title_key, "color": accent, "font": title_font, "buttons_min": 3}
 
 
 func start(_players: int) -> void:
