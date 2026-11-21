@@ -4,7 +4,10 @@
 ## make(spec) accepts:
 ##   - Array of segments (one voice, played back to back), or
 ##   - Dictionary {voices: Array of segment-Arrays (mixed together),
-##                 echo: [delay_s, feedback, mix], crush: bits, gain: float}
+##                 echo: [delay_s, feedback, mix], reverb: [decay_s, mix],
+##                 crush: bits, gain: float}
+## reverb (D-079): a small Schroeder room (4 combs + 2 allpasses) whose tail
+## takes about decay_s to fade by 60 dB; mix is the wet level.
 ## A segment is either the legacy Array [f0, f1, dur, wave?, vol?] or a Dictionary:
 ##   f: [f0, f1] Hz (exponential glide) | t: seconds | w: wave | v: volume 0..1
 ##   a: attack s | env: "exp" | "lin" | "hold" | arp: [semitones..] | arp_rate: Hz
@@ -25,11 +28,13 @@ static func make(spec: Variant) -> AudioStreamWAV:
 		return _cache[key]
 	var voices: Array = []
 	var echo: Array = []
+	var reverb: Array = []
 	var crush := 0
 	var gain := 1.0
 	if spec is Dictionary:
 		voices = spec.get("voices", [])
 		echo = spec.get("echo", [])
+		reverb = spec.get("reverb", [])
 		crush = int(spec.get("crush", 0))
 		gain = float(spec.get("gain", 1.0))
 	else:
@@ -46,6 +51,8 @@ static func make(spec: Variant) -> AudioStreamWAV:
 			mix[i] += buf[i]
 	if echo.size() >= 2:
 		mix = _echo(mix, float(echo[0]), float(echo[1]), float(echo[2]) if echo.size() > 2 else 0.5)
+	if reverb.size() >= 2:
+		mix = _reverb(mix, float(reverb[0]), float(reverb[1]))
 	var data := PackedByteArray()
 	data.resize(mix.size() * 2)
 	var levels := pow(2.0, crush - 1) if crush > 0 else 0.0
@@ -61,6 +68,45 @@ static func make(spec: Variant) -> AudioStreamWAV:
 	w.data = data
 	_cache[key] = w
 	return w
+
+
+static func _reverb(dry: PackedFloat32Array, decay: float, wet: float) -> PackedFloat32Array:
+	var n := dry.size() + int(decay * RATE)
+	var input := dry.duplicate()
+	input.resize(n)
+	for i in range(dry.size(), n):
+		input[i] = 0.0
+	var out := PackedFloat32Array()
+	out.resize(n)
+	out.fill(0.0)
+	# Parallel feedback combs (mutually prime delays, ~30-40 ms), with damping.
+	for d_ms in [29.7, 37.1, 41.1, 43.7]:
+		var d := int(d_ms * 0.001 * RATE)
+		var fb := pow(0.001, (d_ms * 0.001) / maxf(decay, 0.05))
+		var buf := PackedFloat32Array()
+		buf.resize(d)
+		buf.fill(0.0)
+		var lp := 0.0
+		for i in n:
+			var y := buf[i % d]
+			lp = y * 0.6 + lp * 0.4
+			buf[i % d] = input[i] + lp * fb
+			out[i] += y * 0.25
+	# Two series allpasses to diffuse the echoes into a smooth tail.
+	for d_ms in [5.0, 1.7]:
+		var d := int(d_ms * 0.001 * RATE)
+		var buf := PackedFloat32Array()
+		buf.resize(d)
+		buf.fill(0.0)
+		for i in n:
+			var b := buf[i % d]
+			var x := out[i]
+			var y := -0.7 * x + b
+			buf[i % d] = x + 0.7 * y
+			out[i] = y
+	for i in n:
+		out[i] = input[i] + out[i] * wet
+	return out
 
 
 static func _voice(segments: Array) -> PackedFloat32Array:

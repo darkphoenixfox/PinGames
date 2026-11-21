@@ -748,3 +748,9 @@
 - **Decision (director):** grabbing a power-up capsule restores 1 level of the power bar; the triple shot's side bolts fly at 20° instead of 45°; the ion cannon must not break 2 brick columns at once.
 - **Implementation:** collecting adds 1/3 bar (capped). `TRIPLE_ANGLE = 20`. `_ion_beam` burns only the brick column whose centre is closest to the beam (enemies anywhere in the beam still die).
 - **Status:** Accepted (supersedes the ±45° of D-072)
+
+### D-079 — Reverb on bounce and explosion sounds
+- **Date:** 2026-11-21
+- **Decision (director):** add a bit of reverb to the bounce and explosion sound effects.
+- **Implementation:** the synth gets a `reverb: [decay_s, wet]` option, a small Schroeder room (4 damped feedback combs at 29.7/37.1/41.1/43.7 ms plus 2 allpasses) that extends the sample by its tail. Applied to `tb_shield` (ball bounce, 0.6 s / 0.3), `tb_explode` (1.0 s / 0.35), `tb_enemy_die` (0.9 s), `tb_explode_big` and `tb_ship_die` (1.4 s). These are rendered once at game load, which adds about 1.3 s of load time; there's no cost during play.
+- **Status:** Accepted
