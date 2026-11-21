@@ -844,3 +844,11 @@
 - **Tuning to confirm in playtests:** start time 45 s, +34 s per checkpoint every 1.8 km, top speed 288 km/h (360 with nitro), drift entry above about 150 km/h.
 - **Status:** Accepted (prototype)
 
+
+### D-090 — Turbo Run car: keep the full mesh, no decimation (supersedes the car-model line of D-089)
+- **Date:** 2026-11-21
+- **Decision (director feedback "the car model looks broken"):** the D-089 collapse-decimate from 10.8k to 4k tris tore the red car's UV seams and smoothing, which caused black slivers, smeared paint and faceted panels. The game now uses the full 10.8k-tri mesh, which is already a PS2-level budget. The PS2/16-bit look comes only from the 256 px nearest-filtered albedo and the dropped normal/ORM maps.
+- **Tool:** `prepare_racer_car.py` decimates only when given a tris target (default 0 = keep the mesh). It also takes an optional texture size.
+- **Cost:** player plus 10 pooled traffic cars is about 120k tris, trivial for the cabinet GPU.
+- **Lesson:** don't collapse-decimate textured AI meshes blindly. Render a before/after check (Blender workbench) before shipping a reduced model.
+- **Status:** Accepted

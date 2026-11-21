@@ -1,13 +1,16 @@
-"""PS2-style car model for Turbo Run (D-089): decimate, 256 px base colour,
+"""PS2-style car model for Turbo Run (D-089, D-090): optional decimate, small base colour,
 no normal/ORM maps, length along -Z in Godot, 4.4 m long, origin at the wheels.
 Also writes <out>_albedo.png (the 256 px texture the game samples).
-Usage: blender --background --python scripts/tools/prepare_racer_car.py -- <in.glb> <out.glb> [tris]
+Usage: blender --background --python scripts/tools/prepare_racer_car.py -- <in.glb> <out.glb> [tris] [tex]
+tris 0 (default) keeps the full mesh: collapse-decimating the red car below ~10k
+tore its UV seams (black slivers, smeared paint), see D-090.
 """
 import bpy, sys, math, os
 from mathutils import Vector, Matrix
 args = sys.argv[sys.argv.index("--") + 1:]
 src, dst = args[0], args[1]
-target = int(args[2]) if len(args) > 2 else 4000
+target = int(args[2]) if len(args) > 2 else 0
+tex = int(args[3]) if len(args) > 3 else 256
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=src)
 obj = [o for o in bpy.data.objects if o.type == 'MESH'][0]
@@ -15,9 +18,10 @@ bpy.context.view_layer.objects.active = obj
 obj.select_set(True)
 bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
-mod = obj.modifiers.new("dec", 'DECIMATE')
-mod.ratio = min(1.0, target / max(1, tris))
-bpy.ops.object.modifier_apply(modifier="dec")
+if 0 < target < tris:
+    mod = obj.modifiers.new("dec", 'DECIMATE')
+    mod.ratio = target / tris
+    bpy.ops.object.modifier_apply(modifier="dec")
 # Length along Blender X -> along +Y (glTF -Z = Godot forward). Mesh data is
 # transformed directly (transform_apply left stale bounds in background mode).
 me = obj.data
@@ -45,7 +49,7 @@ for n in list(nt.nodes):
 for n in nt.nodes:
     if n.type == 'TEX_IMAGE':
         n.interpolation = 'Closest'
-        n.image.scale(256, 256)
+        n.image.scale(tex, tex)
         # Also saved as a separate PNG: the game samples it directly (nearest).
         n.image.filepath_raw = os.path.abspath(dst).replace(".glb", "_albedo.png")
         n.image.file_format = 'PNG'
