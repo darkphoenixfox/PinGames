@@ -37,6 +37,7 @@ The Godot binary is at `C:\Users\Phoenixfox\Dev\Godot\Godot_v4.7.2-stable_win64_
 - Don't name a class or inner class after a Godot built-in (e.g. `Engine`): it fails to parse.
 - Billboard materials ignore node scale unless `billboard_keep_scale = true`.
 - `GPUParticles3D` particles didn't move in our TABLE SubViewport setup; use `CPUParticles3D` for small emitters.
+- Actions fired from outside `sim.step()` (debug keys, UI) must update the view directly, because sim events are cleared at the start of each step.
 - Screenshot runs use the real `user://` data (settings and scores). Don't leave runs that save anything there.
 
 ## Commit and push

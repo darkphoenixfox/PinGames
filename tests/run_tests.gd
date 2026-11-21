@@ -330,6 +330,15 @@ func test_breakout_sim() -> void:
 	for k in 60 * 5:
 		cap.step(1.0 / 60.0, false, false, false, 0)
 	check(cap.power > p0 - Sim.BLAST_COST + 0.2, "slow recharge after delay")
+	# Debug piercing line (D-057): destroys a whole column of bricks.
+	var dbg = Sim.new()
+	dbg.setup(3)
+	dbg.debug_fire_line()
+	var broken := 0
+	for k in 90:
+		dbg.step(1.0 / 60.0, false, false, false, 0)
+		broken += dbg.events.filter(func(e): return e[0] == "brick").size()
+	check(broken >= Sim.BRICK_ROWS, "debug line destroys a full column (%d)" % broken)
 	test_breakout_enemies(Sim)
 
 

@@ -195,6 +195,7 @@ func start(_players: int) -> void:
 	_build_hud()
 	_build_backglass()
 	_refresh_status()
+	DebugTools.debug_action.connect(_on_debug_action)
 
 
 func on_action(action: StringName, pressed: bool) -> void:
@@ -706,6 +707,15 @@ func _build_hud() -> void:
 	add_to_table(_hint)
 
 
+## Debug keys (D-057): F = piercing plasma along the ship's vertical line.
+func _on_debug_action(action: StringName) -> void:
+	if action == &"fire_line" and sim != null and sim.state != Sim.State.OVER:
+		# Called between frames, so react here (sim events are cleared on the next step).
+		sim.debug_fire_line()
+		Audio.sfx("tb_blast3")
+		_spawn_blast_node(3)
+
+
 ## Plays one of the Tilt Breaker DMD pixel animations (D-056), unless the
 ## game-over finale owns the DMD.
 func _dmd_anim(name: String) -> void:
@@ -802,6 +812,8 @@ func _animate_blasts(_delta: float) -> void:
 	# One node per live sim blast; finished blasts are removed from the front.
 	while _blast_nodes.size() > sim.blasts.size():
 		_blast_nodes.pop_front().queue_free()
+	while _blast_nodes.size() < sim.blasts.size():  # safety net: never index past the nodes
+		_spawn_blast_node(int(sim.blasts[_blast_nodes.size()].level))
 	for i in sim.blasts.size():
 		var p: Vector2 = sim.blasts[i].pos
 		# Nose leads: shift the drawn bolt so its tail trails behind the hitbox.

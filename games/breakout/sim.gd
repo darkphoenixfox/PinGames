@@ -246,6 +246,15 @@ func _update_power_and_blast(dt: float, both: bool) -> void:
 			events.append(["blast_end", [pos, last_hit, int(b.level)]])
 
 
+## Debug (D-057): a free piercing level-3 plasma bolt from the ship that destroys
+## everything in its vertical line. Works in any state except game over.
+func debug_fire_line() -> void:
+	if state == State.OVER:
+		return
+	var start := Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BLAST_H * 0.5)
+	blasts.append({"pos": start, "level": 3, "hits_left": 9999})
+
+
 ## Blast hitbox width by level (bigger blasts are wider).
 static func blast_width(level: int) -> float:
 	return BLAST_W * [0.75, 1.0, 1.3][clampi(level, 1, 3) - 1]

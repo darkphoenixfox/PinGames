@@ -23,6 +23,7 @@ Credits="*res://core/credits.gd"
 HighScores="*res://core/high_scores.gd"
 Dmd="*res://core/dmd/dmd.gd"
 Screens="*res://core/screens.gd"
+DebugTools="*res://core/debug_tools.gd"
 
 [display]
 

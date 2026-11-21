@@ -68,6 +68,14 @@ To open it, **hold Start + Exit for 3 seconds**, or **hold Exit for 5 seconds** 
 - **Game over:** a top-10 score asks for initials. Flippers pick the letter, Launch confirms it and Exit goes back.
 - **Coin mode** (Free play OFF): Coin adds a credit, and starting a game uses one.
 
+### Debug keys (debug builds only, D-057)
+Every run through `scripts/run.ps1` or the Godot binary is a debug build. Exported release builds for cabinets ignore these keys. `--debug-tools=off` disables them.
+
+| Key | Action |
+|---|---|
+| **P** | Pause / resume the whole game |
+| **F** | Tilt Breaker: a free piercing plasma bolt that destroys everything in a vertical line above the ship |
+
 ### Default controls
 | Action | Keyboard | Controller |
 |---|---|---|

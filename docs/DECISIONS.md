@@ -555,3 +555,14 @@
   - **Tilt Breaker clips** (`games/breakout/dmd_anims.gd`, durations in `DURATIONS`): `tetra_hit` (only when shot down; `enemy_destroyed` now carries a shot-down flag), `incoming`, `charge_lost`, `ship_destroyed` and `rack_clear`. They replace the earlier text flashes and are skipped while the game-over finale owns the DMD.
   - **Dev:** `--tb-dmd-anim=<name>` loops one clip.
 - **Status:** Accepted
+
+### D-057 — Debug tools: P pause, F piercing line
+- **Date:** 2026-11-21
+- **Decision (director):** add debug tools: P pauses, and F fires a plasma ball that destroys everything in a vertical line.
+- **Implementation:**
+  - **Autoload:** `DebugTools` (`core/debug_tools.gd`, `PROCESS_MODE_ALWAYS`) reads raw keys only when `OS.is_debug_build()`, so exported release builds ignore them. `--debug-tools=off` disables them.
+  - **P:** toggles `get_tree().paused` and shows "PAUSED" on the TABLE.
+  - **F:** emits `debug_action(&"fire_line")`. Tilt Breaker calls `Sim.debug_fire_line()`, a free level-3 blast with unlimited hits, spawns its view node and plays the sound directly, because events raised between steps would be lost.
+  - **Robustness:** `_animate_blasts` now creates missing blast nodes instead of indexing past them.
+  - **Dev:** `--press` gained `key:<Name>` for raw keyboard taps.
+- **Status:** Accepted

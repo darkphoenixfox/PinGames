@@ -3,7 +3,8 @@
 ##   --press=flip_r,flip_r,launch   simulate cabinet actions, one every 12 frames
 ##                                  (use "wait" to skip a slot, "hold:start+exit:3.5"
 ##                                   to hold actions for N seconds; "down:flip_l" /
-##                                   "up:flip_l" to press/release without waiting)
+##                                   "up:flip_l" to press/release without waiting;
+##                                   "key:P" to tap a raw keyboard key)
 ##   --screenshot=<dir>             after presses + 30 frames, save PNGs and quit
 ##   --screenshot-delay=N           frames to wait before the screenshot (default 30)
 extends Node
@@ -32,6 +33,15 @@ func _run() -> void:
 
 func _do_step(step: String) -> void:
 	if step == "wait" or step.is_empty():
+		await _frames(STEP_FRAMES)
+		return
+	if step.begins_with("key:"):  # raw keyboard key, e.g. key:P (debug tools)
+		for pressed in [true, false]:
+			var ev := InputEventKey.new()
+			ev.physical_keycode = OS.find_keycode_from_string(step.trim_prefix("key:"))
+			ev.pressed = pressed
+			Input.parse_input_event(ev)
+			await _frames(2)
 		await _frames(STEP_FRAMES)
 		return
 	if step.begins_with("down:"):
