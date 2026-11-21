@@ -1,0 +1,9 @@
+# Level 7: the funnel.
+R.........R
+YR.......RY
+GYR.....RYG
+BGYR...RYGB
+bBGYR.RYGBb
+XbBGYRYGBbX
+.XbBGYGBbX.
+..XbbbbbX..

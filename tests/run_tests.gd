@@ -128,6 +128,111 @@ func test_translation_keys() -> void:
 		check(en.has(key), "missing translation key %s (%s)" % [key, used[key]])
 
 
+## Power-ups (D-072) and brick types (D-073).
+func test_breakout_powerups(Sim) -> void:
+	var dt := 1.0 / 60.0
+	var mk := func():
+		var x = Sim.new()
+		x.setup(3)
+		x.step(dt, false, false, true, 0)  # plasma in play
+		x.freeze_ball = true
+		return x
+	# Upward ball passes through the ship (no bounce back down).
+	var up = Sim.new()
+	up.setup(3)
+	up.step(dt, false, false, true, 0)
+	up.ball_pos = Vector2(up.paddle_x, Sim.PADDLE_Y + 0.4)
+	up.ball_vel = Vector2(0, -8)
+	up.step(dt, false, false, false, 0)
+	up.step(dt, false, false, false, 0)
+	check(up.ball_vel.y < 0.0, "ball rising from below passes through the ship")
+	# Capsule falls onto the ship and is collected.
+	var c = mk.call()
+	c.spawn_powerup("T", Vector2(c.paddle_x, Sim.PADDLE_Y - 2.0))
+	var got := ""
+	for k in 120:
+		c.step(dt, false, false, false, 0)
+		for e in c.events:
+			if e[0] == "powerup_collect":
+				got = e[1][1]
+	check(got == "T" and c.powerup == "T", "power-up capsule collected")
+	# T: triple laser fires 3 bolts.
+	c.power = 1.0
+	for k in 50:
+		c.step(dt, true, true, false, 0)
+	c.step(dt, false, false, false, 0)
+	check(c.blasts.size() == 3, "triple laser: 3 bolts (%d)" % c.blasts.size())
+	# P: charges 3x faster.
+	var pw = mk.call()
+	pw.apply_powerup("P")
+	for k in int(Sim.BLAST_CHARGE_TIME * 60.0) + 2:
+		pw.step(dt, true, true, false, 0)
+	check(pw.blast_charge >= 2.9, "power laser reaches level 3 in one phase (%.2f)" % pw.blast_charge)
+	# I: only level 3, full bar, clears the column.
+	var ion = mk.call()
+	ion.apply_powerup("I")
+	for k in 20:
+		ion.step(dt, true, true, false, 0)
+	ion.step(dt, false, false, false, 0)
+	check(ion.power > 0.9, "ion: releasing before level 3 does nothing")
+	var before: int = ion.bricks_alive()
+	for k in 200:
+		ion.step(dt, true, true, false, 0)
+	ion.step(dt, false, false, false, 0)
+	check(ion.power < 0.01 and ion.bricks_alive() <= before - 4, "ion beam fries the column (%d -> %d)" % [before, ion.bricks_alive()])
+	# B: extra ball; losing the main ball while it lives costs no charge.
+	var bb = mk.call()
+	bb.apply_powerup("B")
+	for k in 50:
+		bb.step(dt, true, true, false, 0)
+	bb.step(dt, false, false, false, 0)
+	check(bb.extra_balls.size() == 1 and bb.power < 0.01, "bounce plasma launches an extra ball for the full bar")
+	bb.freeze_ball = false
+	bb.ball_pos = Vector2(0, Sim.DRAIN_Y + 1.0)
+	bb.ball_vel = Vector2(0, 5)
+	bb.extra_balls[0].pos = Vector2(0, -2)
+	bb.extra_balls[0].vel = Vector2(0, -5)
+	bb.step(dt, false, false, false, 0)
+	check(bb.balls_left == 3 and bb.extra_balls.is_empty() and bb.state == Sim.State.PLAY, "extra ball takes over: no charge lost")
+	# S: barrier saves one sinking ball, no charged shot.
+	var sh = mk.call()
+	sh.apply_powerup("S")
+	sh.freeze_ball = false
+	check(sh.affordable_level() == 0, "shield: no charged shot")
+	sh.ball_pos = Vector2(-3.0, Sim.SHIELD_Y - 0.5)
+	sh.ball_vel = Vector2(0, 9)
+	for k in 10:
+		sh.step(dt, false, false, false, 0)
+	check(sh.ball_vel.y < 0.0 and not sh.shield_active and sh.balls_left == 3, "shield bounces one ball, then breaks")
+	# L: afterimages trail the moving ship and are cleared with the power-up on death.
+	var ls = mk.call()
+	ls.apply_powerup("L")
+	for k in 12:  # still accelerating, not yet at the wall
+		ls.step(dt, false, true, false, 0)
+	check(ls.ghost_xs().size() == 2, "lightspeed: two afterimages while moving")
+	ls._lose_ball()
+	check(ls.powerup == "", "power-up ends on death")
+	# Bricks: lowercase = 2 hits, X = indestructible and doesn't block clearing.
+	var lv = Sim.new()
+	lv.setup(3)
+	lv.bricks.clear()
+	lv.bricks.append({"rect": Rect2(0, 0, 1, 0.4), "hp": 2, "alive": true, "row": 0, "col": 0, "colour": "R",
+		"points": 180, "metal": false, "armoured": true})
+	lv.bricks.append({"rect": Rect2(2, 0, 1, 0.4), "hp": -1, "alive": true, "row": 0, "col": 2, "colour": "X",
+		"points": 0, "metal": true, "armoured": false})
+	check(not lv._damage_brick(1) and lv.bricks[1].alive, "metal brick is indestructible")
+	check(not lv._damage_brick(0) and lv.bricks[0].alive, "armoured brick survives the first hit")
+	check(lv._damage_brick(0) and lv.state == Sim.State.LEVEL_CLEAR, "second hit breaks it; metal doesn't block clearing")
+	# Levels 1-10 exist and enemies speed up every 5 levels.
+	for n in range(1, 11):
+		var layout: Array = Sim.level_layout(n)
+		check(layout.size() >= 3, "level %d has a layout" % n)
+	var t = Sim.new()
+	t.setup(3)
+	t.level = 6
+	check(t.enemy_tier() == 1 and t.enemy_speed_mult() > 1.3, "levels 6-10: faster enemies")
+
+
 ## Tetrahedron enemy (D-052): blocked by a full rack, descends through a gap,
 ## orbits at the bottom, dies to the plasma, destroys the ship on contact.
 ## Level complete (D-068): enemies explode, play pauses, next_level loads level 2.
@@ -373,6 +478,7 @@ func test_breakout_sim() -> void:
 		broken += dbg.events.filter(func(e): return e[0] == "brick").size()
 	check(broken >= 4, "debug line destroys a full column (%d)" % broken)
 	test_breakout_levels(Sim)
+	test_breakout_powerups(Sim)
 	test_breakout_enemies(Sim)
 
 

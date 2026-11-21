@@ -1,0 +1,8 @@
+# Level 5: three towers with indestructible metal (X) cores.
+BBB.BBB.BBB
+bXb.bXb.bXb
+BBB.BBB.BBB
+GGG.GGG.GGG
+gXg.gXg.gXg
+GGG.GGG.GGG
+YYYYYYYYYYY

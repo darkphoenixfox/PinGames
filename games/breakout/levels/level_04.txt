@@ -1,0 +1,8 @@
+# Level 4: the swarm's eye. First armoured (lowercase = 2 hits) bricks.
+...RRRRR...
+..RyyyyyR..
+.RyGGGGGyR.
+RyGBBBBBGyR
+.RyGGGGGyR.
+..RyyyyyR..
+...RRRRR...

@@ -38,8 +38,19 @@ const BRICK_COLS := 11
 const LEVEL_FILES := [
 	"res://games/breakout/levels/level_01.txt",
 	"res://games/breakout/levels/level_02.txt",
+	"res://games/breakout/levels/level_03.txt",
+	"res://games/breakout/levels/level_04.txt",
+	"res://games/breakout/levels/level_05.txt",
+	"res://games/breakout/levels/level_06.txt",
+	"res://games/breakout/levels/level_07.txt",
+	"res://games/breakout/levels/level_08.txt",
+	"res://games/breakout/levels/level_09.txt",
+	"res://games/breakout/levels/level_10.txt",
 ]
 const COLOUR_POINTS := {"R": 120, "Y": 100, "G": 80, "B": 60}
+## Brick letters (D-073): UPPERCASE = 1 hit, lowercase = 2-hit armoured
+## (1.5x points), X = indestructible metal (doesn't count for clearing).
+const ARMOURED_MULT := 1.5
 const BRICK_TOP := -5.55  # leaves the top 10% free for enemies (D-052)
 const BRICK_H := 0.4
 const BRICK_GAP := 0.05
@@ -68,6 +79,22 @@ const ENEMY_ORBIT_START_Y := PADDLE_Y - 1.1
 const ENEMY_ORBIT_R := Vector2(2.6, 0.9)
 const ENEMY_ORBIT_SPEED := 0.9       # rad/s
 const SHIP_INVULNERABLE := 2.0       # after the ship is destroyed and respawns
+## Enemy difficulty tiers (D-073): every 5 levels enemies get faster/more aggressive.
+const ENEMY_TIER_SPEED := 0.4        # +40% movement per tier
+const ENEMY_TIER_RATE := 0.5         # spawn interval / (1 + 0.5 * tier)
+# --- power-ups (D-072) ----------------------------------------------------------------
+const POWERUP_EVERY := 10            # every 10th brick destroyed...
+const POWERUP_CHANCE := 0.7          # ...has a 70% chance to drop one
+const POWERUP_FALL := 2.2
+const POWERUP_R := 0.28
+const POWERUP_KINDS := ["T", "P", "B", "I", "L", "S"]
+const TRIPLE_ANGLE := 45.0           # T: side bolts at +-45 degrees
+const POWER_CHARGE_MULT := 3.0       # P: charges 3x faster (one phase)
+const ION_BEAM_W := 0.7              # I: width of the beam
+const LIGHTSPEED_MULT := 1.3         # L: ship speed (assumption, D-072)
+const GHOST_DELAYS := [0.09, 0.18]   # L: afterimages trail by these delays
+const GHOST_MIN_GAP := 0.3           # afterimages only exist while moving
+const SHIELD_Y := PADDLE_Y + 0.85    # S: barrier line (above the horizon)
 
 enum State { SERVE, PLAY, LEVEL_CLEAR, OVER }
 
@@ -85,6 +112,19 @@ var _dash_dir := 0
 var ball_pos := Vector2.ZERO
 var ball_vel := Vector2.ZERO
 var ball_speed := BALL_START_SPEED
+## Extra plasma balls from the Bounce power-up: {pos, vel, speed}. A charge is
+## only lost when the main ball AND all extras are gone (D-072).
+var extra_balls: Array = []
+
+## Power-ups (D-072): current one ("" = none), falling capsules {id, pos, kind},
+## the Shield barrier, and the ship's position history (Lightspeed afterimages).
+var powerup := ""
+var powerups: Array = []
+var shield_active := false
+var _next_powerup_id := 1
+var _broken_count := 0
+var _time := 0.0
+var _paddle_hist: Array = []  # [time, x], newest last
 var _held_time := 0.0
 ## Test hook: keeps the plasma in place (used by headless tests of long holds).
 var freeze_ball := false
@@ -117,7 +157,11 @@ var bricks: Array = []
 ## blast (data = [start pos, level]), blast_fail (low power),
 ## blast_end (data = [pos, brick index or -1, level]),
 ## enemy_spawn (data = [id, pos]), enemy_ready (id),
-## enemy_destroyed (data = [id, pos, shot_down]), ship_destroyed (data = ship pos).
+## enemy_destroyed (data = [id, pos, shot_down]), ship_destroyed (data = ship pos),
+## brick_hit (data = index; armoured brick cracked), powerup_spawn ([id, pos, kind]),
+## powerup_collect ([id, kind]), powerup_lost (id), powerup_end (kind),
+## ion_beam (x), bounce_ball (pos), extra_lost (x), ball_promoted, ghost (x),
+## shield_used (x).
 var events: Array = []
 
 
@@ -137,13 +181,18 @@ func build_rack() -> void:
 	for row in mini(layout.size(), BRICK_ROWS):
 		var line: String = layout[row]
 		for col in mini(line.length(), BRICK_COLS):
-			var ch := line[col].to_upper()
-			if not COLOUR_POINTS.has(ch):
+			var raw := line[col]
+			var ch := raw.to_upper()
+			var metal := ch == "X"
+			if not metal and not COLOUR_POINTS.has(ch):
 				continue
+			var armoured := not metal and raw != ch  # lowercase
 			var rect := Rect2(FIELD.position.x + col * w + BRICK_GAP * 0.5,
 				BRICK_TOP + row * BRICK_H + BRICK_GAP * 0.5, w - BRICK_GAP, BRICK_H - BRICK_GAP)
-			bricks.append({"rect": rect, "hp": 1, "alive": true, "row": row, "col": col,
-				"colour": ch, "points": COLOUR_POINTS[ch]})
+			var pts := 0 if metal else int(COLOUR_POINTS[ch] * (ARMOURED_MULT if armoured else 1.0))
+			bricks.append({"rect": rect, "hp": -1 if metal else (2 if armoured else 1), "alive": true,
+				"row": row, "col": col, "colour": ch, "points": pts,
+				"metal": metal, "armoured": armoured})
 
 
 ## Rows of level n (1-based; loops over LEVEL_FILES). Comment lines start with #.
@@ -166,14 +215,27 @@ func next_level() -> void:
 	enemies.clear()
 	blasts.clear()
 	blast_charge = 0.0
-	_enemy_timer = ENEMY_FIRST_SPAWN
+	_enemy_timer = ENEMY_FIRST_SPAWN / (1.0 + ENEMY_TIER_RATE * enemy_tier())
+	powerups.clear()
+	_end_powerup()
+	extra_balls.clear()
 	_reset_serve()
 
 
+## 0 for levels 1-5, 1 for 6-10, 2 for 11-15... (D-073)
+func enemy_tier() -> int:
+	return (level - 1) / 5
+
+
+func enemy_speed_mult() -> float:
+	return 1.0 + ENEMY_TIER_SPEED * enemy_tier()
+
+
+## Destructible bricks still standing (metal X never counts).
 func bricks_alive() -> int:
 	var n := 0
 	for b in bricks:
-		if b.alive:
+		if b.alive and not b.get("metal", false):
 			n += 1
 	return n
 
@@ -188,6 +250,7 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 	events.clear()
 	if state == State.OVER or state == State.LEVEL_CLEAR:
 		return
+	_time += dt
 	_update_power_and_blast(dt, left and right)
 	_move_paddle(dt, left, right, dash)
 	_update_enemies(dt)
@@ -199,19 +262,52 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 		if launch or _held_time >= AUTO_SERVE_SECONDS:
 			_serve()
 		return
-	if freeze_ball:
+	_update_powerups(dt)
+	if state != State.PLAY or freeze_ball:
 		return
-	var dist := ball_vel.length() * dt
-	var n := maxi(1, ceili(dist / MAX_SUBSTEP))
-	var h := dt / n
-	for i in n:
-		if not _ball_substep(h):
-			break
+	var main := {"pos": ball_pos, "vel": ball_vel, "speed": ball_speed}
+	var r := _move_ball(main, dt)
+	ball_pos = main.pos
+	ball_vel = main.vel
+	ball_speed = main.speed
+	if r == BALL_STOP or state != State.PLAY:
+		return
+	for i in range(extra_balls.size() - 1, -1, -1):
+		var e: Dictionary = extra_balls[i]
+		var r2 := _move_ball(e, dt)
+		if r2 == BALL_STOP or state != State.PLAY:
+			return
+		if r2 == BALL_DRAINED:
+			extra_balls.remove_at(i)
+			events.append(["extra_lost", e.pos.x])
+	if r == BALL_DRAINED:
+		if extra_balls.is_empty():
+			_lose_ball()
+		else:  # an extra ball becomes the main one: no charge lost
+			var e: Dictionary = extra_balls.pop_front()
+			ball_pos = e.pos
+			ball_vel = e.vel
+			ball_speed = e.speed
+			events.append(["ball_promoted", null])
 
 
-## Highest charge level the current power allows (0..BLAST_MAX_LEVEL).
+## Highest charge level the current power allows (0..BLAST_MAX_LEVEL). Power-ups
+## change it (D-072): Bounce = 1 level for a full bar, Ion = only level 3 with a
+## full bar, Lightspeed/Shield = no charged shot at all.
 func affordable_level() -> int:
+	match powerup:
+		"L", "S":
+			return 0
+		"B":
+			return 1 if power >= 1.0 - 0.0001 else 0
+		"I":
+			return BLAST_MAX_LEVEL if power >= 1.0 - 0.0001 else 0
 	return clampi(int(floor(power / BLAST_COST + 0.0001)), 0, BLAST_MAX_LEVEL)
+
+
+## Whether the current power-up allows charging at all.
+func blasts_enabled() -> bool:
+	return powerup != "L" and powerup != "S"
 
 
 ## Holding both flippers charges level by level (BLAST_CHARGE_TIME each, up to
@@ -221,7 +317,7 @@ func _update_power_and_blast(dt: float, both: bool) -> void:
 	_since_blast += dt
 	if _since_blast >= POWER_RECHARGE_DELAY:
 		power = minf(1.0, power + POWER_RECHARGE_RATE * dt)
-	var can_charge := state == State.PLAY
+	var can_charge := state == State.PLAY and blasts_enabled()
 	if both and can_charge:
 		var cap := affordable_level()
 		if not _both_held:
@@ -230,35 +326,33 @@ func _update_power_and_blast(dt: float, both: bool) -> void:
 			else:
 				events.append(["charge_start", 1])
 		var before := blast_charge
-		blast_charge = minf(blast_charge + dt / BLAST_CHARGE_TIME, float(cap))
+		var rate := POWER_CHARGE_MULT if powerup == "P" else 1.0
+		blast_charge = minf(blast_charge + rate * dt / BLAST_CHARGE_TIME, float(cap))
 		var reached := int(floor(blast_charge + 0.0001))
 		if reached > int(floor(before + 0.0001)):
 			events.append(["charged", reached])
 			if reached < cap:
 				events.append(["charge_start", reached + 1])
 	elif _both_held:
-		var level := int(floor(blast_charge + 0.0001))
-		if level >= 1 and can_charge:
-			power = maxf(0.0, power - BLAST_COST * level)
-			_since_blast = 0.0
-			var start := Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BLAST_H * 0.5)
-			blasts.append({"pos": start, "level": level, "hits_left": level})
-			events.append(["blast", [start, level]])
+		var lvl := int(floor(blast_charge + 0.0001))
+		if can_charge and lvl >= (BLAST_MAX_LEVEL if powerup == "I" else 1):
+			_fire(lvl)
 		blast_charge = 0.0
 	if not can_charge:
 		blast_charge = 0.0
 	_both_held = both and can_charge
-	# Move blasts and resolve their single hit.
+	# Move blasts and resolve their hits.
 	for i in range(blasts.size() - 1, -1, -1):
 		var b: Dictionary = blasts[i]
 		var pos: Vector2 = b.pos
+		var dir: Vector2 = b.get("dir", Vector2.UP)
 		var travel := BLAST_SPEED * dt
 		var n := maxi(1, ceili(travel / MAX_SUBSTEP))
 		var last_hit := -1
 		var done := false
 		var w := blast_width(int(b.level))
 		for k in n:
-			pos.y -= travel / n
+			pos += dir * travel / n
 			var rect := Rect2(pos - Vector2(w, BLAST_H) * 0.5, Vector2(w, BLAST_H))
 			# Each brick/enemy touched uses one hit; the blast pierces until spent.
 			var foe := _enemy_hit_by_rect(rect)
@@ -276,12 +370,57 @@ func _update_power_and_blast(dt: float, both: bool) -> void:
 						break
 			if done:
 				return
-			if b.hits_left <= 0 or pos.y - BLAST_H * 0.5 < FIELD.position.y:
+			if b.hits_left <= 0 or _blast_out(pos):
 				break
 		b.pos = pos
-		if b.hits_left <= 0 or pos.y - BLAST_H * 0.5 < FIELD.position.y:
+		if b.hits_left <= 0 or _blast_out(pos):
 			blasts.remove_at(i)
 			events.append(["blast_end", [pos, last_hit, int(b.level)]])
+
+
+func _blast_out(pos: Vector2) -> bool:
+	return pos.y - BLAST_H * 0.5 < FIELD.position.y or pos.x < FIELD.position.x or pos.x > FIELD.end.x
+
+
+## Fires the charged shot at level `lvl`, shaped by the current power-up (D-072).
+func _fire(lvl: int) -> void:
+	_since_blast = 0.0
+	var start := Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BLAST_H * 0.5)
+	match powerup:
+		"I":  # Ion cannon: instant beam that fries the whole column
+			power = 0.0
+			events.append(["ion_beam", paddle_x])
+			_ion_beam(paddle_x)
+		"B":  # Bounce plasma: an extra plasma ball
+			power = 0.0
+			var nose := Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BALL_R - 0.05)
+			var ang := deg_to_rad(randf_range(-12.0, 12.0))
+			extra_balls.append({"pos": nose, "vel": Vector2(sin(ang), -cos(ang)) * BALL_START_SPEED,
+				"speed": BALL_START_SPEED})
+			events.append(["bounce_ball", nose])
+		_:
+			power = maxf(0.0, power - BLAST_COST * lvl)
+			var dirs := [Vector2.UP]
+			if powerup == "T":  # Triple laser: + two bolts at +-45 degrees
+				var a := deg_to_rad(TRIPLE_ANGLE)
+				dirs.append(Vector2(-sin(a), -cos(a)))
+				dirs.append(Vector2(sin(a), -cos(a)))
+			for d in dirs:
+				blasts.append({"pos": start, "level": lvl, "hits_left": lvl, "dir": d})
+				events.append(["blast", [start, lvl, d]])
+
+
+func _ion_beam(x: float) -> void:
+	var beam := Rect2(x - ION_BEAM_W * 0.5, FIELD.position.y, ION_BEAM_W, PADDLE_Y - FIELD.position.y)
+	for k in range(enemies.size() - 1, -1, -1):
+		if enemies[k].state != "wormhole" and not BP.collide_circle_rect(enemies[k].pos, ENEMY_R, beam).is_empty():
+			_destroy_enemy(k)
+	for j in bricks.size():
+		var b: Dictionary = bricks[j]
+		if b.alive and not b.metal and beam.intersects(b.rect):
+			b.hp = 1
+			if _damage_brick(j):
+				return
 
 
 ## Debug (D-057): a free piercing level-3 plasma bolt from the ship that destroys
@@ -290,7 +429,7 @@ func debug_fire_line() -> void:
 	if state == State.OVER:
 		return
 	var start := Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BLAST_H * 0.5)
-	blasts.append({"pos": start, "level": 3, "hits_left": 9999})
+	blasts.append({"pos": start, "level": 3, "hits_left": 9999, "dir": Vector2.UP})
 
 
 ## Debug (D-068): destroys every remaining brick (triggers level complete).
@@ -299,8 +438,10 @@ func debug_clear_level() -> void:
 		return
 	events.clear()
 	for i in bricks.size():
-		if bricks[i].alive and _damage_brick(i):
-			return
+		if bricks[i].alive and not bricks[i].metal:
+			bricks[i].hp = 1
+			if _damage_brick(i):
+				return
 
 
 ## Blast hitbox width by level (bigger blasts are wider).
@@ -311,12 +452,18 @@ static func blast_width(level: int) -> float:
 ## One hit on a brick (plasma or blast). Returns true if a new rack was built.
 func _damage_brick(i: int) -> bool:
 	var b: Dictionary = bricks[i]
+	if b.get("metal", false):
+		return false  # indestructible
 	b.hp -= 1
 	if b.hp > 0:
+		events.append(["brick_hit", i])
 		return false
 	b.alive = false
 	score += b.points
 	events.append(["brick", i])
+	_broken_count += 1
+	if _broken_count % POWERUP_EVERY == 0 and randf() < POWERUP_CHANCE and bricks_alive() > 0:
+		spawn_powerup(POWERUP_KINDS[randi() % POWERUP_KINDS.size()], b.rect.get_center())
 	if bricks_alive() == 0:
 		score += RACK_BONUS
 		# Level complete (D-068): every enemy left explodes; play pauses until
@@ -324,6 +471,8 @@ func _damage_brick(i: int) -> bool:
 		while not enemies.is_empty():
 			_destroy_enemy(0, false)
 		blasts.clear()
+		powerups.clear()
+		extra_balls.clear()
 		blast_charge = 0.0
 		state = State.LEVEL_CLEAR
 		events.append(["rack_clear", level])
@@ -342,17 +491,37 @@ func _move_paddle(dt: float, left: bool, right: bool, dash: int) -> void:
 		_dash_time -= dt
 		paddle_vx = _dash_dir * DASH_SPEED
 	else:
-		var target := (float(right) - float(left)) * PADDLE_MAX_SPEED
+		var boost := LIGHTSPEED_MULT if powerup == "L" else 1.0
+		var target := (float(right) - float(left)) * PADDLE_MAX_SPEED * boost
 		if target == 0.0:
 			paddle_vx = move_toward(paddle_vx, 0.0, PADDLE_DECEL * dt)
 		else:
 			var rate := PADDLE_REVERSE if signf(target) != signf(paddle_vx) and paddle_vx != 0.0 else PADDLE_ACCEL
-			paddle_vx = move_toward(paddle_vx, target, rate * dt)
+			paddle_vx = move_toward(paddle_vx, target, rate * boost * dt)
 	paddle_x += paddle_vx * dt
 	var limit := FIELD.size.x * 0.5 - PADDLE_W * 0.5
 	if absf(paddle_x) > limit:
 		paddle_x = clampf(paddle_x, -limit, limit)
 		paddle_vx = 0.0
+	_paddle_hist.append([_time, paddle_x])
+	while _paddle_hist.size() > 2 and _time - float(_paddle_hist[1][0]) > 0.4:
+		_paddle_hist.pop_front()
+
+
+## Lightspeed afterimages (D-072): ship x positions GHOST_DELAYS ago, only while
+## moving (each must be at least GHOST_MIN_GAP away from the ship).
+func ghost_xs() -> Array:
+	var out := []
+	if powerup != "L" or _paddle_hist.is_empty():
+		return out
+	for d in GHOST_DELAYS:
+		var gx: float = _paddle_hist[0][1]
+		for h in _paddle_hist:
+			if float(h[0]) <= _time - d:
+				gx = h[1]
+		if absf(gx - paddle_x) >= GHOST_MIN_GAP:
+			out.append(gx)
+	return out
 
 
 func _serve() -> void:
@@ -370,68 +539,147 @@ func _reset_serve() -> void:
 	ball_pos = Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BALL_R - 0.01)
 
 
-## Returns false if the ball left play during this substep.
-func _ball_substep(h: float) -> bool:
-	ball_pos += ball_vel * h
+const BALL_OK := 0
+const BALL_DRAINED := 1
+const BALL_STOP := 2  # level cleared mid-step
+
+
+func _move_ball(b: Dictionary, dt: float) -> int:
+	var dist: float = (b.vel as Vector2).length() * dt
+	var n := maxi(1, ceili(dist / MAX_SUBSTEP))
+	var h := dt / n
+	for i in n:
+		var r := _ball_substep(b, h)
+		if r != BALL_OK:
+			return r
+	return BALL_OK
+
+
+## One collision substep for a ball {pos, vel, speed} (main or extra).
+func _ball_substep(b: Dictionary, h: float) -> int:
+	var pos: Vector2 = b.pos
+	var vel: Vector2 = b.vel
+	var speed: float = b.speed
+	var prev_y := pos.y
+	pos += vel * h
 	# Walls
-	if ball_pos.x - BALL_R < FIELD.position.x:
-		ball_pos.x = FIELD.position.x + BALL_R
-		ball_vel.x = absf(ball_vel.x)
-		events.append(["wall", ["l", Vector2(FIELD.position.x, ball_pos.y)]])
-	elif ball_pos.x + BALL_R > FIELD.end.x:
-		ball_pos.x = FIELD.end.x - BALL_R
-		ball_vel.x = -absf(ball_vel.x)
-		events.append(["wall", ["r", Vector2(FIELD.end.x, ball_pos.y)]])
-	if ball_pos.y - BALL_R < FIELD.position.y:
-		ball_pos.y = FIELD.position.y + BALL_R
-		ball_vel.y = absf(ball_vel.y)
-		events.append(["wall", ["t", Vector2(ball_pos.x, FIELD.position.y)]])
+	if pos.x - BALL_R < FIELD.position.x:
+		pos.x = FIELD.position.x + BALL_R
+		vel.x = absf(vel.x)
+		events.append(["wall", ["l", Vector2(FIELD.position.x, pos.y)]])
+	elif pos.x + BALL_R > FIELD.end.x:
+		pos.x = FIELD.end.x - BALL_R
+		vel.x = -absf(vel.x)
+		events.append(["wall", ["r", Vector2(FIELD.end.x, pos.y)]])
+	if pos.y - BALL_R < FIELD.position.y:
+		pos.y = FIELD.position.y + BALL_R
+		vel.y = absf(vel.y)
+		events.append(["wall", ["t", Vector2(pos.x, FIELD.position.y)]])
 	# Bricks: resolve the deepest contact only (one bounce per substep).
 	var best := -1
 	var best_c := {}
 	for i in bricks.size():
-		var b: Dictionary = bricks[i]
-		if not b.alive:
+		var br: Dictionary = bricks[i]
+		if not br.alive:
 			continue
-		var c := BP.collide_circle_rect(ball_pos, BALL_R, b.rect)
+		var c := BP.collide_circle_rect(pos, BALL_R, br.rect)
 		if not c.is_empty() and (best == -1 or c.depth > best_c.depth):
 			best = i
 			best_c = c
 	if best != -1:
-		ball_pos += best_c.normal * best_c.depth
-		ball_vel = BP.reflect(ball_vel, best_c.normal)
+		pos += best_c.normal * best_c.depth
+		vel = BP.reflect(vel, best_c.normal)
+		b.pos = pos
+		b.vel = vel
 		if _damage_brick(best):
-			return false
+			return BALL_STOP
 	# Enemies: the plasma destroys them and rebounds.
 	for k in enemies.size():
 		var en: Dictionary = enemies[k]
 		if en.state == "wormhole":
 			continue
-		var dv: Vector2 = ball_pos - en.pos
+		var dv: Vector2 = pos - en.pos
 		if dv.length() < ENEMY_R + BALL_R:
 			var nrm := dv.normalized() if dv.length_squared() > 1e-8 else Vector2.UP
-			ball_vel = BP.reflect(ball_vel, nrm)
-			ball_pos = en.pos + nrm * (ENEMY_R + BALL_R + 0.01)
+			vel = BP.reflect(vel, nrm)
+			pos = en.pos + nrm * (ENEMY_R + BALL_R + 0.01)
 			_destroy_enemy(k)
 			break
-	# Paddle
-	var pr := paddle_rect()
-	var pc := BP.collide_circle_rect(ball_pos, BALL_R, pr)
-	if not pc.is_empty():
-		if ball_vel.y > 0.0 and ball_pos.y < PADDLE_Y:
-			ball_speed = minf(ball_speed + SPEEDUP_PER_PADDLE_HIT, BALL_MAX_SPEED)
-			ball_vel = BP.paddle_bounce(ball_pos.x, paddle_x, PADDLE_W * 0.5, ball_speed, paddle_vx)
-			ball_pos.y = pr.position.y - BALL_R
+	# Ship (and Lightspeed afterimages): only bounces balls coming DOWN onto it;
+	# a ball coming back up from below passes through (D-072).
+	if vel.y > 0.0 and pos.y < PADDLE_Y:
+		var pr := paddle_rect()
+		if not BP.collide_circle_rect(pos, BALL_R, pr).is_empty():
+			speed = minf(speed + SPEEDUP_PER_PADDLE_HIT, BALL_MAX_SPEED)
+			vel = BP.paddle_bounce(pos.x, paddle_x, PADDLE_W * 0.5, speed, paddle_vx)
+			pos.y = pr.position.y - BALL_R
 			events.append(["paddle", null])
 		else:
-			ball_pos += pc.normal * pc.depth
-			ball_vel = BP.reflect(ball_vel, pc.normal)
-	ball_vel = BP.enforce_min_vertical(ball_vel, ball_speed, MIN_VERTICAL)
+			for gx in ghost_xs():
+				var gr := Rect2(gx - PADDLE_W * 0.5, pr.position.y, PADDLE_W, PADDLE_H)
+				if not BP.collide_circle_rect(pos, BALL_R, gr).is_empty():
+					speed = minf(speed + SPEEDUP_PER_PADDLE_HIT, BALL_MAX_SPEED)
+					vel = BP.paddle_bounce(pos.x, gx, PADDLE_W * 0.5, speed, 0.0)
+					pos.y = gr.position.y - BALL_R
+					events.append(["ghost", gx])
+					break
+	# Shield barrier: saves one sinking ball, then breaks.
+	if shield_active and vel.y > 0.0 and prev_y + BALL_R < SHIELD_Y and pos.y + BALL_R >= SHIELD_Y:
+		pos.y = SHIELD_Y - BALL_R
+		vel.y = -absf(vel.y)
+		shield_active = false
+		events.append(["shield_used", pos.x])
+	vel = BP.enforce_min_vertical(vel, speed, MIN_VERTICAL)
+	b.pos = pos
+	b.vel = vel
+	b.speed = speed
 	# Drain
-	if ball_pos.y - BALL_R > DRAIN_Y:
-		_lose_ball()
-		return false
-	return true
+	if pos.y - BALL_R > DRAIN_Y:
+		return BALL_DRAINED
+	return BALL_OK
+
+
+# --- power-ups (D-072) ------------------------------------------------------------------
+## Spawns a falling power-up capsule (public for tests / debug).
+func spawn_powerup(kind: String, pos: Vector2) -> int:
+	var id := _next_powerup_id
+	_next_powerup_id += 1
+	powerups.append({"id": id, "pos": pos, "kind": kind})
+	events.append(["powerup_spawn", [id, pos, kind]])
+	return id
+
+
+func _update_powerups(dt: float) -> void:
+	var pr := paddle_rect()
+	for i in range(powerups.size() - 1, -1, -1):
+		var p: Dictionary = powerups[i]
+		p.pos += Vector2(0.0, POWERUP_FALL * dt)
+		if not BP.collide_circle_rect(p.pos, POWERUP_R, pr).is_empty() and state != State.OVER:
+			powerups.remove_at(i)
+			apply_powerup(p.kind)
+			events.append(["powerup_collect", [p.id, p.kind]])
+		elif p.pos.y - POWERUP_R > DRAIN_Y:
+			powerups.remove_at(i)
+			events.append(["powerup_lost", p.id])
+
+
+## Only one power-up at a time: a new one replaces the current one.
+func apply_powerup(kind: String) -> void:
+	if not powerup.is_empty():
+		_end_powerup()
+	powerup = kind
+	shield_active = kind == "S"
+	if not blasts_enabled():
+		blast_charge = 0.0
+
+
+## Power-ups last until the end of the level or death.
+func _end_powerup() -> void:
+	if powerup.is_empty():
+		return
+	events.append(["powerup_end", powerup])
+	powerup = ""
+	shield_active = false
 
 
 # --- enemies (D-052) ------------------------------------------------------------------
@@ -455,8 +703,8 @@ func _update_enemies(dt: float) -> void:
 	if state == State.PLAY:
 		_enemy_timer -= dt
 		if _enemy_timer <= 0.0:
-			_enemy_timer = randf_range(ENEMY_INTERVAL.x, ENEMY_INTERVAL.y)
-			if enemies.size() < ENEMY_MAX:
+			_enemy_timer = randf_range(ENEMY_INTERVAL.x, ENEMY_INTERVAL.y) / (1.0 + ENEMY_TIER_RATE * enemy_tier())
+			if enemies.size() < ENEMY_MAX + enemy_tier():
 				spawn_enemy()
 	var lim := FIELD.size.x * 0.5 - ENEMY_R
 	for i in range(enemies.size() - 1, -1, -1):
@@ -471,7 +719,8 @@ func _update_enemies(dt: float) -> void:
 			"sweep":
 				var pos: Vector2 = en.pos
 				# Wide horizontal sine sweep; reverse when bricks block the way.
-				var ph: float = en.phase + ENEMY_SWEEP_SPEED * en.dir * dt
+				var spd := enemy_speed_mult()
+				var ph: float = en.phase + ENEMY_SWEEP_SPEED * spd * en.dir * dt
 				var nx := clampf(sin(ph) * ENEMY_SWEEP_AMP, -lim, lim)
 				if _enemy_blocked(Vector2(nx, pos.y)):
 					en.dir = -en.dir
@@ -479,7 +728,7 @@ func _update_enemies(dt: float) -> void:
 					en.phase = ph
 					pos.x = nx
 				# Descend only where the way down is clear of bricks.
-				var ny := pos.y + ENEMY_DESCENT * dt
+				var ny := pos.y + ENEMY_DESCENT * spd * dt
 				if not _enemy_blocked(Vector2(pos.x, ny)):
 					pos.y = ny
 				en.pos = pos
@@ -491,7 +740,13 @@ func _update_enemies(dt: float) -> void:
 					en.dir = 1.0 if pos.x <= en.center.x else -1.0
 			"orbit":
 				# Wide circles around the bottom (may or may not cross the ship).
-				en.angle += ENEMY_ORBIT_SPEED * en.dir * dt
+				en.angle += ENEMY_ORBIT_SPEED * enemy_speed_mult() * en.dir * dt
+				# More aggressive tiers steer their orbit towards the ship (D-073).
+				if enemy_tier() >= 1:
+					var c: Vector2 = en.center
+					var lim2 := lim - ENEMY_ORBIT_R.x
+					c.x = move_toward(c.x, clampf(paddle_x, -lim2, lim2), 0.8 * enemy_tier() * dt)
+					en.center = c
 				var target: Vector2 = en.center + Vector2(sin(en.angle) * ENEMY_ORBIT_R.x, -cos(en.angle) * ENEMY_ORBIT_R.y)
 				en.pos = en.pos.lerp(target, 1.0 - exp(-6.0 * dt))
 		# Ship collision: the ship is destroyed and the enemy self-destructs.
@@ -528,6 +783,8 @@ func _destroy_enemy(i: int, award: bool = true) -> void:
 
 func _destroy_ship() -> void:
 	events.append(["ship_destroyed", Vector2(paddle_x, PADDLE_Y)])
+	_end_powerup()
+	extra_balls.clear()
 	blasts.clear()
 	blast_charge = 0.0
 	ship_invulnerable = SHIP_INVULNERABLE
@@ -540,6 +797,7 @@ func _destroy_ship() -> void:
 
 
 func _lose_ball() -> void:
+	_end_powerup()
 	balls_left -= 1
 	events.append(["lost", ball_pos.x])
 	if balls_left <= 0:

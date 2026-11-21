@@ -1,0 +1,9 @@
+# Level 8: twin fortresses with a narrow central corridor.
+XXXX...XXXX
+XrrX...XrrX
+XyyX...XyyX
+XggX.R.XggX
+XbbX.R.XbbX
+...........
+GgGgGgGgGgG
+BbBbBbBbBbB

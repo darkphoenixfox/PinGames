@@ -1,0 +1,7 @@
+# Level 3: checkerboard (gaps let enemies through).
+R.R.R.R.R.R
+.Y.Y.Y.Y.Y.
+G.G.G.G.G.G
+.B.B.B.B.B.
+R.R.R.R.R.R
+.Y.Y.Y.Y.Y.
