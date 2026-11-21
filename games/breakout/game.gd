@@ -387,6 +387,9 @@ func _animate(delta: float) -> void:
 	_engines[1].set_thrust(burn if push < 0.0 else 0.0)
 	_refresh_status()  # DMD power bar changes continuously
 	_update_backglass_lights(delta)
+	# "PLASMA CANNON READY" blinks while waiting to fire (D-059).
+	if _hint != null and _hint.visible:
+		_hint.modulate.a = 1.0 if fmod(Time.get_ticks_msec() / 1000.0, 0.8) < 0.5 else 0.0
 	_animate_blasts(delta)
 	_animate_enemies(delta)
 	# Ship respawn: hidden briefly after being destroyed, then blinks while invulnerable.
@@ -715,7 +718,7 @@ func _box(size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
 # --- 2D overlays ---------------------------------------------------------------------
 ## The TABLE stays clean: status lives on the DMD (D-051); only the fire hint here.
 func _build_hud() -> void:
-	_hint = UI.label(tr("TB_PRESS_LAUNCH"), 52, UI.WHITE)
+	_hint = UI.label(tr("TB_PRESS_LAUNCH"), 56, UI.CYAN)
 	_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_hint.offset_top = -560
 	_hint.offset_left = -400

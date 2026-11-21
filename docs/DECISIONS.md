@@ -577,3 +577,9 @@
   - **Event hooks:** fire → shots; shield → shots (short); brick → impacts; enemy kill and blast → shots + impacts; lost charge or ship → all (alarm); rack clear → chase; game over → all blink, then dark.
   - **Dev:** `--tb-lights-on` holds all groups lit, for mapping checks.
 - **Status:** Accepted
+
+### D-059 — "PLASMA CANNON READY" prompt
+- **Date:** 2026-11-21
+- **Decision (director):** replace "LAUNCH TO FIRE" with a blinking "PLASMA CANNON READY".
+- **Implementation:** the `TB_PRESS_LAUNCH` text changes. The TABLE prompt is cyan and blinks (0.5 s on, 0.3 s off) while waiting to fire.
+- **Status:** Accepted
