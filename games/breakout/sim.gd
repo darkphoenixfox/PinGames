@@ -659,8 +659,8 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 	if shield_active and vel.y > 0.0 and prev_y + BALL_R < SHIELD_Y and pos.y + BALL_R >= SHIELD_Y:
 		pos.y = SHIELD_Y - BALL_R
 		vel.y = -absf(vel.y)
-		shield_active = false
 		events.append(["shield_used", pos.x])
+		_end_powerup()  # back to the normal plasma cannon (D-084)
 	vel = BP.enforce_min_vertical(vel, speed, MIN_VERTICAL)
 	b.pos = pos
 	b.vel = vel

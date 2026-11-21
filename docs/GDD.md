@@ -137,12 +137,12 @@ Rules:
   - **B** (yellow) Bounce plasma: the shot is an extra plasma ball that rebounds like the main one; 1 level, full bar. A life is only lost once every ball has sunk.
   - **I** (purple) Ion cannon: level 3 only, full bar; an instant beam fries the one brick column straight above the ship (D-078).
   - **L** (white) Lightspeed: no shot, no bar; the ship is 30 % faster and leaves two afterimages that also bounce the plasma.
-  - **S** (green) Shield: no shot, no bar; a green barrier at the bottom saves one sinking ball.
+  - **S** (green) Shield: no shot, no bar; a green barrier at the bottom saves one sinking ball, then you return to the normal plasma cannon (D-084).
   - The ship never blocks a ball rising from below.
-- **Charged shot (D-074..D-076):** reaching the maximum level fires automatically. With an empty bar, "LOW" shows only in the DMD bar area, and only after both flippers are held for more than 0.5 s. The bar is full at the start of every level.
+- **Charged shot (D-074..D-076):** reaching the maximum level fires automatically. With an empty bar, "LOW" shows only in the DMD bar area, and only after both flippers are held for more than 0.5 s. The bar is full at the start of every level. The ship flashes yellow each time the bar recharges a level (each third; only when full for Bounce and Ion) (D-084).
 - **Bricks (D-073):** UPPERCASE = 1 hit; lowercase = armoured (2 hits, glowing frame, cracks after the first hit, 1.5× points); `X` = indestructible metal (doesn't count towards clearing).
 - **Levels 1–10 (D-073):** rows, pyramid, checkerboard, eye (first armour), metal-core towers, diamond, funnel, twin fortresses, armour weave, hive mind. Every 5 levels enemies get +40 % speed, spawn more often, one more can be on screen, and their orbits steer towards the ship.
-- **Level-change boost (D-076):** "LEVEL CLEAR!" shows first, then the DMD plays the pixel ship boosting away as the real ship lifts off.
+- **Level-change boost (D-076):** "LEVEL CLEAR!" shows first, then the ship glides to the centre and levels out, and lifts off as the DMD plays the pixel ship boosting away (D-085).
 - **Game over (D-044):** when the last charge is lost, the explosion grows until it fills the whole screen, with a bigger, longer blast. The screen fades to black, then **GAME OVER** and the **final score** show on the TABLE, DMD and backglass. After about 4 s (or Launch/Start to skip) the game goes to high-score entry or back to the picker.
 
 ### 5.2 SKY STRIKER — vertical shmup (TATE) (M3)

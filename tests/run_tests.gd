@@ -232,6 +232,7 @@ func test_breakout_powerups(Sim) -> void:
 	for k in 10:
 		sh.step(dt, false, false, false, 0)
 	check(sh.ball_vel.y < 0.0 and not sh.shield_active and sh.balls_left == 3, "shield bounces one ball, then breaks")
+	check(sh.powerup == "" and sh.affordable_level() > 0, "lost shield returns to the normal plasma cannon (D-084)")
 	# L: afterimages trail the moving ship and are cleared with the power-up on death.
 	var ls = mk.call()
 	ls.apply_powerup("L")

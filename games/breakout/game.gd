@@ -238,6 +238,10 @@ var _shield_bar_mat: ShaderMaterial
 var _shield_flash := 99.0
 var _low_power_t := 0.0
 var _debug_pu := 0
+var _recharge_mat: StandardMaterial3D
+var _recharge_flash := 0.0
+var _outro_x0 := 0.0  # ship x when the level ended (it glides to the centre)
+var _last_power_step := -1  # bar levels reached, to detect recharges (D-084)
 var _attract_ui: Control
 var _attract_blink: Label
 var _ready_label: Label
@@ -523,6 +527,7 @@ func _animate(delta: float) -> void:
 	_animate_blasts(delta)
 	_animate_enemies(delta)
 	_animate_powerups(delta)
+	_animate_recharge_flash(delta)
 	# Ship respawn: hidden briefly after being destroyed, then blinks while invulnerable.
 	if _phase == "attract":
 		_paddle.visible = false
@@ -706,6 +711,14 @@ func _build_ship(fallback_mat: Material) -> void:
 		# towards the top of the screen, as in the director's reference (D-071).
 		model.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
 		_ship.add_child(model)
+		# Recharge flash (D-084): a yellow additive overlay on every ship mesh.
+		_recharge_mat = StandardMaterial3D.new()
+		_recharge_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_recharge_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_recharge_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_recharge_mat.albedo_color = Color(1.0, 0.85, 0.2, 0.0)
+		for mi in model.find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).material_overlay = _recharge_mat
 	else:
 		_ship.add_child(_box(Vector3(Sim.PADDLE_W, 0.3, Sim.PADDLE_H), Vector3.ZERO, fallback_mat))
 	# Side engines (left fires outward to -X, right to +X).
@@ -1065,7 +1078,13 @@ func _begin_outro() -> void:
 	_phase = "outro"
 	_phase_t = 0.0
 	_outro_lifted = false
+	_outro_x0 = sim.paddle_x
 	_hint.visible = false
+	# Settle the ship before lift-off (D-085): the sim is paused now, so clear its
+	# last speed (the per-frame banking/thrusters read it) and cut the thrusters.
+	sim.paddle_vx = 0.0
+	for eng in _engines:
+		eng.set_thrust(0.0)
 
 
 func _outro() -> void:
@@ -1078,8 +1097,11 @@ func _outro() -> void:
 		Audio.sfx("tb_ship_arrive")
 		Dmd.play(Callable(_dmd_anims, "ship_boost"), DmdAnims.DURATIONS["ship_boost"])  # D-076
 	var e := k * k
+	# Before lift-off the ship glides to the centre and levels out (D-085).
+	var settle := smoothstep(0.0, OUTRO_LIFT_AT * 0.9, t)
+	var x := lerpf(_outro_x0, Sim.FIELD.get_center().x, settle)
 	_paddle.visible = true
-	_paddle.position = Vector3(sim.paddle_x, 7.0 * e, Sim.PADDLE_Y - 13.0 * e)
+	_paddle.position = Vector3(x, 7.0 * e, Sim.PADDLE_Y - 13.0 * e)
 	_paddle.scale = Vector3.ONE * (1.0 + 2.2 * e)
 	_paddle.rotation = Vector3(-0.5 * k, 0.0, 0.0)
 	_set_belly_thrust(1.5 if k > 0.0 and k < 1.0 else 0.0)
@@ -1251,6 +1273,20 @@ func _animate_powerups(delta: float) -> void:
 		_shield_bar_mat.set_shader_parameter("hit_x", 5.0)  # no hot spot
 		_shield_bar_mat.set_shader_parameter("age", 99.0)
 		_shield_bar_mat.set_shader_parameter("strength", 0.55 + 0.1 * sin(Time.get_ticks_msec() * 0.006))
+
+
+## The ship flashes yellow each time the bar recharges a level (D-084): every
+## third for 3-level guns, only when full for 1-level guns (Bounce, Ion), never
+## without a bar (Lightspeed, Shield). Pickups and level refills count too.
+func _animate_recharge_flash(delta: float) -> void:
+	var levels := 3 if sim.max_level() >= 3 and sim.powerup != "I" else 1
+	var step := int(floor(sim.power * levels + 0.0001))
+	if _phase == "play" and sim.blasts_enabled() and _last_power_step >= 0 and step > _last_power_step:
+		_recharge_flash = 1.0
+	_last_power_step = step
+	_recharge_flash = maxf(0.0, _recharge_flash - delta / 0.3)
+	if _recharge_mat:
+		_recharge_mat.albedo_color.a = 0.75 * _recharge_flash * _recharge_flash
 
 
 func _make_ghost_ship() -> Node3D:

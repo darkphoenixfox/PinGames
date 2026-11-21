@@ -787,3 +787,19 @@
   - The square pixel debris becomes soft additive round sparks (a shared radial-gradient material) that cool from white to the brick colour and shrink as they fade.
   - This applies to every explosion that goes through `_explode_brick`: bricks, armour cracks, enemies and lost shots.
 - **Status:** Accepted
+
+### D-084 — Lost shield ends the power-up; yellow recharge flash
+- **Date:** 2026-11-21
+- **Decision (director):**
+  - When the shield is used up, return to the normal plasma cannon.
+  - Every time the power bar recharges a level, the ship flashes yellow briefly. For 3-level guns that's every third of the bar; for 1-level guns, when the bar is full.
+- **Implementation:**
+  - **Shield:** the barrier save calls `_end_powerup()`. The bar and the charged shot come back, and the DMD badge clears.
+  - **Flash:** a yellow additive `material_overlay` on all ship meshes, fading over 0.3 s, quadratic. It triggers when `floor(power × levels)` rises during play. Bounce and Ion count as 1-level guns; Lightspeed and Shield have no bar, so they never flash. Capsule refills count as recharges.
+- **Status:** Accepted
+
+### D-085 — Ship settles before the level-change lift-off
+- **Date:** 2026-11-21
+- **Decision (director, bug):** if the ship was moving when the level ended, the transition kept its offset position, bank and side thrusters. Reset it to neutral before it flies off.
+- **Implementation:** `_begin_outro()` clears the paused sim's `paddle_vx`, so per-frame banking levels out and the side thrusters cut. During the 0.9 s before lift-off, the ship glides (smoothstep) from where it was to the centre of the field. Then it lifts off on the belly engines as before.
+- **Status:** Accepted
