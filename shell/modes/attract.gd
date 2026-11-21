@@ -98,11 +98,15 @@ func _scores_page(id: String) -> void:
 	_page_nodes.append(add_table(col))
 	var fill := UI.fill(accent.darkened(0.85))
 	_page_nodes.append(add_backglass(fill))
-	var bg := UI.label(tr(info.title_key), 180, accent)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	bg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_page_nodes.append(add_backglass(bg))
+	var art := Registry.backglass_rect(Registry.backglass_art(id))  # D-088
+	if art:
+		_page_nodes.append(add_backglass(art))
+	else:
+		var bg := UI.label(tr(info.title_key), 180, accent)
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		bg.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		bg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_page_nodes.append(add_backglass(bg))
 	_dmd_lines = [[tr(info.title_key), accent]]
 	for i in mini(3, table.size()):
 		_dmd_lines.append(["%d. %s %s" % [i + 1, table[i][0], ScoreTable.format_score(int(table[i][1]))],

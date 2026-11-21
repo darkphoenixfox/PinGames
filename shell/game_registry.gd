@@ -25,6 +25,31 @@ static func instantiate(id: String) -> Node:
 	return null
 
 
+## Backglass art for shell screens (D-088): the game's lit backglass, or its
+## `_2screen` version when the DMD sits inside the backglass. Null if none.
+static func backglass_art(id: String) -> Texture2D:
+	var path: String = info(id).get("backglass", "")
+	if path.is_empty():
+		return null
+	if Screens.dmd_in_backglass:
+		var two := path.get_basename() + "_2screen." + path.get_extension()
+		if ResourceLoader.exists(two):
+			path = two
+	return load(path) if ResourceLoader.exists(path) else null
+
+
+## A full-screen TextureRect showing `tex` (cover), or null if tex is null.
+static func backglass_rect(tex: Texture2D) -> TextureRect:
+	if tex == null:
+		return null
+	var r := TextureRect.new()
+	r.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	r.texture = tex
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	return r
+
+
 ## {id, title_key, color, buttons_min} from the module's get_info().
 static func info(id: String) -> Dictionary:
 	if not _info_cache.has(id):

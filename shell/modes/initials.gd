@@ -49,11 +49,15 @@ func enter() -> void:
 	_timer_label = UI.label("", 44, UI.GREY)
 	col.add_child(_timer_label)
 
-	var bg := UI.label(tr("HS_NEW_HIGH_SCORE"), 150, UI.YELLOW)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	add_backglass(UI.fill(accent.darkened(0.85)))
-	add_backglass(bg)
+	var art := Registry.backglass_rect(Registry.backglass_art(game_id))  # D-088
+	if art:
+		add_backglass(art)
+	else:
+		var bg := UI.label(tr("HS_NEW_HIGH_SCORE"), 150, UI.YELLOW)
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		bg.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		add_backglass(bg)
 	Audio.sfx("fanfare")
 	_refresh()
 

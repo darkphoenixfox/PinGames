@@ -817,3 +817,11 @@
   - **Fireball:** `explosion.gdshader` switches from additive to normal blending, so it reads solid over the bricks. Its palette is white-hot core → brightened brick colour → deep brick colour, with no orange stage. Noise holes open up only in the second half of its life.
   - **Debris:** 16 tumbling box shards (0.13×0.05×0.09, scale 0.5–1.5) in a lit, glowing material in the brick's colour (cached per colour). They spin up to ±720°/s and shrink to nothing over 0.8 s.
 - **Status:** Accepted (supersedes the look of D-083)
+
+### D-088 — Shell screens show each game's backglass art
+- **Date:** 2026-11-21
+- **Decision (director):** on the game select screen, the backglass shows the selected game's backglass, not its logo; the same applies to the high score screens.
+- **Implementation:**
+  - **Registry:** `get_info()` gains an optional `backglass` path (Tilt Breaker: the lit `backglass_on.png`). `Registry.backglass_art(id)` picks its `_2screen` version when `Screens.dmd_in_backglass`, and `Registry.backglass_rect()` builds a full-screen cover TextureRect.
+  - **Screens:** the picker, the attract-mode high-score pages and the initials-entry screen show the art. Games without backglass art keep the old fallback (logo, then styled title on the picker; title or "NEW HIGH SCORE" text elsewhere). The initials screen still shows "NEW HIGH SCORE" on the table.
+- **Status:** Accepted

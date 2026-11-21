@@ -254,7 +254,8 @@ var _landed := 0
 func get_info() -> Dictionary:
 	return {"id": "breakout", "title_key": "GAME_BREAKOUT_TITLE", "color": ACCENT, "font": TITLE_FONT,
 		"logo": "res://assets/textures/breakout/logo.png",
-		"dmd_logo": "res://assets/textures/breakout/dmd_logo.png", "buttons_min": 3}
+		"dmd_logo": "res://assets/textures/breakout/dmd_logo.png", "buttons_min": 3,
+		"backglass": "res://assets/textures/breakout/backglass_on.png"}  # shell screens (D-088)
 
 
 func start(_players: int) -> void:

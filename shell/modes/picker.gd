@@ -26,6 +26,7 @@ var _bg_fill: ColorRect
 const LOGO_SELECTED := Vector2(700, 540)
 const LOGO_OTHER := Vector2(400, 300)
 var _bg_logo: TextureRect
+var _bg_art: TextureRect  # the selected game's backglass (D-088)
 var _press_ms := {}
 var _idle := 0.0
 
@@ -91,6 +92,8 @@ func enter() -> void:
 	_bg_logo.offset_top = 60
 	_bg_logo.offset_bottom = -60
 	add_backglass(_bg_logo)
+	_bg_art = Registry.backglass_rect(PlaceholderTexture2D.new())
+	add_backglass(_bg_art)
 	_bg_title = UI.label("", 170, UI.YELLOW)
 	_bg_title.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_bg_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -212,9 +215,13 @@ func _refresh() -> void:
 	_bg_title.text = tr(info.title_key)
 	UI.set_color(_bg_title, accent)
 	_bg_fill.color = accent.darkened(0.85)
-	var logo: Texture2D = load(info.logo) if info.has("logo") else null
+	# Backglass shows the game's own backglass art; logo or title only as fallback.
+	var art := Registry.backglass_art(id)
+	_bg_art.texture = art
+	_bg_art.visible = art != null
+	var logo: Texture2D = load(info.logo) if info.has("logo") and art == null else null
 	_bg_logo.texture = logo
-	_bg_title.visible = logo == null
+	_bg_title.visible = art == null and logo == null
 	if info.has("dmd_logo"):
 		Dmd.show_image(load(info.dmd_logo))
 	else:
