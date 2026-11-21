@@ -7,14 +7,15 @@
 ##   flippers = steer; throttle/brake automatic (2+1 buttons)
 ##   magna_r = accelerate, magna_l = brake (4+1: switches on at the first press
 ##   when operator.cabinet_buttons = auto, always on when = 4)
-##   hold both flippers = NITRO (drains a bar that refills by itself, D-097)
+##   hold both flippers 0.5 s = shift gear L <-> H (D-103)
+##   NITRO = drive through a canister on the road (5 s boost, D-103)
 extends "res://core/game_module.gd"
 
 const Sim = preload("res://games/racer/sim.gd")
 const Track = preload("res://games/racer/track.gd")
 const Scenery = preload("res://games/racer/scenery.gd")
 const Toon = preload("res://games/racer/toon.gd")
-const NitroGauge = preload("res://games/racer/nitro_gauge.gd")
+const Dial = preload("res://games/racer/dial.gd")
 const UI = preload("res://core/ui/ui.gd")
 const Synth = preload("res://core/util/synth.gd")
 const ScoreTable = preload("res://core/util/score_table.gd")
@@ -33,6 +34,7 @@ const STEER_YAW := 0.3
 const ANIM_FPS := 10.0
 const FLIP_FRAMES := 8.0
 const FLIP_HOP := 1.6
+const PICKUP_SCALE := 1.8           # nitro canisters read from far away (D-103)
 ## Roll-over phases (fractions of the animation, D-101): slew 90 degrees by
 ## FLIP_TURN_END, roll over until FLIP_ROLL_END, then lie still; in the last
 ## FLIP_UNTURN s of the stop the car turns back to face the road.
@@ -97,7 +99,8 @@ const SOUNDS := {
 		[{"f": [200.0, 3000.0], "t": 0.5, "w": "noise", "v": 0.35, "lp": 0.3, "env": "lin"}],
 		[{"f": [70.0, 40.0], "t": 0.7, "w": "sine", "v": 0.55}],
 		[{"f": [440.0, 1320.0], "t": 0.4, "w": "saw", "v": 0.12, "lp": 0.5}]], "reverb": [0.7, 0.25]},
-	"rc_nitro_empty": {"voices": [[{"f": [300.0, 150.0], "t": 0.3, "w": "square", "v": 0.25}]]},
+	"rc_shift": {"voices": [[{"f": [180.0, 90.0], "t": 0.12, "w": "square", "v": 0.25},
+		{"f": [900.0, 900.0], "t": 0.04, "w": "noise", "v": 0.2}]]},
 	"rc_near_miss": {"voices": [[{"f": [3000.0, 500.0], "t": 0.35, "w": "noise", "v": 0.3, "lp": 0.5}],
 		[{"f": [900.0, 500.0], "t": 0.3, "w": "saw", "v": 0.1, "lp": 0.6}]]},
 	"rc_drift_bank": {"voices": [[{"f": [1047.0, 1047.0], "t": 0.06, "w": "pulse25", "v": 0.2, "env": "hold"},
@@ -144,8 +147,14 @@ var _time_label: Label
 var _score_label: Label
 var _stage_label: Label
 var _speed_label: Label
+var _speedo: Control
+var _tacho: Control
+var _gear_label: Label
+var _shift_label: Label
+var _nitro_label: Label
+var _nitro_strip: ColorRect
+var _pickup_nodes: Array = []   # pooled nitro canisters
 var _mode_label: Label
-var _nitro_gauge: Control
 var _drift_label: Label
 var _center: Control             # big centre message (styled font)
 var _center_t := 0.0
@@ -267,7 +276,7 @@ func _attract_tick() -> void:
 	if step != int((_phase_t - get_process_delta_time()) / 3.0) % 3 or _phase_t < 0.05:
 		match step:
 			0: Dmd.show_text(tr("GAME_RACER_TITLE"), tr("RC_PRESS_START"), Dmd.YELLOW, Dmd.WHITE)
-			1: Dmd.show_text(tr("RC_DRIFT_HINT"), tr("RC_NITRO_HINT"), Dmd.CYAN, Dmd.WHITE)
+			1: Dmd.show_text(tr("RC_SHIFT_HINT"), tr("RC_NITRO_HINT"), Dmd.CYAN, Dmd.WHITE)
 			2: Dmd.show_text(tr("ATTRACT_HIGH_SCORES"), _top_score_line(), Dmd.YELLOW, Dmd.WHITE)
 
 
@@ -337,7 +346,9 @@ func _handle_events() -> void:
 				Audio.sfx("rc_checkpoint")
 				_music_i += 1
 				Audio.play_music(MUSIC_TRACKS[_music_i % MUSIC_TRACKS.size()])
-				_center_message(tr("RC_CHECKPOINT"), 1.6)
+				# Reached on momentum after TIME UP: the race goes on (D-103).
+				var saved: bool = e.size() > 3 and e[3]
+				_center_message(tr("RC_JUST_MADE_IT") if saved else tr("RC_CHECKPOINT"), 1.6)
 				Dmd.flash(tr("RC_EXTENDED") % int(e[2]), 1.6, Dmd.GREEN)
 			"time_up":
 				Audio.sfx("rc_time_up")
@@ -350,13 +361,14 @@ func _handle_events() -> void:
 					Audio.sfx("rc_drift_bank")
 					_drift_label.text = tr("RC_DRIFT_POINTS") % ScoreTable.format_score(int(e[1]))
 					_drift_label.modulate.a = 1.0
-			"nitro":
+			"nitro", "nitro_refill":
 				Audio.sfx("rc_nitro")
+				_center_message(tr("RC_NITRO"), 0.8)
 				Dmd.flash(tr("RC_NITRO"), 0.6, Dmd.CYAN)
 				_shake = 0.3
-			"nitro_empty":
-				Audio.sfx("rc_nitro_empty")
-				Dmd.flash(tr("RC_NO_NITRO"), 1.0, Dmd.RED)
+			"shift":
+				Audio.sfx("rc_shift")
+				Dmd.flash(tr("RC_GEAR_FLASH") % _gear_text(int(e[1])), 0.5, Dmd.YELLOW)
 			"near_miss":
 				Audio.sfx("rc_near_miss")
 				Dmd.flash(tr("RC_NEAR_MISS"), 0.8, Dmd.YELLOW)
@@ -499,6 +511,11 @@ func _build_cars() -> void:
 			t.visible = false
 			_root.add_child(t)
 			_traffic_pool[kind].append(t)
+	for i in 4:
+		var pk := _build_pickup()
+		pk.visible = false
+		_root.add_child(pk)
+		_pickup_nodes.append(pk)
 
 
 func _build_puffs() -> void:
@@ -559,6 +576,57 @@ func _update_puffs(delta: float, smoking: bool) -> void:
 		_puffs.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ONE * sc), p.pos))
 		var c: Color = p.col
 		_puffs.set_instance_color(i, Color(c.r, c.g, c.b, c.a * (1.0 - k)))
+
+
+## Nitro canister (D-103): a glowing cyan bottle with white bands, cel
+## outlined; it spins and bobs in stepped sprite-like frames.
+func _build_pickup() -> Node3D:
+	var n := Node3D.new()
+	var body := CylinderMesh.new()
+	body.top_radius = 0.42
+	body.bottom_radius = 0.42
+	body.height = 1.3
+	body.radial_segments = 8
+	var m := StandardMaterial3D.new()
+	m.albedo_color = UI.CYAN
+	m.emission_enabled = true
+	m.emission = UI.CYAN
+	m.emission_energy_multiplier = 1.2
+	m.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
+	body.material = m
+	var mi := MeshInstance3D.new()
+	mi.mesh = body
+	n.add_child(mi)
+	var cap := CylinderMesh.new()
+	cap.top_radius = 0.18
+	cap.bottom_radius = 0.3
+	cap.height = 0.35
+	cap.radial_segments = 8
+	var wm := StandardMaterial3D.new()
+	wm.albedo_color = Color.WHITE
+	wm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	cap.material = wm
+	var ci := MeshInstance3D.new()
+	ci.mesh = cap
+	ci.position.y = 0.82
+	n.add_child(ci)
+	for y in [-0.3, 0.3]:
+		var band := CylinderMesh.new()
+		band.top_radius = 0.44
+		band.bottom_radius = 0.44
+		band.height = 0.12
+		band.radial_segments = 8
+		band.material = wm
+		var bi := MeshInstance3D.new()
+		bi.mesh = band
+		bi.position.y = y
+		n.add_child(bi)
+	if Toon.enabled:
+		for c in n.get_children():
+			var o := MeshInstance3D.new()
+			o.mesh = Toon.outline_mesh((c as MeshInstance3D).mesh)
+			c.add_child(o)
+	return n
 
 
 ## Round pixel puff (16 px, hard steps) for tyre smoke and dust.
@@ -794,6 +862,17 @@ func _animate(delta: float) -> void:
 	for kind in _traffic_pool:
 		for i in range(used[kind], _traffic_pool[kind].size()):
 			(_traffic_pool[kind][i] as Node3D).visible = false
+	# Nitro canisters: spin + bob on stepped frames (D-103).
+	for i in _pickup_nodes.size():
+		var pk: Node3D = _pickup_nodes[i]
+		if i < sim.pickups.size():
+			var pd: Dictionary = sim.pickups[i]
+			pk.visible = true
+			var st := floorf(_phase_t * ANIM_FPS) / ANIM_FPS
+			pk.transform = Transform3D(Basis(Vector3.UP, st * 3.0).scaled(Vector3.ONE * PICKUP_SCALE),
+				tr_.point(pd.s, pd.x, 1.7 + 0.3 * sin(st * 4.0)))
+		else:
+			pk.visible = false
 	# Chase camera: behind and above, looking down the road; FOV opens with speed.
 	# Camera follows the road exactly along s; only its sideways offset lags.
 	if not _cam_ready:
@@ -855,36 +934,89 @@ func _build_hud() -> void:
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(right)
 
-	# Bottom: speed + nitro.
+	# Bottom dashboard (D-103): tachometer | gear + nitro | speedometer, drawn
+	# in the director's segmented-dial style. Fixed-size slots: changing values
+	# never move anything (D-096).
 	var bottom := HBoxContainer.new()
 	bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.offset_top = -260
-	bottom.offset_bottom = -40
-	bottom.offset_left = 50
-	bottom.offset_right = -50
+	bottom.offset_top = -330
+	bottom.offset_bottom = -24
+	bottom.offset_left = 24
+	bottom.offset_right = -24
+	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
+	bottom.add_theme_constant_override("separation", 0)
 	_hud.add_child(bottom)
-	var nbox := UI.vstack(10)
-	nbox.alignment = BoxContainer.ALIGNMENT_END
-	# Nitro gauge (D-097, D-098): drains while both flippers are held, refills
-	# by itself; starts full.
-	_nitro_gauge = NitroGauge.new()
-	nbox.add_child(_nitro_gauge)
-	var nl := UI.label(tr("RC_NITRO"), 36, UI.CYAN)
-	nl.custom_minimum_size.x = _nitro_gauge.custom_minimum_size.x
-	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	nl.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	nbox.add_child(nl)
-	nbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bottom.add_child(nbox)
+	# Tachometer: 0..8 x1000 rpm, red from 7.
+	var tbox := UI.vstack(0)
+	tbox.alignment = BoxContainer.ALIGNMENT_END
+	_tacho = Dial.new()
+	var tl := []
+	for i in 9:
+		if i % 2 == 0:
+			tl.append([i / 8.0, str(i)])
+	_tacho.setup(120.0, 16, tl, 7.0 / 8.0, UI.YELLOW)
+	tbox.add_child(_tacho)
+	var rpm_l := UI.label(tr("RC_RPM"), 24, UI.GREY)
+	rpm_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rpm_l.custom_minimum_size.x = _tacho.custom_minimum_size.x
+	tbox.add_child(rpm_l)
+	bottom.add_child(tbox)
+	# Gear indicator + shift light + nitro timer.
+	var gbox := UI.vstack(6)
+	gbox.alignment = BoxContainer.ALIGNMENT_END
+	gbox.custom_minimum_size.x = 200
+	_shift_label = UI.label(tr("RC_SHIFT"), 36, UI.RED)
+	_shift_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shift_label.modulate.a = 0.0
+	gbox.add_child(_shift_label)
+	var gl := UI.label(tr("RC_GEAR"), 24, UI.GREY)
+	gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	gbox.add_child(gl)
+	var frame := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.07, 0.12, 0.85)
+	sb.border_color = UI.WHITE
+	sb.set_border_width_all(6)
+	sb.set_content_margin_all(6)
+	frame.add_theme_stylebox_override("panel", sb)
+	frame.custom_minimum_size = Vector2(120, 120)
+	frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_gear_label = UI.label("", 84, UI.WHITE)
+	_gear_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_gear_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	frame.add_child(_gear_label)
+	gbox.add_child(frame)
+	_nitro_label = UI.label(tr("RC_NITRO"), 24, UI.CYAN)
+	_nitro_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_nitro_label.modulate.a = 0.0
+	gbox.add_child(_nitro_label)
+	var strip_bg := Control.new()
+	strip_bg.custom_minimum_size = Vector2(160, 12)
+	strip_bg.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_nitro_strip = ColorRect.new()
+	_nitro_strip.color = UI.CYAN
+	_nitro_strip.size = Vector2(0, 12)
+	strip_bg.add_child(_nitro_strip)
+	gbox.add_child(strip_bg)
+	bottom.add_child(gbox)
+	# Speedometer: 0..360 km/h, digital readout under the hub.
 	var sbox := UI.vstack(0)
 	sbox.alignment = BoxContainer.ALIGNMENT_END
-	_speed_label = UI.label("0", 120, UI.WHITE)
-	_speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	sbox.add_child(_speed_label)
-	var kmh := UI.label(tr("RC_KMH"), 36, UI.GREY)
-	kmh.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_speedo = Dial.new()
+	var sl := []
+	for k in range(0, 361, 60):
+		sl.append([k / 360.0, str(k)])
+	_speedo.setup(170.0, 24, sl, 2.0, UI.CYAN)
+	sbox.add_child(_speedo)
+	_speed_label = UI.label("0", 60, UI.WHITE)
+	_speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_speed_label.custom_minimum_size = Vector2(160, 0)
+	_speed_label.position = _speedo.hub() + Vector2(-80, 24)
+	_speedo.add_child(_speed_label)
+	var kmh := UI.label(tr("RC_KMH"), 24, UI.GREY)
+	kmh.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	kmh.custom_minimum_size.x = _speedo.custom_minimum_size.x
 	sbox.add_child(kmh)
-	sbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bottom.add_child(sbox)
 
 	_drift_label = UI.label("", 60, UI.YELLOW)
@@ -894,6 +1026,15 @@ func _build_hud() -> void:
 	_drift_label.offset_left = -500
 	_drift_label.offset_right = 500
 	_hud.add_child(_drift_label)
+
+
+## Tachometer needle 0..1: idle at 1/8, the gear's top speed near the end.
+func _tach_value() -> float:
+	return lerpf(0.11, 1.0, sim.rpm)
+
+
+func _gear_text(g: int) -> String:
+	return tr("RC_GEAR_L") if g == Sim.Gear.LOW else tr("RC_GEAR_H")
 
 
 func _show_mode() -> void:
@@ -923,7 +1064,14 @@ func _update_hud(delta: float) -> void:
 	_stage_label.text = tr("RC_STAGE") % (sim.checkpoints + 1)
 	_speed_label.text = str(sim.speed_kmh())
 	UI.set_color(_speed_label, UI.CYAN if sim.boosting else UI.WHITE)
-	_nitro_gauge.set_state(sim.nitro, sim.boosting, fmod(_phase_t, 0.12) < 0.06)
+	_speedo.set_value(sim.v * 3.6 / 360.0)
+	_tacho.set_value(_tach_value())
+	_gear_label.text = _gear_text(sim.gear)
+	UI.set_color(_gear_label, UI.YELLOW if sim.gear == Sim.Gear.LOW else UI.WHITE)
+	var shift_now := sim.gear == Sim.Gear.LOW and sim.rpm >= Sim.REDLINE
+	_shift_label.modulate.a = 1.0 if shift_now and fmod(_phase_t, 0.3) < 0.18 else 0.0
+	_nitro_label.modulate.a = 1.0 if sim.boosting else 0.0
+	_nitro_strip.size.x = roundf(160.0 * sim.boost_t / Sim.NITRO_TIME)
 	if sim.drifting:
 		_drift_label.text = tr("RC_DRIFT_POINTS") % ScoreTable.format_score(int(sim.drift_points / 10.0) * 10)
 		_drift_label.modulate.a = 1.0
@@ -936,9 +1084,82 @@ func _update_hud(delta: float) -> void:
 	_dmd_t -= delta
 	if _dmd_t <= 0.0 and sim.state != Sim.State.COUNTDOWN:
 		_dmd_t = 0.12
-		Dmd.show_score(sim.score, tr("RC_DMD_TIME") % ceili(sim.time_left), tr("RC_DMD_SPEED") % sim.speed_kmh(),
-			Dmd.RED if low else Dmd.YELLOW)
+		Dmd.show_custom(_draw_dmd_dash)
 	score_changed.emit(0, sim.score)
+
+
+## DMD dashboard (D-103): segmented speedometer dial (the director's icon
+## style) on the left, digital speed + score, gear box and clock on the right,
+## and a horizontal tachometer bar along the bottom (red zone = shift up).
+func _draw_dmd_dash(p) -> void:
+	if sim == null:
+		return
+	const HUB := Vector2(17, 22)
+	const R := 16.0
+	const SEGS := 11
+	var a_from := Dial.SWEEP_FROM
+	var a_to := Dial.SWEEP_TO
+	var speed_f := clampf(sim.v * 3.6 / 360.0, 0.0, 1.0)
+	for y in range(int(HUB.y - R) - 1, 32):
+		for xx in range(0, 36):
+			var d := Vector2(xx + 0.5, y + 0.5) - HUB
+			var r := d.length()
+			var a := atan2(d.y, d.x)
+			if a < a_from - 0.01:
+				a += TAU
+			if a < a_from or a > a_to or r > R:
+				continue
+			var f := (a - a_from) / (a_to - a_from)
+			var i := mini(int(f * SEGS), SEGS - 1)
+			var fi := (i + 0.5) / SEGS
+			var k := clampf((fi - 0.15) / 0.85, 0.0, 1.0)
+			var depth := lerpf(1.6, 5.0, k)
+			var seg_pos := f * SEGS - i
+			var gap := lerpf(0.5, 0.18, k)
+			if r < R - depth or seg_pos < gap * 0.5 or seg_pos > 1.0 - gap * 0.5:
+				continue
+			var lit := speed_f >= fi
+			var c := (Dmd.CYAN if not sim.boosting else Dmd.WHITE) if lit else Color(0.16, 0.18, 0.22)
+			p.dot(xx, y, c)
+	var na := lerpf(a_from, a_to, speed_f)
+	var tip := HUB + Vector2(cos(na), sin(na)) * (R - 2.0)
+	p.line(HUB.x, HUB.y, tip.x, tip.y, Dmd.WHITE)
+	p.ring(HUB.x, HUB.y, 2.0, Dmd.WHITE)
+	p.dot(HUB.x, HUB.y, Color.BLACK)
+	# Digital speed + score
+	var spd := str(sim.speed_kmh())
+	p.text(spd, 72 - p.text_width(spd, 2), 1, 2, Dmd.CYAN if sim.boosting else Dmd.WHITE)
+	p.text(tr("RC_KMH"), 74, 8, 1, Dmd.DIM)
+	var sc := ScoreTable.format_score(sim.score)
+	p.text(sc, 104 - p.text_width(sc), 17, 1, Dmd.YELLOW)
+	# Gear box
+	var g := _gear_text(sim.gear)
+	var gc := Dmd.YELLOW if sim.gear == Sim.Gear.LOW else Dmd.WHITE
+	p.block(106, 0, 22, 1, gc)
+	p.block(106, 18, 22, 1, gc)
+	p.block(106, 0, 1, 19, gc)
+	p.block(127, 0, 1, 19, gc)
+	p.text(g, 117 - p.text_width(g, 2) / 2.0, 3, 2, gc)
+	# Clock
+	var low := sim.time_left < 10.0
+	var t := str(ceili(sim.time_left))
+	p.text(t, 127 - p.text_width(t), 21, 1, Dmd.RED if low and fmod(_phase_t, 0.5) < 0.25 else Dmd.YELLOW)
+	# Tachometer bar: 13 cells, red from 7/8; blinks when it's time to shift.
+	const CELLS := 13
+	var tach := _tach_value()
+	var shift_now := sim.gear == Sim.Gear.LOW and sim.rpm >= Sim.REDLINE
+	for i in CELLS:
+		var f := (i + 0.5) / CELLS
+		var red := f >= 7.0 / 8.0
+		var on := tach >= f
+		var c := Color(0.16, 0.18, 0.22)
+		if on:
+			c = Dmd.RED if red else (Dmd.YELLOW if f > 0.6 else Dmd.GREEN)
+		elif red:
+			c = Color(0.35, 0.08, 0.1)
+		if shift_now and fmod(_phase_t, 0.24) < 0.12:
+			c = Dmd.RED
+		p.block(38 + i * 5, 27, 4, 5, c)
 
 
 func _build_backglass() -> void:
@@ -1000,7 +1221,7 @@ func _loop_wav(gen: Callable, seconds: float, noise: float) -> AudioStreamWAV:
 func _update_audio() -> void:
 	if _engine == null:
 		return
-	var rpm := clampf(sim.v / Sim.MAX_SPEED, 0.0, 1.3)
+	var rpm := sim.rpm
 	_engine.pitch_scale = 0.6 + rpm * 1.9 + (0.25 if sim.boosting else 0.0)
 	_engine.volume_db = -14.0 + sim.throttle * 4.0 + rpm * 2.0
 	var squeal := sim.drifting or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking

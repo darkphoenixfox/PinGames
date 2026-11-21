@@ -136,6 +136,13 @@ func show_status(score: int, lives: int, max_lives: int, power: float, segments:
 		"badge_color": badge_color if badge_color != null else WHITE})
 
 
+## A game-drawn frame (D-103): `draw` is called every frame as
+## draw.call(painter: Dmd.Painter) in logical 128x32 dots. Flashes and
+## animations still show over it.
+func show_custom(draw: Callable) -> void:
+	_elements = [{"type": "custom", "fn": draw}]
+
+
 ## Temporary blinking callout over whatever is shown (e.g. "MULTIBALL!").
 func flash(text: String, duration: float = 1.5, flash_color: Variant = null) -> void:
 	var c: Color = flash_color if flash_color != null else YELLOW
@@ -249,6 +256,11 @@ func _on_draw() -> void:
 		list = _overlay
 	for el in list:
 		match el.get("type", "text"):
+			"custom":
+				var fn: Callable = el.fn
+				if fn.is_valid():
+					fn.call(_painter)
+				continue
 			"lives":
 				_draw_lives(el)
 				continue

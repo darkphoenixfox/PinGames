@@ -978,3 +978,14 @@
 - **Date:** 2026-11-21
 - **Decision (director):** after losing a life (ball drained or ship destroyed), the blast power bar resets to 100 % (3 cells).
 - **Status:** Accepted
+
+### D-103 — Turbo Run: gears, nitro pick-ups, dashboard dials, checkpoint on momentum (supersedes D-097, and D-098's nitro gauge)
+- **Date:** 2026-11-21
+- **Decisions (director):**
+  - **Checkpoint on momentum:** after TIME UP the car coasts (7 m/s² decel, still steerable, no auto-brake). If it reaches the next checkpoint before stopping, the time is added, JUST MADE IT! shows and the race goes on. The game only ends once the car stops short.
+  - **Nitro is a pick-up:** the bar is replaced by canisters on the road, every 0.7–1.2 km in any lane (the first on the start straight). Driving through one gives 5 s of boost, up to 100 m/s; another canister restarts the 5 s. A crash ends the boost. Canisters are glowing cyan bottles at 1.8× scale, cel-outlined, spinning and bobbing on stepped 10 fps frames.
+  - **Gears L and H:** both flippers held 0.5 s shifts. Holding on doesn't shift again; release both first. L pulls 1.25 × ACCEL but tops out at 50 m/s (180 km/h, the rev limiter). H pulls 0.3 × at 0 rpm, rising to 1.05 × at 60 % rpm, and tops out at 80 m/s. L is much faster off the line, and the best shift point is near the redline (rpm ≥ 0.88). The autopilot shifts by itself, and the race starts in L.
+  - **TABLE dashboard:** the director's reference icon style for all dials (`games/racer/dial.gd`): a segmented arc from thin dashes to thick blocks, lit to the value, with a needle and a ring hub. Bottom row: a tachometer (0–8 × 1000 rpm, red from 7), a GEAR box (L yellow, H white) with a blinking SHIFT light and a nitro timer strip, and a speedometer (0–360 km/h, digital readout under the hub). Everything has fixed-size slots (D-096). `nitro_gauge.gd` is removed.
+  - **DMD dashboard:** `Dmd.show_custom(callable)` is a new API for game-drawn frames, called with the Painter each frame, with flashes still drawn over it. The racer draws a segmented speed dial with a needle, digital speed and KM/H, the score, a gear box, the clock, and a 13-cell horizontal tachometer bar (green, yellow, red from 7/8) that blinks red when it's time to shift.
+- **Strings:** the DMD TIME and SPEED keys and NO NITRO are removed. New keys: RC_SHIFT_HINT, RC_GEAR, RC_GEAR_L, RC_GEAR_H, RC_GEAR_FLASH, RC_SHIFT, RC_RPM and RC_JUST_MADE_IT.
+- **Status:** Accepted (tuning pending playtest)

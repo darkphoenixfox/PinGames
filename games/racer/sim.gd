@@ -7,11 +7,12 @@
 ##   2+1 buttons: flippers steer; throttle AND braking are automatic (the car
 ##                lifts/brakes by itself when a corner would throw it off).
 ##   4+1 buttons: magna_r = accelerate, magna_l = brake (manual mode).
-##   Both flippers held = NITRO: burns the nitro bar for as long as they are
-##   held; the bar recovers by itself when not in use (D-097).
+##   Both flippers held 0.5 s = shift gear L <-> H (D-103). L pulls hard but
+##   tops out early; H is slow off the line but reaches top speed.
+## NITRO: drive through a canister on the road for 5 s of boost (D-103).
 ## Drifting: steer INTO a corner at speed (or brake + steer in manual mode).
-## A drift keeps almost all the speed through the corner, scores points and
-## speeds up nitro recovery. Not drifting at speed in a tight corner = auto-brake.
+## A drift keeps almost all the speed through the corner and scores points.
+## Not drifting at speed in a tight corner = auto-brake.
 ## Events (cleared each step): [name, args...]
 extends RefCounted
 
@@ -38,13 +39,23 @@ const DRIFT_GRIP := 0.45         # fraction of the centrifugal push felt while d
 const DRIFT_STEER := 1.25
 const DRIFT_DRAG := 2.5
 const DRIFT_ANGLE := 32.0        # degrees (visual + score feel)
-## Nitro bar (D-097): 0..1, burned while both flippers are held.
-const NITRO_ENGAGE := 0.15       # s both held before it burns (ignores a stray double tap)
-const NITRO_BURN := 4.0          # s a full bar lasts
-const NITRO_RECOVER := 14.0      # s to refill from empty when not in use
-const NITRO_RECOVER_DELAY := 1.0 # s after a burn before it starts recovering
-const NITRO_DRIFT_RATE := 0.06   # extra bar per second while drifting
-const NITRO_CHECKPOINT := 0.3    # bar added at each checkpoint
+## Nitro pick-ups on the road (D-103)
+const NITRO_TIME := 5.0          # s of boost per canister
+const PICKUP_GAP_MIN := 700.0    # m between canisters
+const PICKUP_GAP_MAX := 1200.0
+const PICKUP_DX := 1.7           # lateral reach to collect
+## Gears (D-103): L = strong pull, low top speed; H = weak pull, full speed.
+## rpm 0..1 is v / the gear's top speed; the tachometer's red zone is >= REDLINE.
+enum Gear { LOW, HIGH }
+const GEAR_L_TOP := 50.0         # m/s (180 km/h), the rev limiter in L
+const GEAR_L_PULL := 1.25        # x ACCEL off the line in L
+const GEAR_H_PULL_MIN := 0.3     # x ACCEL at 0 rpm in H (lugging) ...
+const GEAR_H_PULL_MAX := 1.05    # ... rising to this at 60 % rpm
+const SHIFT_HOLD := 0.5          # s both flippers held to shift
+const REDLINE := 0.88
+## After the clock runs out the car coasts (D-103): reaching a checkpoint
+## before it stops extends the time and the race goes on.
+const COAST_OVER := 7.0          # m/s^2 decel while coasting out
 ## Race clock
 const START_TIME := 45.0
 const CHECKPOINT_EVERY := 2300.0   # D-101 (was 1800)
@@ -88,11 +99,14 @@ var drift_angle := 0.0         # degrees, signed like drift_dir
 var drift_points := 0.0
 var _drift_entry := 0.0
 var _drift_exit := 0.0
-var nitro := 1.0               # nitro bar 0..1
-var boosting := false          # nitro burning this step
-var nitro_hold := 0.0          # seconds both flippers have been held
-var _nitro_rest := 99.0        # seconds since the last burn
-var _nitro_lock := false       # emptied (or crashed): release both before it burns again
+var boost_t := 0.0             # s of nitro boost left
+var boosting := false          # boost_t > 0 this step
+var pickups: Array = []        # nitro canisters on the road: {id, s, x}
+var _next_pickup_s := 300.0      # the first canister sits on the start straight
+var gear := Gear.LOW
+var rpm := 0.0                 # 0..1 (tachometer)
+var shift_hold := 0.0          # s both flippers held (for the shift)
+var _shift_lock := false       # shifted: release both before shifting again
 var spin_t := 0.0              # crash timer (spin-out or flip)
 var flipping := false          # this crash is a roll-over (big obstacle)
 var crash_anim := 0.0          # animation length of the current crash (s)
@@ -134,6 +148,7 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 		var ap := _autopilot()
 		left = ap < -0.3
 		right = ap > 0.3
+		_autoshift()
 	track.ensure(s + 1500.0)
 	match state:
 		State.COUNTDOWN:
@@ -148,8 +163,19 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 			return
 		State.OVER:
 			over_t += dt
-			_drive(dt, false, false, false, true)
+			# Coasting out: still steerable; a checkpoint reached on momentum
+			# puts the time back and the race goes on (D-103).
+			if left and right:
+				left = false
+				right = false
+			_drive(dt, left, right, false, false)
 			_update_traffic(dt)
+			_collide_objects()
+			if s >= next_checkpoint and not done:
+				state = State.RACE
+				over_t = 0.0
+				_pass_checkpoint(true)
+				return
 			if v < 1.0 and over_t > 1.5:
 				done = true
 			return
@@ -160,22 +186,28 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 		_end_drift()
 		events.append(["time_up"])
 		return
-	_nitro(dt, left and right)
+	_shift_input(dt, left and right)
 	if left and right:
 		left = false
 		right = false
 	_drive(dt, left, right, gas, brake)
+	_update_boost(dt)
 	_update_traffic(dt)
+	_update_pickups()
 	_collide_objects()
 	if s >= next_checkpoint:
-		checkpoints += 1
-		var bonus := checkpoint_bonus()
-		time_left += bonus
-		next_checkpoint += CHECKPOINT_EVERY
-		_add_score(20000.0)
-		nitro = minf(1.0, nitro + NITRO_CHECKPOINT)
-		events.append(["checkpoint", checkpoints, bonus])
+		_pass_checkpoint(false)
 	_add_score(v * dt * 10.0)
+
+
+## `saved` = reached on momentum after the clock had run out (D-103).
+func _pass_checkpoint(saved: bool) -> void:
+	checkpoints += 1
+	var bonus := checkpoint_bonus()
+	time_left += bonus
+	next_checkpoint += CHECKPOINT_EVERY
+	_add_score(20000.0)
+	events.append(["checkpoint", checkpoints, bonus, saved])
 
 
 func _add_score(p: float) -> void:
@@ -183,31 +215,75 @@ func _add_score(p: float) -> void:
 	score = int(_score_f)
 
 
-func _nitro(dt: float, both: bool) -> void:
-	var was := boosting
+# --- gears + nitro (D-103) -------------------------------------------------------------
+func _shift_input(dt: float, both: bool) -> void:
 	if not both:
-		nitro_hold = 0.0
-		_nitro_lock = false
-	else:
-		nitro_hold += dt
-	boosting = both and not _nitro_lock and nitro_hold >= NITRO_ENGAGE and nitro > 0.0 and spin_t <= 0.0
-	if boosting:
-		nitro = maxf(0.0, nitro - dt / NITRO_BURN)
-		_nitro_rest = 0.0
-		if nitro <= 0.0:
-			boosting = false
-			_nitro_lock = true
-			events.append(["nitro_empty"])
-	else:
-		_nitro_rest += dt
-		if _nitro_rest >= NITRO_RECOVER_DELAY:
-			nitro = minf(1.0, nitro + dt / NITRO_RECOVER)
-		if both and nitro_hold >= NITRO_ENGAGE and nitro_hold - dt < NITRO_ENGAGE and nitro <= 0.0:
-			events.append(["nitro_empty"])
-	if boosting and not was:
-		events.append(["nitro"])
-	elif was and not boosting:
+		shift_hold = 0.0
+		_shift_lock = false
+		return
+	shift_hold += dt
+	if shift_hold >= SHIFT_HOLD and not _shift_lock:
+		_shift_lock = true
+		shift(Gear.HIGH if gear == Gear.LOW else Gear.LOW)
+
+
+func shift(g: int) -> void:
+	if g == gear:
+		return
+	gear = g
+	events.append(["shift", gear])
+
+
+## Autopilot (attract demo): shift up near the redline, down when slow.
+func _autoshift() -> void:
+	if state != State.RACE:
+		return
+	if gear == Gear.LOW and rpm >= REDLINE:
+		shift(Gear.HIGH)
+	elif gear == Gear.HIGH and v < GEAR_L_TOP * 0.45:
+		shift(Gear.LOW)
+
+
+func gear_top() -> float:
+	return GEAR_L_TOP if gear == Gear.LOW else MAX_SPEED
+
+
+## Engine pull at the current speed, as a multiple of ACCEL (before drag).
+func gear_pull() -> float:
+	if gear == Gear.LOW:
+		return GEAR_L_PULL
+	return lerpf(GEAR_H_PULL_MIN, GEAR_H_PULL_MAX, clampf(rpm / 0.6, 0.0, 1.0))
+
+
+func _update_boost(dt: float) -> void:
+	if boost_t <= 0.0:
+		return
+	boost_t -= dt
+	if boost_t <= 0.0:
+		boost_t = 0.0
+		boosting = false
 		events.append(["nitro_end"])
+
+
+func _update_pickups() -> void:
+	while _next_pickup_s < s + 900.0:
+		var lane := _rng.randi_range(0, Track.LANES.size() - 1)
+		pickups.append({"id": _next_id, "s": _next_pickup_s, "x": Track.LANES[lane]})
+		_next_id += 1
+		_next_pickup_s += _rng.randf_range(PICKUP_GAP_MIN, PICKUP_GAP_MAX)
+	for i in range(pickups.size() - 1, -1, -1):
+		var p: Dictionary = pickups[i]
+		var ds: float = p.s - s
+		if ds < -10.0:
+			pickups.remove_at(i)
+		elif absf(ds) < CAR_LEN * 0.6 and absf(p.x - x) < PICKUP_DX and spin_t <= 0.0:
+			pickups.remove_at(i)
+			boost_t = NITRO_TIME
+			if not boosting:
+				boosting = true
+				events.append(["nitro", p.id])
+			else:
+				events.append(["nitro_refill", p.id])
 
 
 func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
@@ -222,22 +298,24 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	var push := c * v * v * CENTRIFUGAL           # to the outside: +x on a left curve
 	var authority := clampf(v / 25.0, 0.3, 1.0) * STEER
 	_update_drift(dt, want, c, brake)
-	var vmax := NITRO_SPEED if boosting else MAX_SPEED
+	var vmax := NITRO_SPEED if boosting else gear_top()
+	rpm = clampf(v / gear_top(), 0.0, 1.0)
+	var pull := gear_pull()
 	# Throttle and brakes
 	var accel := 0.0
 	auto_braking = false
 	if state == State.OVER or spin_t > 0.0:
 		throttle = 0.0
-		braking = state == State.OVER
-		accel = -(BRAKE * 0.5 if state == State.OVER else COAST_DRAG * 3.0)
+		braking = false
+		accel = -(COAST_OVER if state == State.OVER else COAST_DRAG * 3.0)
 	elif manual:
 		throttle = 1.0 if gas else 0.0
 		braking = brake
-		accel = (ACCEL * (1.0 - pow(v / vmax, 2.0)) if gas else -COAST_DRAG) - (BRAKE if brake else 0.0)
+		accel = (ACCEL * pull * (1.0 - pow(minf(v / vmax, 1.2), 2.0)) if gas else -COAST_DRAG) - (BRAKE if brake else 0.0)
 	else:
 		throttle = 1.0
 		braking = false
-		accel = ACCEL * (1.0 - pow(minf(v / vmax, 1.2), 2.0))
+		accel = ACCEL * pull * (1.0 - pow(minf(v / vmax, 1.2), 2.0))
 		# Auto-brake: a corner would throw the car off and it isn't drifting.
 		if not drifting and absf(push) > authority * 0.95 and push * x > 0.0 and absf(x) > Track.ROAD_HALF * 0.35:
 			auto_braking = true
@@ -248,7 +326,7 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 		accel = maxf(accel, ACCEL * 1.8 * (1.0 - v / NITRO_SPEED))
 	if drifting:
 		accel -= DRIFT_DRAG
-	if v > vmax:
+	if v > vmax and not (state == State.OVER or spin_t > 0.0):
 		accel = minf(accel, -6.0)
 	offroad = absf(x) > Track.ROAD_HALF + Track.RUMBLE
 	if offroad and v > OFFROAD_SPEED:
@@ -295,8 +373,6 @@ func _update_drift(dt: float, want: float, c: float, brake: bool) -> void:
 			_end_drift()
 		else:
 			drift_points += v * dt * 25.0
-			if not boosting:
-				nitro = minf(1.0, nitro + NITRO_DRIFT_RATE * dt)
 	var target := drift_dir * DRIFT_ANGLE if drifting else 0.0
 	drift_angle = move_toward(drift_angle, target, dt * (120.0 if drifting else 90.0))
 
@@ -333,8 +409,8 @@ func _crash(kind: String, side: float = 0.0) -> void:
 	v = minf(v, 10.0 if flipping else 14.0)
 	if boosting:
 		boosting = false
+		boost_t = 0.0
 		events.append(["nitro_end"])
-	_nitro_lock = true
 	events.append(["crash", kind])
 
 

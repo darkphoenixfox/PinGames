@@ -594,44 +594,72 @@ func test_racer_sim() -> void:
 	for i in 60 * 3 + 5:
 		c.step(dt, false, false)
 	check(c.state == Sim.State.RACE, "racer countdown ends in RACE")
+	# Gears (D-103): L tops out at its rev limit; both flippers held 0.5 s shift
+	# to H, which then reaches top speed. H is slow off the line.
 	for i in 60 * 8:
 		c.step(dt, false, false)
-	check(c.v > 60.0, "auto throttle reaches speed (%.0f m/s)" % c.v)
-	# Nitro bar (D-097): burns while both flippers are held, refills when not.
-	var n = Sim.new()
-	n.setup(7)
-	n.state = Sim.State.RACE
-	n.v = 50.0
-	var got := false
-	for i in 60:
-		n.step(dt, true, true)
-		for e in n.events:
-			got = got or e[0] == "nitro"
-	var after_1s: float = n.nitro
-	check(got and n.boosting and n.v > 55.0 and absf(after_1s - (1.0 - (1.0 - Sim.NITRO_ENGAGE) / Sim.NITRO_BURN)) < 0.03,
-		"holding both flippers burns nitro over time (bar %.2f)" % after_1s)
-	var ended := false
-	n.step(dt, false, false)
-	for e in n.events:
-		ended = ended or e[0] == "nitro_end"
-	check(ended and not n.boosting, "releasing the flippers stops the nitro")
-	for i in 60 * 4:
-		n.step(dt, false, false)
-	check(n.nitro > after_1s + 0.1, "the nitro bar recovers when not in use")
-	var emptied := false
-	for i in 60 * 6:
-		n.s = Sim.START_S   # stay on the start straight (no steering while boosting)
-		n.step(dt, true, true)
-		for e in n.events:
-			emptied = emptied or e[0] == "nitro_empty"
-	check(emptied and n.nitro < 0.2 and not n.boosting, "an empty bar stops the nitro until the flippers are released")
+	check(c.gear == Sim.Gear.LOW and absf(c.v - Sim.GEAR_L_TOP) < 2.0 and c.rpm > Sim.REDLINE,
+		"low gear tops out at its rev limit (%.0f m/s, rpm %.2f)" % [c.v, c.rpm])
+	var shifted := false
+	for i in 40:
+		c.s = Sim.START_S + 100.0   # stay on the straight: no steering while shifting
+		c.step(dt, true, true)
+		for e in c.events:
+			shifted = shifted or e[0] == "shift"
+	check(shifted and c.gear == Sim.Gear.HIGH, "holding both flippers 0.5 s shifts to high gear")
+	for i in 20:
+		c.s = Sim.START_S + 100.0
+		c.step(dt, true, true)
+	check(c.gear == Sim.Gear.HIGH, "keeping them held does not shift again")
+	c.traffic.clear()
+	for i in 60 * 8:
+		c.s = Sim.START_S + 100.0   # on the straight
+		c.x = 0.0
+		c.step(dt, false, false)
+		c.traffic.clear()
+	check(c.v > 70.0, "high gear reaches top speed (%.0f m/s)" % c.v)
+	var lo = Sim.new()
+	lo.setup(7)
+	lo.state = Sim.State.RACE
+	var hi = Sim.new()
+	hi.setup(7)
+	hi.state = Sim.State.RACE
+	hi.gear = Sim.Gear.HIGH
+	for i in 60 * 2:
+		lo.step(dt, false, false)
+		hi.step(dt, false, false)
+	check(lo.v > hi.v * 1.5, "low gear pulls away much faster than high (%.0f vs %.0f m/s)" % [lo.v, hi.v])
 	var q = Sim.new()
 	q.setup(7)
 	q.state = Sim.State.RACE
-	for i in 5:
+	for i in 10:
 		q.step(dt, true, true)
 	q.step(dt, false, false)
-	check(q.nitro == 1.0 and not q.boosting, "a stray both-flipper tap does not burn nitro")
+	check(q.gear == Sim.Gear.LOW, "a short both-flipper tap does not shift")
+	# Nitro canisters on the road (D-103): drive through one for 5 s of boost.
+	var n = Sim.new()
+	n.setup(7)
+	n.state = Sim.State.RACE
+	n.gear = Sim.Gear.HIGH
+	n.step(dt, false, false)
+	check(n.pickups.size() > 0, "nitro canisters are placed on the road ahead")
+	var pk: Dictionary = n.pickups[0]
+	n.s = pk.s - 1.0
+	n.x = pk.x
+	n.v = 50.0
+	n.traffic.clear()
+	var got := false
+	n.step(dt, false, false)
+	for e in n.events:
+		got = got or e[0] == "nitro"
+	check(got and n.boosting and absf(n.boost_t - Sim.NITRO_TIME) < 0.05, "driving through a canister starts 5 s of nitro")
+	var ended := false
+	for i in 60 * 5 + 10:
+		n.traffic.clear()
+		n.step(dt, false, false)
+		for e in n.events:
+			ended = ended or e[0] == "nitro_end"
+	check(ended and not n.boosting, "nitro ends by itself after 5 s")
 	# Drift: steering into a sharp curve at speed breaks loose and scores.
 	var d = Sim.new()
 	d.setup(7)
@@ -642,6 +670,7 @@ func test_racer_sim() -> void:
 			s_curve = i * 2.0
 			break
 	d.s = s_curve
+	d.gear = Sim.Gear.HIGH
 	d.v = 70.0
 	var cv: float = d.track.curvature(d.s)
 	var drifted := false
@@ -658,6 +687,7 @@ func test_racer_sim() -> void:
 	ab.setup(7)
 	ab.state = Sim.State.RACE
 	ab.s = s_curve
+	ab.gear = Sim.Gear.HIGH
 	ab.v = 75.0
 	ab.x = 4.0 if cv > 0.0 else -4.0  # already on the outside
 	var braked := false
@@ -669,7 +699,7 @@ func test_racer_sim() -> void:
 	var cp = Sim.new()
 	cp.setup(7)
 	cp.state = Sim.State.RACE
-	cp.s = Sim.CHECKPOINT_EVERY - 1.0
+	cp.s = Sim.CHECKPOINT_EVERY - 0.5
 	cp.v = 60.0
 	var t0: float = cp.time_left
 	cp.step(dt, false, false)
@@ -677,11 +707,31 @@ func test_racer_sim() -> void:
 	cp.time_left = 0.01
 	cp.step(dt, false, false)
 	check(cp.state == Sim.State.OVER, "time up ends the race")
+	# Reaching a checkpoint on momentum after TIME UP puts the time back (D-103).
+	cp.s = cp.next_checkpoint - 30.0
+	cp.v = 40.0
+	cp.traffic.clear()
+	var saved := false
+	for i in 120:
+		cp.traffic.clear()
+		cp.step(dt, false, false)
+		for e in cp.events:
+			saved = saved or (e[0] == "checkpoint" and e[3])
+	check(saved and cp.state == Sim.State.RACE and cp.time_left > 15.0 and not cp.done,
+		"a checkpoint reached by coasting after TIME UP extends the time and the race goes on")
+	cp.time_left = 0.01
+	cp.step(dt, false, false)
+	cp.v = 10.0
+	for i in 60 * 4:
+		cp.traffic.clear()
+		cp.step(dt, false, false)
+	check(cp.state == Sim.State.OVER and cp.done, "coasting to a stop short of a checkpoint ends the game")
 	# Rear-ending a slower car at speed crashes; passing close is a near miss.
 	var tr = Sim.new()
 	tr.setup(7)
 	tr.state = Sim.State.RACE
 	tr.s = 100.0
+	tr.gear = Sim.Gear.HIGH
 	tr.v = 75.0
 	tr.x = 1.875
 	tr.traffic = [{"id": 1, "s": 103.0, "x": 1.875, "lane": 2, "v": 30.0, "hue": 0.3, "weave": 0.0, "last_ds": 3.0}]
@@ -732,6 +782,7 @@ func test_racer_sim() -> void:
 	tk.setup(7)
 	tk.state = Sim.State.RACE
 	tk.s = 100.0
+	tk.gear = Sim.Gear.HIGH
 	tk.v = 70.0
 	tk.x = 5.0
 	tk.traffic = [{"id": 1, "s": 106.0, "x": 5.625, "lane": 3, "v": 22.0, "hue": 0.0, "weave": 0.0,
@@ -762,6 +813,7 @@ func test_racer_sim() -> void:
 	nm.setup(7)
 	nm.state = Sim.State.RACE
 	nm.s = 100.0
+	nm.gear = Sim.Gear.HIGH
 	nm.v = 75.0
 	nm.x = -1.0
 	nm.traffic = [{"id": 1, "s": 100.5, "x": 1.875, "lane": 2, "v": 30.0, "hue": 0.3, "weave": 0.0, "last_ds": 0.5}]

@@ -189,16 +189,18 @@ Rules:
   - Flippers steer.
   - **2+1:** throttle and braking are automatic. The car brakes by itself when a corner would throw it off and it isn't drifting.
   - **4+1:** magna R = accelerate, magna L = brake. This switches on at the first magna press when `operator.cabinet_buttons` = auto, and is always on when it is 4.
-  - Holding **both flippers burns NITRO** from a bar for as long as they are held (a full bar lasts 4 s). The bar refills by itself when not in use (14 s from empty, after a 1 s pause), faster while drifting, and +30 % per checkpoint (D-097).
+  - **Gears (D-103):** holding **both flippers for 0.5 s shifts L ↔ H**. L pulls hard but tops out at 180 km/h. H is slow off the line but reaches 288 km/h. Shift up when the tachometer hits the red (SHIFT blinks), and drop to L after a crash.
+  - **NITRO (D-103):** drive through a nitro canister on the road for 5 s of boost (up to 360 km/h). Canisters sit in any lane, including the oncoming ones, every 0.7–1.2 km.
   - Launch/Start begins the race.
 - **Drifting (the core skill):**
   - Steer *into* a corner at more than about 150 km/h to break loose. In manual mode, brake plus steer also starts a drift.
   - The car slides nose-in, keeps almost all its speed, smokes and scores drift points.
   - Letting go of the steering ends the drift and banks the points. Not drifting through a hairpin costs speed.
-- **Clock:** 45 s to start. A checkpoint every 2.3 km (D-101) adds time, from +34 s down to a minimum of +20 s. TIME UP ends the game.
+- **Clock:** 45 s to start. A checkpoint every 2.3 km (D-101) adds time, from +34 s down to a minimum of +20 s. TIME UP ends the game, unless the coasting car still reaches the next checkpoint: then the time is added and the race goes on (D-103).
 - **Traffic:** slower cars in the lanes, more after each checkpoint. Rear-ending one at speed spins you out, a light touch is a bump, and passing close is a NEAR MISS (+5,000).
 - **Roadside objects:** palms, rocks, lamps and signs crash you if you leave the road.
 - **Score:** distance, drift points, near misses, passes and checkpoints.
+- **Dashboard (D-103):** the bottom of the TABLE shows a tachometer, a gear box and a speedometer, drawn as segmented dials in the director's reference style. The DMD shows a segmented speed dial, digital speed, score, gear box, clock and a horizontal tachometer bar.
 - **Not done yet:**
   - Route forks
   - Rear-view mirror or minimap in the bottom of the TABLE
