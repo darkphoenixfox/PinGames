@@ -763,3 +763,10 @@
   - **Placement:** the backglass art is no longer squashed above a strip; it fills the screen. The DMD keeps its dot aspect, centred in `dmd_region`, whose default changes to `0.25,0.78,0.5,0.18`. Around it there is a bezel: a gunmetal border with a bright bevel, a drop shadow, and a thin cyan glowing inner trim.
   - **Art:** Tilt Breaker loads `backglass_{off,on,mask,mask_logo}_2screen.png` in that mode. `prepare_backglass_lights.py` gains a suffix argument with grouping tuned for the higher framing: engines below 42 % height, the logo above 22 %, and a comet touching the logo split off into shots.
 - **Status:** Accepted (supersedes the full-width DMD strip of D-013)
+
+### D-081 — Tilt Breaker background music
+- **Date:** 2026-11-21
+- **Decision (director):** use "n-Dimensions (Main Theme - Retro Version)" (opengameart.org/content/space-dimensions-8bitretro-version, CC BY 3.0) as Tilt Breaker's background music.
+- **Implementation:** converted to `assets/audio/music/breakout/n_dimensions.ogg` (Vorbis q6, untrimmed, because it already loops cleanly). The original is kept in `assets/source/breakout/`. `game.gd start()` plays it on the Music bus, looping, through attract, intro and play.
+- **Attribution:** "Matthew Pablo" (from the MP3's artist tag). The OGA page returned 403 to automated fetching, so the licence and credit name need a manual check and screenshot, like the other OGA tracks.
+- **Status:** Accepted
