@@ -76,6 +76,7 @@ Every run through `scripts/run.ps1` or the Godot binary is a debug build. Export
 | **P** | Pause / resume the whole game |
 | **F** | Tilt Breaker: a free piercing plasma bolt that destroys everything in a vertical line above the ship |
 | **C** | Tilt Breaker: clear the current level instantly (level-complete sequence) |
+| **I** | Input monitor: live view of held actions and window focus. Every press, release and focus change is logged to `<settings folder>/input_log.txt` |
 
 ### Default controls
 | Action | Keyboard | Controller |
@@ -111,6 +112,9 @@ docs/            DECISIONS.md (decision log), GDD.md (design)
 
 ## Adding a translation
 Add a column to `core/locale/strings.csv`, for example `es`. Alternatively, drop a CSV with the same format into `<user dir>/locale/`. Then set `operator.language`.
+
+## Cabinet PC setup (Windows)
+Turn **off** the Sticky Keys and Filter Keys keyboard shortcuts (Settings → Accessibility → Keyboard). With Shift as the flipper key, their prompts can steal focus mid-game. The game warns on the picker if they're on (D-070), and it releases all inputs if it ever loses focus (D-069).
 
 ## Requirements
 - Godot 4.7.2 stable (the standard build, not .NET)

@@ -23,6 +23,7 @@ func _initialize() -> void:
 	test_dot_font()
 	test_translation_keys()
 	test_all_scripts_compile()
+	test_system_checks()
 	test_ball_physics()
 	test_breakout_sim()
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -215,6 +216,15 @@ func test_breakout_enemies(Sim) -> void:
 			if e[0] == "ship_destroyed":
 				ship_hit = true
 	check(ship_hit and crash.balls_left == 2 and crash.enemies.is_empty(), "enemy destroys the ship and itself")
+
+
+## Windows accessibility flag parsing (D-070): 26 = shortcuts off (the director's
+## current setting), 510 / 126 = Windows defaults with the shortcut on.
+func test_system_checks() -> void:
+	var SC = load("res://core/system_checks.gd")
+	check(not SC.flags_warn(26), "flags 26 (shortcut off) -> no warning")
+	check(SC.flags_warn(510) and SC.flags_warn(126), "default flags (shortcut on) -> warning")
+	check(not SC.flags_warn(-1), "unreadable -> no warning")
 
 
 ## Every script in the project must parse/compile (catches errors in scenes the

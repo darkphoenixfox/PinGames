@@ -678,3 +678,23 @@
   - **Debug:** a new key **C** (debug builds) clears the level instantly.
   - **Export note (M5):** level `.txt` files are non-resource files and must be added to the export include filter.
 - **Status:** Accepted
+
+### D-069 — Stuck paddle: release inputs on focus loss; input monitor; ship rotated
+- **Date:** 2026-11-21
+- **Problem (director):** the paddle sometimes gets stuck for a few seconds, more often near the screen edge.
+- **Analysis:** the sim has no stall at the walls (re-tested). The candidates are on the input side:
+  - **(a)** a Windows accessibility prompt (Sticky/Filter Keys, triggered by Shift) steals focus and the key-up is never delivered, so an action stays "held" and both-flippers freezes the ship;
+  - **(b)** a Shift key-up being lost when both Shifts are held (to be confirmed).
+
+  On the director's PC both shortcuts read as off (Flags = 26), so (a) is unlikely there.
+- **Fix and diagnostics:**
+  - **Focus loss:** `CabinetInput` releases every action on `NOTIFICATION_APPLICATION_FOCUS_OUT` and emits `focus_changed`.
+  - **Input monitor:** debug key **I** shows a live overlay of held actions (with hold time) and focus, and logs every press, release and focus change to `user://input_log.txt`, to pin down the real cause next time.
+- **Ship:** the director asked for the model to be rotated 180° so the cockpit faces up the screen, like the backglass. Applied as a Y rotation on `paddle.glb`. The model has glass on both faces, so the change is subtle; the director is confirming against an upside-down (X) alternative.
+- **Status:** Accepted (cause pending log evidence)
+
+### D-070 — Warn about Windows Sticky/Filter Keys shortcuts
+- **Date:** 2026-11-21
+- **Decision (director):** the game should warn if the Filter Keys or Sticky Keys shortcuts are on.
+- **Implementation:** `core/system_checks.gd` (Windows only, once per run) reads `HKCU\Control Panel\Accessibility\StickyKeys` and `...\Keyboard Response` with `reg query`, and flags bits 0x1 (feature on) and 0x4 (shortcut on). The picker shows red warnings plus a how-to line, and the operator's System Info has a "KEYBOARD SHORTCUTS" row. Tests cover flag parsing: 26 = off, 510/126 = Windows defaults with the shortcut on. Dev flag: `--fake-keys-warning`. README has a cabinet setup note.
+- **Status:** Accepted

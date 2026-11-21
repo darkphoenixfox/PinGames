@@ -30,7 +30,11 @@ const DEFAULT_BINDINGS := {
 	"exit": ["key:Backspace", "joy:2"],         # Square
 }
 
+## Emitted on focus loss/gain (D-069), e.g. for the input monitor.
+signal focus_changed(has_focus: bool)
+
 var _down_since := {}  # action -> ticks msec when pressed
+var has_focus := true
 var _muted := false
 var _capture := Callable()
 
@@ -118,6 +122,22 @@ func cancel_capture() -> void:
 
 func is_capturing() -> bool:
 	return _capture.is_valid()
+
+
+## If the window loses keyboard focus (e.g. a Windows Sticky Keys / Filter Keys
+## prompt after repeated Shift presses), key-up events never arrive and actions
+## would stay "held". Release everything on focus loss (D-069).
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_APPLICATION_FOCUS_OUT:
+			has_focus = false
+			for a in ACTIONS:
+				if Input.is_action_pressed(a):
+					Input.action_release(a)
+			focus_changed.emit(false)
+		NOTIFICATION_APPLICATION_FOCUS_IN:
+			has_focus = true
+			focus_changed.emit(true)
 
 
 func _input(event: InputEvent) -> void:

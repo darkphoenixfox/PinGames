@@ -625,6 +625,7 @@ func _build_ship(fallback_mat: Material) -> void:
 		var model := scene.instantiate() as Node3D
 		var s := Sim.PADDLE_W / MODEL_PADDLE_WIDTH
 		model.scale = Vector3(s, s, s)
+		model.rotation_degrees.y = 180.0  # cockpit faces up the screen, like the backglass (D-069)
 		_ship.add_child(model)
 	else:
 		_ship.add_child(_box(Vector3(Sim.PADDLE_W, 0.3, Sim.PADDLE_H), Vector3.ZERO, fallback_mat))

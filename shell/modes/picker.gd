@@ -7,6 +7,7 @@
 extends "res://shell/modes/mode.gd"
 
 const ScoreTable = preload("res://core/util/score_table.gd")
+const SystemChecks = preload("res://core/system_checks.gd")
 const TAP_MAX_MS := 900
 const QUIT_CONFIRM_SECONDS := 5.0
 
@@ -69,6 +70,15 @@ func enter() -> void:
 	col.add_child(UI.spacer(60))
 	_credits = UI.label("", 52, UI.GREEN)
 	col.add_child(_credits)
+	# Windows Sticky/Filter Keys shortcuts can freeze the Shift flippers (D-070).
+	for w in SystemChecks.warnings():
+		var warn := UI.label(tr(w), 36, UI.RED)
+		warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		col.add_child(warn)
+	if not SystemChecks.warnings().is_empty():
+		var how := UI.label(tr("SYS_WARN_HOWTO"), 24, UI.YELLOW)
+		how.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		col.add_child(how)
 	var hint := UI.label(tr("PICKER_HINT"), 36, UI.GREY)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(hint)

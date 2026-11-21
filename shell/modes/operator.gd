@@ -253,6 +253,9 @@ func _info_items() -> Array:
 		_info("INFO_TABLE_RES", func(): return "%dx%d" % [Screens.table.size.x, Screens.table.size.y]),
 		_info("INFO_DMD", func(): return "%dx%d" % [Dmd.size.x, Dmd.size.y]),
 		_info("INFO_CONFIG", func(): return ProjectSettings.globalize_path("user://")),
+		_info("INFO_KEYS_CHECK", func():
+			var w: Array = load("res://core/system_checks.gd").warnings()
+			return tr("VAL_OK") if w.is_empty() else ", ".join(w.map(func(k): return tr(k)))),
 	]
 
 
