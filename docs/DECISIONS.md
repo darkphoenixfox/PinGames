@@ -655,3 +655,13 @@
 - **Decision (director):** attract-mode animations don't show "+XXX" points, just the art.
 - **Implementation:** `_dmd_anim()` passes empty `plus_enemy` / `plus_rack` texts while `_phase == "attract"`. In-game clips still show the points.
 - **Status:** Accepted
+
+### D-067 — Fix: charge effects linger after releasing a blast
+- **Date:** 2026-11-21
+- **Problem (director):** after releasing, the next level's charge sound and particles sometimes kept going while the bolt was already flying. Two causes:
+  - The charge sfx is fire-and-forget, and the next level's 0.68 s sweep starts the moment a level is reached.
+  - Stopping CPU particles only stops new emissions; live ones finish their 0.35 s life.
+- **Fix:**
+  - **Sound:** `Audio.sfx()` now returns its player, and `Audio.stop_sfx(player, name)` stops it only if that player is still playing that sound. Tilt Breaker keeps the charge sound and stops it on a new `charge_start`, on `blast`, and whenever the charge drops to zero.
+  - **Particles:** the charge particles are hidden immediately when charging stops, and `restart()` clears them when a new charge begins.
+- **Status:** Accepted

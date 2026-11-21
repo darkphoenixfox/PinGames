@@ -82,18 +82,30 @@ func register_sfx(sound_name: String, stream: AudioStream) -> void:
 	_sounds[sound_name] = stream
 
 
-func sfx(sound_name: String) -> void:
+## Plays a sound effect. Returns its player, so a long sound can be cut short
+## with stop_sfx() (e.g. a charge-up that is released early).
+func sfx(sound_name: String) -> AudioStreamPlayer:
 	var stream: AudioStream = _sounds.get(sound_name)
 	if stream == null:
 		push_warning("Audio: unknown sfx '%s'" % sound_name)
-		return
+		return null
 	for p in _pool:
 		if not p.playing:
 			p.stream = stream
 			p.play()
-			return
+			return p
 	_pool[0].stream = stream
 	_pool[0].play()
+	return _pool[0]
+
+
+## Stops a sound started by sfx(), if it is still that sound playing.
+func stop_sfx(player: AudioStreamPlayer, sound_name: String = "") -> void:
+	if player == null or not player.playing:
+		return
+	if not sound_name.is_empty() and player.stream != _sounds.get(sound_name):
+		return  # the player was reused for another sound meanwhile
+	player.stop()
 
 
 ## Plays a looping music track (res:// path to an .ogg), fading out whatever is

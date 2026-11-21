@@ -186,6 +186,8 @@ var _backglass_mat: ShaderMaterial
 var _charge_glow: Node3D
 var _charge_particles: CPUParticles3D
 var _charge_level_shown := 0
+var _charge_sound: AudioStreamPlayer  # the rising charge sfx (cut on release)
+var _charge_sound_name := ""
 var _launch := false
 var _dash := 0
 var _dash_glow := 0.0
@@ -308,10 +310,13 @@ func _handle_events() -> void:
 				Audio.sfx("tb_dash")
 				_dash_glow = 1.0
 			"charge_start":
-				Audio.sfx("tb_charge%d" % int(e[1]))
+				_stop_charge_sound()
+				_charge_sound_name = "tb_charge%d" % int(e[1])
+				_charge_sound = Audio.sfx(_charge_sound_name)
 			"charged":
 				Audio.sfx("tb_level%d" % int(e[1]))
 			"blast":
+				_stop_charge_sound()
 				var blevel: int = e[1][1]
 				Audio.sfx("tb_blast%d" % blevel)
 				_recoil = 0.5 + 0.25 * blevel
@@ -941,6 +946,11 @@ func _dmd_anim(name: String) -> void:
 	Dmd.play(Callable(_dmd_anims, name), DmdAnims.DURATIONS[name])
 
 
+func _stop_charge_sound() -> void:
+	Audio.stop_sfx(_charge_sound, _charge_sound_name)
+	_charge_sound = null
+
+
 # --- tetrahedron enemies (D-052) ------------------------------------------------------
 func _spawn_enemy_node(id: int, pos: Vector2) -> void:
 	if _circuit_textures.is_empty():
@@ -1035,7 +1045,14 @@ func _animate_blasts(_delta: float) -> void:
 		and CabinetInput.is_down(&"flip_r"))
 	charging = charging and reached < mini(sim.affordable_level(), Sim.BLAST_MAX_LEVEL)
 	if _charge_particles.emitting != charging:
+		if charging:
+			_charge_particles.restart()  # no leftovers from a previous charge
+			_charge_particles.visible = true
+		else:
+			_charge_particles.visible = false  # vanish at once on release (D-067)
 		_charge_particles.emitting = charging
+	if sim.blast_charge <= 0.0 and not charging:
+		_stop_charge_sound()
 	if charging:
 		_charge_particles.color = LEVEL_COLORS[reached]
 	_charge_glow.visible = reached >= 1
