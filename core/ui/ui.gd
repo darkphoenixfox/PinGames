@@ -12,14 +12,21 @@ const GREY := Color(0.55, 0.55, 0.6)
 const DARK := Color(0.04, 0.04, 0.08)
 
 
+## PinPixel (D-060) has 1 font pixel = size/12 screen pixels; sizes are snapped
+## to multiples of 12 so every font pixel lands on whole screen pixels.
+static func pixel_size(size: int) -> int:
+	return maxi(12, roundi(size / 12.0) * 12)
+
+
 static func label(text: String, size: int, color: Color = WHITE,
 		align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_CENTER) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.horizontal_alignment = align
-	l.add_theme_font_size_override("font_size", size)
+	var ps := pixel_size(size)
+	l.add_theme_font_size_override("font_size", ps)
 	l.add_theme_color_override("font_color", color)
-	l.add_theme_constant_override("outline_size", maxi(4, size / 10))
+	l.add_theme_constant_override("outline_size", maxi(4, ps / 6))  # 2 font pixels
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	return l
 

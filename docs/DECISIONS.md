@@ -583,3 +583,14 @@
 - **Decision (director):** replace "LAUNCH TO FIRE" with a blinking "PLASMA CANNON READY".
 - **Implementation:** the `TB_PRESS_LAUNCH` text changes. The TABLE prompt is cyan and blinks (0.5 s on, 0.3 s off) while waiting to fire.
 - **Status:** Accepted
+
+### D-060 — PinPixel: the bundle's pixel-art UI font
+- **Date:** 2026-11-21
+- **Decision (director):** create a pixel-art font that fits the game style.
+- **Implementation:**
+  - **Design:** `scripts/tools/gen_pixel_font.py` (fontTools, installed with `pip --user`) builds `assets/fonts/pinpixel.ttf` from pixel-grid glyph drawings. The style is 16-bit sci-fi arcade: 2-pixel strokes, squared letters with chamfered corners, and a 9-pixel cap height.
+  - **Coverage:** A–Z, 0–9, punctuation, and Latin accents (á é í ó ú, à è ì ò ù, ä ë ï ö ü, â ê î ô û, ñ ã õ ç ¡ ¿) for translations. Lowercase maps to the same capitals. Commas and semicolons have tails below the baseline.
+  - **Metrics:** UPM 1200 with 1 font pixel = 100 units, so at size N one font pixel is N/12 screen pixels.
+  - **Use:** project-wide theme font (`gui/theme/custom_font`). Import has antialiasing, hinting and subpixel positioning off. `UI.label()` snaps sizes to multiples of 12 (`UI.pixel_size`), with a 2-font-pixel outline.
+  - **DMD:** keeps its own 5×7 dot font (D-027).
+- **Status:** Accepted
