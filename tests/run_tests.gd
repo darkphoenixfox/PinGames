@@ -778,6 +778,26 @@ func test_racer_sim() -> void:
 		"last_ds": 4.0, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W}]
 	ho.step(dt, false, false)
 	check(ho.spin_t > 0.0 and not ho.flipping, "a head-on with an oncoming car crashes")
+	# Oncoming drivers flash their high beams at a car in their lane (D-105).
+	var hb = Sim.new()
+	hb.setup(7)
+	hb.state = Sim.State.RACE
+	hb.s = 100.0
+	hb.v = 30.0
+	hb.x = -5.625
+	hb.traffic = [{"id": 1, "s": 200.0, "x": -5.625, "lane": 0, "v": -25.0, "hue": 0.0, "weave": 0.0,
+		"last_ds": 100.0, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W},
+		{"id": 2, "s": 200.0, "x": -1.875, "lane": 1, "v": -25.0, "hue": 0.0, "weave": 0.0,
+		"last_ds": 100.0, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W}]
+	hb.step(dt, false, false)
+	var honks := 0
+	for e in hb.events:
+		if e[0] == "high_beams":
+			honks += 1
+	check(hb.traffic[0].flash and not hb.traffic[1].flash and honks == 1,
+		"an oncoming car flashes its high beams only at a car in its lane")
+	hb.step(dt, false, false)
+	check(hb.events.filter(func(e): return e[0] == "high_beams").is_empty(), "it honks only once")
 	var tk = Sim.new()
 	tk.setup(7)
 	tk.state = Sim.State.RACE
@@ -805,6 +825,12 @@ func test_racer_sim() -> void:
 	fl.step(dt, false, false)
 	check(fl.flipping and fl.spin_t > Sim.SPIN_TIME and fl.flip_dir == -signf(rock.x),
 		"hitting a rock flips the car over, away from it")
+	# The roll-over tumbles on down the road, then stops (D-105).
+	var s_hit: float = fl.s
+	for i in int(Sim.FLIP_TIME * 60.0) + 2:
+		fl.traffic.clear()
+		fl.step(dt, false, false)
+	check(fl.s - s_hit > 12.0 and fl.v < 2.0, "the car keeps advancing as it rolls over (%.0f m)" % (fl.s - s_hit))
 	fl.spin_t = 0.0
 	fl.flipping = false
 	fl._crash("chevron", 1.0)

@@ -996,3 +996,12 @@
 - **File:** `assets/audio/music/racer/bogart_maximum_overdrive.ogg`, converted from the director's MP3 (Vorbis q5, 3:30) and looped by `Audio.play_music`.
 - **Races:** they still use the CodeManu action loops, starting on action_3 (D-093, D-095).
 - **Status:** Accepted
+
+### D-105 — Turbo Run: TIME UP slide, high beams, music per 4 stages, faster rolling crash
+- **Date:** 2026-11-21
+- **Decisions (director):**
+  - **TIME UP slide:** when time runs out, the car swings 90° (6 stepped frames over 0.6 s, nose towards the inside of the bend) and slides to a stop sideways with tyre smoke and squeal. It turns back if a checkpoint reached on momentum saves it (D-103).
+  - **High beams:** an oncoming car flashes its high beams (flash-flash-pause) while you drive at it in its lane: 8–170 m ahead with lateral overlap under 2.6 m. It honks once, two tones with an echo. The flares are additive pixel-puff billboards at each model's headlights (car 0.95 m, truck 1.3 m), and the sim exposes `traffic.flash`.
+  - **Music:** the race song stays the same through stages 1–4, changes at stage 5, then every 4 stages (`MUSIC_STAGES`). Each race still starts on the next song (D-095).
+  - **Rolling crash:** 1.5× faster (`FLIP_TIME` is now 1.33 s, was 2.0). The car keeps tumbling down the road: speed is capped at 30 m/s and drops evenly to 0 by the end of the roll (about 20 m). A head-on with oncoming traffic stops the car on the spot instead, so it doesn't tumble through the other vehicle.
+- **Status:** Accepted

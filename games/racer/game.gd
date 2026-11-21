@@ -34,6 +34,9 @@ const STEER_YAW := 0.3
 const ANIM_FPS := 10.0
 const FLIP_FRAMES := 8.0
 const FLIP_HOP := 1.6
+## TIME UP slide (D-105): 90 degrees in OVER_TURN_TIME s, OVER_TURN_FRAMES steps.
+const OVER_TURN_TIME := 0.6
+const OVER_TURN_FRAMES := 6.0
 const PICKUP_SCALE := 1.8           # nitro canisters read from far away (D-103)
 ## Roll-over phases (fractions of the animation, D-101): slew 90 degrees by
 ## FLIP_TURN_END, roll over until FLIP_ROLL_END, then lie still; in the last
@@ -53,6 +56,7 @@ const TITLE_FONT := "sunset"
 ## race starts on the next one, and every checkpoint (new stage) moves on again.
 ## The first race plays action_3 (director's pick).
 ## Attract mode: "Maximum Overdrive" by Bogart VGM, CC BY 3.0 (D-104).
+const MUSIC_STAGES := 4
 const MUSIC_ATTRACT := "res://assets/audio/music/racer/bogart_maximum_overdrive.ogg"
 const FIRST_TRACK := 2
 const MUSIC_TRACKS := [
@@ -101,6 +105,8 @@ const SOUNDS := {
 		[{"f": [200.0, 3000.0], "t": 0.5, "w": "noise", "v": 0.35, "lp": 0.3, "env": "lin"}],
 		[{"f": [70.0, 40.0], "t": 0.7, "w": "sine", "v": 0.55}],
 		[{"f": [440.0, 1320.0], "t": 0.4, "w": "saw", "v": 0.12, "lp": 0.5}]], "reverb": [0.7, 0.25]},
+	"rc_horn": {"voices": [[{"f": [392.0, 392.0], "t": 0.18, "w": "square", "v": 0.14, "env": "hold", "lp": 0.5}],
+		[{"f": [494.0, 494.0], "t": 0.18, "w": "square", "v": 0.14, "env": "hold", "lp": 0.5}]], "echo": [0.26, 0.5, 1.5]},
 	"rc_shift": {"voices": [[{"f": [180.0, 90.0], "t": 0.12, "w": "square", "v": 0.25},
 		{"f": [900.0, 900.0], "t": 0.04, "w": "noise", "v": 0.2}]]},
 	"rc_near_miss": {"voices": [[{"f": [3000.0, 500.0], "t": 0.35, "w": "noise", "v": 0.3, "lp": 0.5}],
@@ -128,6 +134,9 @@ var _car: Node3D                 # player car (road frame)
 var _car_body: Node3D            # model; yaws/rolls/spins
 var _car_mats := {}         # model path -> ShaderMaterial
 var _car_outlines := {}     # model path -> outline ArrayMesh
+var _beam_mat: StandardMaterial3D
+var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
+var _over_dir := 0.0
 var _music_i := FIRST_TRACK - 1    # race track index; _begin_race steps it
 var _traffic_pool := {"car": [], "truck": []}   # pools of Node3D per kind
 ## Tyre smoke / dust (D-100): our own pooled billboard puffs in one MultiMesh.
@@ -235,6 +244,8 @@ func _process(delta: float) -> void:
 # --- phases --------------------------------------------------------------------------
 func _new_sim() -> void:
 	sim = Sim.new()
+	_over_turn = 0.0
+	_over_dir = 0.0
 	_puff_list.clear()
 	sim.setup(7)
 	sim.manual = _manual_locked
@@ -346,8 +357,10 @@ func _handle_events() -> void:
 				Dmd.flash(tr("RC_GO"), 1.0, Dmd.GREEN)
 			"checkpoint":
 				Audio.sfx("rc_checkpoint")
-				_music_i += 1
-				Audio.play_music(MUSIC_TRACKS[_music_i % MUSIC_TRACKS.size()])
+				# The song changes at stage 5, then every MUSIC_STAGES stages (D-105).
+				if int(e[1]) % MUSIC_STAGES == 0:
+					_music_i += 1
+					Audio.play_music(MUSIC_TRACKS[_music_i % MUSIC_TRACKS.size()])
 				# Reached on momentum after TIME UP: the race goes on (D-103).
 				var saved: bool = e.size() > 3 and e[3]
 				_center_message(tr("RC_JUST_MADE_IT") if saved else tr("RC_CHECKPOINT"), 1.6)
@@ -368,6 +381,8 @@ func _handle_events() -> void:
 				_center_message(tr("RC_NITRO"), 0.8)
 				Dmd.flash(tr("RC_NITRO"), 0.6, Dmd.CYAN)
 				_shake = 0.3
+			"high_beams":
+				Audio.sfx("rc_horn")
 			"shift":
 				Audio.sfx("rc_shift")
 				Dmd.flash(tr("RC_GEAR_FLASH") % _gear_text(int(e[1])), 0.5, Dmd.YELLOW)
@@ -510,6 +525,7 @@ func _build_cars() -> void:
 	for kind in _traffic_pool:
 		for i in (TRAFFIC_POOL if kind == "car" else Sim.MAX_TRUCKS):
 			var t := _car_instance(0.0) if kind == "car" else _car_instance(0.0, TRUCK_MODEL, TRUCK_TEXTURE)
+			_add_headlights(t, kind)
 			t.visible = false
 			_root.add_child(t)
 			_traffic_pool[kind].append(t)
@@ -578,6 +594,37 @@ func _update_puffs(delta: float, smoking: bool) -> void:
 		_puffs.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ONE * sc), p.pos))
 		var c: Color = p.col
 		_puffs.set_instance_color(i, Color(c.r, c.g, c.b, c.a * (1.0 - k)))
+
+
+## Headlight flares at the model's nose (model space: front is +Z), hidden
+## until an oncoming driver flashes the high beams (D-105).
+func _add_headlights(node: Node3D, kind: String) -> void:
+	if _beam_mat == null:
+		_beam_mat = StandardMaterial3D.new()
+		_beam_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_beam_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_beam_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_beam_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		_beam_mat.billboard_keep_scale = true
+		_beam_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		_beam_mat.albedo_texture = _puff_texture()
+		_beam_mat.albedo_color = Color(1.0, 0.95, 0.7)
+	var q := QuadMesh.new()
+	q.size = Vector2(0.95, 0.95) if kind == "car" else Vector2(1.3, 1.3)
+	var front := 2.25 if kind == "car" else 5.05
+	var side := 0.62 if kind == "car" else 0.95
+	var up := 0.62 if kind == "car" else 0.95
+	var beams := []
+	for sx in [-side, side]:
+		var b := MeshInstance3D.new()
+		b.mesh = q
+		b.material_override = _beam_mat
+		b.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		b.position = Vector3(sx, up, front)
+		b.visible = false
+		node.add_child(b)
+		beams.append(b)
+	node.set_meta("beams", beams)
 
 
 ## Nitro canister (D-103): a glowing cyan bottle with white bands, cel
@@ -818,6 +865,18 @@ func _animate(delta: float) -> void:
 		if sim.spin_t < FLIP_UNTURN:
 			turn = _anim_steps(sim.spin_t / FLIP_UNTURN, FLIP_UNTURN)
 		yaw += turn * PI * 0.5 * sim.flip_dir
+	# TIME UP (D-105): the car swings 90 degrees and slides to a stop sideways,
+	# nose towards the inside of the bend. Turns back if a checkpoint saves it.
+	if sim.state == Sim.State.OVER:
+		if _over_dir == 0.0:
+			var c := sim.track.curvature(sim.s)
+			_over_dir = signf(c) if absf(c) > 1e-4 else (-1.0 if sim.x > 0.0 else 1.0)
+		_over_turn = move_toward(_over_turn, 1.0, delta / OVER_TURN_TIME)
+	else:
+		_over_turn = move_toward(_over_turn, 0.0, delta / OVER_TURN_TIME)
+		if _over_turn == 0.0:
+			_over_dir = 0.0
+	yaw += roundf(_over_turn * OVER_TURN_FRAMES) / OVER_TURN_FRAMES * PI * 0.5 * _over_dir
 	var cam_yaw := _camera_yaw()
 	yaw = _sprite_yaw(tr_.heading(sim.s) + yaw, cam_yaw) - tr_.heading(sim.s)
 	var bounce := 0.0
@@ -837,7 +896,8 @@ func _animate(delta: float) -> void:
 	var pivot := Vector3(0, 0.65, 0)             # roll around the body's middle
 	var rb := Basis(Vector3.UP, yaw) * Basis(Vector3.FORWARD, roll)
 	_car_body.transform = Transform3D(rb * MODEL_TURN, Vector3(0, lift, 0) + pivot - rb * pivot)
-	var smoking := sim.drifting or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
+	var sliding_out := sim.state == Sim.State.OVER and sim.v > 3.0
+	var smoking := sim.drifting or sliding_out or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
 	_update_puffs(delta, smoking)
 	var burning := sim.boosting
 	for fl in _flames:
@@ -861,6 +921,11 @@ func _animate(delta: float) -> void:
 		if kind == "car":
 			for m in node.find_children("*", "MeshInstance3D", true, false):
 				(m as MeshInstance3D).set_instance_shader_parameter("hue", t.hue)
+		# High beams: flash-flash ... pause (D-105).
+		var ph := fmod(_phase_t + t.id * 0.13, 0.7)
+		var beam_on: bool = t.get("flash", false) and (ph < 0.1 or (ph > 0.2 and ph < 0.3))
+		for b in node.get_meta("beams", []):
+			(b as Node3D).visible = beam_on
 	for kind in _traffic_pool:
 		for i in range(used[kind], _traffic_pool[kind].size()):
 			(_traffic_pool[kind][i] as Node3D).visible = false
@@ -1226,5 +1291,5 @@ func _update_audio() -> void:
 	var rpm := sim.rpm
 	_engine.pitch_scale = 0.6 + rpm * 1.9 + (0.25 if sim.boosting else 0.0)
 	_engine.volume_db = -14.0 + sim.throttle * 4.0 + rpm * 2.0
-	var squeal := sim.drifting or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
+	var squeal := sim.drifting or (sim.state == Sim.State.OVER and sim.v > 3.0) 		or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
 	_skid.volume_db = lerpf(_skid.volume_db, -10.0 if squeal else -60.0, 0.2)

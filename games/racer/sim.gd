@@ -67,7 +67,10 @@ const SPIN_TIME := 1.3           # spin-out animation
 ## Every crash ends with the car stopped dead for CRASH_STOP s (D-101).
 const CRASH_STOP := 1.5
 ## Hitting a big roadside object (D-098) rolls the car over sideways instead.
-const FLIP_TIME := 2.0           # roll-over animation
+const FLIP_TIME := 1.33          # roll-over animation (D-105: 1.5x faster than 2.0)
+## A roll-over keeps tumbling down the road (D-105): it starts at up to
+## FLIP_SPEED and slows evenly to 0 by the end of the animation (~20 m).
+const FLIP_SPEED := 30.0
 const FLIP_KINDS := ["palm", "rock", "lamp", "truck"]
 const NEAR_MISS_DX := 3.3
 const TRUCK_LEN := 10.0
@@ -75,6 +78,8 @@ const TRUCK_W := 2.66
 const TRUCK_SHARE := 0.25       # of spawns (D-099)
 const MAX_TRUCKS := 4
 const ONCOMING_SHARE := 0.4
+const HIGHBEAM_RANGE := 170.0   # m ahead an oncoming driver starts flashing (D-105)
+const HIGHBEAM_DX := 2.6        # lateral overlap that counts as "in my lane"
 const START_S := 30.0           # leaves road behind the car for the chase camera
 const START_LINE := 50.0
 
@@ -110,6 +115,7 @@ var _shift_lock := false       # shifted: release both before shifting again
 var spin_t := 0.0              # crash timer (spin-out or flip)
 var flipping := false          # this crash is a roll-over (big obstacle)
 var crash_anim := 0.0          # animation length of the current crash (s)
+var _flip_decel := 0.0         # m/s^2 while a roll-over tumbles on
 var flip_dir := 1.0            # +1 rolls to the right, -1 to the left
 var time_left := START_TIME
 var next_checkpoint := CHECKPOINT_EVERY
@@ -307,7 +313,7 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	if state == State.OVER or spin_t > 0.0:
 		throttle = 0.0
 		braking = false
-		accel = -(COAST_OVER if state == State.OVER else COAST_DRAG * 3.0)
+		accel = -(COAST_OVER if state == State.OVER else (_flip_decel if flipping else COAST_DRAG * 3.0))
 	elif manual:
 		throttle = 1.0 if gas else 0.0
 		braking = brake
@@ -399,14 +405,16 @@ func stalled() -> bool:
 	return spin_t > 0.0 and spin_t <= CRASH_STOP
 
 
-func _crash(kind: String, side: float = 0.0) -> void:
+## `slide` = false for head-on hits: the car stops there instead of tumbling on.
+func _crash(kind: String, side: float = 0.0, slide: bool = true) -> void:
 	_end_drift()
 	flipping = kind in FLIP_KINDS
 	# Rolls away from the obstacle: one on the right (+side) rolls it left.
 	flip_dir = -signf(side) if side != 0.0 else 1.0
 	crash_anim = FLIP_TIME if flipping else SPIN_TIME
 	spin_t = crash_anim + CRASH_STOP
-	v = minf(v, 10.0 if flipping else 14.0)
+	v = minf(v, (FLIP_SPEED if slide else 6.0) if flipping else 14.0)
+	_flip_decel = v / FLIP_TIME if flipping else 0.0
 	if boosting:
 		boosting = false
 		boost_t = 0.0
@@ -445,6 +453,12 @@ func _update_traffic(dt: float) -> void:
 		t.x = Track.LANES[t.lane] + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6)
 		var ds: float = t.s - s
 		t.last_ds = ds
+		# Oncoming drivers flash their high beams (and honk once) at a car
+		# coming at them in their lane (D-105).
+		t.flash = state == State.RACE and t.v < 0.0 and ds > 8.0 and ds < HIGHBEAM_RANGE 			and absf(t.x - x) < HIGHBEAM_DX
+		if t.flash and not t.get("flashed", false):
+			t.flashed = true
+			events.append(["high_beams", t.id])
 		if state == State.RACE and prev_ds > 0.0 and ds <= 0.0:
 			if absf(t.x - x) < NEAR_MISS_DX + (tw - CAR_W) * 0.5 and spin_t <= 0.0:
 				_add_score(5000.0)
@@ -457,7 +471,7 @@ func _update_traffic(dt: float) -> void:
 			var big: bool = t.get("kind", "car") == "truck"
 			if t.v < 0.0 or (ds > 0.0 and rel > 22.0):
 				# Head-on, or rear-ending at speed: a truck rolls the car over.
-				_crash("truck" if big else "car", t.x - x)
+				_crash("truck" if big else "car", t.x - x, t.v >= 0.0)
 				s = t.s - (CAR_LEN + tlen) * 0.5 - 0.3
 			else:
 				# Bump: lose speed, get shoved sideways.
