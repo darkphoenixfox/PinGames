@@ -14,7 +14,7 @@ const Synth = preload("res://core/util/synth.gd")
 const ScoreTable = preload("res://core/util/score_table.gd")
 const BRICK_SHADER = preload("res://games/breakout/shaders/brick_circuit.gdshader")
 const SHIELD_SHADER = preload("res://games/breakout/shaders/shield.gdshader")
-const EXPLOSION_SHADER = preload("res://games/breakout/shaders/pixel_explosion.gdshader")
+const EXPLOSION_SHADER = preload("res://games/breakout/shaders/explosion.gdshader")
 const BLAST_SHADER = preload("res://games/breakout/shaders/blast.gdshader")
 const DmdAnims = preload("res://games/breakout/dmd_anims.gd")
 const BackglassLights = preload("res://games/breakout/backglass_lights.gd")
@@ -797,8 +797,8 @@ func _randomize_crop(n: MeshInstance3D) -> void:
 		Vector2(randi() % int(CIRCUIT_TEXELS), randi() % int(CIRCUIT_TEXELS)) / CIRCUIT_TEXELS)
 
 
-## Pixel-art explosion (D-046): a dithered, stepped-palette blast billboard plus a
-## spray of square "pixel" particles in white/yellow/orange/brick colour.
+## Explosion (D-083): a smooth noisy fireball billboard plus a spray of soft
+## glowing sparks that cool from white to the brick colour as they fade.
 func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void:
 	var blast := MeshInstance3D.new()
 	var quad := QuadMesh.new()
@@ -813,7 +813,7 @@ func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void
 	blast.set_instance_shader_parameter("seed", randf() * 100.0)
 	_root.add_child(blast)
 	var tw := blast.create_tween()
-	tw.tween_method(func(a: float): blast.set_instance_shader_parameter("age", a), 0.0, 1.0, 0.45)
+	tw.tween_method(func(a: float): blast.set_instance_shader_parameter("age", a), 0.0, 1.0, 0.55)
 	tw.tween_callback(blast.queue_free)
 
 	var p := CPUParticles3D.new()
@@ -830,29 +830,54 @@ func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void
 	p.damping_max = 3.0
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 	p.emission_box_extents = Vector3(0.3, 0.05, 0.12) * size_scale
-	var palette := Gradient.new()  # each particle picks one flat colour
-	palette.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
-	palette.offsets = PackedFloat32Array([0.0, 0.25, 0.5, 0.75])
-	palette.colors = PackedColorArray([Color.WHITE, Color(1.0, 0.9, 0.4), Color(1.0, 0.5, 0.15), color])
-	p.color_initial_ramp = palette
-	var fade := Gradient.new()
-	fade.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
-	fade.offsets = PackedFloat32Array([0.0, 0.7])
-	fade.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
-	p.color_ramp = fade
-	var px := QuadMesh.new()  # hard-edged square = a pixel
-	px.size = Vector2(0.075, 0.075)
-	var pm := StandardMaterial3D.new()
-	pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	pm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	pm.vertex_color_use_as_albedo = true
-	pm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	px.material = pm
+	# Sparks cool smoothly over their life: white -> yellow -> orange -> brick colour.
+	var cool := Gradient.new()
+	cool.offsets = PackedFloat32Array([0.0, 0.2, 0.45, 0.75, 1.0])
+	cool.colors = PackedColorArray([Color(1, 1, 0.95, 1), Color(1.0, 0.85, 0.35, 1), Color(1.0, 0.45, 0.12, 0.9),
+		Color(color.r, color.g, color.b, 0.6), Color(color.r, color.g, color.b, 0.0)])
+	p.color_ramp = cool
+	var shrink := Curve.new()
+	shrink.add_point(Vector2(0.0, 1.0))
+	shrink.add_point(Vector2(1.0, 0.3))
+	p.scale_amount_curve = shrink
+	p.scale_amount_min = 0.7
+	p.scale_amount_max = 1.3
+	var px := QuadMesh.new()  # soft round glow
+	px.size = Vector2(0.1, 0.1)
 	p.mesh = px
+	p.material_override = _spark_material()
 	p.position = pos
 	_root.add_child(p)
 	p.emitting = true
 	get_tree().create_timer(0.9).timeout.connect(p.queue_free)
+
+
+var _spark_mat: StandardMaterial3D
+
+
+## Shared material for explosion sparks: additive soft radial dot.
+func _spark_material() -> StandardMaterial3D:
+	if _spark_mat == null:
+		var g := Gradient.new()
+		g.offsets = PackedFloat32Array([0.0, 0.15, 0.45, 1.0])
+		g.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.7), Color(1, 1, 1, 0.12), Color(1, 1, 1, 0)])
+		var tex := GradientTexture2D.new()
+		tex.gradient = g
+		tex.fill = GradientTexture2D.FILL_RADIAL
+		tex.fill_from = Vector2(0.5, 0.5)
+		tex.fill_to = Vector2(0.5, 0.0)
+		tex.width = 64
+		tex.height = 64
+		_spark_mat = StandardMaterial3D.new()
+		_spark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_spark_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		_spark_mat.billboard_keep_scale = true
+		_spark_mat.vertex_color_use_as_albedo = true
+		_spark_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_spark_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_spark_mat.albedo_texture = tex
+		_spark_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+	return _spark_mat
 
 
 func _box(size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:

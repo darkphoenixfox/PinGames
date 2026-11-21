@@ -778,3 +778,12 @@
   - `_enter_attract()` plays `dead_ship_attract.ogg`, and `_begin_intro()` crossfades to the game track (n-Dimensions). `--tb-skip-intro` starts the game track directly.
   - **Format:** the director asked for a conversion to MP3, but the file was already Ogg Vorbis, the project format (D-023). It stays OGG: re-encoding to MP3 loses quality, and MP3 encoder padding puts a gap in loops. The 0.76 s of leading silence was trimmed with `to_ogg.sh trim` for a gapless loop.
 - **Status:** Accepted
+
+### D-083 — Smooth explosions (supersedes the pixel-art look of D-046)
+- **Date:** 2026-11-21
+- **Decision (director):** make the explosion effects less pixelated; they clashed with the rest of the art style.
+- **Implementation:**
+  - `pixel_explosion.gdshader` is replaced by `explosion.gdshader`. It's a billboard fireball with an fbm-noise billowing edge, an ease-out expansion and a smooth heat gradient (white → yellow → orange → brick colour). A faint shockwave ring travels ahead of it and the whole effect fades over 0.55 s. There's no UV quantising or dither any more.
+  - The square pixel debris becomes soft additive round sparks (a shared radial-gradient material) that cool from white to the brick colour and shrink as they fade.
+  - This applies to every explosion that goes through `_explode_brick`: bricks, armour cracks, enemies and lost shots.
+- **Status:** Accepted
