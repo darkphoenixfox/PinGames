@@ -35,8 +35,8 @@ const VIEW_BEHIND := 60.0
 const LATERAL := [-140.0, -70.0, -36.0, -18.0, -11.7, -8.7, -7.5, -3.75, 0.0, 3.75, 7.5, 8.7, 11.7, 18.0, 36.0, 70.0, 140.0]
 const TRAFFIC_POOL := 10
 const CAM_BACK := 8.0
-const CAM_HEIGHT := 3.3
-const CAM_LOOK := 20.0
+const CAM_HEIGHT := 3.6
+const CAM_LOOK := 30.0
 const CAM_FOV := 58.0
 const SKY_TOP := Color(0.16, 0.18, 0.5)
 const SKY_HORIZON := Color(1.0, 0.55, 0.42)
@@ -191,6 +191,8 @@ func _new_sim() -> void:
 	sim.setup(7)
 	sim.manual = _manual_locked
 	sim.autopilot = Config.cli.has("rc-autopilot")
+	if Config.cli.has("rc-time"):  # dev: short clock to test TIME UP
+		sim.time_left = float(str(Config.cli["rc-time"]))
 	for k in _chunks.keys():
 		_chunks[k].queue_free()
 	_chunks.clear()
@@ -431,10 +433,10 @@ func _build_cars() -> void:
 		var p := CPUParticles3D.new()
 		p.local_coords = false
 		p.amount = 40
-		p.lifetime = 0.9
+		p.lifetime = 0.6
 		p.emitting = false
 		var q := QuadMesh.new()
-		q.size = Vector2(1.4, 1.4)
+		q.size = Vector2(0.9, 0.9)
 		var sm := StandardMaterial3D.new()
 		sm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 		sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -453,10 +455,10 @@ func _build_cars() -> void:
 		p.scale_amount_max = 1.6
 		var curve := Curve.new()
 		curve.add_point(Vector2(0, 0.5))
-		curve.add_point(Vector2(1, 2.2))
+		curve.add_point(Vector2(1, 1.7))
 		p.scale_amount_curve = curve
 		var grad := Gradient.new()
-		grad.set_color(0, Color(0.95, 0.95, 0.95, 0.7))
+		grad.set_color(0, Color(0.95, 0.95, 0.95, 0.45))
 		grad.set_color(1, Color(0.9, 0.9, 0.95, 0.0))
 		p.color_ramp = grad
 		p.position = Vector3(side, 0.3, 1.6)
@@ -642,7 +644,7 @@ func _animate(delta: float) -> void:
 	for p in _smoke:
 		var cp := p as CPUParticles3D
 		cp.emitting = smoking
-		var col := Color(0.75, 0.6, 0.4, 0.7) if sim.offroad else Color(0.95, 0.95, 0.95, 0.7)
+		var col := Color(0.75, 0.6, 0.4, 0.5) if sim.offroad else Color(0.95, 0.95, 0.95, 0.45)
 		cp.color_ramp.set_color(0, col)
 	var burning := sim.nitro_t > 0.0
 	for fl in _flames:
