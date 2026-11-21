@@ -21,6 +21,8 @@ var _hiscore: Label
 var _credits: Label
 var _bg_title: Label
 var _bg_fill: ColorRect
+var _logo: TextureRect     # selected game's logo (D-063)
+var _bg_logo: TextureRect
 var _press_ms := {}
 var _idle := 0.0
 
@@ -43,7 +45,9 @@ func enter() -> void:
 	add_table(col)
 	col.add_child(UI.label(tr("APP_TITLE"), 130, UI.YELLOW))
 	col.add_child(UI.label(tr("PICKER_TITLE") if locked_game.is_empty() else tr("PICKER_PLAY_AGAIN"), 60))
-	col.add_child(UI.spacer(30))
+	_logo = _logo_rect(Vector2(900, 690))
+	col.add_child(_logo)
+	col.add_child(UI.spacer(10))
 	_labels.clear()
 	for id in _ids:
 		var info := Registry.info(id)
@@ -62,6 +66,13 @@ func enter() -> void:
 	col.add_child(hint)
 
 	_bg_fill = add_backglass(UI.fill(UI.DARK)) as ColorRect
+	_bg_logo = _logo_rect(Vector2.ZERO)
+	_bg_logo.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_bg_logo.offset_left = 120
+	_bg_logo.offset_right = -120
+	_bg_logo.offset_top = 60
+	_bg_logo.offset_bottom = -60
+	add_backglass(_bg_logo)
 	_bg_title = UI.label("", 170, UI.YELLOW)
 	_bg_title.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_bg_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -152,6 +163,15 @@ func _move(d: int) -> void:
 	_refresh()
 
 
+func _logo_rect(min_size: Vector2) -> TextureRect:
+	var r := TextureRect.new()
+	r.custom_minimum_size = min_size
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	r.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	return r
+
+
 func selected_index() -> int:
 	return _index
 
@@ -171,4 +191,12 @@ func _refresh() -> void:
 	_bg_title.text = tr(info.title_key)
 	UI.set_color(_bg_title, accent)
 	_bg_fill.color = accent.darkened(0.85)
-	Dmd.show_text(tr(info.title_key), Credits.status_text(), accent, Dmd.DIM)
+	var logo: Texture2D = load(info.logo) if info.has("logo") else null
+	_logo.texture = logo
+	_logo.visible = logo != null
+	_bg_logo.texture = logo
+	_bg_title.visible = logo == null
+	if info.has("dmd_logo"):
+		Dmd.show_image(load(info.dmd_logo))
+	else:
+		Dmd.show_text(tr(info.title_key), Credits.status_text(), accent, Dmd.DIM)

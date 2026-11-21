@@ -624,3 +624,13 @@
   - **Usage:** `UI.styled_label(text, style, scale)`. Games expose `"font"` in `get_info()`, and the picker shows each game's name in its own font, dimmed when not selected. Tilt Breaker uses it for the attract title, PRESS START, GET READY, PLASMA CANNON READY and GAME OVER / FINAL SCORE.
   - **Shapes:** for now all three styles share PinPixel's letter shapes. Per-game letterforms can follow if the director wants them.
 - **Status:** Accepted
+
+### D-063 — Game logos: picker, backglass, DMD pixel art
+- **Date:** 2026-11-21
+- **Decision (director):** use `tilt_breaker_logo1.png` in the game select menu, and simulate `tilt_breaker_logo_horiz.png` on the DMD as pixel art.
+- **Implementation:**
+  - **Prep:** `scripts/tools/prepare_logos.py` keeps the originals in `assets/source/<game>/`. It writes `logo.png` (trimmed, ≤1200 px) and `dmd_logo.png`: trimmed, fitted to 32 dots high (70×32) through a 4× sharpened intermediate, with saturation, contrast and brightness boosted and hard alpha.
+  - **Game info:** games may expose `"logo"` and `"dmd_logo"` in `get_info()`.
+  - **Picker:** shows the selected game's logo on the TABLE (900×690 box) and the backglass. The DMD shows the pixel logo through the new `Dmd.show_image()`.
+  - **Attract:** Tilt Breaker's attract step 1 is the `logo` DMD clip (drop-in with bounce, diagonal white glint over opaque pixels, sparkles). It uses the new `Painter.image()`.
+- **Status:** Accepted

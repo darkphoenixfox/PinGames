@@ -5,6 +5,7 @@
 extends RefCounted
 
 const DURATIONS := {
+	"logo": 3.2,
 	"tetra_hit": 1.6,
 	"incoming": 1.3,
 	"charge_lost": 1.5,
@@ -22,6 +23,8 @@ const VIOLET := Color("b36bff")
 const DIM := Color(0.35, 0.35, 0.4)
 
 var texts := {}
+var logo_tex: Texture2D = preload("res://assets/textures/breakout/dmd_logo.png")
+var _logo_alpha: Image
 var enemy_color := VIOLET
 
 const TETRA := [Vector3(1, 1, 1), Vector3(1, -1, -1), Vector3(-1, 1, -1), Vector3(-1, -1, 1)]
@@ -77,6 +80,37 @@ func _txt(key: String) -> String:
 
 
 # --- animations ---------------------------------------------------------------------
+## The pixel-art logo (D-063): drops in from the top with a bounce, then a white
+## glint sweeps diagonally across the letters, then a few sparkles.
+func logo(p, t: float) -> void:
+	if _logo_alpha == null:
+		_logo_alpha = logo_tex.get_image()
+		_logo_alpha.decompress()
+	var lw := logo_tex.get_width()
+	var lh := logo_tex.get_height()
+	var x0 := floorf((p.width - lw) / 2.0)
+	var drop := clampf(t / 0.45, 0.0, 1.0)
+	var y0 := floorf(-lh * (1.0 - drop) + (sin(drop * PI) * 2.0 if drop < 1.0 else 0.0))
+	p.image(logo_tex, x0, y0)
+	if t > 0.7 and t < 1.6:
+		var band := (t - 0.7) / 0.9 * (lw + lh + 8) - 4.0
+		for y in lh:
+			for dx in 3:
+				var x := int(band - y * 0.6) + dx
+				if x >= 0 and x < lw and _logo_alpha.get_pixel(x, y).a > 0.5:
+					p.dot(x0 + x, y0 + y, Color(1, 1, 1, 0.85 - dx * 0.25))
+	if t > 1.6:
+		for i in 4:
+			var k := int((t - 1.6) * 10.0) + i * 7
+			var sx := (k * 37) % lw
+			var sy := (k * 13) % lh
+			if _logo_alpha.get_pixel(sx, sy).a > 0.5 and (k + i) % 3 == 0:
+				p.dot(x0 + sx, y0 + sy, Color.WHITE)
+				p.dot(x0 + sx - 1, y0 + sy, Color(1, 1, 1, 0.5))
+				p.dot(x0 + sx + 1, y0 + sy, Color(1, 1, 1, 0.5))
+
+
+
 ## Tetra hit by the plasma ball and exploding.
 func tetra_hit(p, t: float) -> void:
 	var cx := 86.0

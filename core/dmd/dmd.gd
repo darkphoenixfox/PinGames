@@ -101,6 +101,18 @@ func show_score(score: int, left: String = "", right: String = "", score_color: 
 		_elements.append(_el(right, y, _unit, "right", DIM))
 
 
+## Shows a pixel-art image (e.g. a game logo, D-063) centred on the DMD,
+## optionally with a small text line at the bottom.
+func show_image(tex: Texture2D, bottom: String = "", bottom_color: Variant = null) -> void:
+	var y := 0
+	if not bottom.is_empty():
+		y = maxi(0, (size.y - 9 * _unit - tex.get_height() * _unit) / 2)
+	_elements = [{"type": "image", "tex": tex, "y": y}]
+	if not bottom.is_empty():
+		var c: Color = bottom_color if bottom_color != null else color
+		_elements.append(_el(bottom, size.y - 8 * _unit, _unit, "center", c))
+
+
 ## Game status for games that keep the TABLE clean (D-051): big score on top;
 ## bottom row = `lives` plasma dots (out of `max_lives`, spent ones dim) on the
 ## left, and a segmented power bar (0..1, `segments` cells) on the right.
@@ -181,6 +193,11 @@ class Painter:
 	func text_center(s: String, y: float, scale: int, c: Color) -> void:
 		text(s, (width - DotFont.measure(s, scale)) / 2.0, y, scale, c)
 
+	## Draws a pixel-art texture with its top-left at (x, y) dots.
+	func image(tex: Texture2D, x: float, y: float, modulate: Color = Color.WHITE) -> void:
+		canvas.draw_texture_rect(tex, Rect2(floorf(x) * unit, floorf(y) * unit,
+			tex.get_width() * unit, tex.get_height() * unit), false, modulate)
+
 	func text_width(s: String, scale: int = 1) -> int:
 		return DotFont.measure(s, scale)
 
@@ -221,6 +238,11 @@ func _on_draw() -> void:
 				continue
 			"bar":
 				_draw_bar(el)
+				continue
+			"image":
+				var tex: Texture2D = el.tex
+				var sz := tex.get_size() * _unit
+				_canvas.draw_texture_rect(tex, Rect2(Vector2(floorf((size.x - sz.x) / 2.0), el.y), sz), false)
 				continue
 		var w := DotFont.measure(el.text, el.scale)
 		var x := 0.0

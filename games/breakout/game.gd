@@ -209,7 +209,9 @@ var _landed := 0
 
 
 func get_info() -> Dictionary:
-	return {"id": "breakout", "title_key": "GAME_BREAKOUT_TITLE", "color": ACCENT, "font": TITLE_FONT, "buttons_min": 3}
+	return {"id": "breakout", "title_key": "GAME_BREAKOUT_TITLE", "color": ACCENT, "font": TITLE_FONT,
+		"logo": "res://assets/textures/breakout/logo.png",
+		"dmd_logo": "res://assets/textures/breakout/dmd_logo.png", "buttons_min": 3}
 
 
 func start(_players: int) -> void:
@@ -807,7 +809,8 @@ func _enter_attract() -> void:
 func _build_attract_steps() -> void:
 	var title: String = tr("GAME_BREAKOUT_TITLE")
 	_attract_steps = [
-		[func(): Dmd.show_text(title, tr("TB_PRESS_START"), Dmd.CYAN, Dmd.WHITE), 3.0],
+		[func(): _dmd_anim("logo"), DmdAnims.DURATIONS["logo"]],
+		[func(): Dmd.show_text(title, tr("TB_PRESS_START"), Dmd.CYAN, Dmd.WHITE), 2.0],
 		[func(): Dmd.show_text(tr("ATTRACT_HIGH_SCORES"), "", Dmd.YELLOW), 1.4],
 	]
 	var table: Array = HighScores.get_table("breakout")
