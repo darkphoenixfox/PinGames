@@ -921,3 +921,12 @@
 - **Sounds and strings:** the hold-charge and +1 sounds and the `RC_NITRO_PLUS` string are removed.
 - **Exhaust flames:** they are now children of the car body (they used to be on the road frame), so they follow its yaw, drift and sprite steps. They sit on the model's exhaust pipes (x ±0.57 m, 0.28 m up, at the rear bumper), which are lower and wider than before. The cone is thinner (0.1 m radius).
 - **Status:** Accepted (tuning pending playtest)
+
+### D-098 — Turbo Run: roll-over crashes, stepped crash animation, low camera, nitro gauge
+- **Date:** 2026-11-21
+- **Decisions (director):**
+  - **Roll-over crash:** hitting a big roadside obstacle (palm, rock or lamp) flips the car over sideways. `sim.flipping` and `flip_dir` make it roll away from the obstacle, the crash lasts 2.0 s (`FLIP_TIME`) and speed drops to 10 m/s or less. Chevron signs and traffic still cause a spin-out.
+  - **Sprite-like crash animation:** fewer animation steps, to simulate sprites. Crash animations advance on 10 fps steps (`ANIM_FPS`). A roll-over is a hop of 1.6 m with one full sideways roll shown in 8 poses (45° each), around the body's middle. Spin-outs are stepped too. Yaw stays snapped to the 32 views (D-092).
+  - **Camera:** lower and closer to the road (2.3 m, was 3.6 m), with the car kept at the same height on screen. The camera pitches so the car sits 15.9° below the screen centre (`CAM_CAR_DEG`, the old framing). The horizon now sits just above the car.
+  - **Nitro gauge:** the bar becomes a half-dial gauge (`games/racer/nitro_gauge.gd`): 14 lit segments, a needle and a percentage in a fixed-width slot. It starts at 100 %. The old bar's background stretched wider than its fill, so a full bar looked partly empty.
+- **Status:** Accepted (prototype)

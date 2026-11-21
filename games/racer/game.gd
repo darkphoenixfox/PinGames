@@ -14,6 +14,7 @@ const Sim = preload("res://games/racer/sim.gd")
 const Track = preload("res://games/racer/track.gd")
 const Scenery = preload("res://games/racer/scenery.gd")
 const Toon = preload("res://games/racer/toon.gd")
+const NitroGauge = preload("res://games/racer/nitro_gauge.gd")
 const UI = preload("res://core/ui/ui.gd")
 const Synth = preload("res://core/util/synth.gd")
 const ScoreTable = preload("res://core/util/score_table.gd")
@@ -27,7 +28,11 @@ const MODEL_TURN := Basis(Vector3.UP, PI)
 const SPRITE_ANGLES := 32
 ## Nose turn at full steer (rad): ~1.5 sprite steps, visible on straights.
 const STEER_YAW := 0.3
-const NITRO_BAR_W := 300.0
+## Crash animations (D-098): stepped at ANIM_FPS; a roll-over shows FLIP_FRAMES
+## poses per full turn and hops FLIP_HOP metres.
+const ANIM_FPS := 10.0
+const FLIP_FRAMES := 8.0
+const FLIP_HOP := 1.6
 const CAR_TEXTURE := "res://assets/models/racer/red_car_albedo.png"
 
 const ACCENT := Color("ffd23e")
@@ -50,7 +55,10 @@ const VIEW_BEHIND := 60.0
 const LATERAL := [-140.0, -70.0, -36.0, -18.0, -11.7, -8.7, -7.5, -3.75, 0.0, 3.75, 7.5, 8.7, 11.7, 18.0, 36.0, 70.0, 140.0]
 const TRAFFIC_POOL := 10
 const CAM_BACK := 8.0
-const CAM_HEIGHT := 3.6
+const CAM_HEIGHT := 2.3            # low, close to the road (D-098; was 3.6)
+## The car sits this far below the screen centre (degrees), whatever the
+## camera height: the old 3.6 m camera's framing (D-098).
+const CAM_CAR_DEG := 15.9
 const CAM_LOOK := 30.0
 const CAM_FOV := 58.0
 const SKY_TOP := Color(0.16, 0.18, 0.5)
@@ -122,8 +130,7 @@ var _score_label: Label
 var _stage_label: Label
 var _speed_label: Label
 var _mode_label: Label
-var _nitro_bar: ColorRect
-var _nitro_bar_bg: ColorRect
+var _nitro_gauge: Control
 var _drift_label: Label
 var _center: Control             # big centre message (styled font)
 var _center_t := 0.0
@@ -657,6 +664,13 @@ func _build_gate(parent: Node3D, s: float, text: String) -> void:
 
 
 # --- per-frame visuals ----------------------------------------------------------------
+## Animation progress t (0..1 over `seconds`) held on ANIM_FPS steps, so crash
+## animations play like a few sprite frames instead of smooth motion (D-098).
+func _anim_steps(t: float, seconds: float) -> float:
+	var n := maxf(1.0, seconds * ANIM_FPS)
+	return floorf(clampf(t, 0.0, 1.0) * n) / n
+
+
 ## Horizontal yaw of the chase camera's view (same convention as Track: 0 = -Z).
 func _camera_yaw() -> float:
 	var tr_ := sim.track
@@ -678,15 +692,26 @@ func _animate(delta: float) -> void:
 	_car.transform = f
 	# Steering visibly turns the nose even on straights (D-092).
 	var yaw := deg_to_rad(sim.drift_angle) - sim.steer * STEER_YAW
-	if sim.spin_t > 0.0:
-		yaw += (1.0 - sim.spin_t / Sim.SPIN_TIME) * TAU * 1.5
+	if sim.spin_t > 0.0 and not sim.flipping:
+		# Spin-out, stepped like sprite frames (D-098).
+		yaw += _anim_steps(1.0 - sim.spin_t / Sim.SPIN_TIME, Sim.SPIN_TIME) * TAU * 1.5
 	var cam_yaw := _camera_yaw()
 	yaw = _sprite_yaw(tr_.heading(sim.s) + yaw, cam_yaw) - tr_.heading(sim.s)
 	var bounce := 0.0
 	if sim.offroad and sim.v > 5.0:
 		bounce = sin(_phase_t * 40.0) * 0.05
-	# No roll: a sprite can't lean.
-	_car_body.transform = Transform3D(Basis(Vector3.UP, yaw) * MODEL_TURN, Vector3(0, bounce, 0))
+	# No lean while driving (a sprite can't lean). A roll-over is the exception:
+	# a hop with one full sideways roll in FLIP_FRAMES stepped poses (D-098).
+	var roll := 0.0
+	var lift := bounce
+	if sim.spin_t > 0.0 and sim.flipping:
+		var p := _anim_steps(1.0 - sim.spin_t / Sim.FLIP_TIME, Sim.FLIP_TIME)
+		var q := clampf(p / 0.6, 0.0, 1.0)      # roll + hop in the first 60 %
+		roll = roundf(q * FLIP_FRAMES) / FLIP_FRAMES * TAU * sim.flip_dir
+		lift += 4.0 * FLIP_HOP * q * (1.0 - q)
+	var pivot := Vector3(0, 0.65, 0)             # roll around the body's middle
+	var rb := Basis(Vector3.UP, yaw) * Basis(Vector3.FORWARD, roll)
+	_car_body.transform = Transform3D(rb * MODEL_TURN, Vector3(0, lift, 0) + pivot - rb * pivot)
 	var smoking := sim.drifting or sim.spin_t > 0.0 or (sim.offroad and sim.v > 12.0)
 	for p in _smoke:
 		var cp := p as CPUParticles3D
@@ -724,6 +749,10 @@ func _animate(delta: float) -> void:
 	var shake := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * _shake * 0.25
 	_cam.position = _cam_pos + shake
 	_cam.look_at(look, Vector3.UP)
+	# Pitch so the car stays at the same height on screen as before (D-098).
+	var to_car := _cam.global_basis.inverse() * (tr_.point(sim.s, sim.x, 0.6) - _cam.position)
+	var below := atan2(-to_car.y, -to_car.z)
+	_cam.rotate_object_local(Vector3.RIGHT, deg_to_rad(CAM_CAR_DEG) - below)
 	_cam.rotate_object_local(Vector3.BACK, deg_to_rad(-sim.drift_angle * 0.12))
 	var fov := CAM_FOV + sim.v / Sim.MAX_SPEED * 6.0 + (8.0 if sim.boosting else 0.0)
 	_cam.fov = lerpf(_cam.fov, fov, 1.0 - exp(-delta * 4.0))
@@ -771,23 +800,22 @@ func _build_hud() -> void:
 	# Bottom: speed + nitro.
 	var bottom := HBoxContainer.new()
 	bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.offset_top = -200
+	bottom.offset_top = -260
 	bottom.offset_bottom = -40
 	bottom.offset_left = 50
 	bottom.offset_right = -50
 	_hud.add_child(bottom)
 	var nbox := UI.vstack(10)
 	nbox.alignment = BoxContainer.ALIGNMENT_END
-	nbox.add_child(UI.label(tr("RC_NITRO"), 36, UI.CYAN))
-	# Nitro bar (D-097): drains while both flippers are held, refills by itself.
-	_nitro_bar_bg = ColorRect.new()
-	_nitro_bar_bg.color = Color(0.05, 0.08, 0.12, 0.75)
-	_nitro_bar_bg.custom_minimum_size = Vector2(NITRO_BAR_W, 36)
-	_nitro_bar = ColorRect.new()
-	_nitro_bar.color = UI.CYAN
-	_nitro_bar.size = Vector2(NITRO_BAR_W, 36)
-	_nitro_bar_bg.add_child(_nitro_bar)
-	nbox.add_child(_nitro_bar_bg)
+	# Nitro gauge (D-097, D-098): drains while both flippers are held, refills
+	# by itself; starts full.
+	_nitro_gauge = NitroGauge.new()
+	nbox.add_child(_nitro_gauge)
+	var nl := UI.label(tr("RC_NITRO"), 36, UI.CYAN)
+	nl.custom_minimum_size.x = _nitro_gauge.custom_minimum_size.x
+	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nl.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	nbox.add_child(nl)
 	nbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bottom.add_child(nbox)
 	var sbox := UI.vstack(0)
@@ -837,11 +865,7 @@ func _update_hud(delta: float) -> void:
 	_stage_label.text = tr("RC_STAGE") % (sim.checkpoints + 1)
 	_speed_label.text = str(sim.speed_kmh())
 	UI.set_color(_speed_label, UI.CYAN if sim.boosting else UI.WHITE)
-	_nitro_bar.size.x = roundf(NITRO_BAR_W * sim.nitro)
-	if sim.boosting:
-		_nitro_bar.color = UI.WHITE if fmod(_phase_t, 0.12) < 0.06 else UI.CYAN
-	else:
-		_nitro_bar.color = UI.CYAN if sim.nitro >= 0.25 else Color(0.2, 0.45, 0.6)
+	_nitro_gauge.set_state(sim.nitro, sim.boosting, fmod(_phase_t, 0.12) < 0.06)
 	if sim.drifting:
 		_drift_label.text = tr("RC_DRIFT_POINTS") % ScoreTable.format_score(int(sim.drift_points / 10.0) * 10)
 		_drift_label.modulate.a = 1.0

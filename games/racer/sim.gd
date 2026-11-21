@@ -53,6 +53,9 @@ const CHECKPOINT_BONUS := 34.0   # minus 2 s per checkpoint passed, never below 
 const CAR_LEN := 4.4
 const CAR_W := 1.95
 const SPIN_TIME := 1.3
+## Hitting a big roadside object (D-098) rolls the car over sideways instead.
+const FLIP_TIME := 2.0
+const FLIP_KINDS := ["palm", "rock", "lamp"]
 const NEAR_MISS_DX := 3.3
 const START_S := 30.0           # leaves road behind the car for the chase camera
 const START_LINE := 50.0
@@ -83,7 +86,9 @@ var boosting := false          # nitro burning this step
 var nitro_hold := 0.0          # seconds both flippers have been held
 var _nitro_rest := 99.0        # seconds since the last burn
 var _nitro_lock := false       # emptied (or crashed): release both before it burns again
-var spin_t := 0.0              # crash spin-out timer
+var spin_t := 0.0              # crash timer (spin-out or flip)
+var flipping := false          # this crash is a roll-over (big obstacle)
+var flip_dir := 1.0            # +1 rolls to the right, -1 to the left
 var time_left := START_TIME
 var next_checkpoint := CHECKPOINT_EVERY
 var checkpoints := 0
@@ -296,10 +301,13 @@ func _end_drift() -> void:
 	drift_points = 0.0
 
 
-func _crash(kind: String) -> void:
+func _crash(kind: String, side: float = 0.0) -> void:
 	_end_drift()
-	spin_t = SPIN_TIME
-	v = minf(v, 14.0)
+	flipping = kind in FLIP_KINDS
+	# Rolls away from the obstacle: one on the right (+side) rolls it left.
+	flip_dir = -signf(side) if side != 0.0 else 1.0
+	spin_t = FLIP_TIME if flipping else SPIN_TIME
+	v = minf(v, 10.0 if flipping else 14.0)
 	if boosting:
 		boosting = false
 		events.append(["nitro_end"])
@@ -314,7 +322,7 @@ func _collide_objects() -> void:
 		if o.r <= 0.0:
 			continue
 		if absf(x - o.x) < o.r + CAR_W * 0.5:
-			_crash(o.kind)
+			_crash(o.kind, o.x - x)
 			x = move_toward(x, 0.0, 2.5)  # bounce back towards the road
 			return
 

@@ -681,7 +681,27 @@ func test_racer_sim() -> void:
 	tr.x = 1.875
 	tr.traffic = [{"id": 1, "s": 103.0, "x": 1.875, "lane": 2, "v": 30.0, "hue": 0.3, "weave": 0.0, "last_ds": 3.0}]
 	tr.step(dt, false, false)
-	check(tr.spin_t > 0.0 and tr.v <= 14.0, "rear-ending traffic at speed spins out")
+	check(tr.spin_t > 0.0 and tr.v <= 14.0 and not tr.flipping, "rear-ending traffic at speed spins out")
+	# A big roadside object rolls the car over, away from the obstacle (D-098).
+	var fl = Sim.new()
+	fl.setup(7)
+	fl.track.ensure(2000.0)
+	var rock: Dictionary = {}
+	for o in fl.track.objects:
+		if o.kind == "rock":
+			rock = o
+			break
+	fl.state = Sim.State.RACE
+	fl.s = rock.s
+	fl.x = rock.x - signf(rock.x) * 0.5
+	fl.v = 60.0
+	fl.step(dt, false, false)
+	check(fl.flipping and fl.spin_t > Sim.SPIN_TIME and fl.flip_dir == -signf(rock.x),
+		"hitting a rock flips the car over, away from it")
+	fl.spin_t = 0.0
+	fl.flipping = false
+	fl._crash("chevron", 1.0)
+	check(not fl.flipping, "a small sign only spins the car")
 	var nm = Sim.new()
 	nm.setup(7)
 	nm.state = Sim.State.RACE
