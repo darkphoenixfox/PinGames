@@ -760,7 +760,7 @@
 - **Decision (director):** add `_2screen` versions of the backglass (on/off). On 2-screen cabinets, place the DMD at the bottom of the second screen, centred, with a frame around it.
 - **Implementation:**
   - **Setting:** the existing operator layout setting (Windowed / 2 screens / 3 screens, D-006) chooses the mode. `Screens.dmd_in_backglass` is true for 2 screens, or whenever DMD output = backglass. The windowed dev layout honours it too, as a preview (`--display.dmd_sink=backglass`).
-  - **Placement:** the backglass art is no longer squashed above a strip; it fills the screen. The DMD keeps its dot aspect, centred in `dmd_region`, whose default changes to `0.25,0.78,0.5,0.18` (enlarged in D-086). Around it there is a bezel: a gunmetal border with a bright bevel, a drop shadow, and a thin cyan glowing inner trim.
+  - **Placement:** the backglass art is no longer squashed above a strip; it fills the screen. The DMD keeps its dot aspect, centred in `dmd_region`, whose default changes to `0.25,0.78,0.5,0.18`. Around it there is a bezel: a gunmetal border with a bright bevel, a drop shadow, and a thin cyan glowing inner trim.
   - **Art:** Tilt Breaker loads `backglass_{off,on,mask,mask_logo}_2screen.png` in that mode. `prepare_backglass_lights.py` gains a suffix argument with grouping tuned for the higher framing: engines below 42 % height, the logo above 22 %, and a comet touching the logo split off into shots.
 - **Status:** Accepted (supersedes the full-width DMD strip of D-013)
 
