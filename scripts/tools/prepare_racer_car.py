@@ -1,7 +1,8 @@
 """PS2-style car model for Turbo Run (D-089, D-090): optional decimate, small base colour,
 no normal/ORM maps, length along -Z in Godot, 4.4 m long, origin at the wheels.
 Also writes <out>_albedo.png (the 256 px texture the game samples).
-Usage: blender --background --python scripts/tools/prepare_racer_car.py -- <in.glb> <out.glb> [tris] [tex]
+Usage: blender --background --python scripts/tools/prepare_racer_car.py -- <in.glb> <out.glb> [tris] [tex] [length]
+length: metres nose to tail (default 4.4, the red car; the truck is 10, D-099).
 tris 0 (default) keeps the full mesh: collapse-decimating the red car below ~10k
 tore its UV seams (black slivers, smeared paint), see D-090.
 """
@@ -11,6 +12,7 @@ args = sys.argv[sys.argv.index("--") + 1:]
 src, dst = args[0], args[1]
 target = int(args[2]) if len(args) > 2 else 0
 tex = int(args[3]) if len(args) > 3 else 256
+length = float(args[4]) if len(args) > 4 else 4.4
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=src)
 obj = [o for o in bpy.data.objects if o.type == 'MESH'][0]
@@ -27,7 +29,7 @@ if 0 < target < tris:
 me = obj.data
 me.transform(Matrix.Rotation(math.radians(90), 4, 'Z'))
 ys = [v.co.y for v in me.vertices]
-s = 4.4 / (max(ys) - min(ys))
+s = length / (max(ys) - min(ys))
 me.transform(Matrix.Scale(s, 4))
 xs = [v.co.x for v in me.vertices]
 ys = [v.co.y for v in me.vertices]

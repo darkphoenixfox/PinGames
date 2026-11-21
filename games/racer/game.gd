@@ -34,6 +34,9 @@ const ANIM_FPS := 10.0
 const FLIP_FRAMES := 8.0
 const FLIP_HOP := 1.6
 const CAR_TEXTURE := "res://assets/models/racer/red_car_albedo.png"
+## Director's truck (D-099): 10 m, same orientation as the car.
+const TRUCK_MODEL := "res://assets/models/racer/truck.glb"
+const TRUCK_TEXTURE := "res://assets/models/racer/truck_albedo.png"
 
 const ACCENT := Color("ffd23e")
 const TITLE_FONT := "sunset"
@@ -112,12 +115,18 @@ var _road_mat: ShaderMaterial
 var _chunks := {}                # chunk index -> Node3D
 var _car: Node3D                 # player car (road frame)
 var _car_body: Node3D            # model; yaws/rolls/spins
-var _car_tex: Texture2D
-var _car_mat: ShaderMaterial
-var _car_outline: ArrayMesh
+var _car_mats := {}         # model path -> ShaderMaterial
+var _car_outlines := {}     # model path -> outline ArrayMesh
 var _music_i := FIRST_TRACK - 1    # race track index; _begin_race steps it
-var _traffic_nodes: Array = []   # pool of Node3D
-var _smoke: Array = []           # CPUParticles3D at the rear wheels
+var _traffic_pool := {"car": [], "truck": []}   # pools of Node3D per kind
+## Tyre smoke / dust (D-100): our own pooled billboard puffs in one MultiMesh.
+## CPUParticles3D drew a stray pure-black puff at the emitter when toggled.
+const PUFF_MAX := 192
+const PUFF_EVERY := 0.016        # s between puffs per wheel
+const PUFF_LIFE := 0.6
+var _puffs: MultiMesh
+var _puff_list: Array = []       # {pos, vel, age, size, col}
+var _puff_t := 0.0
 var _flames: Array = []          # nitro flame meshes
 var _cam_pos := Vector3.ZERO
 var _cam_ready := false
@@ -209,6 +218,7 @@ func _process(delta: float) -> void:
 # --- phases --------------------------------------------------------------------------
 func _new_sim() -> void:
 	sim = Sim.new()
+	_puff_list.clear()
 	sim.setup(7)
 	sim.manual = _manual_locked
 	sim.autopilot = Config.cli.has("rc-autopilot")
@@ -423,26 +433,26 @@ func _build_world() -> void:
 	_build_cars()
 
 
-func _car_instance(hue: float) -> Node3D:
-	var scene: PackedScene = load(CAR_MODEL)
+## A car or truck model with the cel car material (+ outline). Materials and
+## outline meshes are shared per model.
+func _car_instance(hue: float, model: String = CAR_MODEL, texture: String = CAR_TEXTURE) -> Node3D:
+	var scene: PackedScene = load(model)
 	var node: Node3D = scene.instantiate()
-	var meshes := node.find_children("*", "MeshInstance3D", true, false)
-	for m in meshes:
+	if not _car_mats.has(model):
+		var mat := ShaderMaterial.new()
+		mat.shader = CAR_SHADER
+		mat.set_shader_parameter("tex", load(texture))
+		mat.set_shader_parameter("toon", Toon.enabled)
+		_car_mats[model] = mat
+	for m in node.find_children("*", "MeshInstance3D", true, false):
 		var mi := m as MeshInstance3D
-		if _car_tex == null:
-			_car_tex = load(CAR_TEXTURE)
-		if _car_mat == null:
-			_car_mat = ShaderMaterial.new()
-			_car_mat.shader = CAR_SHADER
-			_car_mat.set_shader_parameter("tex", _car_tex)
-			_car_mat.set_shader_parameter("toon", Toon.enabled)
-		mi.material_override = _car_mat
+		mi.material_override = _car_mats[model]
 		mi.set_instance_shader_parameter("hue", hue)
 		if Toon.enabled:
-			if _car_outline == null:
-				_car_outline = Toon.outline_mesh(mi.mesh)
+			if not _car_outlines.has(model):
+				_car_outlines[model] = Toon.outline_mesh(mi.mesh)
 			var ol := MeshInstance3D.new()
-			ol.mesh = _car_outline
+			ol.mesh = _car_outlines[model]
 			ol.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			mi.add_child(ol)
 	return node
@@ -453,42 +463,9 @@ func _build_cars() -> void:
 	_root.add_child(_car)
 	_car_body = _car_instance(0.0)
 	_car.add_child(_car_body)
-	# Rear-wheel smoke (world space so it trails behind) and nitro flames.
+	_build_puffs()
+	# Nitro flames.
 	for side in [-0.75, 0.75]:
-		var p := CPUParticles3D.new()
-		p.local_coords = false
-		p.amount = 40
-		p.lifetime = 0.6
-		p.emitting = false
-		var q := QuadMesh.new()
-		q.size = Vector2(0.9, 0.9)
-		var sm := StandardMaterial3D.new()
-		sm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		sm.vertex_color_use_as_albedo = true
-		sm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-		sm.albedo_texture = _puff_texture()
-		q.material = sm
-		p.mesh = q
-		p.direction = Vector3(0, 1, 0.5)
-		p.spread = 35.0
-		p.initial_velocity_min = 1.0
-		p.initial_velocity_max = 3.0
-		p.gravity = Vector3(0, 0.6, 0)
-		p.scale_amount_min = 0.8
-		p.scale_amount_max = 1.6
-		var curve := Curve.new()
-		curve.add_point(Vector2(0, 0.5))
-		curve.add_point(Vector2(1, 1.7))
-		p.scale_amount_curve = curve
-		var grad := Gradient.new()
-		grad.set_color(0, Color(0.95, 0.95, 0.95, 0.45))
-		grad.set_color(1, Color(0.9, 0.9, 0.95, 0.0))
-		p.color_ramp = grad
-		p.position = Vector3(side, 0.3, 1.6)
-		_car.add_child(p)
-		_smoke.append(p)
 		var flame := MeshInstance3D.new()
 		var cone := CylinderMesh.new()
 		cone.top_radius = 0.0
@@ -510,11 +487,70 @@ func _build_cars() -> void:
 		flame.visible = false
 		_car_body.add_child(flame)
 		_flames.append(flame)
-	for i in TRAFFIC_POOL:
-		var t := _car_instance(0.0)
-		t.visible = false
-		_root.add_child(t)
-		_traffic_nodes.append(t)
+	for kind in _traffic_pool:
+		for i in (TRAFFIC_POOL if kind == "car" else Sim.MAX_TRUCKS):
+			var t := _car_instance(0.0) if kind == "car" else _car_instance(0.0, TRUCK_MODEL, TRUCK_TEXTURE)
+			t.visible = false
+			_root.add_child(t)
+			_traffic_pool[kind].append(t)
+
+
+func _build_puffs() -> void:
+	_puffs = MultiMesh.new()
+	_puffs.transform_format = MultiMesh.TRANSFORM_3D
+	_puffs.use_colors = true
+	var q := QuadMesh.new()
+	q.size = Vector2(0.9, 0.9)
+	var sm := StandardMaterial3D.new()
+	sm.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	sm.billboard_keep_scale = true
+	sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	sm.vertex_color_use_as_albedo = true
+	sm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	sm.albedo_texture = _puff_texture()
+	q.material = sm
+	_puffs.mesh = q
+	_puffs.instance_count = PUFF_MAX
+	_puffs.visible_instance_count = 0
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = _puffs
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.custom_aabb = AABB(Vector3(-1e5, -1e5, -1e5), Vector3(2e5, 2e5, 2e5))
+	_root.add_child(mmi)
+
+
+## Rear-wheel puffs in world space: rise, grow and fade (D-100).
+func _update_puffs(delta: float, smoking: bool) -> void:
+	if smoking:
+		_puff_t += delta
+		var col := Color(0.75, 0.6, 0.4, 0.5) if sim.offroad else Color(0.95, 0.95, 0.95, 0.45)
+		while _puff_t >= PUFF_EVERY:
+			_puff_t -= PUFF_EVERY
+			for side in [-0.75, 0.75]:
+				if _puff_list.size() >= PUFF_MAX:
+					_puff_list.pop_front()
+				var pos := _car.global_transform * Vector3(side, 0.3, 1.6)
+				var vel := Vector3(randf_range(-1, 1), randf_range(1.0, 2.5), randf_range(-1, 1))
+				_puff_list.append({"pos": pos, "vel": vel, "age": 0.0, "size": randf_range(0.8, 1.6), "col": col})
+	else:
+		_puff_t = 0.0
+	for i in range(_puff_list.size() - 1, -1, -1):
+		var p: Dictionary = _puff_list[i]
+		p.age += delta
+		if p.age >= PUFF_LIFE:
+			_puff_list.remove_at(i)
+			continue
+		p.vel.y += 0.6 * delta
+		p.pos += p.vel * delta
+	_puffs.visible_instance_count = _puff_list.size()
+	for i in _puff_list.size():
+		var p: Dictionary = _puff_list[i]
+		var k: float = p.age / PUFF_LIFE
+		var sc: float = p.size * lerpf(0.5, 1.7, k)
+		_puffs.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ONE * sc), p.pos))
+		var c: Color = p.col
+		_puffs.set_instance_color(i, Color(c.r, c.g, c.b, c.a * (1.0 - k)))
 
 
 ## Round pixel puff (16 px, hard steps) for tyre smoke and dust.
@@ -713,29 +749,32 @@ func _animate(delta: float) -> void:
 	var rb := Basis(Vector3.UP, yaw) * Basis(Vector3.FORWARD, roll)
 	_car_body.transform = Transform3D(rb * MODEL_TURN, Vector3(0, lift, 0) + pivot - rb * pivot)
 	var smoking := sim.drifting or sim.spin_t > 0.0 or (sim.offroad and sim.v > 12.0)
-	for p in _smoke:
-		var cp := p as CPUParticles3D
-		cp.emitting = smoking
-		var col := Color(0.75, 0.6, 0.4, 0.5) if sim.offroad else Color(0.95, 0.95, 0.95, 0.45)
-		cp.color_ramp.set_color(0, col)
+	_update_puffs(delta, smoking)
 	var burning := sim.boosting
 	for fl in _flames:
 		fl.visible = burning
 		if burning:
 			fl.scale = Vector3(1.0, 0.8 + randf() * 0.7, 1.0)
 	# Traffic
-	for i in _traffic_nodes.size():
-		var node: Node3D = _traffic_nodes[i]
-		if i < sim.traffic.size():
-			var t: Dictionary = sim.traffic[i]
-			node.visible = true
-			node.transform = tr_.frame(t.s, t.x)
-			var h := tr_.heading(t.s)
-			node.basis = node.basis * Basis(Vector3.UP, _sprite_yaw(h, cam_yaw) - h) * MODEL_TURN
+	var used := {"car": 0, "truck": 0}
+	for t in sim.traffic:
+		var kind: String = t.get("kind", "car")
+		var pool: Array = _traffic_pool[kind]
+		if used[kind] >= pool.size():
+			continue
+		var node: Node3D = pool[used[kind]]
+		used[kind] += 1
+		node.visible = true
+		node.transform = tr_.frame(t.s, t.x)
+		var h := tr_.heading(t.s)
+		var wy := h + (PI if t.v < 0.0 else 0.0)     # oncoming faces us (D-099)
+		node.basis = node.basis * Basis(Vector3.UP, _sprite_yaw(wy, cam_yaw) - h) * MODEL_TURN
+		if kind == "car":
 			for m in node.find_children("*", "MeshInstance3D", true, false):
 				(m as MeshInstance3D).set_instance_shader_parameter("hue", t.hue)
-		else:
-			node.visible = false
+	for kind in _traffic_pool:
+		for i in range(used[kind], _traffic_pool[kind].size()):
+			(_traffic_pool[kind][i] as Node3D).visible = false
 	# Chase camera: behind and above, looking down the road; FOV opens with speed.
 	# Camera follows the road exactly along s; only its sideways offset lags.
 	if not _cam_ready:

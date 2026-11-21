@@ -55,8 +55,13 @@ const CAR_W := 1.95
 const SPIN_TIME := 1.3
 ## Hitting a big roadside object (D-098) rolls the car over sideways instead.
 const FLIP_TIME := 2.0
-const FLIP_KINDS := ["palm", "rock", "lamp"]
+const FLIP_KINDS := ["palm", "rock", "lamp", "truck"]
 const NEAR_MISS_DX := 3.3
+const TRUCK_LEN := 10.0
+const TRUCK_W := 2.66
+const TRUCK_SHARE := 0.25       # of spawns (D-099)
+const MAX_TRUCKS := 3
+const ONCOMING_SHARE := 0.4
 const START_S := 30.0           # leaves road behind the car for the chase camera
 const START_LINE := 50.0
 
@@ -94,7 +99,7 @@ var next_checkpoint := CHECKPOINT_EVERY
 var checkpoints := 0
 var score := 0
 var _score_f := 0.0
-var traffic: Array = []        # {id, s, x, v, lane, hue, weave}
+var traffic: Array = []        # {id, s, x, v, lane, hue, weave, last_ds, kind, len, w}
 var _next_id := 0
 var _rng := RandomNumberGenerator.new()
 var over_t := 0.0
@@ -328,50 +333,79 @@ func _collide_objects() -> void:
 
 
 # --- traffic -------------------------------------------------------------------------
+## Right-hand traffic (D-099): the two right lanes (x > 0) drive our way and are
+## caught up from behind; the two left lanes are oncoming (dir -1, v < 0).
+## Trucks are long and slow and count as a big obstacle (a hit rolls the car).
 func traffic_target() -> int:
-	return mini(3 + checkpoints, 9)
+	return mini(4 + checkpoints, 11)
 
 
 func _update_traffic(dt: float) -> void:
 	for i in range(traffic.size() - 1, -1, -1):
 		var t: Dictionary = traffic[i]
 		var prev_ds: float = t.last_ds
+		var tlen: float = t.get("len", CAR_LEN)
+		var tw: float = t.get("w", CAR_W)
 		t.s += t.v * dt
 		t.weave += dt
-		t.x = Track.LANES[t.lane] + sin(t.weave * 0.4) * 0.6
+		t.x = Track.LANES[t.lane] + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6)
 		var ds: float = t.s - s
 		t.last_ds = ds
 		if state == State.RACE and prev_ds > 0.0 and ds <= 0.0:
-			if absf(t.x - x) < NEAR_MISS_DX and spin_t <= 0.0:
+			if absf(t.x - x) < NEAR_MISS_DX + (tw - CAR_W) * 0.5 and spin_t <= 0.0:
 				_add_score(5000.0)
 				events.append(["near_miss", t.id])
 			else:
 				_add_score(500.0)
 				events.append(["pass", t.id])
-		if state == State.RACE and spin_t <= 0.0 and absf(ds) < CAR_LEN and absf(t.x - x) < CAR_W:
+		if state == State.RACE and spin_t <= 0.0 and absf(ds) < (CAR_LEN + tlen) * 0.5 				and absf(t.x - x) < (CAR_W + tw) * 0.5:
 			var rel: float = v - t.v
-			if ds > 0.0 and rel > 22.0:
-				_crash("car")
-				s = t.s - CAR_LEN
+			var big: bool = t.get("kind", "car") == "truck"
+			if t.v < 0.0 or (ds > 0.0 and rel > 22.0):
+				# Head-on, or rear-ending at speed: a truck rolls the car over.
+				_crash("truck" if big else "car", t.x - x)
+				s = t.s - (CAR_LEN + tlen) * 0.5 - 0.3
 			else:
 				# Bump: lose speed, get shoved sideways.
 				v = minf(v, t.v * 0.85) if ds > 0.0 else v
 				x += signf(x - t.x + 0.01) * 1.2
-				t.v = minf(t.v + 4.0, 52.0)
+				if not big:
+					t.v = minf(t.v + 4.0, 52.0)
 				events.append(["bump", t.id])
-		if ds < -40.0 or ds > 900.0:
+		if ds < -60.0 or ds > 900.0:
 			traffic.remove_at(i)
 	if state == State.OVER:
 		return
 	if traffic.size() < traffic_target():
-		var ahead := 380.0 + _rng.randf() * 250.0
-		var lane := _rng.randi_range(0, Track.LANES.size() - 1)
-		for t in traffic:  # keep spawns apart
-			if absf(t.s - (s + ahead)) < 30.0 and t.lane == lane:
-				return
-		traffic.append({"id": _next_id, "s": s + ahead, "x": Track.LANES[lane], "lane": lane,
-			"v": _rng.randf_range(28.0, 46.0), "hue": _rng.randf(), "weave": _rng.randf() * 10.0, "last_ds": ahead})
-		_next_id += 1
+		_spawn_traffic()
+
+
+func _spawn_traffic() -> void:
+	var oncoming := _rng.randf() < ONCOMING_SHARE
+	var trucks := 0
+	for t in traffic:
+		if t.get("kind", "car") == "truck":
+			trucks += 1
+	var truck := trucks < MAX_TRUCKS and _rng.randf() < TRUCK_SHARE
+	var lane: int
+	var v_t: float
+	if oncoming:
+		# Oncoming drivers keep to their right: the far-left lane for trucks.
+		lane = 0 if truck or _rng.randf() < 0.4 else 1
+		v_t = -(_rng.randf_range(18.0, 24.0) if truck else _rng.randf_range(22.0, 36.0))
+	else:
+		lane = 3 if truck or _rng.randf() < 0.4 else 2
+		v_t = _rng.randf_range(20.0, 26.0) if truck else _rng.randf_range(28.0, 46.0)
+	# Oncoming traffic closes fast, so it appears further out.
+	var ahead := (560.0 if oncoming else 380.0) + _rng.randf() * 250.0
+	for t in traffic:  # keep spawns apart
+		if absf(t.s - (s + ahead)) < 40.0 and t.lane == lane:
+			return
+	var kind := "truck" if truck else "car"
+	traffic.append({"id": _next_id, "s": s + ahead, "x": Track.LANES[lane], "lane": lane,
+		"v": v_t, "hue": _rng.randf(), "weave": _rng.randf() * 10.0, "last_ds": ahead,
+		"kind": kind, "len": TRUCK_LEN if truck else CAR_LEN, "w": TRUCK_W if truck else CAR_W})
+	_next_id += 1
 
 
 ## Attract/dev autopilot: aim for a lane that's free ahead and steer to it.
@@ -381,7 +415,8 @@ func _autopilot() -> float:
 	var target := -c * 900.0                     # hug the inside a little
 	for t in traffic:
 		var ds: float = t.s - s
-		if ds > 0.0 and ds < 60.0 and absf(t.x - target) < 3.0:
+		var window := 60.0 + (maxf(0.0, -t.v) * 2.0)   # oncoming closes fast
+		if ds > 0.0 and ds < window and absf(t.x - target) < 3.0:
 			target = t.x + (4.5 if t.x < 0.0 else -4.5)
 	target = clampf(target, -Track.ROAD_HALF + 1.5, Track.ROAD_HALF - 1.5)
 	var predicted := x + c * v * v * CENTRIFUGAL * 0.35

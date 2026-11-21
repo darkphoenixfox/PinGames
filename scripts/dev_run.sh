@@ -6,6 +6,7 @@
 #   only and deletes it afterwards (override.cfg is git-ignored).
 # - Puts the windowed layout on monitor index $PINGAMES_DEV_MONITOR (default 1)
 #   and renders the TABLE at full base resolution (render_scale 1.0).
+# - Silent by default (dummy audio driver, D-100); PINGAMES_DEV_SOUND=1 keeps sound.
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GODOT="${GODOT_BIN:-/c/Users/Phoenixfox/Dev/Godot/Godot_v4.7.2-stable_win64_console.exe}"
@@ -13,4 +14,6 @@ OVERRIDE="$ROOT/override.cfg"
 printf '[display]\n\nwindow/size/no_focus=true\n' > "$OVERRIDE"
 trap 'rm -f "$OVERRIDE"' EXIT
 "$GODOT" --headless --path "$ROOT" --import >/dev/null 2>&1 || true  # pick up new assets
-"$GODOT" --path "$ROOT" -- --display.windowed_monitor="${PINGAMES_DEV_MONITOR:-1}" --display.render_scale=1.0 "$@"
+AUDIO="--audio-driver Dummy"
+[ "${PINGAMES_DEV_SOUND:-0}" = "1" ] && AUDIO=""
+"$GODOT" --path "$ROOT" $AUDIO -- --display.windowed_monitor="${PINGAMES_DEV_MONITOR:-1}" --display.render_scale=1.0 "$@"

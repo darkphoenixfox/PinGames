@@ -682,6 +682,43 @@ func test_racer_sim() -> void:
 	tr.traffic = [{"id": 1, "s": 103.0, "x": 1.875, "lane": 2, "v": 30.0, "hue": 0.3, "weave": 0.0, "last_ds": 3.0}]
 	tr.step(dt, false, false)
 	check(tr.spin_t > 0.0 and tr.v <= 14.0 and not tr.flipping, "rear-ending traffic at speed spins out")
+	# Traffic keeps to its side (D-099): right lanes go our way, left lanes come
+	# at us; some of it is trucks.
+	var tf = Sim.new()
+	tf.setup(7)
+	tf.state = Sim.State.RACE
+	var lanes_ok := true
+	var seen := {"ahead": 0, "oncoming": 0, "truck": 0}
+	for i in 400:
+		tf.traffic.clear()
+		tf._spawn_traffic()
+		for t in tf.traffic:
+			lanes_ok = lanes_ok and ((t.v < 0.0 and t.x < 0.0) or (t.v > 0.0 and t.x > 0.0))
+			seen["oncoming" if t.v < 0.0 else "ahead"] += 1
+			if t.kind == "truck":
+				seen.truck += 1
+	check(lanes_ok and seen.ahead > 100 and seen.oncoming > 100 and seen.truck > 40,
+		"traffic drives on its own side, both directions, with trucks (%s)" % str(seen))
+	var ho = Sim.new()
+	ho.setup(7)
+	ho.state = Sim.State.RACE
+	ho.s = 100.0
+	ho.v = 40.0
+	ho.x = -1.875
+	ho.traffic = [{"id": 1, "s": 104.0, "x": -1.875, "lane": 1, "v": -25.0, "hue": 0.0, "weave": 0.0,
+		"last_ds": 4.0, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W}]
+	ho.step(dt, false, false)
+	check(ho.spin_t > 0.0 and not ho.flipping, "a head-on with an oncoming car crashes")
+	var tk = Sim.new()
+	tk.setup(7)
+	tk.state = Sim.State.RACE
+	tk.s = 100.0
+	tk.v = 70.0
+	tk.x = 5.0
+	tk.traffic = [{"id": 1, "s": 106.0, "x": 5.625, "lane": 3, "v": 22.0, "hue": 0.0, "weave": 0.0,
+		"last_ds": 6.0, "kind": "truck", "len": Sim.TRUCK_LEN, "w": Sim.TRUCK_W}]
+	tk.step(dt, false, false)
+	check(tk.flipping, "rear-ending a truck at speed rolls the car over")
 	# A big roadside object rolls the car over, away from the obstacle (D-098).
 	var fl = Sim.new()
 	fl.setup(7)

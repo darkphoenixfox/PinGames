@@ -930,3 +930,35 @@
   - **Camera:** lower and closer to the road (2.3 m, was 3.6 m), with the car kept at the same height on screen. The camera pitches so the car sits 15.9° below the screen centre (`CAM_CAR_DEG`, the old framing). The horizon now sits just above the car.
   - **Nitro gauge:** the bar becomes a half-dial gauge (`games/racer/nitro_gauge.gd`): 14 lit segments, a needle and a percentage in a fixed-width slot. It starts at 100 %. The old bar's background stretched wider than its fill, so a full bar looked partly empty.
 - **Status:** Accepted (prototype)
+
+### D-099 — Turbo Run traffic: both directions, trucks
+- **Date:** 2026-11-21
+- **Decision (director):** add the director's `truck.glb` to the road, and have cars drive in the correct lane directions. Some traffic is caught up from behind, and some comes from the front.
+- **Lanes:** right-hand traffic.
+  - The two right lanes (x > 0) drive our way and are caught up from behind.
+  - The two left lanes are oncoming (`v < 0`). They spawn further out (560–810 m), because they close fast.
+  - Trucks and 40 % of cars keep to the outer, slow lane of their side.
+- **Mix:**
+  - 40 % of spawns are oncoming.
+  - 25 % are trucks, with at most 3 on the road at once.
+  - Trucks are 10 m × 2.66 m and drive at 20–26 m/s (18–24 m/s oncoming).
+  - The traffic target is min(4 + checkpoints, 11).
+- **Collisions:**
+  - Checks use each vehicle's own length and width.
+  - Any hit with oncoming traffic is a crash.
+  - Hitting a truck (head-on, or rear-ending it at more than 22 m/s) rolls the car over, since trucks are big obstacles (D-098).
+  - Bumping a truck doesn't speed it up.
+  - Near misses and passes score in both directions.
+  - The autopilot looks further ahead for oncoming traffic.
+- **View:**
+  - Pooled nodes per kind: 10 cars and 3 trucks.
+  - Oncoming vehicles face the camera, also snapped to the 32 sprite views.
+  - Trucks aren't hue-shifted.
+- **Truck model:** the full 11k-tri mesh is kept and scaled to 10 m (2.66 m wide, 3.28 m tall), with a 512 px texture because it is big on screen. `prepare_racer_car.py` gained a length argument.
+- **Status:** Accepted (prototype)
+
+### D-100 — Silent test runs; own tyre-smoke puffs
+- **Date:** 2026-11-21
+- **Silent runs (director):** mute the game when testing. `scripts/dev_run.sh` passes `--audio-driver Dummy` by default, and `PINGAMES_DEV_SOUND=1` keeps sound.
+- **Tyre smoke:** the `CPUParticles3D` rear-wheel emitters sometimes drew a pure-black puff fixed at the emitter, at the start of drifts. It happened with cel shading on and off, and disappeared with the smoke off. They are replaced by our own pooled billboard puffs: one MultiMesh with up to 192 puffs, spawned every 16 ms per wheel and fading over 0.6 s. This gives full control over each puff.
+- **Status:** Accepted
