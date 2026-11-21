@@ -5,10 +5,13 @@ Input (director's art, same framing): <name>_off.png and <name>_on.png, where
   backglass_off.png, backglass_on.png   1920x1080 (backglass base resolution)
   backglass_mask.png                    RGB light groups, soft-edged:
                                         R = engines, G = shots, B = impacts
+  backglass_mask_logo.png               greyscale: the title logo group
+                                        (separate file: never store masks in alpha)
 Originals are kept in assets/source/<game>/.
 
 Lit areas are found by differencing the two images; connected lit regions are
 assigned to a group by where their centre is (tuned for Tilt Breaker's art):
+  centre in the top-centre (y < 30%, 25-70% x) -> logo (title marquee)
   centre x > 66% width                      -> impacts (top-right hits/lightning)
   centre x < 25% width or y > 66% height    -> engines (exhaust flames)
   otherwise                                 -> shots (plasma comets)
@@ -53,6 +56,8 @@ def components(mask: Image.Image):
 
 
 def group_of(cx: float, cy: float, w: int, h: int) -> int:
+    if cy < 0.3 * h and 0.25 * w < cx < 0.7 * w:
+        return 3  # logo
     if cx > 0.66 * w:
         return 2  # impacts
     if cx < 0.25 * w or cy > 0.66 * h:
@@ -76,9 +81,9 @@ def main():
         imgs[state] = img
     diff = ImageChops.difference(imgs["off"].resize(WORK), imgs["on"].resize(WORK)).convert("L")
     lit = diff.point(lambda v: 255 if v > THRESHOLD else 0).filter(ImageFilter.MaxFilter(3))
-    groups = [Image.new("L", WORK, 0) for _ in range(3)]
+    groups = [Image.new("L", WORK, 0) for _ in range(4)]
     gpx = [g.load() for g in groups]
-    counts = [0, 0, 0]
+    counts = [0, 0, 0, 0]
     for pts in components(lit):
         if len(pts) < 6:
             continue
@@ -90,8 +95,9 @@ def main():
             gpx[g][x, y] = 255
     channels = [g.resize(OUT_SIZE, Image.BILINEAR).filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.GaussianBlur(6))
                 for g in groups]
-    Image.merge("RGB", channels).save(os.path.join(out_dir, "backglass_mask.png"), optimize=True)
-    print(f"regions: engines={counts[0]} shots={counts[1]} impacts={counts[2]}")
+    Image.merge("RGB", channels[:3]).save(os.path.join(out_dir, "backglass_mask.png"), optimize=True)
+    channels[3].save(os.path.join(out_dir, "backglass_mask_logo.png"), optimize=True)
+    print(f"regions: engines={counts[0]} shots={counts[1]} impacts={counts[2]} logo={counts[3]}")
 
 
 if __name__ == "__main__":

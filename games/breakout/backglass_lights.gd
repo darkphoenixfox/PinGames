@@ -4,23 +4,26 @@
 ## every frame and feed the result to backglass_lights.gdshader.
 extends RefCounted
 
-const ENGINES := Vector3(1, 0, 0)
-const SHOTS := Vector3(0, 1, 0)
-const IMPACTS := Vector3(0, 0, 1)
-const ALL := Vector3(1, 1, 1)
+const ENGINES := Vector4(1, 0, 0, 0)
+const SHOTS := Vector4(0, 1, 0, 0)
+const IMPACTS := Vector4(0, 0, 1, 0)
+const LOGO := Vector4(0, 0, 0, 1)  # title marquee (D-064)
+const ALL := Vector4(1, 1, 1, 1)
 
 ## 0..1 extra engine glow (the game sets it from the ship's speed).
 var engine_drive := 0.0
 ## 0..1 steady shots glow while a blast is charging.
 var charge := 0.0
-var _pulses: Array = []  # {groups: Vector3, t, dur, hz, strength}
+## Logo marquee: steady on in play; attract blinks it slowly.
+var logo_mode := "on"  # "on" | "blink"
+var _pulses: Array = []  # {groups: Vector4, t, dur, hz, strength}
 var _chase_left := 0.0
 var _dark := false
 var _time := 0.0
 
 
 ## Blink `groups` on/off at `hz` for `dur` seconds, fading out.
-func pulse(groups: Vector3, dur: float, hz: float = 12.0, strength: float = 1.0) -> void:
+func pulse(groups: Vector4, dur: float, hz: float = 12.0, strength: float = 1.0) -> void:
 	_pulses.append({"groups": groups, "t": 0.0, "dur": dur, "hz": hz, "strength": strength})
 
 
@@ -37,12 +40,13 @@ func set_dark(dark: bool) -> void:
 		_chase_left = 0.0
 
 
-func levels(delta: float) -> Vector3:
+func levels(delta: float) -> Vector4:
 	_time += delta
 	if _dark:
-		return Vector3.ZERO
+		return Vector4.ZERO
 	var breathe := 0.14 + 0.1 * sin(_time * 2.2)  # idle engines
-	var l := Vector3(maxf(breathe, engine_drive), charge * (0.6 + 0.4 * sin(_time * 18.0)), 0.0)
+	var logo := 1.0 if logo_mode == "on" else (1.0 if fmod(_time, 1.2) < 0.8 else 0.15)
+	var l := Vector4(maxf(breathe, engine_drive), charge * (0.6 + 0.4 * sin(_time * 18.0)), 0.0, logo)
 	for i in range(_pulses.size() - 1, -1, -1):
 		var p: Dictionary = _pulses[i]
 		p.t += delta
@@ -51,15 +55,19 @@ func levels(delta: float) -> Vector3:
 			continue
 		var on := 1.0 if fmod(p.t * p.hz, 1.0) < 0.5 else 0.0
 		var amp: float = p.strength * sqrt(1.0 - p.t / p.dur) * on
-		var g: Vector3 = p.groups
-		l = Vector3(maxf(l.x, g.x * amp), maxf(l.y, g.y * amp), maxf(l.z, g.z * amp))
+		var g: Vector4 = p.groups
+		l = Vector4(maxf(l.x, g.x * amp), maxf(l.y, g.y * amp), maxf(l.z, g.z * amp), l.w)
+		if g.w > 0.0:  # the logo flickers with the pulse (off-phase dims it)
+			l.w = minf(l.w, 0.2 + 0.8 * on)
 	if _chase_left > 0.0:
 		_chase_left -= delta
-		match int(_time * 7.0) % 3:
+		var step := int(_time * 7.0) % 4
+		match step:
 			0:
 				l.x = 1.0
 			1:
 				l.y = 1.0
-			_:
+			2:
 				l.z = 1.0
-	return l.clamp(Vector3.ZERO, Vector3.ONE)
+		l.w = 1.0 if step == 3 else 0.3
+	return l.clamp(Vector4.ZERO, Vector4.ONE)

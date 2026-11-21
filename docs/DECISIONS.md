@@ -634,3 +634,12 @@
   - **Picker:** shows the selected game's logo on the TABLE (900×690 box) and the backglass. The DMD shows the pixel logo through the new `Dmd.show_image()`.
   - **Attract:** Tilt Breaker's attract step 1 is the `logo` DMD clip (drop-in with bounce, diagonal white glint over opaque pixels, sparkles). It uses the new `Painter.image()`.
 - **Status:** Accepted
+
+### D-064 — Updated backglass art with a lit title logo (4th light group)
+- **Date:** 2026-11-21
+- **Decision (director):** updated `breaker_lights_off/on`. The new art includes the TILT BREAKER logo, unlit and lit.
+- **Implementation:**
+  - **Prep:** `prepare_backglass_lights.py` puts lit regions centred in the top-centre (y < 30 %, 25–70 % x) into a **logo** group, written as a separate greyscale `backglass_mask_logo.png` (never in alpha). The result was 3/6/9/1 regions.
+  - **Shader:** takes `vec4 levels` (engines, shots, impacts, logo).
+  - **Light logic:** the logo is steady on in play and blinks slowly in attract. ALL pulses make it flicker, and the rack-clear chase now cycles four steps.
+- **Status:** Accepted

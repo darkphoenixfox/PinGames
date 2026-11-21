@@ -1061,6 +1061,7 @@ func _build_backglass() -> void:
 	_backglass_mat.shader = BACKGLASS_SHADER
 	_backglass_mat.set_shader_parameter("on_tex", load("res://assets/textures/breakout/backglass_on.png"))
 	_backglass_mat.set_shader_parameter("mask_tex", load("res://assets/textures/breakout/backglass_mask.png"))
+	_backglass_mat.set_shader_parameter("logo_mask_tex", load("res://assets/textures/breakout/backglass_mask_logo.png"))
 	art.material = _backglass_mat
 	add_to_backglass(art)
 
@@ -1070,7 +1071,8 @@ func _update_backglass_lights(delta: float) -> void:
 		return
 	_lights.engine_drive = clampf(absf(sim.paddle_vx) / Sim.PADDLE_MAX_SPEED, 0.0, 1.0)
 	_lights.charge = clampf(sim.blast_charge / Sim.BLAST_MAX_LEVEL, 0.0, 1.0)
+	_lights.logo_mode = "blink" if _phase == "attract" else "on"
 	var lv := _lights.levels(delta)
 	if Config.cli.has("tb-lights-on"):  # dev: hold every light group fully lit
-		lv = Vector3.ONE
+		lv = Vector4.ONE
 	_backglass_mat.set_shader_parameter("levels", lv)
