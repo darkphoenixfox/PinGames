@@ -874,3 +874,12 @@
   - Full steer adds 0.3 rad of nose turn (`STEER_YAW`, about 1.5 steps). It used to be 0.08 rad, which was below one sprite step.
   - Body roll is removed, since a sprite can't lean. Pitch still follows the hills.
 - **Status:** Accepted (prototype)
+
+### D-093 — Turbo Run music: the five CodeManu "action" loops
+- **Date:** 2026-11-21
+- **Decision (director):** the `bgm_action*` tracks (CodeManu, CC BY 3.0, confirmed by the director) are the right music for Turbo Run. They were already in the repo as `assets/audio/music/racer/codemanu_action_1..5.ogg` (D-033), but only `action_1` played and attract mode used the menu loop.
+- **Implementation:**
+  - Attract plays `action_5`.
+  - Each race starts on the next action track in turn, and every checkpoint (new stage) fades to the following one.
+  - `codemanu_menu.ogg` stays in the repo but is no longer used by the racer.
+- **Status:** Accepted

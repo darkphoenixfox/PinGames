@@ -32,8 +32,15 @@ const CAR_TEXTURE := "res://assets/models/racer/red_car_albedo.png"
 const ACCENT := Color("ffd23e")
 const TITLE_FONT := "sunset"
 ## Director's pick: "8-bit Music Pack (Loopable)" by CodeManu, CC BY 3.0 (D-033).
-const MUSIC_MENU := "res://assets/audio/music/racer/codemanu_menu.ogg"
-const MUSIC_RACE := "res://assets/audio/music/racer/codemanu_action_1.ogg"
+## Director's pick (D-093): the five "action" loops for attract and race. Each
+## race starts on the next one, and every checkpoint (new stage) moves on again.
+const MUSIC_TRACKS := [
+	"res://assets/audio/music/racer/codemanu_action_1.ogg",
+	"res://assets/audio/music/racer/codemanu_action_2.ogg",
+	"res://assets/audio/music/racer/codemanu_action_3.ogg",
+	"res://assets/audio/music/racer/codemanu_action_4.ogg",
+	"res://assets/audio/music/racer/codemanu_action_5.ogg",
+]
 const CHUNK := 100.0             # metres of road per mesh chunk
 const VIEW_AHEAD := 900.0
 const VIEW_BEHIND := 60.0
@@ -100,6 +107,7 @@ var _car_body: Node3D            # model; yaws/rolls/spins
 var _car_tex: Texture2D
 var _car_mat: ShaderMaterial
 var _car_outline: ArrayMesh
+var _music_i := -1    # race track index; _begin_race steps it
 var _traffic_nodes: Array = []   # pool of Node3D
 var _smoke: Array = []           # CPUParticles3D at the rear wheels
 var _flames: Array = []          # nitro flame meshes
@@ -214,7 +222,7 @@ func _enter_attract() -> void:
 	sim.autopilot = true
 	sim.state = Sim.State.RACE
 	sim.v = 60.0
-	Audio.play_music(MUSIC_MENU)
+	Audio.play_music(MUSIC_TRACKS[MUSIC_TRACKS.size() - 1])
 	_hud.visible = false
 	_attract_ui = UI.vstack(60)
 	_attract_ui.add_child(UI.spacer(200))
@@ -254,7 +262,8 @@ func _begin_race() -> void:
 	_phase = "race"
 	_phase_t = 0.0
 	_new_sim()
-	Audio.play_music(MUSIC_RACE)
+	_music_i += 1
+	Audio.play_music(MUSIC_TRACKS[_music_i % MUSIC_TRACKS.size()])
 	Audio.sfx("start")
 	_hud.visible = true
 	_show_mode()
@@ -303,6 +312,8 @@ func _handle_events() -> void:
 				Dmd.flash(tr("RC_GO"), 1.0, Dmd.GREEN)
 			"checkpoint":
 				Audio.sfx("rc_checkpoint")
+				_music_i += 1
+				Audio.play_music(MUSIC_TRACKS[_music_i % MUSIC_TRACKS.size()])
 				_center_message(tr("RC_CHECKPOINT"), 1.6)
 				Dmd.flash(tr("RC_EXTENDED") % int(e[2]), 1.6, Dmd.GREEN)
 			"time_up":
