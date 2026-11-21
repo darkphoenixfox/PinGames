@@ -649,3 +649,9 @@
 - **Decision (director):** the logo replaces the "TILT BREAKER" text in the game select menu; it isn't an extra image above the list. Logos for the other two games will follow.
 - **Implementation:** each list entry is the game's logo if `get_info()` has `"logo"`, otherwise its styled title. The selected logo is 700×540 at full brightness; others are 400×300 and dimmed. The backglass (logo) and the DMD (pixel logo) still follow the selection. The vertical layout shifts slightly while only some games have logos, and it will be stable once all three do.
 - **Status:** Accepted
+
+### D-066 — Attract DMD animations show art only
+- **Date:** 2026-11-21
+- **Decision (director):** attract-mode animations don't show "+XXX" points, just the art.
+- **Implementation:** `_dmd_anim()` passes empty `plus_enemy` / `plus_rack` texts while `_phase == "attract"`. In-game clips still show the points.
+- **Status:** Accepted

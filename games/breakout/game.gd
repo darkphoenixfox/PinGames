@@ -930,12 +930,13 @@ func _dmd_anim(name: String) -> void:
 	if _finale_t >= 0.0 or sim.state == Sim.State.OVER:
 		return
 	_dmd_anims.texts = {
-		"plus_enemy": "+%d" % Sim.ENEMY_POINTS,
+		# Attract shows just the art: no point texts (D-066).
+		"plus_enemy": "" if _phase == "attract" else "+%d" % Sim.ENEMY_POINTS,
 		"incoming": tr("TB_DMD_INCOMING"),
 		"charge_lost": tr("TB_CHARGE_LOST"),
 		"ship_destroyed": tr("TB_SHIP_DESTROYED"),
 		"rack_clear": tr("DMD_RACK_CLEAR"),
-		"plus_rack": "+%d" % Sim.RACK_BONUS,
+		"plus_rack": "" if _phase == "attract" else "+%d" % Sim.RACK_BONUS,
 	}
 	Dmd.play(Callable(_dmd_anims, name), DmdAnims.DURATIONS[name])
 
