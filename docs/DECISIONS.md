@@ -825,3 +825,22 @@
   - **Registry:** `get_info()` gains an optional `backglass` path (Tilt Breaker: the lit `backglass_on.png`). `Registry.backglass_art(id)` picks its `_2screen` version when `Screens.dmd_in_backglass`, and `Registry.backglass_rect()` builds a full-screen cover TextureRect.
   - **Screens:** the picker, the attract-mode high-score pages and the initials-entry screen show the art. Games without backglass art keep the old fallback (logo, then styled title on the picker; title or "NEW HIGH SCORE" text elsewhere). The initials screen still shows "NEW HIGH SCORE" on the table.
 - **Status:** Accepted
+
+### D-089 — Turbo Run prototype: 3D road, auto/manual pedals, drift, nitro
+- **Date:** 2026-11-21
+- **Decision (director):** start the racer prototype using the director's `red_car.glb`. Gameplay in the OutRun style: a road with turns and ups and downs, racing the clock, checkpoints, obstacles beside the road, traffic, and an emphasis on drifting in corners. Automatic accelerate/brake on 2+1 buttons, manual on 4 buttons. Holding 2 buttons for 2 seconds fires nitrous. Models should be PS2-level with 16-bit-looking textures, made with ComfyUI/Blender when needed.
+- **Implementation:**
+  - **Sim and track:** pure `games/racer/sim.gd` plus `track.gd`, headless-tested. Road coordinates are s/x. Curves push the car outwards by curvature × v² × 0.21, against a steering authority of 12 m/s, so the sharpest curves can't be held at full speed without drifting or braking.
+  - **Drift:** while drifting, the push is 45 %, the steering is ×1.25 and the drag is small. Drifting refills nitro.
+  - **Nitro:** both flippers held for 2 s, which also means no steering meanwhile.
+  - **View:** `game.gd` streams 100 m road chunks (one SurfaceTool strip each, `road.gdshader` with 25 cm texels and 8 m light/dark bands) and MultiMesh props built in code from a 160×32 procedural atlas (`scenery.gd`).
+  - **Cars:** `car.gdshader` samples the car texture nearest. Traffic recolours it with a per-instance hue rotation.
+  - **Camera and effects:** a chase camera with FOV kick, drift roll and shake, CPU particle tyre smoke and dust, and nitro flames.
+  - **Sound:** engine and squeal are generated looping WAVs; the other sounds are Synth one-shots.
+  - **Music:** the CodeManu menu and race loops (D-033).
+- **Car model:** the original is kept in `assets/source/racer/`. `scripts/tools/prepare_racer_car.py` (headless Blender) decimates it from 10.8k to 4k tris, scales it to 4.4 m, drops the normal and ORM maps, and writes a 256 px albedo PNG. The game samples that PNG directly, because the glb's embedded texture didn't come through Godot's import. The model's nose is +Z, so the view turns it 180°.
+- **Why 3D instead of a sprite scaler (GDD §5.3 proposal):** the director supplied a 3D car and asked for PS2-level models. Real 3D gives hills, banking views and drift yaw for free. The 16-bit look comes from texel-snapped shaders and nearest filtering.
+- **Dev flags:** `--rc-skip-intro` and `--rc-autopilot`. The attract mode is the autopilot driving.
+- **Tuning to confirm in playtests:** start time 45 s, +34 s per checkpoint every 1.8 km, top speed 288 km/h (360 with nitro), drift entry above about 150 km/h.
+- **Status:** Accepted (prototype)
+

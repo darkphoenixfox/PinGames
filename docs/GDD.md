@@ -183,6 +183,30 @@ Rules:
 **Art direction [PROPOSAL]:** classic super-scaler. Roadside objects and cars are billboard sprites (AI-generated, or pre-rendered from 3D). The road is drawn with a segment-projection renderer. Sunset palettes.
 **Technical risk:** the road renderer. Prototype it early in M4 as a spike.
 
+**Prototype (D-089), playable:**
+- **Road:** real 3D, not sprite scaling. It is an endless seeded road made of sections: straights, sweepers, medium curves and hairpins, with hills and dips. 4 lanes with kerbs, sand and grass, drawn with a 16-bit texel shader. Low-poly "PS2" props: palms, rocks, lamps and chevron signs on the outside of curves. Mountains on the horizon, sunset sky.
+- **Controls:**
+  - Flippers steer.
+  - **2+1:** throttle and braking are automatic. The car brakes by itself when a corner would throw it off and it isn't drifting.
+  - **4+1:** magna R = accelerate, magna L = brake. This switches on at the first magna press when `operator.cabinet_buttons` = auto, and is always on when it is 4.
+  - Holding **both flippers for 2 s fires NITRO**: 3 charges, +1 per checkpoint, +1 per 4 s of drifting.
+  - Launch/Start begins the race.
+- **Drifting (the core skill):**
+  - Steer *into* a corner at more than about 150 km/h to break loose. In manual mode, brake plus steer also starts a drift.
+  - The car slides nose-in, keeps almost all its speed, smokes and scores drift points.
+  - Letting go of the steering ends the drift and banks the points. Not drifting through a hairpin costs speed.
+- **Clock:** 45 s to start. A checkpoint every 1.8 km adds time, from +34 s down to a minimum of +20 s. TIME UP ends the game.
+- **Traffic:** slower cars in the lanes, more after each checkpoint. Rear-ending one at speed spins you out, a light touch is a bump, and passing close is a NEAR MISS (+5,000).
+- **Roadside objects:** palms, rocks, lamps and signs crash you if you leave the road.
+- **Score:** distance, drift points, near misses, passes and checkpoints.
+- **Not done yet:**
+  - Route forks
+  - Rear-view mirror or minimap in the bottom of the TABLE
+  - Backglass art
+  - DMD animations
+  - Stage palettes
+  - Attract high-score pages
+
 ## 6. Roadmap
 | Milestone | Content |
 |---|---|

@@ -26,6 +26,7 @@ func _initialize() -> void:
 	test_system_checks()
 	test_ball_physics()
 	test_breakout_sim()
+	test_racer_sim()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	quit(1 if _failures > 0 else 0)
 
@@ -541,3 +542,130 @@ func _gd_files(dir: String) -> Array[String]:
 		if f.ends_with(".gd"):
 			out.append(dir.path_join(f))
 	return out
+
+
+## Turbo Run (D-089): track, auto throttle, drift, nitro, checkpoints, traffic.
+func test_racer_sim() -> void:
+	var Sim = load("res://games/racer/sim.gd")
+	var dt := 1.0 / 60.0
+	var a = Sim.new()
+	a.setup(7)
+	var b = Sim.new()
+	b.setup(7)
+	a.track.ensure(5000.0)
+	b.track.ensure(5000.0)
+	check(a.track.center(4000.0).is_equal_approx(b.track.center(4000.0)), "racer track is deterministic per seed")
+	var hills := 0.0
+	var curves := 0
+	for i in 2000:
+		hills = maxf(hills, absf(a.track.center(i * 2.5).y))
+		if absf(a.track.curvature(i * 2.5)) > 1.0 / 120.0:
+			curves += 1
+	check(hills > 5.0 and curves > 0, "racer track has hills (%.1f m) and sharp curves" % hills)
+	# Countdown, then automatic throttle.
+	var c = Sim.new()
+	c.setup(7)
+	for i in 60 * 3 + 5:
+		c.step(dt, false, false)
+	check(c.state == Sim.State.RACE, "racer countdown ends in RACE")
+	for i in 60 * 8:
+		c.step(dt, false, false)
+	check(c.v > 60.0, "auto throttle reaches speed (%.0f m/s)" % c.v)
+	# Nitro: both flippers held for 2 s uses a charge.
+	var n = Sim.new()
+	n.setup(7)
+	n.state = Sim.State.RACE
+	n.v = 50.0
+	var got := false
+	for i in 60 * 2 + 5:
+		n.step(dt, true, true)
+		for e in n.events:
+			got = got or e[0] == "nitro"
+	check(got and n.nitro == Sim.NITRO_MAX - 1 and n.nitro_t > 0.0, "holding both flippers 2 s fires nitro")
+	var q = Sim.new()
+	q.setup(7)
+	q.state = Sim.State.RACE
+	for i in 60:
+		q.step(dt, true, true)
+	q.step(dt, false, false)
+	check(q.nitro == Sim.NITRO_MAX and q.nitro_t <= 0.0, "a short both-flipper hold does not fire nitro")
+	# Drift: steering into a sharp curve at speed breaks loose and scores.
+	var d = Sim.new()
+	d.setup(7)
+	d.state = Sim.State.RACE
+	var s_curve := -1.0
+	for i in 4000:
+		if absf(d.track.curvature(i * 2.0)) > 1.0 / 110.0:
+			s_curve = i * 2.0
+			break
+	d.s = s_curve
+	d.v = 70.0
+	var cv: float = d.track.curvature(d.s)
+	var drifted := false
+	for i in 30:
+		d.step(dt, cv > 0.0, cv < 0.0)
+		drifted = drifted or d.drifting
+	check(s_curve > 0.0 and drifted and d.v > 60.0, "steering into a sharp curve at speed drifts and keeps speed")
+	d.traffic.clear()
+	for i in 30:
+		d.step(dt, false, false)
+	check(not d.drifting and d.score > 0, "releasing the steering ends the drift and banks points")
+	# Same curve without drifting: auto-brake slows the car instead.
+	var ab = Sim.new()
+	ab.setup(7)
+	ab.state = Sim.State.RACE
+	ab.s = s_curve
+	ab.v = 75.0
+	ab.x = 4.0 if cv > 0.0 else -4.0  # already on the outside
+	var braked := false
+	for i in 40:
+		ab.step(dt, false, false)
+		braked = braked or ab.auto_braking
+	check(braked and not ab.drifting, "auto mode brakes when a corner would throw the car off")
+	# Checkpoint extends the time; running out ends the race.
+	var cp = Sim.new()
+	cp.setup(7)
+	cp.state = Sim.State.RACE
+	cp.s = Sim.CHECKPOINT_EVERY - 1.0
+	cp.v = 60.0
+	var t0: float = cp.time_left
+	cp.step(dt, false, false)
+	check(cp.checkpoints == 1 and cp.time_left > t0 + 20.0, "checkpoint extends the clock")
+	cp.time_left = 0.01
+	cp.step(dt, false, false)
+	check(cp.state == Sim.State.OVER, "time up ends the race")
+	# Rear-ending a slower car at speed crashes; passing close is a near miss.
+	var tr = Sim.new()
+	tr.setup(7)
+	tr.state = Sim.State.RACE
+	tr.s = 100.0
+	tr.v = 75.0
+	tr.x = 1.875
+	tr.traffic = [{"id": 1, "s": 103.0, "x": 1.875, "lane": 2, "v": 30.0, "hue": 0.3, "weave": 0.0, "last_ds": 3.0}]
+	tr.step(dt, false, false)
+	check(tr.spin_t > 0.0 and tr.v <= 14.0, "rear-ending traffic at speed spins out")
+	var nm = Sim.new()
+	nm.setup(7)
+	nm.state = Sim.State.RACE
+	nm.s = 100.0
+	nm.v = 75.0
+	nm.x = -1.0
+	nm.traffic = [{"id": 1, "s": 100.5, "x": 1.875, "lane": 2, "v": 30.0, "hue": 0.3, "weave": 0.0, "last_ds": 0.5}]
+	var near := false
+	for i in 3:
+		nm.step(dt, false, false)
+		for e in nm.events:
+			near = near or e[0] == "near_miss"
+	check(near, "passing traffic closely scores a near miss")
+	# Manual mode: no gas = no acceleration.
+	var m = Sim.new()
+	m.setup(7)
+	m.state = Sim.State.RACE
+	m.manual = true
+	for i in 60:
+		m.step(dt, false, false, false, false)
+	check(m.v < 1.0, "manual mode needs the gas button")
+	for i in 60:
+		m.step(dt, false, false, true, false)
+	check(m.v > 8.0, "manual gas accelerates")
+
