@@ -770,3 +770,11 @@
 - **Implementation:** converted to `assets/audio/music/breakout/n_dimensions.ogg` (Vorbis q6, untrimmed, because it already loops cleanly). The original is kept in `assets/source/breakout/`. `game.gd start()` plays it on the Music bus, looping, through attract, intro and play.
 - **Attribution:** "Matthew Pablo" (from the MP3's artist tag). The OGA page returned 403 to automated fetching, so the licence and credit name need a manual check and screenshot, like the other OGA tracks.
 - **Status:** Accepted
+
+### D-082 — Tilt Breaker attract-mode music
+- **Date:** 2026-11-21
+- **Decision (director):** "My Very Own Dead Ship" by yd (CC0, opengameart.org/content/background-space-track) is the music for Tilt Breaker's attract mode. The director also confirmed D-081's track as CC BY 3.0 by Matthew Pablo.
+- **Implementation:**
+  - `_enter_attract()` plays `dead_ship_attract.ogg`, and `_begin_intro()` crossfades to the game track (n-Dimensions). `--tb-skip-intro` starts the game track directly.
+  - **Format:** the director asked for a conversion to MP3, but the file was already Ogg Vorbis, the project format (D-023). It stays OGG: re-encoding to MP3 loses quality, and MP3 encoder padding puts a gap in loops. The 0.76 s of leading silence was trimmed with `to_ogg.sh trim` for a gapless loop.
+- **Status:** Accepted

@@ -58,6 +58,7 @@ const LEVEL_COLORS := [Color(0.35, 0.65, 1.0), Color(1.0, 0.85, 0.25), Color(1.0
 const POWERUP_COLORS := {"T": Color(0.3, 0.55, 1.0), "P": Color(1.0, 0.25, 0.2), "B": Color(1.0, 0.85, 0.2),
 	"I": Color(0.72, 0.3, 1.0), "L": Color(1.0, 1.0, 1.0), "S": Color(0.3, 1.0, 0.4)}
 const MUSIC := "res://assets/audio/music/breakout/n_dimensions.ogg"
+const MUSIC_ATTRACT := "res://assets/audio/music/breakout/dead_ship_attract.ogg"  # D-082
 const ION_SHADER = preload("res://games/breakout/shaders/ion_beam.gdshader")
 const LEVEL_SPHERE_SCALE := [0.5, 0.75, 1.0]
 ## Ship banking (visual only; the hitbox is always the sim's rectangle).
@@ -253,8 +254,6 @@ func get_info() -> Dictionary:
 
 
 func start(_players: int) -> void:
-	# Background music (D-081): "n-Dimensions (Retro)" by Matthew Pablo, CC BY 3.0.
-	Audio.play_music(MUSIC)
 	for s in SOUNDS:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
 	sim = Sim.new()
@@ -270,6 +269,7 @@ func start(_players: int) -> void:
 	_build_backglass()
 	DebugTools.debug_action.connect(_on_debug_action)
 	if Config.cli.has("tb-skip-intro"):  # dev: straight into play
+		Audio.play_music(MUSIC)
 		_enter_play()
 	else:
 		_enter_attract()
@@ -898,6 +898,8 @@ func _on_debug_action(action: StringName) -> void:
 
 # --- attract + intro (D-061) ---------------------------------------------------------
 func _enter_attract() -> void:
+	# Attract music (D-082): "My Very Own Dead Ship" by yd, CC0.
+	Audio.play_music(MUSIC_ATTRACT)
 	_phase = "attract"
 	_phase_t = 0.0
 	for n in _brick_nodes:
@@ -944,6 +946,8 @@ func _attract(delta: float) -> void:
 
 
 func _begin_intro() -> void:
+	# Game music (D-081): "n-Dimensions (Retro)" by Matthew Pablo, CC BY 3.0.
+	Audio.play_music(MUSIC)
 	_phase = "intro"
 	_phase_t = 0.0
 	_landed = 0

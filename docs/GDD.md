@@ -221,5 +221,6 @@ These are AI-generated or royalty-free, and each needs a row in `assets/CREDITS.
 | Use | Track | Source | License (from search summary, unverified) | Status |
 |---|---|---|---|---|
 | Main screen (picker; attract if "attract sounds" is on) | "Legends" by KLY (Kim Lightyear) | https://opengameart.org/content/legends | CC BY 3.0 (confirmed). Credit "Kim Lightyear (KLY)" by name, including in the store/project description | ✅ In game |
-| Tilt Breaker: background music (attract, intro and play) | "n-Dimensions (Main Theme - Retro Version)" by Matthew Pablo | https://opengameart.org/content/space-dimensions-8bitretro-version | CC BY 3.0 (director's statement; the OGA page blocks automated reads, so check it by hand). Credit "Matthew Pablo" | ✅ In game (D-081) |
+| Tilt Breaker: attract mode | "My Very Own Dead Ship" by yd | https://opengameart.org/content/background-space-track | CC0 (confirmed by the director) | ✅ In game (D-082) |
+| Tilt Breaker: game music (intro and play) | "n-Dimensions (Main Theme - Retro Version)" by Matthew Pablo | https://opengameart.org/content/space-dimensions-8bitretro-version | CC BY 3.0 (confirmed by the director). Credit "Matthew Pablo" | ✅ In game (D-081) |
 | Turbo Run (racer): menu + 5 race loops | "8-bit Music Pack (Loopable)" by CodeManu | https://opengameart.org/content/8-bit-music-pack-loopable | CC BY 3.0 | ✅ In game (racer stub plays race loop 1) |
