@@ -962,3 +962,19 @@
 - **Silent runs (director):** mute the game when testing. `scripts/dev_run.sh` passes `--audio-driver Dummy` by default, and `PINGAMES_DEV_SOUND=1` keeps sound.
 - **Tyre smoke:** the `CPUParticles3D` rear-wheel emitters sometimes drew a pure-black puff fixed at the emitter, at the start of drifts. It happened with cel shading on and off, and disappeared with the smoke off. They are replaced by our own pooled billboard puffs: one MultiMesh with up to 192 puffs, spawned every 16 ms per wheel and fading over 0.6 s. This gives full control over each puff.
 - **Status:** Accepted
+
+### D-101 — Turbo Run harder: more traffic, longer stages, crashes stop the car, 90° roll-over
+- **Date:** 2026-11-21
+- **Decision (director):** the race is too easy.
+  - **Traffic:** the target is now min(7 + 2 × checkpoints, 16), up from min(4 + n, 11). Trucks go up to 4 at once, and the view pools are 16 cars and 4 trucks.
+  - **Checkpoints:** every 2.3 km, up from 1.8 km. The time bonus is unchanged, so each stage is tighter.
+  - **Crash stop:** every crash ends with the car stopped dead for 1.5 s (`CRASH_STOP`) while the clock keeps running. `sim.crash_progress()` drives the animation and `sim.stalled()` covers the stop. There is no smoke or squeal while stopped.
+  - **Big crash** (roll-over, D-098): the car first slews 90° across the road (first 25 % of the 2 s animation), then hops and rolls one full turn about its own length, so it tumbles towards the front of the road (to 80 %). It lies still, and in the last 0.4 s of the stop it turns back to face the road. Everything is stepped like sprite frames.
+  - **Spin-out:** now two full turns, so it ends nose-forward before the stop.
+  - **Smoke:** puffs come less often at low speed, so they don't pile up into one opaque cloud.
+- **Status:** Accepted (tuning pending playtest)
+
+### D-102 — Tilt Breaker: losing a life refills the power bar
+- **Date:** 2026-11-21
+- **Decision (director):** after losing a life (ball drained or ship destroyed), the blast power bar resets to 100 % (3 cells).
+- **Status:** Accepted

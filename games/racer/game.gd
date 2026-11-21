@@ -33,6 +33,12 @@ const STEER_YAW := 0.3
 const ANIM_FPS := 10.0
 const FLIP_FRAMES := 8.0
 const FLIP_HOP := 1.6
+## Roll-over phases (fractions of the animation, D-101): slew 90 degrees by
+## FLIP_TURN_END, roll over until FLIP_ROLL_END, then lie still; in the last
+## FLIP_UNTURN s of the stop the car turns back to face the road.
+const FLIP_TURN_END := 0.25
+const FLIP_ROLL_END := 0.8
+const FLIP_UNTURN := 0.4
 const CAR_TEXTURE := "res://assets/models/racer/red_car_albedo.png"
 ## Director's truck (D-099): 10 m, same orientation as the car.
 const TRUCK_MODEL := "res://assets/models/racer/truck.glb"
@@ -56,7 +62,7 @@ const CHUNK := 100.0             # metres of road per mesh chunk
 const VIEW_AHEAD := 900.0
 const VIEW_BEHIND := 60.0
 const LATERAL := [-140.0, -70.0, -36.0, -18.0, -11.7, -8.7, -7.5, -3.75, 0.0, 3.75, 7.5, 8.7, 11.7, 18.0, 36.0, 70.0, 140.0]
-const TRAFFIC_POOL := 10
+const TRAFFIC_POOL := 16
 const CAM_BACK := 8.0
 const CAM_HEIGHT := 2.3            # low, close to the road (D-098; was 3.6)
 ## The car sits this far below the screen centre (degrees), whatever the
@@ -525,8 +531,10 @@ func _update_puffs(delta: float, smoking: bool) -> void:
 	if smoking:
 		_puff_t += delta
 		var col := Color(0.75, 0.6, 0.4, 0.5) if sim.offroad else Color(0.95, 0.95, 0.95, 0.45)
-		while _puff_t >= PUFF_EVERY:
-			_puff_t -= PUFF_EVERY
+		# Fewer puffs when slow, or they pile up into one opaque cloud.
+		var every := PUFF_EVERY * clampf(40.0 / maxf(sim.v, 1.0), 1.0, 4.0)
+		while _puff_t >= every:
+			_puff_t -= every
 			for side in [-0.75, 0.75]:
 				if _puff_list.size() >= PUFF_MAX:
 					_puff_list.pop_front()
@@ -728,27 +736,38 @@ func _animate(delta: float) -> void:
 	_car.transform = f
 	# Steering visibly turns the nose even on straights (D-092).
 	var yaw := deg_to_rad(sim.drift_angle) - sim.steer * STEER_YAW
+	var crash_p := _anim_steps(sim.crash_progress(), sim.crash_anim)
 	if sim.spin_t > 0.0 and not sim.flipping:
-		# Spin-out, stepped like sprite frames (D-098).
-		yaw += _anim_steps(1.0 - sim.spin_t / Sim.SPIN_TIME, Sim.SPIN_TIME) * TAU * 1.5
+		# Spin-out: two full turns stepped like sprite frames, ending nose
+		# forward, then stopped (D-098, D-101).
+		yaw += crash_p * TAU * 2.0
+	elif sim.spin_t > 0.0 and sim.flipping:
+		# Roll-over, part 1: slew 90 degrees across the road (D-101) ...
+		var turn := clampf(crash_p / FLIP_TURN_END, 0.0, 1.0)
+		# ... and while stopped at the end, turn back to face the road.
+		if sim.spin_t < FLIP_UNTURN:
+			turn = _anim_steps(sim.spin_t / FLIP_UNTURN, FLIP_UNTURN)
+		yaw += turn * PI * 0.5 * sim.flip_dir
 	var cam_yaw := _camera_yaw()
 	yaw = _sprite_yaw(tr_.heading(sim.s) + yaw, cam_yaw) - tr_.heading(sim.s)
 	var bounce := 0.0
 	if sim.offroad and sim.v > 5.0:
 		bounce = sin(_phase_t * 40.0) * 0.05
 	# No lean while driving (a sprite can't lean). A roll-over is the exception:
-	# a hop with one full sideways roll in FLIP_FRAMES stepped poses (D-098).
+	# part 2, once sideways, a hop with one full roll about the car's length,
+	# so it tumbles towards the front of the road, in FLIP_FRAMES stepped poses
+	# (D-098, D-101). Turned +90 (nose left) the right side faces forward, and a
+	# positive roll drops the right side: the roll sign follows the turn.
 	var roll := 0.0
 	var lift := bounce
 	if sim.spin_t > 0.0 and sim.flipping:
-		var p := _anim_steps(1.0 - sim.spin_t / Sim.FLIP_TIME, Sim.FLIP_TIME)
-		var q := clampf(p / 0.6, 0.0, 1.0)      # roll + hop in the first 60 %
+		var q := clampf((crash_p - FLIP_TURN_END) / (FLIP_ROLL_END - FLIP_TURN_END), 0.0, 1.0)
 		roll = roundf(q * FLIP_FRAMES) / FLIP_FRAMES * TAU * sim.flip_dir
 		lift += 4.0 * FLIP_HOP * q * (1.0 - q)
 	var pivot := Vector3(0, 0.65, 0)             # roll around the body's middle
 	var rb := Basis(Vector3.UP, yaw) * Basis(Vector3.FORWARD, roll)
 	_car_body.transform = Transform3D(rb * MODEL_TURN, Vector3(0, lift, 0) + pivot - rb * pivot)
-	var smoking := sim.drifting or sim.spin_t > 0.0 or (sim.offroad and sim.v > 12.0)
+	var smoking := sim.drifting or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
 	_update_puffs(delta, smoking)
 	var burning := sim.boosting
 	for fl in _flames:
@@ -984,5 +1003,5 @@ func _update_audio() -> void:
 	var rpm := clampf(sim.v / Sim.MAX_SPEED, 0.0, 1.3)
 	_engine.pitch_scale = 0.6 + rpm * 1.9 + (0.25 if sim.boosting else 0.0)
 	_engine.volume_db = -14.0 + sim.throttle * 4.0 + rpm * 2.0
-	var squeal := sim.drifting or sim.spin_t > 0.0 or sim.auto_braking
+	var squeal := sim.drifting or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
 	_skid.volume_db = lerpf(_skid.volume_db, -10.0 if squeal else -60.0, 0.2)

@@ -115,7 +115,7 @@ Rules:
   - **Level 2:** yellow particles, then a medium yellow sphere.
   - **Level 3:** red particles, then a full-size red sphere.
 
-  Each level plays a rising charge tone, then a warm **hum** when reached. Each level needs ⅓ of the power bar to be available, and charging stops at the highest level you can afford; with an empty bar you hear "LOW POWER". Releasing fires a bolt straight up in that level's colour: a level-n bolt is bigger and punches through up to **n** bricks or enemies (one plasma hit each) before dissolving, and it costs n/3 of the bar. Power recharges slowly from 1 s after the last blast (full in about 15 s). The ship can't move while charging.
+  Each level plays a rising charge tone, then a warm **hum** when reached. Each level needs ⅓ of the power bar to be available, and charging stops at the highest level you can afford; with an empty bar you hear "LOW POWER". Releasing fires a bolt straight up in that level's colour: a level-n bolt is bigger and punches through up to **n** bricks or enemies (one plasma hit each) before dissolving, and it costs n/3 of the bar. Power recharges slowly from 1 s after the last blast (full in about 15 s). Losing a life refills the bar (D-102). The ship can't move while charging.
 - **Sound (D-050):** 16-bit-era effects synthesized in code (pulse waves, LFSR noise, arpeggios, vibrato, SNES-style echo).
 - **Setting (D-043):** the ship is in orbit. The horizon of an **earth-like planet** runs across the bottom of the TABLE: so huge that its curve is barely visible, out of focus (soft, low-detail shading), with a glowing atmospheric rim and haze. It has oceans, continents and drifting clouds. Plasma that gets past the ship falls past the horizon: an **explosion sound**, a **fireball**, and the planet's surface **lights up where it would have hit**, with a shockwave spreading along the horizon. The ship sits higher to make room.
 - **Space (D-049):** a pixel-art starfield (three parallax layers of square stars that twinkle) fills the background. It swings around a pivot far below the screen as the ship moves, like the ship moving along its orbit. There are **no visible walls**: invisible boundaries sit a little inside the screen edges, and a rebound there flashes an energy shield (the same effect as the ship's) where the plasma hits.
@@ -195,7 +195,7 @@ Rules:
   - Steer *into* a corner at more than about 150 km/h to break loose. In manual mode, brake plus steer also starts a drift.
   - The car slides nose-in, keeps almost all its speed, smokes and scores drift points.
   - Letting go of the steering ends the drift and banks the points. Not drifting through a hairpin costs speed.
-- **Clock:** 45 s to start. A checkpoint every 1.8 km adds time, from +34 s down to a minimum of +20 s. TIME UP ends the game.
+- **Clock:** 45 s to start. A checkpoint every 2.3 km (D-101) adds time, from +34 s down to a minimum of +20 s. TIME UP ends the game.
 - **Traffic:** slower cars in the lanes, more after each checkpoint. Rear-ending one at speed spins you out, a light touch is a bump, and passing close is a NEAR MISS (+5,000).
 - **Roadside objects:** palms, rocks, lamps and signs crash you if you leave the road.
 - **Score:** distance, drift points, near misses, passes and checkpoints.

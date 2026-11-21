@@ -47,20 +47,22 @@ const NITRO_DRIFT_RATE := 0.06   # extra bar per second while drifting
 const NITRO_CHECKPOINT := 0.3    # bar added at each checkpoint
 ## Race clock
 const START_TIME := 45.0
-const CHECKPOINT_EVERY := 1800.0
+const CHECKPOINT_EVERY := 2300.0   # D-101 (was 1800)
 const CHECKPOINT_BONUS := 34.0   # minus 2 s per checkpoint passed, never below 20
 ## Traffic
 const CAR_LEN := 4.4
 const CAR_W := 1.95
-const SPIN_TIME := 1.3
+const SPIN_TIME := 1.3           # spin-out animation
+## Every crash ends with the car stopped dead for CRASH_STOP s (D-101).
+const CRASH_STOP := 1.5
 ## Hitting a big roadside object (D-098) rolls the car over sideways instead.
-const FLIP_TIME := 2.0
+const FLIP_TIME := 2.0           # roll-over animation
 const FLIP_KINDS := ["palm", "rock", "lamp", "truck"]
 const NEAR_MISS_DX := 3.3
 const TRUCK_LEN := 10.0
 const TRUCK_W := 2.66
 const TRUCK_SHARE := 0.25       # of spawns (D-099)
-const MAX_TRUCKS := 3
+const MAX_TRUCKS := 4
 const ONCOMING_SHARE := 0.4
 const START_S := 30.0           # leaves road behind the car for the chase camera
 const START_LINE := 50.0
@@ -93,6 +95,7 @@ var _nitro_rest := 99.0        # seconds since the last burn
 var _nitro_lock := false       # emptied (or crashed): release both before it burns again
 var spin_t := 0.0              # crash timer (spin-out or flip)
 var flipping := false          # this crash is a roll-over (big obstacle)
+var crash_anim := 0.0          # animation length of the current crash (s)
 var flip_dir := 1.0            # +1 rolls to the right, -1 to the left
 var time_left := START_TIME
 var next_checkpoint := CHECKPOINT_EVERY
@@ -212,6 +215,8 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	if spin_t > 0.0:
 		spin_t -= dt
 		want = 0.0
+		if stalled():
+			v = 0.0
 	steer = move_toward(steer, want, dt * 6.0)
 	var c := track.curvature(s)
 	var push := c * v * v * CENTRIFUGAL           # to the outside: +x on a left curve
@@ -251,8 +256,8 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	# Gravity on hills: a little slower uphill, faster downhill.
 	accel -= track.slope(s) * 9.8 * 0.5
 	v = maxf(0.0, v + accel * dt)
-	if state == State.OVER or spin_t > 0.0:
-		v = maxf(0.0, v)
+	if stalled():
+		v = 0.0
 	# Lateral motion
 	var lat := want * authority
 	if drifting:
@@ -306,12 +311,25 @@ func _end_drift() -> void:
 	drift_points = 0.0
 
 
+## 0..1 through the current crash animation (1 while stopped after it).
+func crash_progress() -> float:
+	if spin_t <= 0.0 or crash_anim <= 0.0:
+		return 1.0
+	return clampf(1.0 - (spin_t - CRASH_STOP) / crash_anim, 0.0, 1.0)
+
+
+## Stopped dead at the end of a crash.
+func stalled() -> bool:
+	return spin_t > 0.0 and spin_t <= CRASH_STOP
+
+
 func _crash(kind: String, side: float = 0.0) -> void:
 	_end_drift()
 	flipping = kind in FLIP_KINDS
 	# Rolls away from the obstacle: one on the right (+side) rolls it left.
 	flip_dir = -signf(side) if side != 0.0 else 1.0
-	spin_t = FLIP_TIME if flipping else SPIN_TIME
+	crash_anim = FLIP_TIME if flipping else SPIN_TIME
+	spin_t = crash_anim + CRASH_STOP
 	v = minf(v, 10.0 if flipping else 14.0)
 	if boosting:
 		boosting = false
@@ -337,7 +355,7 @@ func _collide_objects() -> void:
 ## caught up from behind; the two left lanes are oncoming (dir -1, v < 0).
 ## Trucks are long and slow and count as a big obstacle (a hit rolls the car).
 func traffic_target() -> int:
-	return mini(4 + checkpoints, 11)
+	return mini(7 + 2 * checkpoints, 16)   # D-101 (was min(4 + n, 11))
 
 
 func _update_traffic(dt: float) -> void:

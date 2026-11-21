@@ -240,8 +240,13 @@ func test_breakout_powerups(Sim) -> void:
 	for k in 12:  # still accelerating, not yet at the wall
 		ls.step(dt, false, true, false, 0)
 	check(ls.ghost_xs().size() == 2, "lightspeed: two afterimages while moving")
+	ls.power = 0.2
 	ls._lose_ball()
 	check(ls.powerup == "", "power-up ends on death")
+	check(ls.power == 1.0, "losing a life refills the power bar (D-102)")
+	ls.power = 0.1
+	ls._destroy_ship()
+	check(ls.power == 1.0, "losing the ship refills the power bar (D-102)")
 	# Bricks: lowercase = 2 hits, X = indestructible and doesn't block clearing.
 	var lv = Sim.new()
 	lv.setup(3)
@@ -682,6 +687,20 @@ func test_racer_sim() -> void:
 	tr.traffic = [{"id": 1, "s": 103.0, "x": 1.875, "lane": 2, "v": 30.0, "hue": 0.3, "weave": 0.0, "last_ds": 3.0}]
 	tr.step(dt, false, false)
 	check(tr.spin_t > 0.0 and tr.v <= 14.0 and not tr.flipping, "rear-ending traffic at speed spins out")
+	# Every crash ends stopped dead for CRASH_STOP s, then the car drives on (D-101).
+	tr.traffic.clear()
+	var stopped_for := 0.0
+	var steps := 0
+	while tr.spin_t > 0.0 and steps < 600:
+		tr.step(dt, false, false)
+		tr.traffic.clear()
+		steps += 1
+		if tr.stalled() and tr.v == 0.0:
+			stopped_for += dt
+	for i in 30:
+		tr.step(dt, false, false)
+	check(absf(stopped_for - Sim.CRASH_STOP) < 0.05 and tr.v > 0.0,
+		"a crash ends with the car stopped for %.2f s, then it drives on" % stopped_for)
 	# Traffic keeps to its side (D-099): right lanes go our way, left lanes come
 	# at us; some of it is trucks.
 	var tf = Sim.new()

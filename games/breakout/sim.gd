@@ -826,6 +826,7 @@ func _destroy_ship() -> void:
 		state = State.OVER
 		events.append(["over", score])
 	else:
+		power = 1.0  # a new life starts with a full power bar (D-102)
 		_reset_serve()
 
 
@@ -837,4 +838,5 @@ func _lose_ball() -> void:
 		state = State.OVER
 		events.append(["over", score])
 	else:
+		power = 1.0  # a new life starts with a full power bar (D-102)
 		_reset_serve()
