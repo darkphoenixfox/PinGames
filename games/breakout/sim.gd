@@ -88,7 +88,7 @@ const POWERUP_CHANCE := 0.7          # ...has a 70% chance to drop one
 const POWERUP_FALL := 2.2
 const POWERUP_R := 0.28
 const POWERUP_KINDS := ["T", "P", "B", "I", "L", "S"]
-const TRIPLE_ANGLE := 45.0           # T: side bolts at +-45 degrees
+const TRIPLE_ANGLE := 20.0           # T: side bolts at +-20 degrees (D-078)
 const POWER_CHARGE_MULT := 3.0       # P: charges 3x faster (one phase)
 const ION_BEAM_W := 0.7              # I: width of the beam
 const LIGHTSPEED_MULT := 1.3         # L: ship speed (assumption, D-072)
@@ -441,9 +441,15 @@ func _ion_beam(x: float) -> void:
 	for k in range(enemies.size() - 1, -1, -1):
 		if enemies[k].state != "wormhole" and not BP.collide_circle_rect(enemies[k].pos, ENEMY_R, beam).is_empty():
 			_destroy_enemy(k)
+	# Only one brick column burns: the one closest to the beam centre (D-078).
+	var col_x := INF
+	for b in bricks:
+		if b.alive and not b.metal and beam.intersects(b.rect) \
+				and absf(b.rect.get_center().x - x) < absf(col_x - x):
+			col_x = b.rect.get_center().x
 	for j in bricks.size():
 		var b: Dictionary = bricks[j]
-		if b.alive and not b.metal and beam.intersects(b.rect):
+		if b.alive and not b.metal and absf(b.rect.get_center().x - col_x) < 0.01:
 			b.hp = 1
 			if _damage_brick(j):
 				return
@@ -683,6 +689,7 @@ func _update_powerups(dt: float) -> void:
 		if not BP.collide_circle_rect(p.pos, POWERUP_R, pr).is_empty() and state != State.OVER:
 			powerups.remove_at(i)
 			apply_powerup(p.kind)
+			power = minf(1.0, power + 1.0 / BLAST_MAX_LEVEL)  # +1 bar level (D-078)
 			events.append(["powerup_collect", [p.id, p.kind]])
 		elif p.pos.y - POWERUP_R > DRAIN_Y:
 			powerups.remove_at(i)

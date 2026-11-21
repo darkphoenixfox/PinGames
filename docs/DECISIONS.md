@@ -742,3 +742,9 @@
 - **Why:** arrows exist in the same place on every keyboard layout and avoid the Shift / accessibility-shortcut problems.
 - **Consequences:** `flip_l = key:Left`, `flip_r = key:Right`; controller unchanged (L1/R1). Encoders that send Shift can be remapped in the operator menu.
 - **Status:** Accepted
+
+### D-078 — Capsules refill one bar level; triple at 20°; ion beam one column
+- **Date:** 2026-11-21
+- **Decision (director):** grabbing a power-up capsule restores 1 level of the power bar; the triple shot's side bolts fly at 20° instead of 45°; the ion cannon must not break 2 brick columns at once.
+- **Implementation:** collecting adds 1/3 bar (capped). `TRIPLE_ANGLE = 20`. `_ion_beam` burns only the brick column whose centre is closest to the beam (enemies anywhere in the beam still die).
+- **Status:** Accepted (supersedes the ±45° of D-072)

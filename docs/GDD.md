@@ -131,11 +131,11 @@ Rules:
 - **Attract and intro (D-061):** the game opens in its own **attract mode**. The TABLE shows the title and a blinking PRESS START over the planet and stars. The DMD cycles the title and PRESS START, the top-5 high scores, and pixel animations. **Start** (or Launch) plays a jingle and shows **GET READY** on the DMD and in the middle of the TABLE. The **wall forms**: bricks drop in one after another, top row first, falling in 3D from above and settling with a bounce. Then the **ship blasts up** from below the screen on a downward **belly afterburner** and settles into place. Play begins with PLASMA CANNON READY.
 - **Levels (D-068):** stages are text files in `games/breakout/levels/`, one character per brick (R/Y/G/B = colour, `.` = empty, `#` = comment line), up to 11 columns × 10 rows. **Level 1** is 4 rows of 11 (44 bricks). **Level 2** is a stepped nanomachine **pyramid**. After the last file the levels loop.
 - **Level complete (D-068):** every enemy on screen explodes and the DMD plays "LEVEL CLEAR! +1000". The ship **flies away** up the screen and toward the viewer (rising, growing, pitching) on its belly afterburner. The screen **fades to black**, then the next level loads with the same intro (bricks drop in, ship blasts in) and "LEVEL n".
-- **Power-ups (D-072):** every 10th brick destroyed has a 70 % chance to drop a capsule (glossy coloured sphere, letter, two orbiting electrons). Catch it with the ship. One at a time; lasts until the level ends or you die. The DMD shows its letter next to the power bar, and the bar takes its colour.
-  - **T** (blue) Triple laser: the charged shot fires 3 bolts, straight up and at ±45°.
+- **Power-ups (D-072):** every 10th brick destroyed has a 70 % chance to drop a capsule (glossy coloured sphere, letter, two orbiting electrons). Catch it with the ship: it also refills one bar level (D-078). One at a time; lasts until the level ends or you die. The DMD shows its letter next to the power bar, and the bar takes its colour.
+  - **T** (blue) Triple laser: the charged shot fires 3 bolts, straight up and at ±20° (D-078).
   - **P** (red) Power laser: charges straight to level 3 in one phase, with only the level-3 effects.
   - **B** (yellow) Bounce plasma: the shot is an extra plasma ball that rebounds like the main one; 1 level, full bar. A life is only lost once every ball has sunk.
-  - **I** (purple) Ion cannon: level 3 only, full bar; an instant beam fries everything straight above the ship.
+  - **I** (purple) Ion cannon: level 3 only, full bar; an instant beam fries the one brick column straight above the ship (D-078).
   - **L** (white) Lightspeed: no shot, no bar; the ship is 30 % faster and leaves two afterimages that also bounce the plasma.
   - **S** (green) Shield: no shot, no bar; a green barrier at the bottom saves one sinking ball.
   - The ship never blocks a ball rising from below.

@@ -156,6 +156,15 @@ func test_breakout_powerups(Sim) -> void:
 			if e[0] == "powerup_collect":
 				got = e[1][1]
 	check(got == "T" and c.powerup == "T", "power-up capsule collected")
+	var rc = mk.call()
+	rc.power = 0.1
+	rc.spawn_powerup("S", Vector2(rc.paddle_x, Sim.PADDLE_Y - 1.0))
+	var ctl = mk.call()
+	ctl.power = 0.1
+	for k in 90:
+		rc.step(dt, false, false, false, 0)
+		ctl.step(dt, false, false, false, 0)
+	check(absf(rc.power - ctl.power - 1.0 / 3.0) < 0.02, "capsule restores one bar level (+%.2f)" % (rc.power - ctl.power))
 	# T: triple laser fires 3 bolts.
 	c.power = 1.0
 	for k in 50:
@@ -189,6 +198,16 @@ func test_breakout_powerups(Sim) -> void:
 		ion.step(dt, true, true, false, 0)
 	ion.step(dt, false, false, false, 0)
 	check(ion.power < 0.1 and ion.bricks_alive() <= before - 4, "ion beam fries the column (%d -> %d)" % [before, ion.bricks_alive()])
+	# Beam centred on a column gap still burns only one column.
+	var ig = mk.call()
+	ig.freeze_ball = true
+	var xs := {}
+	var b0: Dictionary = ig.bricks[0]
+	ig._ion_beam(b0.rect.end.x + Sim.BRICK_GAP * 0.5)
+	for b in ig.bricks:
+		if not b.alive:
+			xs[snappedf(b.rect.get_center().x, 0.01)] = true
+	check(xs.size() == 1, "ion beam never burns two columns (%d)" % xs.size())
 	# B: extra ball; losing the main ball while it lives costs no charge.
 	var bb = mk.call()
 	bb.apply_powerup("B")
