@@ -241,13 +241,13 @@ class ShipEngine:
 	var _particles: CPUParticles3D
 	var _light: OmniLight3D
 
-	func _init(dir_x: float) -> void:
+	func _init(dir: Vector3) -> void:
 		_particles = CPUParticles3D.new()
 		_particles.amount = 40
 		_particles.lifetime = 0.26
 		_particles.local_coords = true  # the flame stays attached to the nozzle
 		_particles.emitting = false
-		_particles.direction = Vector3(dir_x, 0.0, 0.0)
+		_particles.direction = dir.normalized()
 		_particles.spread = 3.0  # narrow: the cone shape comes from shrinking particles
 		_particles.gravity = Vector3.ZERO
 		_particles.initial_velocity_min = 3.0
@@ -288,7 +288,7 @@ class ShipEngine:
 		_light.light_color = Color(0.35, 0.6, 1.0)
 		_light.omni_range = 1.4
 		_light.light_energy = 0.0
-		_light.position = Vector3(dir_x * 0.15, 0.35, 0.0)
+		_light.position = dir.normalized() * 0.15 + Vector3(0.0, 0.35, 0.0)
 		add_child(_light)
 
 	func set_thrust(t: float) -> void:

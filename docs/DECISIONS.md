@@ -594,3 +594,19 @@
   - **Use:** project-wide theme font (`gui/theme/custom_font`). Import has antialiasing, hinting and subpixel positioning off. `UI.label()` snaps sizes to multiples of 12 (`UI.pixel_size`), with a 2-font-pixel outline.
   - **DMD:** keeps its own 5×7 dot font (D-027).
 - **Status:** Accepted
+
+### D-061 — Tilt Breaker attract mode and intro
+- **Date:** 2026-11-21
+- **Decision (director):**
+  - The game starts in attract mode, with high scores and pixel animations on the DMD.
+  - Start shows a game-start message on the DMD and in the middle of the screen.
+  - The wall forms with bricks arriving in sequence, dropping into place in 3D.
+  - The ship blasts in from the bottom of the screen on a bottom afterburner.
+- **Implementation:**
+  - **Phases:** `game.gd` runs `attract` → `intro` → `play`, and the sim isn't stepped until `play`.
+  - **Attract:** the TABLE shows the title and a blinking PRESS START. The DMD step list shows title/PRESS START, "HIGH SCORES" and the top 5, and the `tetra_hit` / `incoming` / `rack_clear` clips plus the credit status.
+  - **Intro:** Start or Launch plays the start jingle, shows GET READY (DMD and TABLE) and runs a backglass chase. Bricks drop with a 22 ms stagger, a 0.4 s fall from 9 units with an ease-out bounce and a little tumble, and a clack every few landings. The ship rises from z = 10.5 over 0.8 s on a belly `ShipEngine` (pointing +Z), then settles for 0.35 s.
+  - **Engines:** `Fx.ShipEngine` now takes a `Vector3` direction.
+  - **Dev:** `--tb-skip-intro`.
+  - **Note:** in coin mode, the credit is still spent when the game is chosen on the picker (shell), not on the in-game Start.
+- **Status:** Accepted

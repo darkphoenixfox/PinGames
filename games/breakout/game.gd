@@ -33,6 +33,14 @@ const CIRCUIT_COLOURS := ["red", "red", "yellow", "green", "blue", "blue"]
 const CIRCUIT_GLOW := {"red": Color("ff5a32"), "yellow": Color("ffd23e"), "green": Color("4dff6a"), "blue": Color("3ec7ff")}
 const CIRCUIT_TEXELS := 512.0
 const BRICK_TEXELS_W := 64.0  # texels across one brick (chunky pixel size)
+## Attract + intro (D-061): bricks drop in one after another, then the ship
+## blasts up from below on its belly afterburner.
+const INTRO_BRICK_STAGGER := 0.022  # s between bricks
+const INTRO_BRICK_FALL := 0.4       # s each brick takes to drop into place
+const INTRO_DROP_HEIGHT := 9.0      # units above the playfield (towards the camera)
+const INTRO_SHIP_TIME := 0.8
+const INTRO_SHIP_FROM_Z := 10.5     # below the bottom of the screen
+const INTRO_SETTLE := 0.35          # pause after the ship arrives
 ## Game-over finale (D-044): explosion fills the screen, fade to black, then
 ## GAME OVER + score; Launch/Start may skip once the score is shown.
 const FINALE_FADE_AT := 0.9
@@ -140,6 +148,11 @@ const SOUNDS := {
 		[{"f": [1800.0, 50.0], "t": 1.2, "w": "lfsr", "v": 0.45, "lp": 0.5}],
 		[{"f": [140.0, 30.0], "t": 1.0, "w": "sine", "v": 0.55}],
 		[{"f": [880.0, 110.0], "t": 0.6, "w": "saw", "v": 0.15, "vib": [20.0, 1.0]}]], "echo": [0.12, 0.35, 0.6]},
+	"tb_brick_land": {"voices": [[{"f": [1500.0, 700.0], "t": 0.035, "w": "pulse12", "v": 0.1}]]},
+	"tb_ship_arrive": {"voices": [  # belly afterburner roar
+		[{"f": [180.0, 1800.0], "t": 0.7, "w": "noise", "v": 0.22, "lp": 0.45, "env": "lin"}],
+		[{"f": [55.0, 110.0], "t": 0.7, "w": "saw", "v": 0.18, "lp": 0.4, "env": "lin"}]],
+		"echo": ECHO},
 	"tb_low_power": {"voices": [[{"f": [220.0, 220.0], "t": 0.08, "w": "pulse25", "v": 0.2, "env": "hold", "gap": 0.04},
 		{"f": [165.0, 165.0], "t": 0.16, "w": "pulse25", "v": 0.2}]]},
 }
@@ -181,6 +194,17 @@ var _finale_t := -1.0
 var _finale_black: ColorRect
 var _finale_text: Control
 var _shown_score := -1
+## "attract" -> (Start) -> "intro" -> "play" (D-061)
+var _phase := "attract"
+var _phase_t := 0.0
+var _belly_engine: Node3D
+var _attract_ui: Control
+var _attract_blink: Label
+var _ready_label: Label
+var _attract_steps: Array = []  # [Callable, seconds]
+var _attract_step := -1
+var _attract_left := 0.0
+var _landed := 0
 
 
 func get_info() -> Dictionary:
@@ -198,12 +222,21 @@ func start(_players: int) -> void:
 	_build_bricks()
 	_build_hud()
 	_build_backglass()
-	_refresh_status()
 	DebugTools.debug_action.connect(_on_debug_action)
+	if Config.cli.has("tb-skip-intro"):  # dev: straight into play
+		_enter_play()
+	else:
+		_enter_attract()
 
 
 func on_action(action: StringName, pressed: bool) -> void:
 	if not pressed:
+		return
+	if _phase == "attract":
+		if action == &"start" or action == &"launch":
+			_begin_intro()
+		return
+	if _phase == "intro":
 		return
 	if _finale_t >= FINALE_SKIP_AT and (action == &"launch" or action == &"start"):
 		_finale_t = FINALE_END_AT
@@ -219,6 +252,15 @@ func on_action(action: StringName, pressed: bool) -> void:
 
 func _process(delta: float) -> void:
 	if sim == null:
+		return
+	_phase_t += delta
+	if _phase == "attract":
+		_attract(delta)
+		_animate(delta)
+		return
+	if _phase == "intro":
+		_animate(delta)
+		_intro()
 		return
 	if _finale_t >= 0.0:
 		_finale(delta)
@@ -337,8 +379,8 @@ func _refresh_status() -> void:
 	if _shown_score != sim.score:
 		_shown_score = sim.score
 		score_changed.emit(0, sim.score)
-	if _finale_t >= 0.0:
-		return  # the finale owns the DMD
+	if _finale_t >= 0.0 or _phase != "play":
+		return  # the finale / attract / intro own the DMD
 	Dmd.show_status(sim.score, sim.balls_left, int(Config.get_value("operator", "balls_per_game")),
 		sim.power, 3, ACCENT)
 
@@ -388,12 +430,18 @@ func _animate(delta: float) -> void:
 	_refresh_status()  # DMD power bar changes continuously
 	_update_backglass_lights(delta)
 	# "PLASMA CANNON READY" blinks while waiting to fire (D-059).
+	if _hint != null and _phase != "play":
+		_hint.visible = false
 	if _hint != null and _hint.visible:
 		_hint.modulate.a = 1.0 if fmod(Time.get_ticks_msec() / 1000.0, 0.8) < 0.5 else 0.0
 	_animate_blasts(delta)
 	_animate_enemies(delta)
 	# Ship respawn: hidden briefly after being destroyed, then blinks while invulnerable.
-	if sim.ship_invulnerable > 0.0:
+	if _phase == "attract":
+		_paddle.visible = false
+	elif _phase == "intro":
+		pass  # positioned and shown by _intro()
+	elif sim.ship_invulnerable > 0.0:
 		var since := Sim.SHIP_INVULNERABLE - sim.ship_invulnerable
 		_paddle.visible = since > 0.6 and fmod(Time.get_ticks_msec() / 1000.0, 0.2) < 0.13
 	else:
@@ -572,7 +620,7 @@ func _build_ship(fallback_mat: Material) -> void:
 		_ship.add_child(_box(Vector3(Sim.PADDLE_W, 0.3, Sim.PADDLE_H), Vector3.ZERO, fallback_mat))
 	# Side engines (left fires outward to -X, right to +X).
 	for side in [-1.0, 1.0]:
-		var eng := Fx.ShipEngine.new(side)
+		var eng := Fx.ShipEngine.new(Vector3(side, 0.0, 0.0))
 		eng.position = Vector3(side * ENGINE_X, 0.0, 0.0)
 		_ship.add_child(eng)
 		_engines.append(eng)
@@ -587,6 +635,10 @@ func _build_ship(fallback_mat: Material) -> void:
 	shield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	shield.position = Vector3(0.0, 0.08, -Sim.PADDLE_H * 0.5 - 0.2)
 	_ship.add_child(shield)
+	# Belly afterburner (D-061): fires downwards for the ship's entrance.
+	_belly_engine = Fx.ShipEngine.new(Vector3(0.0, 0.0, 1.0))
+	_belly_engine.position = Vector3(0.0, -0.05, Sim.PADDLE_H * 0.5)
+	_ship.add_child(_belly_engine)
 	# Blast charge (D-053): particles gather at a point in front of the nose while
 	# charging; once charged, the plasma ball appears there until release.
 	var charge_point := Vector3(0.0, 0.1, -Sim.PADDLE_H * 0.5 - 0.3)
@@ -733,6 +785,139 @@ func _on_debug_action(action: StringName) -> void:
 		sim.debug_fire_line()
 		Audio.sfx("tb_blast3")
 		_spawn_blast_node(3)
+
+
+# --- attract + intro (D-061) ---------------------------------------------------------
+func _enter_attract() -> void:
+	_phase = "attract"
+	_phase_t = 0.0
+	for n in _brick_nodes:
+		n.visible = false
+	_paddle.visible = false
+	_attract_ui = UI.vstack(60)
+	_attract_ui.add_child(UI.label(tr("GAME_BREAKOUT_TITLE"), 132, ACCENT))
+	_attract_blink = UI.label(tr("TB_PRESS_START"), 72, UI.WHITE)
+	_attract_ui.add_child(_attract_blink)
+	add_to_table(_attract_ui)
+	_build_attract_steps()
+
+
+## DMD attract loop: title / PRESS START, high scores, pixel animations.
+func _build_attract_steps() -> void:
+	var title: String = tr("GAME_BREAKOUT_TITLE")
+	_attract_steps = [
+		[func(): Dmd.show_text(title, tr("TB_PRESS_START"), Dmd.CYAN, Dmd.WHITE), 3.0],
+		[func(): Dmd.show_text(tr("ATTRACT_HIGH_SCORES"), "", Dmd.YELLOW), 1.4],
+	]
+	var table: Array = HighScores.get_table("breakout")
+	for i in mini(5, table.size()):
+		var row: Array = table[i]
+		var line := "%d. %s %s" % [i + 1, row[0], ScoreTable.format_score(int(row[1]))]
+		var col: Color = Dmd.YELLOW if i == 0 else Dmd.WHITE
+		_attract_steps.append([func(): Dmd.show_text(line, "", col), 1.3])
+	_attract_steps.append([func(): _dmd_anim("tetra_hit"), DmdAnims.DURATIONS["tetra_hit"] + 0.2])
+	_attract_steps.append([func(): Dmd.show_text(title, Credits.status_text(), Dmd.CYAN, Dmd.GREEN), 2.0])
+	_attract_steps.append([func(): _dmd_anim("incoming"), DmdAnims.DURATIONS["incoming"] + 0.2])
+	_attract_steps.append([func(): _dmd_anim("rack_clear"), DmdAnims.DURATIONS["rack_clear"] + 0.2])
+	_attract_step = -1
+	_attract_left = 0.0
+
+
+func _attract(delta: float) -> void:
+	_attract_blink.visible = fmod(_phase_t, 1.0) < 0.6
+	_attract_left -= delta
+	if _attract_left <= 0.0 and not _attract_steps.is_empty():
+		_attract_step = (_attract_step + 1) % _attract_steps.size()
+		var step: Array = _attract_steps[_attract_step]
+		(step[0] as Callable).call()
+		_attract_left = step[1]
+
+
+func _begin_intro() -> void:
+	_phase = "intro"
+	_phase_t = 0.0
+	_landed = 0
+	if is_instance_valid(_attract_ui):
+		_attract_ui.queue_free()
+	Audio.sfx("start")
+	Dmd.play(Callable(), 0.0)
+	Dmd.show_text(tr("TB_GET_READY"), tr("DMD_PLAYER_1"), Dmd.YELLOW, Dmd.WHITE)
+	_ready_label = UI.label(tr("TB_GET_READY"), 108, UI.YELLOW)
+	_ready_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ready_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	add_to_table(_ready_label)
+	_lights.chase(1.5)
+
+
+## Bricks drop in one after another (3D fall with a little bounce), then the
+## ship rises from below the screen on its belly afterburner.
+func _intro() -> void:
+	var t := _phase_t
+	var landed := 0
+	for i in _brick_nodes.size():
+		var n := _brick_nodes[i]
+		var r: Rect2 = sim.bricks[i].rect
+		var k := (t - i * INTRO_BRICK_STAGGER) / INTRO_BRICK_FALL
+		n.visible = k > 0.0
+		if k <= 0.0:
+			continue
+		k = minf(k, 1.0)
+		var drop := INTRO_DROP_HEIGHT * pow(1.0 - _ease_out_bounce(k), 1.0)
+		n.position = Vector3(r.get_center().x, drop, r.get_center().y)
+		n.rotation = Vector3((1.0 - k) * 0.6, 0.0, (1.0 - k) * 0.4 * (1.0 if i % 2 == 0 else -1.0))
+		if k >= 1.0:
+			landed += 1
+	while _landed < landed:
+		_landed += 1
+		if _landed % 3 == 1:  # don't spam: a clack every few bricks
+			Audio.sfx("tb_brick_land")
+	var bricks_done := (_brick_nodes.size() - 1) * INTRO_BRICK_STAGGER + INTRO_BRICK_FALL
+	var st := (t - bricks_done) / INTRO_SHIP_TIME
+	if st < 0.0:
+		_paddle.visible = false
+		_belly_engine.set_thrust(0.0)
+		return
+	if not _paddle.visible:
+		_paddle.visible = true
+		Audio.sfx("tb_ship_arrive")
+	var e := 1.0 - pow(1.0 - clampf(st, 0.0, 1.0), 3.0)  # ease out
+	_paddle.position = Vector3(sim.paddle_x, 0.0, lerpf(INTRO_SHIP_FROM_Z, Sim.PADDLE_Y, e))
+	_belly_engine.set_thrust(1.5 * (1.0 - e) + 0.1 if st < 1.0 else 0.0)
+	if st >= 1.0 + INTRO_SETTLE / INTRO_SHIP_TIME:
+		_enter_play()
+
+
+func _enter_play() -> void:
+	_phase = "play"
+	_phase_t = 0.0
+	for i in _brick_nodes.size():
+		var r: Rect2 = sim.bricks[i].rect
+		_brick_nodes[i].visible = sim.bricks[i].alive
+		_brick_nodes[i].position = Vector3(r.get_center().x, 0.0, r.get_center().y)
+		_brick_nodes[i].rotation = Vector3.ZERO
+	_belly_engine.set_thrust(0.0)
+	if is_instance_valid(_ready_label):
+		_ready_label.queue_free()
+	if is_instance_valid(_attract_ui):
+		_attract_ui.queue_free()
+	_hint.visible = true
+	_shown_score = -1
+	_refresh_status()
+
+
+static func _ease_out_bounce(x: float) -> float:
+	const N := 7.5625
+	const D := 2.75
+	if x < 1.0 / D:
+		return N * x * x
+	if x < 2.0 / D:
+		x -= 1.5 / D
+		return N * x * x + 0.75
+	if x < 2.5 / D:
+		x -= 2.25 / D
+		return N * x * x + 0.9375
+	x -= 2.625 / D
+	return N * x * x + 0.984375
 
 
 ## Plays one of the Tilt Breaker DMD pixel animations (D-056), unless the
