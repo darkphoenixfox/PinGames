@@ -898,3 +898,10 @@
 - **Date:** 2026-11-21
 - **Decision (director):** attract and the first race play `codemanu_action_3`. Later races and checkpoints step on from there (4, 5, 1, 2, …).
 - **Status:** Accepted
+
+### D-096 — UI rule: blinking and changing elements never move their neighbours
+- **Date:** 2026-11-21
+- **Problem (director):** in Turbo Run's attract screen, the flashing PRESS START made the instructions below it move up and down. That is bad UX: changes in one UI element must not make others dance.
+- **Cause:** the blink toggled `visible`, and a hidden Control collapses in its VBoxContainer. Tilt Breaker's attract screen had the same bug.
+- **Rule:** blink with `modulate.a`, which keeps the layout space. Elements whose text changes length inside a container get a fixed minimum size or their own anchored slot.
+- **Status:** Accepted

@@ -241,7 +241,9 @@ func _enter_attract() -> void:
 
 
 func _attract_tick() -> void:
-	_attract_blink.visible = fmod(_phase_t, 1.0) < 0.6
+	# Blink by alpha, not visibility: a hidden label collapses in its VBox and
+	# makes the text below it jump (D-096).
+	_attract_blink.modulate.a = 1.0 if fmod(_phase_t, 1.0) < 0.6 else 0.0
 	var step := int(_phase_t / 3.0) % 3
 	if step != int((_phase_t - get_process_delta_time()) / 3.0) % 3 or _phase_t < 0.05:
 		match step:

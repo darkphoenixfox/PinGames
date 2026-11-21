@@ -966,7 +966,9 @@ func _build_attract_steps() -> void:
 
 
 func _attract(delta: float) -> void:
-	_attract_blink.visible = fmod(_phase_t, 1.0) < 0.6
+	# Blink by alpha, not visibility: a hidden label collapses in its VBox and
+	# makes the text below it jump (D-096).
+	_attract_blink.modulate.a = 1.0 if fmod(_phase_t, 1.0) < 0.6 else 0.0
 	_attract_left -= delta
 	if _attract_left <= 0.0 and not _attract_steps.is_empty():
 		_attract_step = (_attract_step + 1) % _attract_steps.size()
