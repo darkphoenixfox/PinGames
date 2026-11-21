@@ -141,7 +141,7 @@ func _setup_cabinet(_two_screens: bool) -> void:
 func _add_framed_dmd(win: Window) -> void:
 	var r := str(Config.get_value("display", "dmd_region")).split_floats(",")
 	if r.size() != 4:
-		r = PackedFloat64Array([0.25, 0.78, 0.5, 0.18])
+		r = PackedFloat64Array([0.2, 0.755, 0.6, 0.216])
 	var ws := Vector2(win.size)
 	var box := Rect2(r[0] * ws.x, r[1] * ws.y, r[2] * ws.x, r[3] * ws.y)
 	var aspect := float(Dmd.size.x) / float(Dmd.size.y)

@@ -760,7 +760,7 @@
 - **Decision (director):** add `_2screen` versions of the backglass (on/off). On 2-screen cabinets, place the DMD at the bottom of the second screen, centred, with a frame around it.
 - **Implementation:**
   - **Setting:** the existing operator layout setting (Windowed / 2 screens / 3 screens, D-006) chooses the mode. `Screens.dmd_in_backglass` is true for 2 screens, or whenever DMD output = backglass. The windowed dev layout honours it too, as a preview (`--display.dmd_sink=backglass`).
-  - **Placement:** the backglass art is no longer squashed above a strip; it fills the screen. The DMD keeps its dot aspect, centred in `dmd_region`, whose default changes to `0.25,0.78,0.5,0.18`. Around it there is a bezel: a gunmetal border with a bright bevel, a drop shadow, and a thin cyan glowing inner trim.
+  - **Placement:** the backglass art is no longer squashed above a strip; it fills the screen. The DMD keeps its dot aspect, centred in `dmd_region`, whose default changes to `0.25,0.78,0.5,0.18` (enlarged in D-086). Around it there is a bezel: a gunmetal border with a bright bevel, a drop shadow, and a thin cyan glowing inner trim.
   - **Art:** Tilt Breaker loads `backglass_{off,on,mask,mask_logo}_2screen.png` in that mode. `prepare_backglass_lights.py` gains a suffix argument with grouping tuned for the higher framing: engines below 42 % height, the logo above 22 %, and a comet touching the logo split off into shots.
 - **Status:** Accepted (supersedes the full-width DMD strip of D-013)
 
@@ -803,3 +803,9 @@
 - **Decision (director, bug):** if the ship was moving when the level ended, the transition kept its offset position, bank and side thrusters. Reset it to neutral before it flies off.
 - **Implementation:** `_begin_outro()` clears the paused sim's `paddle_vx`, so per-frame banking levels out and the side thrusters cut. During the 0.9 s before lift-off, the ship glides (smoothstep) from where it was to the centre of the field. Then it lifts off on the belly engines as before.
 - **Status:** Accepted
+
+### D-086 — 2-screen DMD 20 % bigger
+- **Date:** 2026-11-21
+- **Decision (director):** make the 2-screen DMD 20 % bigger.
+- **Implementation:** the default `dmd_region` changes from `0.25,0.78,0.5,0.18` to `0.2,0.755,0.6,0.216`. The DMD is about 933×233 px at backglass base resolution (it was 777×194), and its frame keeps a ~15 px margin above the bottom edge.
+- **Status:** Accepted (refines D-080)

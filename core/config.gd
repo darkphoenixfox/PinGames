@@ -24,7 +24,7 @@ const DEFAULTS := {
 		"dmd_sink": "window",
 		# Box for the DMD inside the backglass, as fractions x,y,w,h. The DMD keeps
 		# its dot aspect, centred in the box, with a frame around it (D-080).
-		"dmd_region": "0.25,0.78,0.5,0.18",
+		"dmd_region": "0.2,0.755,0.6,0.216",
 		# "auto" or a number (1.0 = base resolution 1080x1920 for the table)
 		"render_scale": "auto",
 	},
