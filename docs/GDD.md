@@ -189,7 +189,7 @@ Rules:
   - Flippers steer.
   - **2+1:** throttle and braking are automatic. The car brakes by itself when a corner would throw it off and it isn't drifting.
   - **4+1:** magna R = accelerate, magna L = brake. This switches on at the first magna press when `operator.cabinet_buttons` = auto, and is always on when it is 4.
-  - Holding **both flippers for 2 s fires NITRO**: 3 charges, +1 per checkpoint, +1 per 4 s of drifting.
+  - Holding **both flippers burns NITRO** from a bar for as long as they are held (a full bar lasts 4 s). The bar refills by itself when not in use (14 s from empty, after a 1 s pause), faster while drifting, and +30 % per checkpoint (D-097).
   - Launch/Start begins the race.
 - **Drifting (the core skill):**
   - Steer *into* a corner at more than about 150 km/h to break loose. In manual mode, brake plus steer also starts a drift.

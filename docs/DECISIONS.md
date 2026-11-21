@@ -905,3 +905,19 @@
 - **Cause:** the blink toggled `visible`, and a hidden Control collapses in its VBoxContainer. Tilt Breaker's attract screen had the same bug.
 - **Rule:** blink with `modulate.a`, which keeps the layout space. Elements whose text changes length inside a container get a fixed minimum size or their own anchored slot.
 - **Status:** Accepted
+
+### D-097 — Turbo Run nitro is a bar that drains while held and refills over time (supersedes D-089's charges)
+- **Date:** 2026-11-21
+- **Decision (director):** instead of hold 2 s, then fire a charge, nitro is a bar.
+  - **Drain:** holding both flippers burns it for as long as they are held.
+  - **Refill:** it recovers over time when not in use.
+- **Tuning:**
+  - Both flippers must be held 0.15 s before it burns, so a stray double tap doesn't fire it.
+  - A full bar lasts 4 s.
+  - It refills from empty in 14 s, starting 1 s after the last burn.
+  - Drifting adds 6 % per second, and each checkpoint adds 30 %.
+  - Emptying the bar or crashing stops the burn until both flippers are released.
+- **HUD:** one 300 px bar replaces the 3 pips and the hold-progress bar. It flickers white while burning and dims when low.
+- **Sounds and strings:** the hold-charge and +1 sounds and the `RC_NITRO_PLUS` string are removed.
+- **Exhaust flames:** they are now children of the car body (they used to be on the road frame), so they follow its yaw, drift and sprite steps. They sit on the model's exhaust pipes (x ±0.57 m, 0.28 m up, at the rear bumper), which are lower and wider than before. The cone is thinner (0.1 m radius).
+- **Status:** Accepted (tuning pending playtest)

@@ -592,24 +592,41 @@ func test_racer_sim() -> void:
 	for i in 60 * 8:
 		c.step(dt, false, false)
 	check(c.v > 60.0, "auto throttle reaches speed (%.0f m/s)" % c.v)
-	# Nitro: both flippers held for 2 s uses a charge.
+	# Nitro bar (D-097): burns while both flippers are held, refills when not.
 	var n = Sim.new()
 	n.setup(7)
 	n.state = Sim.State.RACE
 	n.v = 50.0
 	var got := false
-	for i in 60 * 2 + 5:
+	for i in 60:
 		n.step(dt, true, true)
 		for e in n.events:
 			got = got or e[0] == "nitro"
-	check(got and n.nitro == Sim.NITRO_MAX - 1 and n.nitro_t > 0.0, "holding both flippers 2 s fires nitro")
+	var after_1s: float = n.nitro
+	check(got and n.boosting and n.v > 55.0 and absf(after_1s - (1.0 - (1.0 - Sim.NITRO_ENGAGE) / Sim.NITRO_BURN)) < 0.03,
+		"holding both flippers burns nitro over time (bar %.2f)" % after_1s)
+	var ended := false
+	n.step(dt, false, false)
+	for e in n.events:
+		ended = ended or e[0] == "nitro_end"
+	check(ended and not n.boosting, "releasing the flippers stops the nitro")
+	for i in 60 * 4:
+		n.step(dt, false, false)
+	check(n.nitro > after_1s + 0.1, "the nitro bar recovers when not in use")
+	var emptied := false
+	for i in 60 * 6:
+		n.s = Sim.START_S   # stay on the start straight (no steering while boosting)
+		n.step(dt, true, true)
+		for e in n.events:
+			emptied = emptied or e[0] == "nitro_empty"
+	check(emptied and n.nitro < 0.2 and not n.boosting, "an empty bar stops the nitro until the flippers are released")
 	var q = Sim.new()
 	q.setup(7)
 	q.state = Sim.State.RACE
-	for i in 60:
+	for i in 5:
 		q.step(dt, true, true)
 	q.step(dt, false, false)
-	check(q.nitro == Sim.NITRO_MAX and q.nitro_t <= 0.0, "a short both-flipper hold does not fire nitro")
+	check(q.nitro == 1.0 and not q.boosting, "a stray both-flipper tap does not burn nitro")
 	# Drift: steering into a sharp curve at speed breaks loose and scores.
 	var d = Sim.new()
 	d.setup(7)

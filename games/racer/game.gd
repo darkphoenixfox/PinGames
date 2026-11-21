@@ -7,7 +7,7 @@
 ##   flippers = steer; throttle/brake automatic (2+1 buttons)
 ##   magna_r = accelerate, magna_l = brake (4+1: switches on at the first press
 ##   when operator.cabinet_buttons = auto, always on when = 4)
-##   hold both flippers 2 s = NITRO
+##   hold both flippers = NITRO (drains a bar that refills by itself, D-097)
 extends "res://core/game_module.gd"
 
 const Sim = preload("res://games/racer/sim.gd")
@@ -27,6 +27,7 @@ const MODEL_TURN := Basis(Vector3.UP, PI)
 const SPRITE_ANGLES := 32
 ## Nose turn at full steer (rad): ~1.5 sprite steps, visible on straights.
 const STEER_YAW := 0.3
+const NITRO_BAR_W := 300.0
 const CAR_TEXTURE := "res://assets/models/racer/red_car_albedo.png"
 
 const ACCENT := Color("ffd23e")
@@ -79,10 +80,7 @@ const SOUNDS := {
 		[{"f": [200.0, 3000.0], "t": 0.5, "w": "noise", "v": 0.35, "lp": 0.3, "env": "lin"}],
 		[{"f": [70.0, 40.0], "t": 0.7, "w": "sine", "v": 0.55}],
 		[{"f": [440.0, 1320.0], "t": 0.4, "w": "saw", "v": 0.12, "lp": 0.5}]], "reverb": [0.7, 0.25]},
-	"rc_nitro_hold": {"voices": [[{"f": [220.0, 880.0], "t": 2.0, "w": "pulse25", "v": 0.12, "env": "hold", "vib": [14.0, 0.3]}]]},
 	"rc_nitro_empty": {"voices": [[{"f": [300.0, 150.0], "t": 0.3, "w": "square", "v": 0.25}]]},
-	"rc_nitro_gain": {"voices": [[{"f": [1320.0, 1320.0], "t": 0.06, "w": "pulse25", "v": 0.2, "env": "hold"},
-		{"f": [1760.0, 1760.0], "t": 0.25, "w": "pulse25", "v": 0.2}]], "echo": [0.08, 0.3, 0.5]},
 	"rc_near_miss": {"voices": [[{"f": [3000.0, 500.0], "t": 0.35, "w": "noise", "v": 0.3, "lp": 0.5}],
 		[{"f": [900.0, 500.0], "t": 0.3, "w": "saw", "v": 0.1, "lp": 0.6}]]},
 	"rc_drift_bank": {"voices": [[{"f": [1047.0, 1047.0], "t": 0.06, "w": "pulse25", "v": 0.2, "env": "hold"},
@@ -118,14 +116,12 @@ var _cam_ready := false
 var _cam_x := 0.0
 var _engine: AudioStreamPlayer
 var _skid: AudioStreamPlayer
-var _hold_snd: AudioStreamPlayer
 var _hud: Control
 var _time_label: Label
 var _score_label: Label
 var _stage_label: Label
 var _speed_label: Label
 var _mode_label: Label
-var _nitro_pips: Array = []
 var _nitro_bar: ColorRect
 var _nitro_bar_bg: ColorRect
 var _drift_label: Label
@@ -331,22 +327,13 @@ func _handle_events() -> void:
 					Audio.sfx("rc_drift_bank")
 					_drift_label.text = tr("RC_DRIFT_POINTS") % ScoreTable.format_score(int(e[1]))
 					_drift_label.modulate.a = 1.0
-			"nitro_hold":
-				if e[1]:
-					_hold_snd = Audio.sfx("rc_nitro_hold")
-			"nitro_cancel":
-				Audio.stop_sfx(_hold_snd, "rc_nitro_hold")
 			"nitro":
 				Audio.sfx("rc_nitro")
-				_center_message(tr("RC_NITRO"), 1.0)
-				Dmd.flash(tr("RC_NITRO"), 1.0, Dmd.CYAN)
-				_shake = 0.4
+				Dmd.flash(tr("RC_NITRO"), 0.6, Dmd.CYAN)
+				_shake = 0.3
 			"nitro_empty":
 				Audio.sfx("rc_nitro_empty")
 				Dmd.flash(tr("RC_NO_NITRO"), 1.0, Dmd.RED)
-			"nitro_gain":
-				Audio.sfx("rc_nitro_gain")
-				Dmd.flash(tr("RC_NITRO_PLUS"), 1.0, Dmd.CYAN)
 			"near_miss":
 				Audio.sfx("rc_near_miss")
 				Dmd.flash(tr("RC_NEAR_MISS"), 0.8, Dmd.YELLOW)
@@ -498,7 +485,7 @@ func _build_cars() -> void:
 		var flame := MeshInstance3D.new()
 		var cone := CylinderMesh.new()
 		cone.top_radius = 0.0
-		cone.bottom_radius = 0.18
+		cone.bottom_radius = 0.1
 		cone.height = 1.0
 		cone.radial_segments = 6
 		var fm := StandardMaterial3D.new()
@@ -509,10 +496,12 @@ func _build_cars() -> void:
 		fm.emission_energy_multiplier = 3.0
 		cone.material = fm
 		flame.mesh = cone
-		flame.rotation_degrees = Vector3(90, 0, 0)  # point backwards (+Z)
-		flame.position = Vector3(side * 0.55, 0.42, 2.6)
+		# On the model's exhaust pipes (model space: rear is -Z, pipes at
+		# x +-0.57, 0.28 m up), so they follow the body's yaw (D-097).
+		flame.rotation_degrees = Vector3(-90, 0, 0)  # tip points out the back
+		flame.position = Vector3(signf(side) * 0.57, 0.28, -2.2 - 0.5)
 		flame.visible = false
-		_car.add_child(flame)
+		_car_body.add_child(flame)
 		_flames.append(flame)
 	for i in TRAFFIC_POOL:
 		var t := _car_instance(0.0)
@@ -704,7 +693,7 @@ func _animate(delta: float) -> void:
 		cp.emitting = smoking
 		var col := Color(0.75, 0.6, 0.4, 0.5) if sim.offroad else Color(0.95, 0.95, 0.95, 0.45)
 		cp.color_ramp.set_color(0, col)
-	var burning := sim.nitro_t > 0.0
+	var burning := sim.boosting
 	for fl in _flames:
 		fl.visible = burning
 		if burning:
@@ -736,7 +725,7 @@ func _animate(delta: float) -> void:
 	_cam.position = _cam_pos + shake
 	_cam.look_at(look, Vector3.UP)
 	_cam.rotate_object_local(Vector3.BACK, deg_to_rad(-sim.drift_angle * 0.12))
-	var fov := CAM_FOV + sim.v / Sim.MAX_SPEED * 6.0 + (8.0 if sim.nitro_t > 0.0 else 0.0)
+	var fov := CAM_FOV + sim.v / Sim.MAX_SPEED * 6.0 + (8.0 if sim.boosting else 0.0)
 	_cam.fov = lerpf(_cam.fov, fov, 1.0 - exp(-delta * 4.0))
 	_mountains.position = Vector3(_cam.position.x, _cam.position.y + 120.0, _cam.position.z)
 	_sun.rotation = Vector3(deg_to_rad(-25), tr_.heading(sim.s) + PI * 0.92, 0)
@@ -790,20 +779,13 @@ func _build_hud() -> void:
 	var nbox := UI.vstack(10)
 	nbox.alignment = BoxContainer.ALIGNMENT_END
 	nbox.add_child(UI.label(tr("RC_NITRO"), 36, UI.CYAN))
-	var pips := HBoxContainer.new()
-	pips.add_theme_constant_override("separation", 12)
-	for i in Sim.NITRO_MAX:
-		var pip := ColorRect.new()
-		pip.custom_minimum_size = Vector2(60, 36)
-		pips.add_child(pip)
-		_nitro_pips.append(pip)
-	nbox.add_child(pips)
+	# Nitro bar (D-097): drains while both flippers are held, refills by itself.
 	_nitro_bar_bg = ColorRect.new()
-	_nitro_bar_bg.color = Color(0, 0, 0, 0.5)
-	_nitro_bar_bg.custom_minimum_size = Vector2(204, 14)
+	_nitro_bar_bg.color = Color(0.05, 0.08, 0.12, 0.75)
+	_nitro_bar_bg.custom_minimum_size = Vector2(NITRO_BAR_W, 36)
 	_nitro_bar = ColorRect.new()
 	_nitro_bar.color = UI.CYAN
-	_nitro_bar.size = Vector2(0, 14)
+	_nitro_bar.size = Vector2(NITRO_BAR_W, 36)
 	_nitro_bar_bg.add_child(_nitro_bar)
 	nbox.add_child(_nitro_bar_bg)
 	nbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -854,10 +836,12 @@ func _update_hud(delta: float) -> void:
 	_score_label.text = ScoreTable.format_score(sim.score)
 	_stage_label.text = tr("RC_STAGE") % (sim.checkpoints + 1)
 	_speed_label.text = str(sim.speed_kmh())
-	UI.set_color(_speed_label, UI.CYAN if sim.nitro_t > 0.0 else UI.WHITE)
-	for i in _nitro_pips.size():
-		(_nitro_pips[i] as ColorRect).color = UI.CYAN if i < sim.nitro else Color(0.1, 0.15, 0.2, 0.7)
-	_nitro_bar.size.x = 204.0 * clampf(sim.nitro_hold / Sim.NITRO_HOLD, 0.0, 1.0)
+	UI.set_color(_speed_label, UI.CYAN if sim.boosting else UI.WHITE)
+	_nitro_bar.size.x = roundf(NITRO_BAR_W * sim.nitro)
+	if sim.boosting:
+		_nitro_bar.color = UI.WHITE if fmod(_phase_t, 0.12) < 0.06 else UI.CYAN
+	else:
+		_nitro_bar.color = UI.CYAN if sim.nitro >= 0.25 else Color(0.2, 0.45, 0.6)
 	if sim.drifting:
 		_drift_label.text = tr("RC_DRIFT_POINTS") % ScoreTable.format_score(int(sim.drift_points / 10.0) * 10)
 		_drift_label.modulate.a = 1.0
@@ -935,7 +919,7 @@ func _update_audio() -> void:
 	if _engine == null:
 		return
 	var rpm := clampf(sim.v / Sim.MAX_SPEED, 0.0, 1.3)
-	_engine.pitch_scale = 0.6 + rpm * 1.9 + (0.25 if sim.nitro_t > 0.0 else 0.0)
+	_engine.pitch_scale = 0.6 + rpm * 1.9 + (0.25 if sim.boosting else 0.0)
 	_engine.volume_db = -14.0 + sim.throttle * 4.0 + rpm * 2.0
 	var squeal := sim.drifting or sim.spin_t > 0.0 or sim.auto_braking
 	_skid.volume_db = lerpf(_skid.volume_db, -10.0 if squeal else -60.0, 0.2)

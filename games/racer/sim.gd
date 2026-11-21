@@ -7,10 +7,11 @@
 ##   2+1 buttons: flippers steer; throttle AND braking are automatic (the car
 ##                lifts/brakes by itself when a corner would throw it off).
 ##   4+1 buttons: magna_r = accelerate, magna_l = brake (manual mode).
-##   Both flippers held 2 s = NITRO (uses a charge).
+##   Both flippers held = NITRO: burns the nitro bar for as long as they are
+##   held; the bar recovers by itself when not in use (D-097).
 ## Drifting: steer INTO a corner at speed (or brake + steer in manual mode).
 ## A drift keeps almost all the speed through the corner, scores points and
-## refills nitro. Not drifting at speed in a tight corner = auto-brake.
+## speeds up nitro recovery. Not drifting at speed in a tight corner = auto-brake.
 ## Events (cleared each step): [name, args...]
 extends RefCounted
 
@@ -37,11 +38,13 @@ const DRIFT_GRIP := 0.45         # fraction of the centrifugal push felt while d
 const DRIFT_STEER := 1.25
 const DRIFT_DRAG := 2.5
 const DRIFT_ANGLE := 32.0        # degrees (visual + score feel)
-const DRIFT_NITRO_SECONDS := 4.0 # drifting this long refills one nitro charge
-## Nitro
-const NITRO_HOLD := 2.0
-const NITRO_TIME := 3.0
-const NITRO_MAX := 3
+## Nitro bar (D-097): 0..1, burned while both flippers are held.
+const NITRO_ENGAGE := 0.15       # s both held before it burns (ignores a stray double tap)
+const NITRO_BURN := 4.0          # s a full bar lasts
+const NITRO_RECOVER := 14.0      # s to refill from empty when not in use
+const NITRO_RECOVER_DELAY := 1.0 # s after a burn before it starts recovering
+const NITRO_DRIFT_RATE := 0.06   # extra bar per second while drifting
+const NITRO_CHECKPOINT := 0.3    # bar added at each checkpoint
 ## Race clock
 const START_TIME := 45.0
 const CHECKPOINT_EVERY := 1800.0
@@ -75,10 +78,11 @@ var drift_angle := 0.0         # degrees, signed like drift_dir
 var drift_points := 0.0
 var _drift_entry := 0.0
 var _drift_exit := 0.0
-var _drift_charge := 0.0
-var nitro := NITRO_MAX
-var nitro_t := 0.0             # seconds of nitro left
+var nitro := 1.0               # nitro bar 0..1
+var boosting := false          # nitro burning this step
 var nitro_hold := 0.0          # seconds both flippers have been held
+var _nitro_rest := 99.0        # seconds since the last burn
+var _nitro_lock := false       # emptied (or crashed): release both before it burns again
 var spin_t := 0.0              # crash spin-out timer
 var time_left := START_TIME
 var next_checkpoint := CHECKPOINT_EVERY
@@ -156,8 +160,7 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 		time_left += bonus
 		next_checkpoint += CHECKPOINT_EVERY
 		_add_score(20000.0)
-		if nitro < NITRO_MAX:
-			nitro += 1
+		nitro = minf(1.0, nitro + NITRO_CHECKPOINT)
 		events.append(["checkpoint", checkpoints, bonus])
 	_add_score(v * dt * 10.0)
 
@@ -168,25 +171,30 @@ func _add_score(p: float) -> void:
 
 
 func _nitro(dt: float, both: bool) -> void:
-	if nitro_t > 0.0:
-		nitro_t -= dt
-		if nitro_t <= 0.0:
-			events.append(["nitro_end"])
-	if both and nitro_t <= 0.0:
-		if nitro_hold == 0.0:
-			events.append(["nitro_hold", nitro > 0])
-		nitro_hold += dt
-		if nitro_hold >= NITRO_HOLD and nitro_hold - dt < NITRO_HOLD:
-			if nitro > 0:
-				nitro -= 1
-				nitro_t = NITRO_TIME
-				events.append(["nitro", nitro])
-			else:
-				events.append(["nitro_empty"])
-	else:
-		if nitro_hold > 0.0 and nitro_hold < NITRO_HOLD:
-			events.append(["nitro_cancel"])
+	var was := boosting
+	if not both:
 		nitro_hold = 0.0
+		_nitro_lock = false
+	else:
+		nitro_hold += dt
+	boosting = both and not _nitro_lock and nitro_hold >= NITRO_ENGAGE and nitro > 0.0 and spin_t <= 0.0
+	if boosting:
+		nitro = maxf(0.0, nitro - dt / NITRO_BURN)
+		_nitro_rest = 0.0
+		if nitro <= 0.0:
+			boosting = false
+			_nitro_lock = true
+			events.append(["nitro_empty"])
+	else:
+		_nitro_rest += dt
+		if _nitro_rest >= NITRO_RECOVER_DELAY:
+			nitro = minf(1.0, nitro + dt / NITRO_RECOVER)
+		if both and nitro_hold >= NITRO_ENGAGE and nitro_hold - dt < NITRO_ENGAGE and nitro <= 0.0:
+			events.append(["nitro_empty"])
+	if boosting and not was:
+		events.append(["nitro"])
+	elif was and not boosting:
+		events.append(["nitro_end"])
 
 
 func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
@@ -199,7 +207,7 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	var push := c * v * v * CENTRIFUGAL           # to the outside: +x on a left curve
 	var authority := clampf(v / 25.0, 0.3, 1.0) * STEER
 	_update_drift(dt, want, c, brake)
-	var vmax := NITRO_SPEED if nitro_t > 0.0 else MAX_SPEED
+	var vmax := NITRO_SPEED if boosting else MAX_SPEED
 	# Throttle and brakes
 	var accel := 0.0
 	auto_braking = false
@@ -221,7 +229,7 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 			braking = true
 			throttle = 0.0
 			accel = -BRAKE * 0.8
-	if nitro_t > 0.0 and spin_t <= 0.0:
+	if boosting and spin_t <= 0.0:
 		accel = maxf(accel, ACCEL * 1.8 * (1.0 - v / NITRO_SPEED))
 	if drifting:
 		accel -= DRIFT_DRAG
@@ -272,12 +280,8 @@ func _update_drift(dt: float, want: float, c: float, brake: bool) -> void:
 			_end_drift()
 		else:
 			drift_points += v * dt * 25.0
-			_drift_charge += dt
-			if _drift_charge >= DRIFT_NITRO_SECONDS:
-				_drift_charge -= DRIFT_NITRO_SECONDS
-				if nitro < NITRO_MAX:
-					nitro += 1
-					events.append(["nitro_gain", nitro])
+			if not boosting:
+				nitro = minf(1.0, nitro + NITRO_DRIFT_RATE * dt)
 	var target := drift_dir * DRIFT_ANGLE if drifting else 0.0
 	drift_angle = move_toward(drift_angle, target, dt * (120.0 if drifting else 90.0))
 
@@ -296,7 +300,10 @@ func _crash(kind: String) -> void:
 	_end_drift()
 	spin_t = SPIN_TIME
 	v = minf(v, 14.0)
-	nitro_t = 0.0
+	if boosting:
+		boosting = false
+		events.append(["nitro_end"])
+	_nitro_lock = true
 	events.append(["crash", kind])
 
 
