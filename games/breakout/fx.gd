@@ -140,6 +140,82 @@ static func make_charge_particles(ring_radius: float, color: Color) -> CPUPartic
 	return p
 
 
+## Power-up capsule (D-072): a coloured glowing sphere with its letter in the
+## middle and two "electrons" orbiting like an atom. Call spin(t) every frame.
+class PowerupCapsule:
+	extends Node3D
+
+	var _orbits: Array[Node3D] = []
+
+	func _init(letter: String, color: Color, radius: float) -> void:
+		var core := MeshInstance3D.new()
+		var sphere := SphereMesh.new()
+		sphere.radius = radius
+		sphere.height = radius * 2.0
+		core.mesh = sphere
+		# Volume (D-075): low self-glow so the scene light shades the sphere, a
+		# glossy highlight and a rim light around the edge.
+		var m := StandardMaterial3D.new()
+		m.albedo_color = color
+		m.emission_enabled = true
+		m.emission = color
+		m.emission_energy_multiplier = 0.3
+		m.roughness = 0.18
+		m.metallic = 0.15
+		m.metallic_specular = 0.9
+		m.rim_enabled = true
+		m.rim = 0.8
+		m.rim_tint = 0.3
+		core.material_override = m
+		add_child(core)
+		var key := OmniLight3D.new()  # small key light: lit top-left, shaded bottom-right
+		key.position = Vector3(-radius * 2.2, radius * 3.0, -radius * 1.5)
+		key.omni_range = radius * 7.0
+		key.light_energy = 1.6
+		key.light_color = color.lerp(Color.WHITE, 0.6)
+		add_child(key)
+		var label := Label3D.new()
+		label.text = letter
+		label.font = load("res://assets/fonts/pinpixel.ttf")
+		label.font_size = 96
+		label.pixel_size = radius * 0.012
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		label.no_depth_test = true
+		label.modulate = Color.WHITE if color.get_luminance() < 0.75 else Color(0.1, 0.1, 0.15)
+		label.outline_size = 16
+		label.outline_modulate = Color(0, 0, 0, 0.8)
+		label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		label.render_priority = 2
+		# Drop shadow under the letter so it reads as raised (D-075).
+		var shadow := label.duplicate() as Label3D
+		shadow.modulate = Color(0, 0, 0, 0.7)
+		shadow.outline_modulate = Color(0, 0, 0, 0.0)
+		shadow.render_priority = 1
+		shadow.position = Vector3(radius * 0.14, -radius * 0.1, radius * 0.14)
+		add_child(shadow)
+		add_child(label)
+		for tilt in [Vector3(1.1, 0.0, 0.5), Vector3(-1.0, 0.0, -0.6)]:
+			var pivot := Node3D.new()
+			pivot.rotation = tilt
+			var e := MeshInstance3D.new()
+			var dot := SphereMesh.new()
+			dot.radius = radius * 0.17
+			dot.height = radius * 0.34
+			e.mesh = dot
+			var em := StandardMaterial3D.new()
+			em.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			em.albedo_color = color.lerp(Color.WHITE, 0.6) * 2.0
+			e.material_override = em
+			e.position = Vector3(radius * 1.7, 0.0, 0.0)
+			pivot.add_child(e)
+			add_child(pivot)
+			_orbits.append(pivot)
+
+	func spin(delta: float) -> void:
+		for i in _orbits.size():
+			_orbits[i].rotate_object_local(Vector3.UP, delta * (5.0 if i == 0 else -6.5))
+
+
 ## Wormhole vortex billboard (D-052). Drive "open" (0..1) as an instance uniform.
 static func make_wormhole(size: float) -> MeshInstance3D:
 	var m := MeshInstance3D.new()

@@ -135,6 +135,10 @@ var power := 1.0
 var blast_charge := 0.0
 var _since_blast := 99.0
 var _both_held := false
+var _await_release := false  # after an automatic max-charge shot (D-074)
+var _both_hold_t := 0.0       # how long both flippers have been held
+var _fail_reported := false   # LOW POWER reported for this hold (D-075)
+const LOW_POWER_HOLD := 0.5   # only warn if both flippers are held this long
 ## Live blasts: {pos: Vector2, level: int, hits_left: int}. A level-n blast hits
 ## up to n bricks/enemies (one plasma hit each), then dissolves; otherwise it
 ## dissolves at the top boundary.
@@ -216,6 +220,7 @@ func next_level() -> void:
 	blasts.clear()
 	blast_charge = 0.0
 	_enemy_timer = ENEMY_FIRST_SPAWN / (1.0 + ENEMY_TIER_RATE * enemy_tier())
+	power = 1.0  # full power bar at the start of each level (D-076)
 	powerups.clear()
 	_end_powerup()
 	extra_balls.clear()
@@ -256,13 +261,13 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 	_update_enemies(dt)
 	if state == State.OVER:
 		return
+	_update_powerups(dt)  # capsules keep falling while waiting to fire
 	if state == State.SERVE:
 		ball_pos = Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BALL_R - 0.01)
 		_held_time += dt
 		if launch or _held_time >= AUTO_SERVE_SECONDS:
 			_serve()
 		return
-	_update_powerups(dt)
 	if state != State.PLAY or freeze_ball:
 		return
 	var main := {"pos": ball_pos, "vel": ball_vel, "speed": ball_speed}
@@ -305,6 +310,11 @@ func affordable_level() -> int:
 	return clampi(int(floor(power / BLAST_COST + 0.0001)), 0, BLAST_MAX_LEVEL)
 
 
+## The highest level the current mode can reach (Bounce = 1, otherwise 3).
+func max_level() -> int:
+	return 1 if powerup == "B" else BLAST_MAX_LEVEL
+
+
 ## Whether the current power-up allows charging at all.
 func blasts_enabled() -> bool:
 	return powerup != "L" and powerup != "S"
@@ -318,20 +328,36 @@ func _update_power_and_blast(dt: float, both: bool) -> void:
 	if _since_blast >= POWER_RECHARGE_DELAY:
 		power = minf(1.0, power + POWER_RECHARGE_RATE * dt)
 	var can_charge := state == State.PLAY and blasts_enabled()
-	if both and can_charge:
+	if not both:
+		_await_release = false
+		_both_hold_t = 0.0
+		_fail_reported = false
+	else:
+		_both_hold_t += dt
+	if both and can_charge and _await_release:
+		pass  # just auto-fired: release the flippers before charging again
+	elif both and can_charge:
 		var cap := affordable_level()
-		if not _both_held:
-			if cap == 0:
+		if cap == 0:
+			# Empty bar: stay silent unless the player keeps holding (D-075).
+			if _both_hold_t >= LOW_POWER_HOLD and not _fail_reported:
+				_fail_reported = true
 				events.append(["blast_fail", null])
-			else:
-				events.append(["charge_start", 1])
+		elif not _both_held:
+			# Power laser charges straight to level 3: only its effects (D-076).
+			events.append(["charge_start", BLAST_MAX_LEVEL if powerup == "P" else 1])
 		var before := blast_charge
 		var rate := POWER_CHARGE_MULT if powerup == "P" else 1.0
 		blast_charge = minf(blast_charge + rate * dt / BLAST_CHARGE_TIME, float(cap))
 		var reached := int(floor(blast_charge + 0.0001))
-		if reached > int(floor(before + 0.0001)):
+		if reached > int(floor(before + 0.0001)) and (powerup != "P" or reached >= max_level()):
 			events.append(["charged", reached])
-			if reached < cap:
+			if reached >= max_level():
+				# Maximum charge fires automatically (D-074).
+				_fire(reached)
+				blast_charge = 0.0
+				_await_release = true
+			elif reached < cap:
 				events.append(["charge_start", reached + 1])
 	elif _both_held:
 		var lvl := int(floor(blast_charge + 0.0001))

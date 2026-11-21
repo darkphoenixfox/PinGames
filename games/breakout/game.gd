@@ -54,6 +54,10 @@ const FINALE_END_AT := 6.0
 const CAMERA_TILT_DEG := 20.0
 ## Blast charge levels (D-054): particle/sphere/bolt colour and sphere size.
 const LEVEL_COLORS := [Color(0.35, 0.65, 1.0), Color(1.0, 0.85, 0.25), Color(1.0, 0.3, 0.2)]
+## Power-up colours (D-072); also the DMD power bar colour while active.
+const POWERUP_COLORS := {"T": Color(0.3, 0.55, 1.0), "P": Color(1.0, 0.25, 0.2), "B": Color(1.0, 0.85, 0.2),
+	"I": Color(0.72, 0.3, 1.0), "L": Color(1.0, 1.0, 1.0), "S": Color(0.3, 1.0, 0.4)}
+const ION_SHADER = preload("res://games/breakout/shaders/ion_beam.gdshader")
 const LEVEL_SPHERE_SCALE := [0.5, 0.75, 1.0]
 ## Ship banking (visual only; the hitbox is always the sim's rectangle).
 const MAX_BANK_DEG := 18.0
@@ -77,13 +81,18 @@ const STAR_DRIFT := 0.004
 ## 16-bit style sound effects (D-050), synthesized by core/util/synth.gd.
 const ECHO := [0.085, 0.3, 0.55]
 const SOUNDS := {
-	"tb_fire": {"voices": [  # plasma shot: laser zap + breathy burst
-		[{"f": [2400.0, 260.0], "t": 0.22, "w": "pulse12", "v": 0.22}],
-		[{"f": [3000.0, 600.0], "t": 0.1, "w": "noise", "v": 0.12, "lp": 0.4}]], "echo": ECHO},
-	"tb_shield": {"voices": [  # energy shield "bwong"
-		[{"f": [330.0, 880.0], "t": 0.14, "w": "triangle", "v": 0.4, "vib": [30.0, 0.5]}],
-		[{"f": [1760.0, 1760.0], "t": 0.1, "w": "pulse25", "v": 0.08, "arp": [0, 12, 7], "arp_rate": 40.0}]],
-		"echo": [0.06, 0.25, 0.5]},
+	"tb_fire": {"voices": [  # serve: laser cannon (D-074) - whine, sweep, thump
+		[{"f": [600.0, 1800.0], "t": 0.06, "w": "pulse25", "v": 0.12, "env": "hold"},
+		 {"f": [3200.0, 180.0], "t": 0.32, "w": "saw", "v": 0.26, "lp": 0.15}],
+		[{"f": [0.0, 0.0], "t": 0.05, "w": "sine", "v": 0.0, "gap": 0.0},
+		 {"f": [140.0, 38.0], "t": 0.35, "w": "sine", "v": 0.55}],
+		[{"f": [0.0, 0.0], "t": 0.05, "w": "sine", "v": 0.0},
+		 {"f": [5000.0, 800.0], "t": 0.15, "w": "lfsr", "v": 0.14, "lp": 0.35}]], "echo": [0.1, 0.35, 0.55]},
+	"tb_shield": {"voices": [  # laser hitting an energy shield (D-074)
+		[{"f": [4200.0, 1400.0], "t": 0.07, "w": "pulse12", "v": 0.2}],
+		[{"f": [6000.0, 2500.0], "t": 0.09, "w": "lfsr", "v": 0.1, "lp": 0.2}],
+		[{"f": [2350.0, 2200.0], "t": 0.22, "w": "sine", "v": 0.16, "vib": [55.0, 0.4]}]],
+		"echo": [0.05, 0.28, 0.5]},
 	"tb_brick": {"voices": [  # crunchy chip break
 		[{"f": [5000.0, 700.0], "t": 0.13, "w": "lfsr", "v": 0.2}],
 		[{"f": [880.0, 1760.0], "t": 0.05, "w": "square", "v": 0.14}]], "crush": 8},
@@ -155,6 +164,23 @@ const SOUNDS := {
 		[{"f": [180.0, 1800.0], "t": 0.7, "w": "noise", "v": 0.22, "lp": 0.45, "env": "lin"}],
 		[{"f": [55.0, 110.0], "t": 0.7, "w": "saw", "v": 0.18, "lp": 0.4, "env": "lin"}]],
 		"echo": ECHO},
+	"tb_pu_drop": {"voices": [[{"f": [1600.0, 2400.0], "t": 0.18, "w": "triangle", "v": 0.25, "arp": [0, 7, 12], "arp_rate": 30.0}]],
+		"echo": ECHO},
+	"tb_pu_get": {"voices": [
+		[{"f": [523.0, 523.0], "t": 0.06, "w": "pulse25", "v": 0.22, "env": "hold"},
+		 {"f": [784.0, 784.0], "t": 0.06, "w": "pulse25", "v": 0.22, "env": "hold"},
+		 {"f": [1047.0, 1047.0], "t": 0.06, "w": "pulse25", "v": 0.22, "env": "hold"},
+		 {"f": [1568.0, 1568.0], "t": 0.35, "w": "pulse25", "v": 0.24, "vib": [8.0, 0.3]}],
+		[{"f": [262.0, 262.0], "t": 0.53, "w": "triangle", "v": 0.3}]], "echo": ECHO},
+	"tb_ion": {"voices": [
+		[{"f": [90.0, 60.0], "t": 0.7, "w": "saw", "v": 0.3, "lp": 0.3, "vib": [30.0, 0.8]}],
+		[{"f": [2400.0, 600.0], "t": 0.5, "w": "lfsr", "v": 0.18, "lp": 0.2}],
+		[{"f": [1200.0, 1200.0], "t": 0.5, "w": "sine", "v": 0.15, "vib": [45.0, 2.0]}]], "echo": [0.1, 0.35, 0.55]},
+	"tb_shield_break": {"voices": [
+		[{"f": [700.0, 200.0], "t": 0.35, "w": "triangle", "v": 0.35, "vib": [25.0, 1.0]}],
+		[{"f": [4000.0, 900.0], "t": 0.25, "w": "noise", "v": 0.15, "lp": 0.3}]], "echo": ECHO},
+	"tb_armour": {"voices": [[{"f": [2200.0, 1400.0], "t": 0.06, "w": "square", "v": 0.16},
+		{"f": [900.0, 900.0], "t": 0.05, "w": "lfsr", "v": 0.1}]], "crush": 8},
 	"tb_low_power": {"voices": [[{"f": [220.0, 220.0], "t": 0.08, "w": "pulse25", "v": 0.2, "env": "hold", "gap": 0.04},
 		{"f": [165.0, 165.0], "t": 0.16, "w": "pulse25", "v": 0.2}]]},
 }
@@ -201,7 +227,15 @@ var _shown_score := -1
 ## "attract" -> (Start) -> "intro" -> "play" (D-061)
 var _phase := "attract"
 var _phase_t := 0.0
-var _belly_engine: Node3D
+var _belly_engines: Array = []  # two belly afterburners at the nozzles (D-072)
+var _powerup_nodes := {}  # capsule id -> Fx.PowerupCapsule
+var _extra_ball_nodes: Array = []  # [ball Node3D, Fx.Trail]
+var _ghost_nodes: Array[Node3D] = []
+var _shield_node: MeshInstance3D
+var _shield_bar_mat: ShaderMaterial
+var _shield_flash := 99.0
+var _low_power_t := 0.0
+var _debug_pu := 0
 var _attract_ui: Control
 var _attract_blink: Label
 var _ready_label: Label
@@ -222,6 +256,9 @@ func start(_players: int) -> void:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
 	sim = Sim.new()
 	sim.setup(int(Config.get_value("operator", "balls_per_game")))
+	if Config.cli.has("tb-level"):  # dev: start at level N
+		sim.level = maxi(1, int(str(Config.cli["tb-level"])))
+		sim.build_rack()
 	if Config.cli.has("tb-enemy-now"):  # dev: first enemy right after firing
 		sim._enemy_timer = 0.3
 	_build_world()
@@ -323,13 +360,47 @@ func _handle_events() -> void:
 			"blast":
 				_stop_charge_sound()
 				var blevel: int = e[1][1]
-				Audio.sfx("tb_blast%d" % blevel)
-				_recoil = 0.5 + 0.25 * blevel
-				_spawn_blast_node(blevel)
+				var bdir: Vector2 = e[1][2] if e[1].size() > 2 else Vector2.UP
+				if bdir == Vector2.UP:  # one sound/recoil per volley (Triple = 3 events)
+					Audio.sfx("tb_blast%d" % blevel)
+					_recoil = 0.5 + 0.25 * blevel
+				_spawn_blast_node(blevel, bdir)
 				_lights.pulse(BackglassLights.SHOTS + BackglassLights.IMPACTS, 0.5 + 0.2 * blevel, 10.0)
 			"blast_fail":
 				Audio.sfx("tb_low_power")
-				Dmd.flash(tr("TB_LOW_POWER"), 1.0, Dmd.RED)
+				_low_power_t = 1.2  # LOW shows only in the DMD power bar area (D-072)
+			"brick_hit":
+				var hb: Dictionary = sim.bricks[e[1]]
+				_brick_nodes[e[1]].set_instance_shader_parameter("mode", 2.0)
+				Audio.sfx("tb_armour")
+				_explode_brick(_brick_nodes[e[1]].position, _brick_glow(hb), 0.5)
+			"powerup_spawn":
+				_spawn_powerup_node(e[1][0], e[1][1], e[1][2])
+				Audio.sfx("tb_pu_drop")
+			"powerup_collect":
+				_remove_powerup_node(e[1][0])
+				var kind: String = e[1][1]
+				Audio.sfx("tb_pu_get")
+				Dmd.flash(tr("TB_PU_%s" % kind), 1.4, POWERUP_COLORS[kind])
+				_lights.pulse(BackglassLights.ALL, 0.8, 10.0)
+				_recoil = 0.4
+			"powerup_lost":
+				_remove_powerup_node(e[1])
+			"ion_beam":
+				_fire_ion_beam(e[1])
+			"bounce_ball":
+				Audio.sfx("tb_fire")
+				_recoil = 0.7
+			"ghost":
+				Audio.sfx("tb_shield")
+			"shield_used":
+				Audio.sfx("tb_shield_break")
+				_shield_flash = 0.0
+				_shield_bar_mat.set_shader_parameter("hit_x", clampf(e[1] / (Sim.FIELD.size.x * 0.5), -1.0, 1.0))
+				_lights.pulse(BackglassLights.ENGINES + BackglassLights.SHOTS, 0.6, 12.0)
+			"extra_lost":
+				Audio.sfx("tb_explode")
+				_planet.impact(Vector3(e[1], 0.0, Sim.DRAIN_Y), -_cam.global_transform.basis.z)
 			"blast_end":
 				var end_pos: Vector2 = e[1][0]
 				var end_level: int = e[1][2]
@@ -391,8 +462,10 @@ func _refresh_status() -> void:
 		score_changed.emit(0, sim.score)
 	if _finale_t >= 0.0 or _phase != "play":
 		return  # the finale / attract / intro own the DMD
+	var pu: String = sim.powerup
+	var pcol: Color = POWERUP_COLORS.get(pu, Dmd.YELLOW)
 	Dmd.show_status(sim.score, sim.balls_left, int(Config.get_value("operator", "balls_per_game")),
-		sim.power, 3, ACCENT)
+		sim.power, 3, ACCENT, pcol, sim.level, pu, pcol, sim.blasts_enabled(), _low_power_t > 0.0)
 
 
 # --- game-over finale (D-044) -----------------------------------------------------------
@@ -446,6 +519,7 @@ func _animate(delta: float) -> void:
 		_hint.modulate.a = 1.0 if fmod(Time.get_ticks_msec() / 1000.0, 0.8) < 0.5 else 0.0
 	_animate_blasts(delta)
 	_animate_enemies(delta)
+	_animate_powerups(delta)
 	# Ship respawn: hidden briefly after being destroyed, then blinks while invulnerable.
 	if _phase == "attract":
 		_paddle.visible = false
@@ -649,9 +723,12 @@ func _build_ship(fallback_mat: Material) -> void:
 	shield.position = Vector3(0.0, 0.08, -Sim.PADDLE_H * 0.5 - 0.2)
 	_ship.add_child(shield)
 	# Belly afterburner (D-061): fires downwards for the ship's entrance.
-	_belly_engine = Fx.ShipEngine.new(Vector3(0.0, 0.0, 1.0))
-	_belly_engine.position = Vector3(0.0, -0.05, Sim.PADDLE_H * 0.5)
-	_ship.add_child(_belly_engine)
+	# Two belly nozzles (left/right of centre on the ship's lower edge, D-072).
+	for bx in [-0.3, 0.27]:
+		var be := Fx.ShipEngine.new(Vector3(0.0, 0.0, 1.0))
+		be.position = Vector3(bx, -0.05, Sim.PADDLE_H * 0.5)
+		_ship.add_child(be)
+		_belly_engines.append(be)
 	# Blast charge (D-053): particles gather at a point in front of the nose while
 	# charging; once charged, the plasma ball appears there until release.
 	var charge_point := Vector3(0.0, 0.1, -Sim.PADDLE_H * 0.5 - 0.3)
@@ -672,6 +749,8 @@ func _build_ship(fallback_mat: Material) -> void:
 
 
 func _brick_glow(b: Dictionary) -> Color:
+	if b.get("metal", false):
+		return Color(0.6, 0.65, 0.7)
 	return CIRCUIT_GLOW[LETTER_COLOUR.get(b.get("colour", "B"), "blue")]
 
 
@@ -699,11 +778,12 @@ func _build_bricks() -> void:
 		var r: Rect2 = b.rect
 		var col: int = b.get("col", i % Sim.BRICK_COLS)
 		var size := Vector3(r.size.x, 0.3, r.size.y)
-		var colour: String = LETTER_COLOUR.get(b.get("colour", "B"), "blue")
+		var colour: String = LETTER_COLOUR.get(b.get("colour", "B"), "blue")  # X uses blue art, shown as metal
 		var n := _box(size, Vector3(r.get_center().x, 0, r.get_center().y), _brick_material(colour, size))
 		_randomize_crop(n)
 		# Pulse ripples diagonally across the swarm, with a little jitter.
 		n.set_instance_shader_parameter("phase", -(col * 0.55 + b.row * 0.8) + float((i * 37) % 11) * 0.08)
+		n.set_instance_shader_parameter("mode", 3.0 if b.get("metal", false) else (1.0 if b.get("armoured", false) else 0.0))
 		_root.add_child(n)
 		_brick_nodes.append(n)
 
@@ -795,6 +875,13 @@ func _build_hud() -> void:
 
 ## Debug keys (D-057): F = piercing plasma along the ship's vertical line.
 func _on_debug_action(action: StringName) -> void:
+	if action == &"powerup" and sim != null and _phase == "play":
+		var kind: String = Sim.POWERUP_KINDS[_debug_pu % Sim.POWERUP_KINDS.size()]
+		_debug_pu += 1
+		sim.events.clear()
+		sim.spawn_powerup(kind, Vector2(sim.paddle_x, Sim.PADDLE_Y - 1.3))
+		_handle_events()
+		return
 	if action == &"clear_level" and sim != null and _phase == "play":
 		sim.debug_clear_level()
 		_handle_events()  # events raised between steps must be handled now
@@ -897,14 +984,14 @@ func _intro() -> void:
 	var st := (t - bricks_done) / INTRO_SHIP_TIME
 	if st < 0.0:
 		_paddle.visible = false
-		_belly_engine.set_thrust(0.0)
+		_set_belly_thrust(0.0)
 		return
 	if not _paddle.visible:
 		_paddle.visible = true
 		Audio.sfx("tb_ship_arrive")
 	var e := 1.0 - pow(1.0 - clampf(st, 0.0, 1.0), 3.0)  # ease out
 	_paddle.position = Vector3(sim.paddle_x, 0.0, lerpf(INTRO_SHIP_FROM_Z, Sim.PADDLE_Y, e))
-	_belly_engine.set_thrust(1.5 * (1.0 - e) + 0.1 if st < 1.0 else 0.0)
+	_set_belly_thrust(1.5 * (1.0 - e) + 0.1 if st < 1.0 else 0.0)
 	if st >= 1.0 + INTRO_SETTLE / INTRO_SHIP_TIME:
 		_enter_play()
 
@@ -917,7 +1004,7 @@ func _enter_play() -> void:
 		_brick_nodes[i].visible = sim.bricks[i].alive
 		_brick_nodes[i].position = Vector3(r.get_center().x, 0.0, r.get_center().y)
 		_brick_nodes[i].rotation = Vector3.ZERO
-	_belly_engine.set_thrust(0.0)
+	_set_belly_thrust(0.0)
 	_paddle.scale = Vector3.ONE
 	_paddle.rotation = Vector3.ZERO
 	if is_instance_valid(_ready_label):
@@ -930,11 +1017,11 @@ func _enter_play() -> void:
 
 
 # --- level complete (D-068) -------------------------------------------------------------
-const OUTRO_LIFT_AT := 0.5     # ship starts flying away
+const OUTRO_LIFT_AT := 0.9     # ship starts flying away (LEVEL CLEAR reads first)
 const OUTRO_LIFT_TIME := 1.4
-const OUTRO_FADE_AT := 1.5     # fade to black
+const OUTRO_FADE_AT := 1.9     # fade to black
 const OUTRO_FADE_TIME := 0.6
-const OUTRO_NEXT_AT := 2.3     # next level loads (behind the black)
+const OUTRO_NEXT_AT := 2.7     # next level loads (behind the black)
 var _outro_black: ColorRect
 var _outro_lifted := false
 
@@ -957,12 +1044,13 @@ func _outro() -> void:
 	if k > 0.0 and not _outro_lifted:
 		_outro_lifted = true
 		Audio.sfx("tb_ship_arrive")
+		Dmd.play(Callable(_dmd_anims, "ship_boost"), DmdAnims.DURATIONS["ship_boost"])  # D-076
 	var e := k * k
 	_paddle.visible = true
 	_paddle.position = Vector3(sim.paddle_x, 7.0 * e, Sim.PADDLE_Y - 13.0 * e)
 	_paddle.scale = Vector3.ONE * (1.0 + 2.2 * e)
 	_paddle.rotation = Vector3(-0.5 * k, 0.0, 0.0)
-	_belly_engine.set_thrust(1.5 if k > 0.0 and k < 1.0 else 0.0)
+	_set_belly_thrust(1.5 if k > 0.0 and k < 1.0 else 0.0)
 	if t >= OUTRO_FADE_AT and _outro_black == null:
 		_outro_black = UI.fill(Color(0, 0, 0, 0))
 		add_to_table(_outro_black)
@@ -979,7 +1067,7 @@ func _load_next_level() -> void:
 	_paddle.visible = false
 	_paddle.scale = Vector3.ONE
 	_paddle.rotation = Vector3.ZERO
-	_belly_engine.set_thrust(0.0)
+	_set_belly_thrust(0.0)
 	for id in _enemy_nodes.keys():
 		_remove_enemy_node(id)
 	_begin_intro()
@@ -1028,6 +1116,129 @@ func _dmd_anim(name: String) -> void:
 func _stop_charge_sound() -> void:
 	Audio.stop_sfx(_charge_sound, _charge_sound_name)
 	_charge_sound = null
+
+
+func _set_belly_thrust(t: float) -> void:
+	for be in _belly_engines:
+		be.set_thrust(t)
+
+
+# --- power-up visuals (D-072) -----------------------------------------------------------
+func _spawn_powerup_node(id: int, pos: Vector2, kind: String) -> void:
+	var cap := Fx.PowerupCapsule.new(kind, POWERUP_COLORS[kind], Sim.POWERUP_R)
+	cap.position = Vector3(pos.x, 0.3, pos.y)
+	_root.add_child(cap)
+	_powerup_nodes[id] = cap
+
+
+func _remove_powerup_node(id: int) -> void:
+	if _powerup_nodes.has(id):
+		_powerup_nodes[id].queue_free()
+		_powerup_nodes.erase(id)
+
+
+func _fire_ion_beam(x: float) -> void:
+	Audio.sfx("tb_ion")
+	_recoil = 1.0
+	_lights.pulse(BackglassLights.SHOTS + BackglassLights.IMPACTS, 1.0, 14.0)
+	var m := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	var length := Sim.PADDLE_Y - Sim.FIELD.position.y
+	plane.size = Vector2(Sim.ION_BEAM_W * 1.8, length)
+	m.mesh = plane
+	var mat := ShaderMaterial.new()
+	mat.shader = ION_SHADER
+	m.material_override = mat
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	m.position = Vector3(x, 0.15, Sim.FIELD.position.y + length * 0.5)
+	_root.add_child(m)
+	var tw := m.create_tween()
+	tw.tween_method(func(f: float): m.set_instance_shader_parameter("fade", f), 1.0, 0.0, 0.55)
+	tw.tween_callback(m.queue_free)
+
+
+## Capsules, extra plasma balls, Lightspeed afterimages, Shield barrier.
+func _animate_powerups(delta: float) -> void:
+	_low_power_t = maxf(0.0, _low_power_t - delta)
+	for p in sim.powerups:
+		if _powerup_nodes.has(p.id):
+			var cap: Fx.PowerupCapsule = _powerup_nodes[p.id]
+			cap.position = Vector3(p.pos.x, 0.3, p.pos.y)
+			cap.spin(delta)
+	# Extra balls (Bounce): one plasma ball + trail each.
+	while _extra_ball_nodes.size() < sim.extra_balls.size():
+		var b := Fx.make_plasma_ball(Sim.BALL_R)
+		Fx.tint_plasma(b, POWERUP_COLORS["B"])
+		_root.add_child(b)
+		var tr_node := Fx.Trail.new()
+		tr_node.width = Sim.BALL_R * 1.1
+		tr_node.head_color = Color(1.0, 0.85, 0.3, 0.9)
+		tr_node.tail_color = Color(1.0, 0.4, 0.1, 0.0)
+		_root.add_child(tr_node)
+		_extra_ball_nodes.append([b, tr_node])
+	while _extra_ball_nodes.size() > sim.extra_balls.size():
+		var pair: Array = _extra_ball_nodes.pop_back()
+		pair[0].queue_free()
+		pair[1].queue_free()
+	for i in sim.extra_balls.size():
+		var ep: Vector2 = sim.extra_balls[i].pos
+		var pos := Vector3(ep.x, 0.05, ep.y)
+		_extra_ball_nodes[i][0].position = pos
+		_extra_ball_nodes[i][1].update(pos)
+	# Lightspeed afterimages
+	var gx: Array = sim.ghost_xs() if _phase == "play" else []
+	while _ghost_nodes.size() < 2:
+		var g := _make_ghost_ship()
+		_root.add_child(g)
+		_ghost_nodes.append(g)
+	for i in _ghost_nodes.size():
+		var on := i < gx.size()
+		_ghost_nodes[i].visible = on
+		if on:
+			_ghost_nodes[i].position = Vector3(gx[i], 0.0, Sim.PADDLE_Y)
+	# Shield barrier: steady while active, flashes and fades when it saves a ball.
+	if _shield_node == null:
+		_shield_node = MeshInstance3D.new()
+		var plane := PlaneMesh.new()
+		plane.size = Vector2(Sim.FIELD.size.x, 0.5)
+		_shield_node.mesh = plane
+		_shield_bar_mat = ShaderMaterial.new()
+		_shield_bar_mat.shader = SHIELD_SHADER
+		_shield_bar_mat.set_shader_parameter("shield_color", POWERUP_COLORS["S"])
+		_shield_node.material_override = _shield_bar_mat
+		_shield_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_shield_node.position = Vector3(Sim.FIELD.get_center().x, 0.06, Sim.SHIELD_Y + 0.12)
+		_root.add_child(_shield_node)
+	_shield_flash += delta
+	var flashing := _shield_flash < SHIELD_FADE
+	_shield_node.visible = (sim.shield_active and _phase == "play") or flashing
+	if flashing:
+		_shield_bar_mat.set_shader_parameter("age", _shield_flash)
+		_shield_bar_mat.set_shader_parameter("strength", 1.0 - _shield_flash / SHIELD_FADE)
+	elif sim.shield_active:
+		_shield_bar_mat.set_shader_parameter("hit_x", 5.0)  # no hot spot
+		_shield_bar_mat.set_shader_parameter("age", 99.0)
+		_shield_bar_mat.set_shader_parameter("strength", 0.55 + 0.1 * sin(Time.get_ticks_msec() * 0.006))
+
+
+func _make_ghost_ship() -> Node3D:
+	var root := Node3D.new()
+	var scene := load(PADDLE_MODEL) as PackedScene
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.albedo_color = Color(0.7, 0.85, 1.0, 0.35)
+	if scene:
+		var model := scene.instantiate() as Node3D
+		var s := Sim.PADDLE_W / MODEL_PADDLE_WIDTH
+		model.scale = Vector3(s, s, s)
+		model.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+		root.add_child(model)
+		for mi in model.find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).material_override = mat
+	root.visible = false
+	return root
 
 
 # --- tetrahedron enemies (D-052) ------------------------------------------------------
@@ -1088,8 +1299,9 @@ func _animate_enemies(delta: float) -> void:
 
 
 # --- energy blast visuals (D-051) -------------------------------------------------------
-func _spawn_blast_node(level: int) -> void:
+func _spawn_blast_node(level: int, dir: Vector2 = Vector2.UP) -> void:
 	var m := MeshInstance3D.new()
+	m.rotation.y = -atan2(dir.x, -dir.y)  # the bolt's nose points along `dir`
 	var plane := PlaneMesh.new()
 	var grow := 0.85 + 0.25 * level
 	plane.size = Vector2(Sim.blast_width(level) * 2.4, Sim.BLAST_H * 2.2 * grow)
@@ -1111,11 +1323,14 @@ func _animate_blasts(_delta: float) -> void:
 	while _blast_nodes.size() > sim.blasts.size():
 		_blast_nodes.pop_front().queue_free()
 	while _blast_nodes.size() < sim.blasts.size():  # safety net: never index past the nodes
-		_spawn_blast_node(int(sim.blasts[_blast_nodes.size()].level))
+		var nb: Dictionary = sim.blasts[_blast_nodes.size()]
+		_spawn_blast_node(int(nb.level), nb.get("dir", Vector2.UP))
 	for i in sim.blasts.size():
 		var p: Vector2 = sim.blasts[i].pos
+		var d: Vector2 = sim.blasts[i].get("dir", Vector2.UP)
 		# Nose leads: shift the drawn bolt so its tail trails behind the hitbox.
-		_blast_nodes[i].position = Vector3(p.x, 0.12, p.y + Sim.BLAST_H * 0.55)
+		var off := -d * Sim.BLAST_H * 0.55
+		_blast_nodes[i].position = Vector3(p.x + off.x, 0.12, p.y + off.y)
 	# Charging (D-053, D-054): particles in the colour of the level being charged
 	# converge in front of the nose; the sphere shows the level already reached
 	# (small blue, medium yellow, full-size red).
@@ -1133,8 +1348,9 @@ func _animate_blasts(_delta: float) -> void:
 	if sim.blast_charge <= 0.0 and not charging:
 		_stop_charge_sound()
 	if charging:
-		_charge_particles.color = LEVEL_COLORS[reached]
-	_charge_glow.visible = reached >= 1
+		# Power laser goes straight to level 3: red particles only (D-076).
+		_charge_particles.color = LEVEL_COLORS[2] if sim.powerup == "P" else LEVEL_COLORS[reached]
+	_charge_glow.visible = reached >= 1 and sim.powerup != "P"
 	if reached >= 1:
 		if _charge_level_shown != reached:
 			_charge_level_shown = reached

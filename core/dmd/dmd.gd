@@ -116,14 +116,24 @@ func show_image(tex: Texture2D, bottom: String = "", bottom_color: Variant = nul
 ## Game status for games that keep the TABLE clean (D-051): big score on top;
 ## bottom row = `lives` plasma dots (out of `max_lives`, spent ones dim) on the
 ## left, and a segmented power bar (0..1, `segments` cells) on the right.
+## Optional (D-072): `level` > 0 shows "LVn" in the bottom row; `badge` shows a
+## letter icon (current power-up) left of the bar in `badge_color`; `bar` false
+## hides the bar; `warn` makes the bar area blink "LOW" in red.
 func show_status(score: int, lives: int, max_lives: int, power: float, segments: int = 3,
-		score_color: Variant = null, power_color: Variant = null) -> void:
+		score_color: Variant = null, power_color: Variant = null, level: int = 0,
+		badge: String = "", badge_color: Variant = null, bar: bool = true, warn: bool = false) -> void:
 	show_score(score, "", "", score_color)
 	var y := size.y - 7 * _unit
 	_elements.append({"type": "lives", "y": y, "lives": lives, "max": max_lives,
 		"color": CYAN})
+	if level > 0:
+		var lv := "LV%d" % level
+		var lx := maxf((2 + max_lives * 7 + 3) * _unit, (size.x - DotFont.measure(lv, _unit)) / 2.0 - 12 * _unit)
+		_elements.append({"type": "text_at", "text": lv, "x": lx, "y": y, "color": DIM})
 	_elements.append({"type": "bar", "y": y + _unit, "value": clampf(power, 0.0, 1.0),
-		"segments": segments, "color": power_color if power_color != null else YELLOW})
+		"segments": segments, "color": power_color if power_color != null else YELLOW,
+		"hidden": not bar, "warn": warn, "badge": badge,
+		"badge_color": badge_color if badge_color != null else WHITE})
 
 
 ## Temporary blinking callout over whatever is shown (e.g. "MULTIBALL!").
@@ -180,6 +190,12 @@ class Painter:
 			for dx in range(-ir, ir + 1):
 				if dx * dx + dy * dy <= r * r + 0.3:
 					dot(cx + dx, cy + dy, c)
+
+	## Filled rectangle of dots.
+	func block(x: float, y: float, w: float, h: float, c: Color) -> void:
+		for yy in range(floori(y), floori(y + h)):
+			for xx in range(floori(x), floori(x + w)):
+				dot(xx, yy, c)
 
 	func ring(cx: float, cy: float, r: float, c: Color, y_scale: float = 1.0) -> void:
 		var steps := maxi(8, ceili(r * 7.0))
@@ -239,6 +255,9 @@ func _on_draw() -> void:
 			"bar":
 				_draw_bar(el)
 				continue
+			"text_at":
+				DotFont.draw(_canvas, el.text, Vector2(el.x, el.y), _unit, el.color)
+				continue
 			"image":
 				var tex: Texture2D = el.tex
 				var sz := tex.get_size() * _unit
@@ -292,6 +311,20 @@ func _draw_bar(el: Dictionary) -> void:
 	var h := 4 * u
 	var total := segs * cell_w + (segs - 1) * gap
 	var x0 := size.x - 2 * u - total
+	# Power-up badge: its letter in a small frame, just left of the bar (D-072).
+	var badge: String = el.get("badge", "")
+	if not badge.is_empty():
+		var bc: Color = el.badge_color
+		var bx := x0 - 10 * u
+		var by: float = el.y - 2 * u
+		_canvas.draw_rect(Rect2(bx, by, 8 * u, 9 * u), bc * 0.35)
+		DotFont.draw(_canvas, badge, Vector2(bx + 1.5 * u, by + u), u, bc)
+	if el.get("hidden", false):
+		return
+	if el.get("warn", false):  # LOW POWER: only the bar area blinks (D-072)
+		if fmod(_time, 0.3) < 0.18:
+			DotFont.draw(_canvas, "LOW", Vector2(x0 + (total - DotFont.measure("LOW", u)) / 2.0, el.y - 2 * u), u, RED)
+		return
 	var filled: float = float(el.value) * segs
 	for i in segs:
 		var x := x0 + i * (cell_w + gap)

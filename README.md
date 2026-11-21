@@ -36,7 +36,7 @@ scripts\test.ps1                                 # headless smoke tests
 | `--mode=operator\|attract\|initials` | Open a shell mode directly (development aid) |
 | `--press=flip_r,launch,hold:start+exit:3.5` | Simulate button presses (development aid) |
 | `--mode=viewer --model=res://assets/models/<…>.glb` | Model viewer: flippers rotate, Launch toggles spin, Start changes view, Exit leaves |
-| `--tb-enemy-now`, `--tb-dmd-anim=<name>`, `--tb-show-shields`, `--tb-lights-on`, `--tb-skip-intro` | Tilt Breaker dev aids (skip-intro = straight into play): early enemy, loop a DMD animation, show the edge shields, hold all backglass lights on |
+| `--tb-enemy-now`, `--tb-dmd-anim=<name>`, `--tb-show-shields`, `--tb-lights-on`, `--tb-skip-intro`, `--tb-level=N` | Tilt Breaker dev aids (skip-intro = straight into play): early enemy, loop a DMD animation, show the edge shields, hold all backglass lights on |
 | `--screenshot=<dir>` | Save PNGs of every screen and window, then quit (development aid) |
 
 ### Settings
@@ -76,12 +76,13 @@ Every run through `scripts/run.ps1` or the Godot binary is a debug build. Export
 | **P** | Pause / resume the whole game |
 | **F** | Tilt Breaker: a free piercing plasma bolt that destroys everything in a vertical line above the ship |
 | **C** | Tilt Breaker: clear the current level instantly (level-complete sequence) |
+| **U** | Tilt Breaker: drop the next power-up capsule (T, P, B, I, L, S in turn) over the ship |
 | **I** | Input monitor: live view of held actions and window focus. Every press, release and focus change is logged to `<settings folder>/input_log.txt` |
 
 ### Default controls
 | Action | Keyboard | Controller |
 |---|---|---|
-| Left / right flipper | Left / Right Shift | L1 / R1 |
+| Left / right flipper | Left / Right arrow | L1 / R1 |
 | Left / right magna save | Left / Right Ctrl | L2 / R2 |
 | Launch | Space | Cross |
 | Start | Enter | Circle |
@@ -114,7 +115,7 @@ docs/            DECISIONS.md (decision log), GDD.md (design)
 Add a column to `core/locale/strings.csv`, for example `es`. Alternatively, drop a CSV with the same format into `<user dir>/locale/`. Then set `operator.language`.
 
 ## Cabinet PC setup (Windows)
-Turn **off** the Sticky Keys and Filter Keys keyboard shortcuts (Settings → Accessibility → Keyboard). With Shift as the flipper key, their prompts can steal focus mid-game. The game warns on the picker if they're on (D-070), and it releases all inputs if it ever loses focus (D-069).
+Turn **off** the Sticky Keys and Filter Keys keyboard shortcuts (Settings → Accessibility → Keyboard). Their prompts can steal focus mid-game, especially if your encoder maps flippers to Shift. The game warns on the picker if they're on (D-070), and it releases all inputs if it ever loses focus (D-069).
 
 ## Requirements
 - Godot 4.7.2 stable (the standard build, not .NET)

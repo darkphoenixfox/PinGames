@@ -18,6 +18,8 @@ uniform float pulse_speed = 2.6;
 instance uniform vec2 crop_offset = vec2(0.0);
 instance uniform float phase = 0.0;
 instance uniform float hit_flash = 0.0;
+// 0 normal, 1 armoured (2 hits), 2 cracked (armoured, hit once), 3 metal (D-073)
+instance uniform float mode = 0.0;
 
 varying vec3 local_pos;
 
@@ -38,13 +40,32 @@ void fragment() {
 	float dark = max(step(brick_texels.x - 1.0, tx.x), step(brick_texels.y - 1.0, tx.y));
 	vec3 face = mix(t, t * 0.35, dark);
 	face = mix(face, mix(t, glow_color.rgb, 0.35) * 1.4, light * (1.0 - dark));
+	float border2 = max(max(step(tx.x, 1.0), step(tx.y, 1.0)),
+		max(step(brick_texels.x - 2.0, tx.x), step(brick_texels.y - 2.0, tx.y)));
+	if (mode > 2.5) {
+		// Metal: steel grey, riveted frame, no life inside.
+		float lum = dot(t, vec3(0.3, 0.59, 0.11));
+		face = vec3(0.32, 0.35, 0.4) * (0.6 + 0.8 * lum) + vec3(0.25) * border2;
+		float rivet = step(length(mod(tx, vec2(8.0)) - 4.0), 1.0);
+		face += vec3(0.25) * rivet * (1.0 - border2);
+	} else if (mode > 0.5) {
+		// Armoured: a thick glowing frame; cracked: dimmer with crack lines.
+		face = mix(face, glow_color.rgb * 1.2, border2 * 0.85);
+		if (mode > 1.5) {
+			float crack = step(abs(fract((tx.x * 0.9 + tx.y * 1.7) / 11.0) - 0.5), 0.045)
+				+ step(abs(fract((tx.x * 1.3 - tx.y * 2.1) / 13.0) - 0.5), 0.04);
+			face = mix(face * 0.65, vec3(0.02), clamp(crack, 0.0, 1.0));
+		}
+	}
 	ALBEDO = face * mix(0.5, 1.0, is_top);
 	// Glow mask from the texture: lit LEDs/traces are bright AND saturated.
 	float hi = max(t.r, max(t.g, t.b));
 	float lo = min(t.r, min(t.g, t.b));
 	float mask = smoothstep(0.45, 0.8, hi) * smoothstep(0.2, 0.45, hi - lo);
 	float pulse = 0.5 + 0.5 * sin(TIME * pulse_speed + phase);
-	EMISSION = (t * 0.5 + glow_color.rgb * 0.5) * mask * (0.5 + 1.3 * pulse) * glow_strength * is_top
+	float alive_glow = mode > 2.5 ? 0.0 : 1.0;
+	EMISSION = (t * 0.5 + glow_color.rgb * 0.5) * mask * (0.5 + 1.3 * pulse) * glow_strength * is_top * alive_glow
+		+ glow_color.rgb * border2 * (mode > 0.5 && mode < 1.5 ? 0.6 : 0.0)
 		+ vec3(hit_flash);
 	ROUGHNESS = 0.6;
 	SPECULAR = 0.2;

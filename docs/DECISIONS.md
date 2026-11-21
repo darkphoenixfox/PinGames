@@ -704,3 +704,41 @@
 - **Decision (director, with a reference image):** the camera should see the ship's **front face**, with the cockpit window at the top and vents/thrusters at the bottom, cockpit toward the top of the screen. The earlier Y-axis 180° turn was the wrong axis.
 - **Implementation:** `paddle.glb` is pitched −90° about X (`model.rotation_degrees = (-90, 0, 0)`), so the model's +Z face points at the camera and the model's +Y (cockpit side) points up the screen (−Z). The hitbox, engines, shield and charge point are unchanged.
 - **Status:** Accepted
+
+### D-072 — Tilt Breaker power-ups, multi-ball, ship pass-through
+- **Date:** 2026-11-21
+- **Decision (director):** every 10 bricks, a 70 % chance of a power-up capsule (coloured sphere, letter, two orbiting "atom" particles). One at a time, lasting until level end or death. T triple laser, P power laser, B bounce plasma, I ion cannon, L lightspeed, S shield (see GDD). LOW POWER shows only in the bar area; the current power-up shows next to the bar, which takes its colour. The ship must not stop a ball coming back up from below.
+- **Implementation:** sim `powerup`, `powerups`, `extra_balls` (main ball loss promotes an extra), `shield_active`, `ghost_xs()`, per-power-up `affordable_level`/`blasts_enabled`, `_fire()` with triple directions / ion column / extra ball. The paddle only bounces descending balls. View: `Fx.PowerupCapsule`, `ion_beam.gdshader`, extra plasma balls, ghost ships, shield strip, angled bolts, `Dmd.show_status(..., level, badge, badge_color, bar, warn)`. Debug key U drops the next capsule; `--tb-level=N`.
+- **Assumption to confirm:** Lightspeed also makes the ship 30 % faster.
+- **Status:** Accepted
+
+### D-073 — Brick types, levels 1–10, enemy difficulty tiers
+- **Date:** 2026-11-21
+- **Decision (director):** levels 1 to 10 of increasing difficulty; every 5 levels enemies become faster and more aggressive.
+- **Implementation:** lowercase letters = 2-hit armoured bricks (1.5× points, cracked look after a hit); `X` = indestructible metal. `brick_circuit` shader gains `mode` 0–3. `enemy_tier() = (level-1)/5`: speed ×(1 + 0.4·tier), spawn interval ÷(1 + 0.5·tier), max enemies +tier, orbits steer toward the ship from tier 1.
+- **Status:** Accepted
+
+### D-074 — Auto-fire at max charge; shield-hit and serve-cannon sounds
+- **Date:** 2026-11-21
+- **Decision (director):** maximum-level charged shots fire automatically; the ball's rebound off the ship sounds like a laser hitting a shield; serving plays a laser-cannon sound.
+- **Implementation:** reaching `max_level()` (3, or 1 for Bounce) fires at once and blocks re-charging until the flippers are released. New `tb_shield` and `tb_fire` synth patches.
+- **Status:** Accepted
+
+### D-075 — LOW POWER only on long holds; capsule volume
+- **Date:** 2026-11-21
+- **Decision (director):** with an empty bar, show LOW POWER and its sound only if both flippers are held for more than 0.5 s. Give the capsules volume (shading on the sphere and the text). Shift still seemed to stick, so the flipper keys moved (final choice in D-077).
+- **Implementation:** `blast_fail` fires once per hold after `LOW_POWER_HOLD` = 0.5 s. Capsule: low emission, glossy specular, rim light, small coloured key light, dark drop-shadow copy of the letter. Fix: capsules keep falling while waiting to serve.
+- **Status:** Accepted
+
+### D-076 — Power-laser effects, full bar per level, DMD level-change boost
+- **Date:** 2026-11-21
+- **Decision (director):** the P charge plays only the level-3 sound and particles; the power bar is full at the start of each level; add a DMD animation for the level-change ship boost.
+- **Implementation:** P emits only `charge_start(3)` / `charged(3)`. `next_level()` sets `power = 1.0`. New DMD clip `ship_boost` (pixel ship scaling up on belly flames, star streaks, exit flash; new `Painter.block`). The outro lift-off moves to 0.9 s so "LEVEL CLEAR!" reads first.
+- **Status:** Accepted
+
+### D-077 — Default flipper keys: arrow keys (supersedes the keyboard part of D-019)
+- **Date:** 2026-11-21
+- **Decision (director):** `\` didn't work, so the flippers use the Left/Right arrow keys.
+- **Why:** arrows exist in the same place on every keyboard layout and avoid the Shift / accessibility-shortcut problems.
+- **Consequences:** `flip_l = key:Left`, `flip_r = key:Right`; controller unchanged (L1/R1). Encoders that send Shift can be remapped in the operator menu.
+- **Status:** Accepted

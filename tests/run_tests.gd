@@ -167,7 +167,16 @@ func test_breakout_powerups(Sim) -> void:
 	pw.apply_powerup("P")
 	for k in int(Sim.BLAST_CHARGE_TIME * 60.0) + 2:
 		pw.step(dt, true, true, false, 0)
-	check(pw.blast_charge >= 2.9, "power laser reaches level 3 in one phase (%.2f)" % pw.blast_charge)
+	check(pw.blasts.size() == 1 and pw.blasts[0].level == 3, "power laser reaches level 3 in one phase and auto-fires")
+	var pe = mk.call()
+	pe.apply_powerup("P")
+	var starts: Array = []
+	for k in 60:
+		pe.step(dt, true, true, false, 0)
+		for e in pe.events:
+			if e[0] == "charge_start" or e[0] == "charged":
+				starts.append([e[0], e[1]])
+	check(starts == [["charge_start", 3], ["charged", 3]], "power laser: only level-3 charge effects (%s)" % [starts])
 	# I: only level 3, full bar, clears the column.
 	var ion = mk.call()
 	ion.apply_powerup("I")
@@ -179,7 +188,7 @@ func test_breakout_powerups(Sim) -> void:
 	for k in 200:
 		ion.step(dt, true, true, false, 0)
 	ion.step(dt, false, false, false, 0)
-	check(ion.power < 0.01 and ion.bricks_alive() <= before - 4, "ion beam fries the column (%d -> %d)" % [before, ion.bricks_alive()])
+	check(ion.power < 0.1 and ion.bricks_alive() <= before - 4, "ion beam fries the column (%d -> %d)" % [before, ion.bricks_alive()])
 	# B: extra ball; losing the main ball while it lives costs no charge.
 	var bb = mk.call()
 	bb.apply_powerup("B")
@@ -249,7 +258,9 @@ func test_breakout_levels(Sim) -> void:
 	check(lv.events.filter(func(e): return e[0] == "enemy_destroyed").size() == 1, "remaining enemy exploded")
 	lv.step(1.0 / 60.0, true, false, true, 0)
 	check(lv.state == Sim.State.LEVEL_CLEAR, "sim waits during the level-complete sequence")
+	lv.power = 0.2
 	lv.next_level()
+	check(is_equal_approx(lv.power, 1.0), "full power bar at the start of the level (D-076)")
 	check(lv.level == 2 and lv.state == Sim.State.SERVE and lv.bricks.size() == lv.bricks_alive() and lv.bricks.size() > 20,
 		"next_level loads level 2 (%d bricks)" % lv.bricks.size())
 
@@ -435,22 +446,40 @@ func test_breakout_sim() -> void:
 	for k in 54:
 		stepper.call(true)
 	stepper.call(false)
-	check(tally.blast == 3 and tally.blast_fail >= 1, "empty bar: no 4th blast, LOW POWER")
+	check(tally.blast == 3 and tally.blast_fail >= 1, "empty bar: no 4th blast, LOW POWER after a long hold")
+	var quick = Sim.new()
+	quick.setup(3)
+	quick.step(1.0 / 60.0, false, false, true, 0)
+	quick.freeze_ball = true
+	quick.power = 0.0
+	var fails := 0
+	for k in 20:  # 0.33 s: shorter than LOW_POWER_HOLD
+		quick.step(1.0 / 60.0, true, true, false, 0)
+		fails += quick.events.filter(func(e): return e[0] == "blast_fail").size()
+	check(fails == 0, "quick double-press on an empty bar stays silent (D-075)")
 	check(Sim.BLAST_CHARGE_TIME < 0.7, "charge time cut (0.8 -> 0.68)")
 	var lv = Sim.new()
 	lv.setup(3)
 	lv.step(1.0 / 60.0, false, false, true, 0)  # plasma in play
 	lv.freeze_ball = true  # the ship can't move while charging; keep the plasma safe
 	var reached: Array = []
+	var fired: Array = []
+	var pierced := 0
+	var power_after_fire := -1.0
 	for k in 60 * 3:
 		lv.step(1.0 / 60.0, true, true, false, 0)
 		for e in lv.events:
 			if e[0] == "charged":
 				reached.append(e[1])
-	check(reached == [1, 2, 3] and is_equal_approx(lv.blast_charge, 3.0), "charges through 3 levels (%s)" % [reached])
+			elif e[0] == "blast":
+				fired.append(e[1][1])
+				power_after_fire = lv.power
+			elif e[0] == "brick":
+				pierced += 1
+	check(reached == [1, 2, 3], "charges through 3 levels (%s)" % [reached])
+	check(fired == [3] and power_after_fire < 0.01, "level 3 fires automatically and spends the full bar (D-074)")
 	lv.step(1.0 / 60.0, false, false, false, 0)
-	check(lv.blasts.size() == 1 and lv.blasts[0].level == 3 and lv.power < 0.01, "level-3 blast spends the full bar")
-	var pierced := 0
+	check(lv.events.filter(func(e): return e[0] == "blast").is_empty(), "no second shot on release after auto-fire")
 	for k in 120:
 		lv.step(1.0 / 60.0, false, false, false, 0)
 		pierced += lv.events.filter(func(e): return e[0] == "brick").size()

@@ -5,6 +5,7 @@
 ##   I  input monitor: live action states + focus on the TABLE, and a log of
 ##      every press/release/focus change in user://input_log.txt (D-069)
 ##   C  game-specific "clear the level" (Tilt Breaker: instant level complete)
+##   U  game-specific: Tilt Breaker drops the next power-up capsule over the ship
 ##   F  game-specific debug action (`debug_action` signal, e.g. Tilt Breaker's
 ##      piercing plasma that destroys everything in a vertical line)
 extends Node
@@ -46,6 +47,10 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		KEY_I:
 			toggle_monitor()
+			get_viewport().set_input_as_handled()
+		KEY_U:
+			if not get_tree().paused:
+				debug_action.emit(&"powerup")
 			get_viewport().set_input_as_handled()
 		KEY_C:
 			if not get_tree().paused:

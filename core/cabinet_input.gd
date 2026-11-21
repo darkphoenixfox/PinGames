@@ -16,12 +16,12 @@ const ACTIONS: Array[StringName] = [
 	&"flip_l", &"flip_r", &"magna_l", &"magna_r", &"launch", &"start", &"coin", &"exit",
 ]
 
-## Director-specified defaults (D-019). Godot joypad indices use SDL layout:
+## Director-specified defaults (D-019; flippers moved off Shift in D-075). Godot joypad indices use SDL layout:
 ## joy:0 = Cross/A, joy:1 = Circle/B, joy:2 = Square/X, joy:9 = L1, joy:10 = R1,
 ## axis:4 = L2, axis:5 = R2.
 const DEFAULT_BINDINGS := {
-	"flip_l": ["key:Shift@left", "joy:9"],      # L1
-	"flip_r": ["key:Shift@right", "joy:10"],    # R1
+	"flip_l": ["key:Left", "joy:9"],            # L1  (left arrow, D-077)
+	"flip_r": ["key:Right", "joy:10"],          # R1  (right arrow, D-077)
 	"magna_l": ["key:Ctrl@left", "axis:4+"],    # L2
 	"magna_r": ["key:Ctrl@right", "axis:5+"],   # R2
 	"launch": ["key:Space", "joy:0"],           # Cross

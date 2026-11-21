@@ -5,6 +5,7 @@
 extends RefCounted
 
 const DURATIONS := {
+	"ship_boost": 1.7,
 	"logo": 3.2,
 	"tetra_hit": 1.6,
 	"incoming": 1.3,
@@ -109,6 +110,38 @@ func logo(p, t: float) -> void:
 				p.dot(x0 + sx - 1, y0 + sy, Color(1, 1, 1, 0.5))
 				p.dot(x0 + sx + 1, y0 + sy, Color(1, 1, 1, 0.5))
 
+
+
+## Level change (D-076): the ship boosts away upwards on its belly flames,
+## growing as it comes towards the viewer, stars streaking past, white flash.
+func ship_boost(p, t: float) -> void:
+	var k := clampf(t / 1.4, 0.0, 1.0)
+	# Star streaks rushing down (faster as the boost builds)
+	for i in 14:
+		var sx := float((i * 53) % 128)
+		var len := 2.0 + 6.0 * k
+		var sy := fmod(i * 7.0 + t * (40.0 + 140.0 * k), 40.0) - 4.0
+		p.line(sx, sy, sx, sy + len, Color(0.5, 0.6, 0.9) * (0.4 + 0.6 * k))
+	var s := 1 + int(k * 3.0)                     # pixel scale: 1 -> 4 (towards viewer)
+	var cy := lerpf(26.0, -4.0 - 10.0 * s, k * k)  # rises and leaves the top
+	var cx := 64.0
+	# Belly flames under the ship, flickering
+	for f in [-3, 3]:
+		var fl := (3.0 + 4.0 * k) * s * (0.7 + 0.3 * sin(t * 47.0 + f))
+		for d in int(fl):
+			var c := WHITE if d < s else (CYAN if d < 3 * s else BLUE)
+			p.block(cx + f * s - floorf(s * 0.5), cy + 3 * s + d, s, 1, c)
+	# Ship sprite scaled up
+	for r in SHIP.size():
+		for col in SHIP[r].length():
+			var ch: String = SHIP[r][col]
+			if ch == "0":
+				continue
+			var c := WHITE * 0.85 if ch == "1" else (CYAN if ch == "2" else BLUE)
+			p.block(cx + (col - 7) * s, cy + (r - 2) * s, s, s, c)
+	if t > 1.4:  # exit flash
+		var a := 1.0 - (t - 1.4) / 0.3
+		p.block(0, 0, 128, 32, Color(1, 1, 1) * maxf(a, 0.0))
 
 
 ## Tetra hit by the plasma ball and exploding.

@@ -34,7 +34,7 @@ Layouts are `3screen`, `2screen` (DMD inside the backglass) and `windowed` (thre
 ## 3. Controls contract
 | Action | Default (keyboard / pad) | Guaranteed? | Typical use |
 |---|---|---|---|
-| `flip_l` / `flip_r` | L/R Shift · L1/R1 | Yes | Move / steer / choose |
+| `flip_l` / `flip_r` | Left/Right arrow · L1/R1 | Yes | Move / steer / choose |
 | `launch` | Space · Cross | Yes | Primary action (serve, bomb, turbo) |
 | `start` | Enter · Circle | Yes | Start game / add player |
 | `exit` | Backspace · Square | Yes | Back to picker, or quit (when started with `--game`) |
@@ -131,6 +131,18 @@ Rules:
 - **Attract and intro (D-061):** the game opens in its own **attract mode**. The TABLE shows the title and a blinking PRESS START over the planet and stars. The DMD cycles the title and PRESS START, the top-5 high scores, and pixel animations. **Start** (or Launch) plays a jingle and shows **GET READY** on the DMD and in the middle of the TABLE. The **wall forms**: bricks drop in one after another, top row first, falling in 3D from above and settling with a bounce. Then the **ship blasts up** from below the screen on a downward **belly afterburner** and settles into place. Play begins with PLASMA CANNON READY.
 - **Levels (D-068):** stages are text files in `games/breakout/levels/`, one character per brick (R/Y/G/B = colour, `.` = empty, `#` = comment line), up to 11 columns × 10 rows. **Level 1** is 4 rows of 11 (44 bricks). **Level 2** is a stepped nanomachine **pyramid**. After the last file the levels loop.
 - **Level complete (D-068):** every enemy on screen explodes and the DMD plays "LEVEL CLEAR! +1000". The ship **flies away** up the screen and toward the viewer (rising, growing, pitching) on its belly afterburner. The screen **fades to black**, then the next level loads with the same intro (bricks drop in, ship blasts in) and "LEVEL n".
+- **Power-ups (D-072):** every 10th brick destroyed has a 70 % chance to drop a capsule (glossy coloured sphere, letter, two orbiting electrons). Catch it with the ship. One at a time; lasts until the level ends or you die. The DMD shows its letter next to the power bar, and the bar takes its colour.
+  - **T** (blue) Triple laser: the charged shot fires 3 bolts, straight up and at ±45°.
+  - **P** (red) Power laser: charges straight to level 3 in one phase, with only the level-3 effects.
+  - **B** (yellow) Bounce plasma: the shot is an extra plasma ball that rebounds like the main one; 1 level, full bar. A life is only lost once every ball has sunk.
+  - **I** (purple) Ion cannon: level 3 only, full bar; an instant beam fries everything straight above the ship.
+  - **L** (white) Lightspeed: no shot, no bar; the ship is 30 % faster and leaves two afterimages that also bounce the plasma.
+  - **S** (green) Shield: no shot, no bar; a green barrier at the bottom saves one sinking ball.
+  - The ship never blocks a ball rising from below.
+- **Charged shot (D-074..D-076):** reaching the maximum level fires automatically. With an empty bar, "LOW" shows only in the DMD bar area, and only after both flippers are held for more than 0.5 s. The bar is full at the start of every level.
+- **Bricks (D-073):** UPPERCASE = 1 hit; lowercase = armoured (2 hits, glowing frame, cracks after the first hit, 1.5× points); `X` = indestructible metal (doesn't count towards clearing).
+- **Levels 1–10 (D-073):** rows, pyramid, checkerboard, eye (first armour), metal-core towers, diamond, funnel, twin fortresses, armour weave, hive mind. Every 5 levels enemies get +40 % speed, spawn more often, one more can be on screen, and their orbits steer towards the ship.
+- **Level-change boost (D-076):** "LEVEL CLEAR!" shows first, then the DMD plays the pixel ship boosting away as the real ship lifts off.
 - **Game over (D-044):** when the last charge is lost, the explosion grows until it fills the whole screen, with a bigger, longer blast. The screen fades to black, then **GAME OVER** and the **final score** show on the TABLE, DMD and backglass. After about 4 s (or Launch/Start to skip) the game goes to high-score entry or back to the picker.
 
 ### 5.2 SKY STRIKER — vertical shmup (TATE) (M3)
