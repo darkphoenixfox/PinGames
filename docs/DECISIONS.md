@@ -989,3 +989,10 @@
   - **DMD dashboard:** `Dmd.show_custom(callable)` is a new API for game-drawn frames, called with the Painter each frame, with flashes still drawn over it. The racer draws a segmented speed dial with a needle, digital speed and KM/H, the score, a gear box, the clock, and a 13-cell horizontal tachometer bar (green, yellow, red from 7/8) that blinks red when it's time to shift.
 - **Strings:** the DMD TIME and SPEED keys and NO NITRO are removed. New keys: RC_SHIFT_HINT, RC_GEAR, RC_GEAR_L, RC_GEAR_H, RC_GEAR_FLASH, RC_SHIFT, RC_RPM and RC_JUST_MADE_IT.
 - **Status:** Accepted (tuning pending playtest)
+
+### D-104 — Turbo Run attract music: "Maximum Overdrive" by Bogart VGM
+- **Date:** 2026-11-21
+- **Decision (director):** Turbo Run's attract mode plays "Maximum Overdrive" by Bogart VGM (https://opengameart.org/content/maximum-overdrive, CC BY 3.0, as stated by the director; the page refuses automated reads, so the license wasn't re-checked by tool).
+- **File:** `assets/audio/music/racer/bogart_maximum_overdrive.ogg`, converted from the director's MP3 (Vorbis q5, 3:30) and looped by `Audio.play_music`.
+- **Races:** they still use the CodeManu action loops, starting on action_3 (D-093, D-095).
+- **Status:** Accepted

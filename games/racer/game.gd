@@ -51,7 +51,9 @@ const TITLE_FONT := "sunset"
 ## Director's pick: "8-bit Music Pack (Loopable)" by CodeManu, CC BY 3.0 (D-033).
 ## Director's pick (D-093): the five "action" loops for attract and race. Each
 ## race starts on the next one, and every checkpoint (new stage) moves on again.
-## Attract and the first race play action_3 (director's pick).
+## The first race plays action_3 (director's pick).
+## Attract mode: "Maximum Overdrive" by Bogart VGM, CC BY 3.0 (D-104).
+const MUSIC_ATTRACT := "res://assets/audio/music/racer/bogart_maximum_overdrive.ogg"
 const FIRST_TRACK := 2
 const MUSIC_TRACKS := [
 	"res://assets/audio/music/racer/codemanu_action_1.ogg",
@@ -252,7 +254,7 @@ func _enter_attract() -> void:
 	sim.autopilot = true
 	sim.state = Sim.State.RACE
 	sim.v = 60.0
-	Audio.play_music(MUSIC_TRACKS[FIRST_TRACK])
+	Audio.play_music(MUSIC_ATTRACT)
 	_hud.visible = false
 	_attract_ui = UI.vstack(60)
 	_attract_ui.add_child(UI.spacer(200))
