@@ -698,3 +698,9 @@
 - **Decision (director):** the game should warn if the Filter Keys or Sticky Keys shortcuts are on.
 - **Implementation:** `core/system_checks.gd` (Windows only, once per run) reads `HKCU\Control Panel\Accessibility\StickyKeys` and `...\Keyboard Response` with `reg query`, and flags bits 0x1 (feature on) and 0x4 (shortcut on). The picker shows red warnings plus a how-to line, and the operator's System Info has a "KEYBOARD SHORTCUTS" row. Tests cover flag parsing: 26 = off, 510/126 = Windows defaults with the shortcut on. Dev flag: `--fake-keys-warning`. README has a cabinet setup note.
 - **Status:** Accepted
+
+### D-071 — Ship model orientation (supersedes the rotation in D-069)
+- **Date:** 2026-11-21
+- **Decision (director, with a reference image):** the camera should see the ship's **front face**, with the cockpit window at the top and vents/thrusters at the bottom, cockpit toward the top of the screen. The earlier Y-axis 180° turn was the wrong axis.
+- **Implementation:** `paddle.glb` is pitched −90° about X (`model.rotation_degrees = (-90, 0, 0)`), so the model's +Z face points at the camera and the model's +Y (cockpit side) points up the screen (−Z). The hitbox, engines, shield and charge point are unchanged.
+- **Status:** Accepted
