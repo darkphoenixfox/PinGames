@@ -13,6 +13,9 @@ shader_type spatial;
 #endif
 
 uniform sampler2D tex : source_color, filter_nearest;
+// D-195 HD graphics: the model's original high-res texture, smoothly filtered.
+uniform sampler2D tex_hd : source_color, filter_linear_mipmap_anisotropic;
+uniform bool hd = false;
 uniform bool toon = true;
 INST uniform float hue = 0.0;
 INST uniform float bright = 1.0;
@@ -57,7 +60,7 @@ vec3 hue_rotate(vec3 c, float a) {
 }
 
 void fragment() {
-	vec3 c = texture(tex, UV).rgb;
+	vec3 c = hd ? texture(tex_hd, UV).rgb : texture(tex, UV).rgb;
 	ALBEDO = hue_rotate(c, hue * 6.2831853) * bright;
 	float lum = dot(c, vec3(0.3, 0.59, 0.11));
 	if (spin > 0.5 && abs(mp.x) > 0.7) {

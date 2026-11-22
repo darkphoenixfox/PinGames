@@ -194,6 +194,7 @@ Rules:
 
 **Prototype (D-089), playable:**
 - **Road:** real 3D, not sprite scaling. It is an endless seeded road made of sections: straights, sweepers, medium curves and hairpins, with hills and dips. 4 lanes with kerbs, sand and grass, drawn with a 16-bit texel shader. Low-poly "PS2" props: palms, rocks, lamps and chevron signs on the outside of curves. Mountains on the horizon. **Time of day (D-193):** a procedural sky with one sun that moves with the race: stages 1–3 daylight (the sun coming down from about 48°), stages 4–5 golden hour and sunset (it sets late in stage 5, ahead of the road's start), stages 6–9 night (moon and stars, headlights, Dreamstate music), and dawn in stage 10. The sky, clouds, mountains, light, ambient and fog all follow the sun's elevation.
+- **Graphics (D-195):** after Start, a GRAPHICS screen offers RETRO (the 16-bit pixel look) or HD (native resolution, high-res sprites and car textures, smooth filtering, 4× MSAA). Flippers choose and the road behind switches live; Launch confirms, and the choice is remembered (RETRO by default).
 - **Car select (D-122):** after Start, three cars spin on turntables: red EASY (259 km/h, high grip), yellow NORMAL (288 km/h) and blue HARD (317 km/h, slides wide). Their stats show on a card beside each car (top speed, cornering and time as 5-segment bars with values, D-185) and on the DMD. Flippers choose, Launch/Start confirms, and after 15 s the highlighted car is taken.
 - **Controls:**
   - Flippers steer.

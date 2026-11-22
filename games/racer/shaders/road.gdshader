@@ -6,6 +6,7 @@ shader_type spatial;
 render_mode cull_disabled;
 
 uniform float road_half = 7.5;
+uniform bool hd = false;   // D-195: HD graphics: no 25 cm texels, finer grain
 uniform float rumble = 1.2;
 uniform vec3 asphalt_a : source_color = vec3(0.36, 0.36, 0.4);
 uniform vec3 asphalt_b : source_color = vec3(0.32, 0.32, 0.36);
@@ -22,7 +23,7 @@ float hash(vec2 p) {
 }
 
 void fragment() {
-	vec2 m = floor(UV * 4.0) / 4.0;
+	vec2 m = hd ? UV : floor(UV * 4.0) / 4.0;
 	float x = abs(m.x);
 	float sv = m.y;
 	float band = mod(floor(sv / 8.0), 2.0);
@@ -39,7 +40,7 @@ void fragment() {
 	} else {
 		col = mix(grass_a, grass_b, band);
 	}
-	col *= 0.92 + 0.08 * hash(m);
+	col *= 0.92 + 0.08 * hash(hd ? floor(UV * 24.0) : m);
 	ALBEDO = col;
 	ROUGHNESS = 0.92;
 	SPECULAR = 0.2;

@@ -21,6 +21,9 @@ const KINDS := {
 }
 
 static var _meshes := {}
+## D-195 HD graphics: the high-res cut-outs (assets/sprites/racer/hd/), smoothly
+## filtered. set_hd() swaps the textures on the meshes already made.
+static var hd := false
 ## Moonlit tint for the pre-lit sprites at night (D-113).
 const NIGHT_TINT := Color(0.3, 0.34, 0.58)
 static var _night := 0.0
@@ -38,6 +41,20 @@ static func set_night(k: float) -> void:
 		m.albedo_color = Color.WHITE.lerp(NIGHT_TINT, k)
 
 
+static func set_hd(on: bool) -> void:
+	hd = on
+	for kind in _meshes:
+		_apply_texture((_meshes[kind] as QuadMesh).material, KINDS[kind][0])
+
+
+static func _apply_texture(m: StandardMaterial3D, file: String) -> void:
+	var path := DIR + ("hd/" if hd else "") + file + ".png"
+	if not ResourceLoader.exists(path):
+		path = DIR + file + ".png"
+	m.albedo_texture = load(path)
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC if hd 		else BaseMaterial3D.TEXTURE_FILTER_NEAREST
+
+
 static func has(kind: String) -> bool:
 	return KINDS.has(kind)
 
@@ -50,11 +67,10 @@ static func mesh(kind: String) -> Mesh:
 	var h: float = spec[1]
 	var w := h * tex.get_width() / float(tex.get_height())
 	var m := StandardMaterial3D.new()
-	m.albedo_texture = tex
+	_apply_texture(m, spec[0])
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 	m.alpha_scissor_threshold = 0.5
-	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	if spec[2]:
 		m.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y

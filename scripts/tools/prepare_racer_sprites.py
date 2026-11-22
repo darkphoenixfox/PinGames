@@ -6,7 +6,10 @@ into game sprites in assets/sprites/racer/.
   with nearest-neighbour by a whole factor so the pixel-art grid stays crisp.
   Alpha is cut hard (0/255) because the game draws them with alpha scissor.
 - Sky: scaled to 1024 wide; the game wraps it around a cylinder behind the world.
-Run: python scripts/tools/prepare_racer_sprites.py
+- HD (D-195): `--hd` writes assets/sprites/racer/hd/<name>.png instead: the same
+  cut-out at the original's resolution (up to HD_MAX tall), Lanczos-scaled with
+  soft alpha, for the game's HD graphics mode. The retro sprites are untouched.
+Run: python scripts/tools/prepare_racer_sprites.py [--hd]
 """
 import os
 import sys
@@ -85,6 +88,23 @@ def sprite(name, height):
     print(f"{out}  {img.width}x{img.height}")
 
 
+HD_MAX = 1024
+
+
+def sprite_hd(name):
+    img = cutout(Image.open(os.path.join(SRC, name + ".png")))
+    if name in HOLES:
+        img = remove_grey_framed_holes(img)
+    img = img.crop(img.getbbox())
+    if img.height > HD_MAX:
+        img = img.resize((max(1, round(img.width * HD_MAX / img.height)), HD_MAX), Image.LANCZOS)
+    out_dir = os.path.join(DST, "hd")
+    os.makedirs(out_dir, exist_ok=True)
+    out = os.path.join(out_dir, name + ".png")
+    img.save(out, optimize=True)
+    print(f"{out}  {img.width}x{img.height}")
+
+
 def sky():
     img = Image.open(os.path.join(SRC, "sky_1.png")).convert("RGB")
     img = img.resize((1024, round(img.height * 1024 / img.width)), Image.NEAREST)
@@ -95,6 +115,14 @@ def sky():
 
 if __name__ == "__main__":
     os.makedirs(DST, exist_ok=True)
+    if "--hd" in sys.argv:
+        for n in SPRITES:
+            sprite_hd(n)
+        # The car-select backdrop at the original's 2048 px, smoothly scaled.
+        sky_hd = Image.open(os.path.join(SRC, "sky_1.png")).convert("RGB")
+        sky_hd.save(os.path.join(DST, "hd", "sky.png"), optimize=True)
+        print("hd/sky.png", sky_hd.size)
+        sys.exit(0)
     for n, h in SPRITES.items():
         sprite(n, h)
     sky()

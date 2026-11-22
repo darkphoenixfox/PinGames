@@ -28,6 +28,7 @@ func _initialize() -> void:
 	test_breakout_sim()
 	test_racer_sim()
 	test_racer_time_of_day()
+	test_racer_hd_assets()
 	test_exported_translation()
 	test_export_includes_data()
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -603,6 +604,24 @@ func test_exported_translation() -> void:
 
 
 ## Turbo Run time of day (D-193): stages 1-3 day, 4-5 sunset, 6-9 night, dawn at 10.
+## HD graphics (D-195): every sprite kind has its HD cut-out and every car model
+## its high-res texture in the shipped assets.
+func test_racer_hd_assets() -> void:
+	var Sprites = load("res://games/racer/sprites.gd")
+	var missing: Array = []
+	for kind in Sprites.KINDS:
+		var f: String = Sprites.KINDS[kind][0]
+		if not ResourceLoader.exists("res://assets/sprites/racer/hd/%s.png" % f):
+			missing.append(f)
+	check(missing.is_empty(), "HD sprite cut-outs exist (%s missing)" % ", ".join(missing))
+	var Game = load("res://games/racer/game.gd")
+	var miss_tex: Array = []
+	for lo in Game.HD_TEXTURES:
+		if not ResourceLoader.exists(Game.HD_TEXTURES[lo]):
+			miss_tex.append(Game.HD_TEXTURES[lo])
+	check(miss_tex.is_empty() and Game.HD_TEXTURES.size() == 5, "HD car textures exist for all five models")
+
+
 func test_racer_time_of_day() -> void:
 	var T = load("res://games/racer/sky.gd")
 	var el := func(p: float) -> float: return T.sun_elevation(T.hour_at(p))

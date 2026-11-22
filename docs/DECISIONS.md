@@ -1802,3 +1802,23 @@
 - **Unchanged:** the 16-bit look, the HUD, and the car-select showroom (its own 360×640 pass).
 - **Cost:** about 1.8× the pixels to render.
 - **Status:** Accepted (amends D-107)
+
+### D-195 — Turbo Run HD / RETRO graphics setting
+- **Date:** 2026-11-22
+- **Decision (director):** an HD / RETRO setting before choosing cars. HD renders the game at native resolution with high-res sprites and textures; RETRO is the current look.
+- **Choosing:** PRESS START opens a GRAPHICS screen over the attract demo, then the car select.
+  - The left flipper (or magna) picks RETRO and the right picks HD; the road behind switches live.
+  - Launch / Start confirms, and the screen confirms by itself after 15 s.
+  - The choice is saved as `racer.graphics` (not during `--press` runs) and preselected next time. RETRO is the default.
+  - `--rc-gfx=hd|retro` sets it for dev runs.
+- **RETRO:** unchanged. The world renders at 480×854 through the palette/dither pass (D-107, D-194).
+- **HD** (`_apply_gfx`):
+  - Render: the world viewport takes the TABLE's own size with 4× MSAA, and the pixel pass is off (view filter linear).
+  - Sprites: the HD cut-outs from `sprites/racer/hd/`, made by `prepare_racer_sprites.py --hd` from the Qwen originals at up to 1024 px, Lanczos-scaled with soft alpha. `Sprites.set_hd` swaps textures on the meshes already made.
+  - Cars: `car.gdshader` samples `tex_hd`, the model's original high-res texture with linear, mipmapped, anisotropic filtering (`HD_TEXTURES`; the 4 K/2 K glb textures and the police car's 2 K original copied to `police2_albedo_hd.png`). All five share the retro textures' UV layout (checked: mean difference ≈ 0).
+  - Road: `road.gdshader` `hd` drops the 25 cm texels.
+  - Every other nearest-filtered material in the world (scenery atlas, tunnel, lights, smoke…) turns linear-mipmapped. Pieces added later get the same through `node_added`, and RETRO restores exactly the flipped ones.
+  - The car-select showroom renders at 1080×1920 without the pixel pass, with an HD backdrop (`hd/sky.png`, 2048 px).
+- **Notes:** the HD sprites come from pixel-art-styled generations, so they're crisp and detailed but keep a slight pixel character; painterly art would mean new generations. HD costs far more GPU than RETRO (about 4.5× the pixels plus MSAA), which is why RETRO is the default for phones and the web.
+- **Tests:** HD cut-outs exist for every sprite kind, and HD textures for all five car models.
+- **Status:** Accepted

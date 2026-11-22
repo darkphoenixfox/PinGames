@@ -11,6 +11,7 @@ const Sim = preload("res://games/racer/sim.gd")
 const PIXEL_POST = preload("res://games/racer/shaders/pixel_post.gdshader")
 
 const RES := Vector2i(360, 640)
+const HD_RES := Vector2i(1080, 1920)   # D-195: HD graphics renders at the TABLE's size, no pixel pass
 const ROW_Y := [5.4, 0.0, -5.4]      # car heights in the showroom (m), top to bottom
 const SPIN := 1.2                     # rad/s, the chosen car only
 const SPRITE_ANGLES := 32
@@ -23,6 +24,8 @@ const PIP_W := 38.0
 const ROW_COLS := [Color("4fff7a"), Color("ffd23e"), Color("ff3b4f")]   # easy, normal, hard
 
 var selected := Sim.DEFAULT_CAR
+var hd := false        # set before build() (D-195)
+var _res := RES
 var _vp: SubViewport
 var _cam: Camera3D
 var _cars: Array = []
@@ -38,7 +41,10 @@ var _angles := [START_ANGLE, START_ANGLE, START_ANGLE]   # all start alike (D-14
 func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_vp = SubViewport.new()
-	_vp.size = RES
+	_res = HD_RES if hd else RES
+	_vp.size = _res
+	if hd:
+		_vp.msaa_3d = Viewport.MSAA_4X
 	_vp.own_world_3d = true
 	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_vp.transparent_bg = true
@@ -46,7 +52,9 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 	# Backdrop: the race's sunset sky, whole, behind the 3D view.
 	var sky := TextureRect.new()
 	sky.texture = sky_tex
-	sky.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	if hd and ResourceLoader.exists("res://assets/sprites/racer/hd/sky.png"):   # D-195
+		sky.texture = load("res://assets/sprites/racer/hd/sky.png")
+	sky.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if hd else CanvasItem.TEXTURE_FILTER_NEAREST
 	sky.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	sky.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	sky.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -109,15 +117,16 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 	_cam.current = true
 	var view := TextureRect.new()
 	view.texture = _vp.get_texture()
-	view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if hd else CanvasItem.TEXTURE_FILTER_NEAREST
 	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	view.stretch_mode = TextureRect.STRETCH_SCALE
 	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var post := ShaderMaterial.new()
-	post.shader = PIXEL_POST
-	post.set_shader_parameter("low_res", Vector2(RES))
-	post.set_shader_parameter("keep_alpha", true)
-	view.material = post
+	if not hd:   # retro: the 16-bit palette/dither pass (HD shows the render as it is)
+		var post := ShaderMaterial.new()
+		post.shader = PIXEL_POST
+		post.set_shader_parameter("low_res", Vector2(RES))
+		post.set_shader_parameter("keep_alpha", true)
+		view.material = post
 	add_child(view)
 	# Title + a stats card beside each car (fixed slots: nothing moves, D-096).
 	var title := UI.styled_label(tr("RC_CHOOSE_CAR"), title_font, 2)
@@ -168,7 +177,7 @@ func _stats_box(i: int) -> Control:
 	# Level with its turntable: centre the card on the car's row.
 	var mid := _cam.unproject_position(Vector3(CAR_X, float(ROW_Y[i]), 0.0))
 	var h := panel.get_combined_minimum_size().y
-	panel.position = Vector2(CARD_X, mid.y * (1920.0 / RES.y) - h * 0.5)
+	panel.position = Vector2(CARD_X, mid.y * (1920.0 / _res.y) - h * 0.5)
 	return panel
 
 

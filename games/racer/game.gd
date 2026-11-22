@@ -105,6 +105,17 @@ const LAMP_BOXES := {
 const POLICE_MODEL := "res://assets/models/racer/police2.glb"   # D-140: not modelled on a real car
 const POLICE_TEXTURE := "res://assets/models/racer/police2_albedo.png"
 const TRUCK2_TEXTURE := "res://assets/models/racer/truck2_albedo.png"
+## D-195 HD graphics: each model's original high-res texture (same UV layout).
+const HD_TEXTURES := {
+	CAR_TEXTURE: "res://assets/models/racer/red_car_red_car_albedo.jpg",
+	TRUCK_TEXTURE: "res://assets/models/racer/truck_truck_albedo.jpg",
+	TRUCK2_TEXTURE: "res://assets/models/racer/truck2_truck2_albedo.jpg",
+	HATCH_TEXTURE: "res://assets/models/racer/hatchback_hatchback_albedo.jpg",
+	POLICE_TEXTURE: "res://assets/models/racer/police2_albedo_hd.png",
+}
+const GFX_OPTIONS := ["retro", "hd"]
+const GFX_NAMES := {"retro": "RC_GFX_RETRO", "hd": "RC_GFX_HD"}
+const GFX_DESC := {"retro": "RC_GFX_RETRO_DESC", "hd": "RC_GFX_HD_DESC"}
 
 const ACCENT := Color("ffd23e")
 const TITLE_FONT := "sunset"
@@ -251,6 +262,13 @@ var _car_mats := {}         # model path -> ShaderMaterial
 var _car_outlines := {}     # model path -> outline ArrayMesh
 var _beam_mat: StandardMaterial3D
 var _pix_vp: SubViewport
+var _gfx_hd := false             # D-195: HD graphics (native resolution, high-res art)
+var _retro_post: ShaderMaterial  # the 16-bit palette/dither pass, kept for switching back
+var _hd_flipped := {}            # materials HD switched from nearest to smooth filtering
+var _gfx_ui: Control
+var _gfx_rows: Array = []
+var _gfx_index := 0
+var _gfx_hint: Label
 var _police: Node3D          # D-135
 var _flashers: Array = []
 var _washes: Array = []
@@ -356,6 +374,8 @@ func start(_players: int) -> void:
 	Toon.enabled = not Config.cli.has("rc-no-toon")
 	DebugTools.debug_action.connect(_on_debug_action)
 	_build_world()
+	_apply_gfx(_start_gfx())
+	get_tree().node_added.connect(_on_world_node_added)
 	_build_hud()
 	_build_backglass()
 	_build_audio_loops()
@@ -382,7 +402,16 @@ func on_action(action: StringName, pressed: bool) -> void:
 		return
 	if _phase == "attract":
 		if action == &"start" or action == &"launch":
-			_begin_select()
+			_begin_gfx()
+		return
+	if _phase == "gfx":
+		match action:
+			&"flip_l", &"magna_l":
+				_move_gfx(0)
+			&"flip_r", &"magna_r":
+				_move_gfx(1)
+			&"launch", &"start":
+				_confirm_gfx()
 		return
 	if _phase == "select":
 		match action:
@@ -420,6 +449,12 @@ func _process(delta: float) -> void:
 		sim.time_left = 99.0
 		sim.step(dt, false, false)
 		_attract_tick()
+	elif _phase == "gfx":
+		sim.time_left = 99.0
+		sim.step(dt, false, false)   # the attract demo keeps driving behind the menu
+		_gfx_hint.text = tr("RC_GFX_HINT") % maxi(ceili(SELECT_TIME - _phase_t), 0)
+		if _phase_t >= SELECT_TIME:
+			_confirm_gfx()
 	elif _phase == "select":
 		var left := ceili(SELECT_TIME - _phase_t)
 		_select_hint.text = tr("RC_SELECT_HINT") % maxi(left, 0)
@@ -512,6 +547,136 @@ func _top_score_line() -> String:
 
 ## Car select (D-122): three cars in a showroom, flippers choose, Launch/Start
 ## confirms (or the timer picks the highlighted one).
+# --- graphics: HD / RETRO (D-195) ------------------------------------------------------
+## --rc-gfx=hd|retro (dev), else the last choice, else RETRO.
+func _start_gfx() -> bool:
+	var g := str(Config.cli.get("rc-gfx", Config.get_value("racer", "graphics", "retro")))
+	return g == "hd"
+
+
+## RETRO: the world at PIXEL_RES through the 16-bit palette/dither pass (D-107,
+## D-194). HD: the world at the TABLE's own resolution with 4x MSAA, no pixel
+## pass, the high-res sprite cut-outs and car textures, smooth filtering, and
+## the road without its 25 cm texels.
+func _apply_gfx(on: bool) -> void:
+	_gfx_hd = on
+	_pix_vp.size = Vector2i(Screens.table.size) if on else PIXEL_RES
+	_pix_vp.msaa_3d = Viewport.MSAA_4X if on else Viewport.MSAA_DISABLED
+	_world_view.material = null if on else _retro_post
+	_world_view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if on else CanvasItem.TEXTURE_FILTER_NEAREST
+	Sprites.set_hd(on)
+	if _road_mat != null:
+		_road_mat.set_shader_parameter("hd", on)
+	for m in _car_mats.values():
+		(m as ShaderMaterial).set_shader_parameter("hd", on)
+	if on:
+		_refilter(_root)
+	else:
+		for m in _hd_flipped:
+			if is_instance_valid(m):
+				(m as BaseMaterial3D).texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		_hd_flipped.clear()
+
+
+## HD: every nearest-filtered material under `root` turns smooth (remembered,
+## so RETRO can put it back).
+func _refilter(root: Node) -> void:
+	var nodes: Array = [root]
+	nodes.append_array(root.find_children("*", "GeometryInstance3D", true, false))
+	for g in nodes:
+		if not (g is GeometryInstance3D):
+			continue
+		var mats: Array = [g.material_override, g.material_overlay]
+		var mesh: Mesh = null
+		if g is MeshInstance3D:
+			mesh = (g as MeshInstance3D).mesh
+			for si in (g as MeshInstance3D).get_surface_override_material_count():
+				mats.append((g as MeshInstance3D).get_surface_override_material(si))
+		elif g is CPUParticles3D:
+			mesh = (g as CPUParticles3D).mesh
+		elif g is MultiMeshInstance3D and (g as MultiMeshInstance3D).multimesh != null:
+			mesh = (g as MultiMeshInstance3D).multimesh.mesh
+		if mesh != null:
+			for si in mesh.get_surface_count():
+				mats.append(mesh.surface_get_material(si))
+		for m in mats:
+			while m is BaseMaterial3D:
+				if (m as BaseMaterial3D).texture_filter == BaseMaterial3D.TEXTURE_FILTER_NEAREST:
+					(m as BaseMaterial3D).texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+					_hd_flipped[m] = true
+				m = (m as Material).next_pass
+
+
+## Pieces built while racing (road chunks, props) get HD filtering too.
+func _on_world_node_added(n: Node) -> void:
+	if _gfx_hd and n is GeometryInstance3D and _root != null and _root.is_ancestor_of(n):
+		_refilter(n)
+
+
+func _begin_gfx() -> void:
+	if is_instance_valid(_attract_ui):
+		_attract_ui.queue_free()
+	_phase = "gfx"
+	_phase_t = 0.0
+	Audio.sfx("start")
+	_gfx_index = 1 if _gfx_hd else 0
+	_gfx_ui = Control.new()
+	_gfx_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_gfx_ui.add_child(UI.fill(Color(0, 0, 0, 0.35)))
+	var col := UI.vstack(60)
+	col.add_child(UI.styled_label(tr("RC_GFX_TITLE"), TITLE_FONT, 2))
+	_gfx_rows.clear()
+	for g in GFX_OPTIONS:
+		var row := VBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		var name_l := UI.label("", 96, UI.WHITE)
+		row.add_child(name_l)
+		row.add_child(UI.label(tr(GFX_DESC[g]), 36, UI.WHITE))
+		col.add_child(row)
+		_gfx_rows.append([name_l, row])
+	_gfx_hint = UI.label("", 36, UI.WHITE)
+	col.add_child(_gfx_hint)
+	_gfx_ui.add_child(col)
+	add_to_table(_gfx_ui)
+	_refresh_gfx()
+
+
+## Flippers pick RETRO (left) or HD (right), shown live on the road behind.
+func _move_gfx(i: int) -> void:
+	_phase_t = 0.0
+	if i == _gfx_index:
+		return
+	_gfx_index = i
+	Audio.sfx("rc_shift")
+	_apply_gfx(GFX_OPTIONS[i] == "hd")
+	_refresh_gfx()
+
+
+func _refresh_gfx() -> void:
+	for i in _gfx_rows.size():
+		var on := i == _gfx_index
+		var name_l: Label = _gfx_rows[i][0]
+		var g: String = GFX_OPTIONS[i]
+		name_l.text = ("> %s <" % tr(GFX_NAMES[g])) if on else tr(GFX_NAMES[g])
+		name_l.add_theme_color_override("font_color", ACCENT if on else UI.WHITE)
+		(_gfx_rows[i][1] as Control).modulate.a = 1.0 if on else 0.45
+	var cur: String = GFX_OPTIONS[_gfx_index]
+	Dmd.show_text(tr("RC_GFX_TITLE"), tr(GFX_NAMES[cur]), Dmd.CYAN, Dmd.YELLOW)
+
+
+func _confirm_gfx() -> void:
+	if _phase != "gfx":
+		return
+	var g: String = GFX_OPTIONS[_gfx_index]
+	# Remembered for next time (not from scripted test runs, which mustn't save).
+	if not Config.cli.has("press") and str(Config.get_value("racer", "graphics", "retro")) != g:
+		Config.set_value("racer", "graphics", g)
+		Config.save()
+	if is_instance_valid(_gfx_ui):
+		_gfx_ui.queue_free()
+	_begin_select()
+
+
 func _begin_select() -> void:
 	if is_instance_valid(_attract_ui):
 		_attract_ui.queue_free()
@@ -520,6 +685,7 @@ func _begin_select() -> void:
 	Audio.sfx("start")
 	_world_view.visible = false
 	_showroom = Showroom.new()
+	_showroom.hd = _gfx_hd
 	add_to_table(_showroom)
 	_showroom.selected = _chosen_car
 	_showroom.build(func(hue: float) -> Node3D: return _car_instance(hue), load(SKY_TEXTURE), TITLE_FONT)
@@ -758,6 +924,7 @@ func _build_world() -> void:
 	post.set_shader_parameter("levels", 32.0)   # D-194: gentler bands (default 24)
 	post.set_shader_parameter("dither", 0.45)   # D-194: lighter dither (default 0.6)
 	view.material = post
+	_retro_post = post
 	add_to_table(view)
 	# Police light wash (D-137): red and blue glows from the screen edges.
 	var add_mat := CanvasItemMaterial.new()
@@ -872,6 +1039,8 @@ func _car_instance(hue: float, model: String = CAR_MODEL, texture: String = CAR_
 		var mat := ShaderMaterial.new()
 		mat.shader = CAR_SHADER
 		mat.set_shader_parameter("tex", load(texture))
+		mat.set_shader_parameter("tex_hd", load(HD_TEXTURES.get(texture, texture)))   # D-195
+		mat.set_shader_parameter("hd", _gfx_hd)
 		mat.set_shader_parameter("toon", Toon.enabled)
 		if LAMP_BOXES.has(model):   # where this model's lamps are (D-144)
 			var lb: Dictionary = LAMP_BOXES[model]
