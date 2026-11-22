@@ -27,6 +27,8 @@ const DEFAULTS := {
 		"dmd_region": "0.2,0.755,0.6,0.216",
 		# "auto" or a number (1.0 = base resolution 1080x1920 for the table)
 		"render_scale": "auto",
+		# Browser build on touch screens: show the on-screen buttons (D-176).
+		"touch_controls": true,
 	},
 	"dmd": {
 		"width": 128,

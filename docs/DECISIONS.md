@@ -1584,3 +1584,15 @@
 - **URL options:** on the web, the page's query string is added to the command-line options (`?game=racer&rc-skip-intro` gives `--game=racer --rc-skip-intro`), for direct links and test runs.
 - **Deploy script:** it waits for the export files to stop growing and then stops Godot, which sometimes doesn't exit after a headless export.
 - **Status:** Accepted
+
+### D-176 — Touch controls in the browser build
+- **Date:** 2026-11-22
+- **Decision (director):** touch controls for the web version, with a button to hide and show them.
+- **Buttons** (`core/touch_controls.gd`): on touch screens (or with `?touch` / `--touch`), a strip at the bottom has big LEFT and RIGHT flipper buttons at the outer edges, with EXIT, START and LAUNCH between them. They press the same CabinetInput actions as the keys, so every game works unchanged (D-007). The TABLE's left and right halves are flipper pads too. Each finger is tracked separately, so both flippers can be held at once (gear shift), and a finger sliding off a button releases it. Mouse clicks drive the strip too, but emulated mouse events from touch are ignored, so a tap never counts twice.
+- **Taps:** CabinetInput polls actions once per frame, and the picker acts on release, so a quick tap could press and release unseen. A touch press now lasts at least two frames, and the strip processes before CabinetInput (`process_priority = -100`), so CabinetInput sees the delayed release in the frame it happens.
+- **Hide/show:** a small HIDE / SHOW BUTTONS button sits at the end of the strip, and stays at the bottom right while the strip is hidden. The choice is saved as `display.touch_controls` (in the browser's storage on the web). A hidden strip ignores all input, including the TABLE pads.
+- **Layout:** the web page now rebuilds when it switches between landscape and portrait. In landscape the layout is as in D-173, plus the strip. In portrait (phones), the DMD sits above the TABLE and the BACKGLASS is left out. `--web-portrait` previews portrait on the desktop.
+- **Web quits:** the picker's quit confirm is off in the browser, because a page can't quit and would freeze.
+- **HTTPS only:** Godot's web build requires a secure context, so the plain-HTTP LAN address (`http://192.168.1.150:8086/pingames/`) shows an error. Use https://web.phoenixfox.net/pingames/. This corrects D-173 and D-175, which listed the LAN address as working.
+- **Dev:** `--press=click:X.Y` clicks the mouse at window pixel X,Y. `--vr-cam=x,y,z` places the VR desktop-preview camera (for screenshots).
+- **Status:** Accepted

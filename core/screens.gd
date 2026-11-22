@@ -11,6 +11,8 @@
 ## Games add their nodes to `table` / `backglass` (base coordinates, any render scale).
 extends Node
 
+const UI = preload("res://core/ui/ui.gd")
+const TouchControls = preload("res://core/touch_controls.gd")
 const ScreenView = preload("res://core/screen_view.gd")
 const VrCabinet = preload("res://core/vr_cabinet.gd")
 const DMD_SHADER = preload("res://core/shaders/dmd_dots.gdshader")
@@ -116,38 +118,141 @@ func _setup_windowed() -> void:
 	_add_view(dmw, Dmd.texture(), 0, true)
 
 
-# --- web: all three screens on one page (D-173) ---------------------------------
-## A browser has one canvas: the TABLE on the left at full height, the BACKGLASS
-## and the DMD stacked on the right, and the keyboard controls under them.
+# --- web: all three screens on one page (D-173, D-176) --------------------------
+## A browser has one canvas. Landscape: the TABLE on the left at full height,
+## the BACKGLASS and the DMD stacked on the right. Portrait (phones): the DMD
+## above the TABLE, no BACKGLASS. On touch screens the cabinet buttons run
+## along the bottom (core/touch_controls.gd); otherwise the keys are listed.
+var _web_page: VBoxContainer
+var _web_portrait := -1
+var _touch: TouchControls
+
+
 func _setup_web() -> void:
 	table.size = TABLE_BASE
+	var root := get_window()
 	if not OS.has_feature("web"):   # desktop preview (--web-preview): a browser-sized window
-		var root := get_window()
 		root.mode = Window.MODE_WINDOWED
 		var mon := _clamp_monitor(int(Config.get_value("display", "windowed_monitor")))
 		var area := DisplayServer.screen_get_usable_rect(mon)
-		root.size = Vector2i(mini(1280, area.size.x - 40), mini(720, area.size.y - 80))
+		var want := Vector2i(1280, 720)
+		if Config.cli.has("web-portrait"):
+			want = Vector2i(450, 900)
+		root.size = Vector2i(mini(want.x, area.size.x - 40), mini(want.y, area.size.y - 80))
 		root.position = area.position + (area.size - root.size) / 2
-	var page := HBoxContainer.new()
-	page.set_anchors_preset(Control.PRESET_FULL_RECT)
-	page.add_theme_constant_override("separation", 8)
-	add_child(page)
-	_outputs.append(page)
+	_web_page = VBoxContainer.new()
+	_web_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_web_page.add_theme_constant_override("separation", 6)
+	add_child(_web_page)
+	_outputs.append(_web_page)
+	_web_portrait = -1
+	_web_layout()
+	if not root.size_changed.is_connected(_web_layout):
+		root.size_changed.connect(_web_layout)
+
+
+func _web_layout() -> void:
+	if not is_instance_valid(_web_page):
+		return
+	var win := Vector2(get_window().size)
+	if is_instance_valid(_touch):
+		_touch.fit(win)
+	var portrait := 1 if win.y > win.x else 0
+	if portrait == _web_portrait:
+		return
+	_web_portrait = portrait
+	for c in _web_page.get_children():
+		c.queue_free()
+	var touch := TouchControls.wanted()
+	var content: BoxContainer = VBoxContainer.new() if portrait == 1 else HBoxContainer.new()
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 6)
+	_web_page.add_child(content)
 	var t := ScreenView.new()
 	t.texture = table.get_texture()
-	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	t.size_flags_stretch_ratio = 0.9
-	page.add_child(t)
-	var right := VBoxContainer.new()
-	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right.size_flags_stretch_ratio = 1.6
-	right.add_theme_constant_override("separation", 8)
-	page.add_child(right)
-	var bg := ScreenView.new()
-	bg.texture = backglass.get_texture()
-	bg.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	bg.size_flags_stretch_ratio = 2.2
-	right.add_child(bg)
+	if portrait == 1:
+		var top := _web_dmd()
+		top.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		top.size_flags_stretch_ratio = 0.22
+		content.add_child(top)
+		t.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		content.add_child(t)
+	else:
+		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		t.size_flags_stretch_ratio = 0.9
+		content.add_child(t)
+		var right := VBoxContainer.new()
+		right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		right.size_flags_stretch_ratio = 1.6
+		right.add_theme_constant_override("separation", 8)
+		content.add_child(right)
+		var bg := ScreenView.new()
+		bg.texture = backglass.get_texture()
+		bg.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		bg.size_flags_stretch_ratio = 2.2
+		right.add_child(bg)
+		var box := _web_dmd()
+		box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		box.size_flags_stretch_ratio = 0.6
+		right.add_child(box)
+		if not touch:
+			var help := Label.new()
+			help.text = tr("WEB_CONTROLS")
+			help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			help.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
+			help.add_theme_font_size_override("font_size", 16)
+			right.add_child(help)
+	if touch:
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_END   # SHOW stays at the right while hidden
+		row.add_theme_constant_override("separation", 6)
+		_web_page.add_child(row)
+		_touch = TouchControls.new()
+		_touch.table_view = t
+		_touch.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(_touch)
+		_touch.fit(win)
+		row.add_child(_touch_toggle())
+		_show_touch(bool(Config.get_value("display", "touch_controls")))
+
+
+## Small button at the end of the strip that hides or shows the on-screen
+## buttons (D-176). While hidden only this button stays, and the screens get
+## the space. The choice is saved (in the browser's storage on the web).
+var _touch_btn: Button
+
+
+func _touch_toggle() -> Button:
+	_touch_btn = Button.new()
+	_touch_btn.focus_mode = Control.FOCUS_NONE   # Space/Enter must stay game keys
+	_touch_btn.size_flags_vertical = Control.SIZE_SHRINK_END
+	for st in ["normal", "hover", "pressed", "focus"]:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.12, 0.12, 0.16, 0.85)
+		sb.border_color = Color(0.5, 0.5, 0.58)
+		sb.set_border_width_all(2)
+		sb.set_corner_radius_all(12)
+		sb.set_content_margin_all(10)
+		_touch_btn.add_theme_stylebox_override(st, sb)
+	_touch_btn.pressed.connect(func():
+		var on := not _touch.visible
+		_show_touch(on)
+		Config.set_value("display", "touch_controls", on)
+		Config.save())
+	return _touch_btn
+
+
+func _show_touch(on: bool) -> void:
+	_touch.visible = on
+	_touch_btn.text = tr("TOUCH_HIDE") if on else tr("TOUCH_SHOW")
+	var px := maxi(12, int(_touch.custom_minimum_size.y * 0.22 / 12.0) * 12)
+	_touch_btn.add_theme_font_size_override("font_size", px)
+
+
+## The DMD with its dot shader, kept exactly the DMD's shape so the dots never
+## cover the margins.
+func _web_dmd() -> Control:
 	var d := ScreenView.new()
 	d.texture = Dmd.texture()
 	d.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -157,20 +262,10 @@ func _setup_web() -> void:
 	mat.set_shader_parameter("tint", Dmd.color)
 	mat.set_shader_parameter("mono", Dmd.mono)
 	d.material = mat
-	# Exactly the DMD's shape, so the dot shader never covers the margins.
 	var box := AspectRatioContainer.new()
 	box.ratio = float(Dmd.size.x) / Dmd.size.y
-	box.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.size_flags_stretch_ratio = 0.6
 	box.add_child(d)
-	right.add_child(box)
-	var help := Label.new()
-	help.text = tr("WEB_CONTROLS")
-	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
-	help.add_theme_font_size_override("font_size", 16)
-	right.add_child(help)
+	return box
 
 
 # --- vr: a 3D cabinet with the screens on it (D-164) ----------------------------

@@ -164,6 +164,10 @@ func _desktop_camera() -> void:
 	cam.fov = 62.0
 	add_child(cam)
 	cam.position = Vector3(0, EYE, STAND + 0.05)
+	# Dev: --vr-cam=x,y,z places the preview camera elsewhere (screenshots).
+	var at := str(Config.cli.get("vr-cam", "")).split(",")
+	if at.size() == 3:
+		cam.position = Vector3(float(at[0]), float(at[1]), float(at[2]))
 	cam.look_at(Vector3(0, FRONT_H + 0.25, -0.55), Vector3.UP)
 	cam.current = true
 

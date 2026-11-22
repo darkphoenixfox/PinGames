@@ -1,6 +1,7 @@
 ## Development aids driven by CLI flags, so changes can be verified without a human
 ## at the cabinet (D-017):
 ##   --press=flip_r,flip_r,launch   simulate cabinet actions, one every 12 frames
+##                                   (click:X.Y clicks the mouse at window pixel X,Y)
 ##                                  (use "wait" to skip a slot, "hold:start+exit:3.5"
 ##                                   to hold actions for N seconds; "down:flip_l" /
 ##                                   "up:flip_l" to press/release without waiting;
@@ -42,6 +43,19 @@ func _do_step(step: String) -> void:
 			ev.pressed = pressed
 			Input.parse_input_event(ev)
 			await _frames(2)
+		await _frames(STEP_FRAMES)
+		return
+	if step.begins_with("click:"):  # mouse click at window pixels, e.g. click:780,545
+		var xy := step.trim_prefix("click:").split(";") if ";" in step else step.trim_prefix("click:").split(".")
+		var pos := Vector2(float(xy[0]), float(xy[1]))
+		for pressed in [true, false]:
+			var ev := InputEventMouseButton.new()
+			ev.button_index = MOUSE_BUTTON_LEFT
+			ev.position = pos
+			ev.global_position = pos
+			ev.pressed = pressed
+			Input.parse_input_event(ev)
+			await _frames(1)
 		await _frames(STEP_FRAMES)
 		return
 	if step.begins_with("down:"):

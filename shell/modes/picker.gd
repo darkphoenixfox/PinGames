@@ -154,6 +154,8 @@ func _process(delta: float) -> void:
 
 
 func _show_quit_confirm() -> void:
+	if OS.has_feature("web"):
+		return   # a browser page can't quit; closing the tab does that (D-176)
 	_quit_left = QUIT_CONFIRM_SECONDS
 	if _quit_overlay == null:
 		_quit_overlay = add_table(UI.fill(Color(0, 0, 0, 0.88))) as Control
