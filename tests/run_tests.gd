@@ -601,6 +601,13 @@ func test_racer_sim() -> void:
 		for o in tt_.objects_between(tv.x, tv.y):
 			clear = false
 	check(tt_.tunnels.size() >= 3 and clear, "tunnels appear, clear of checkpoints and empty (%d)" % tt_.tunnels.size())
+	for sd in [1, 7, 42, 99]:
+		var gt = load("res://games/racer/track.gd").new()
+		gt.avoid_every = 2300.0
+		gt.setup(sd)
+		gt.ensure(4600.0)
+		check(not gt.tunnels.is_empty() and (gt.tunnels[0] as Vector2).y < 4600.0 - 60.0,
+			"seed %d: a tunnel comes before stage 3 (D-132)" % sd)
 	var tn = Sim.new()
 	tn.setup(7)
 	tn.track.ensure(30000.0)

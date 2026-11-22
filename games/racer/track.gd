@@ -41,6 +41,7 @@ var _built_to := 0.0   # metres generated so far
 var _next_obj_s := 30.0
 ## Tunnels (D-127): Vector2(s_start, s_end), in order.
 var tunnels: Array = []
+var _force_tunnel := false
 var avoid_every := 0.0          # checkpoint spacing to keep tunnels clear of (set by the sim)
 var _next_sign_s := 300.0
 var _next_gantry_s := 700.0
@@ -74,6 +75,13 @@ func length() -> float:
 
 
 func _random_section() -> void:
+	# A tunnel is guaranteed before stage 3 (D-132): once the road reaches the
+	# middle of stage 2 without one, a gentle tunnel section is laid there.
+	if avoid_every > 0.0 and tunnels.is_empty() and _built_to >= avoid_every * 1.25 			and _built_to < avoid_every * 2.0 - TUNNEL_MIN - 200.0:
+		_force_tunnel = true
+		_add_section(TUNNEL_MIN + 160.0, 0.0, _rng.randf_range(-1.0, 1.0) * 12.0)
+		_force_tunnel = false
+		return
 	var roll := _rng.randf()
 	var radius := 0.0
 	if roll < 0.22:
@@ -192,7 +200,7 @@ func _maybe_tunnel(s0: float, s1: float, c: float) -> void:
 		return
 	if not tunnels.is_empty() and s0 - (tunnels[-1] as Vector2).y < TUNNEL_GAP:
 		return
-	if _rng.randf() > TUNNEL_CHANCE:
+	if not _force_tunnel and _rng.randf() > TUNNEL_CHANCE:
 		return
 	var a := s0 + 20.0
 	var b := minf(s1 - 20.0, a + TUNNEL_MAX)
