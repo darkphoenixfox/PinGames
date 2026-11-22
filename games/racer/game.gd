@@ -1187,8 +1187,9 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	lean += roundf(_police_swing * 4.0) / 4.0 * PI * 0.5 * side
 	_police.basis = _police.basis * Basis(Vector3.UP, _sprite_yaw(h - lean, cam_yaw) - h) * MODEL_TURN
 	var ph := fmod(_phase_t, 0.5)
-	var red_on := ph < 0.25 and (ph < 0.08 or ph > 0.15)
-	var blue_on := ph >= 0.25 and (ph < 0.33 or ph > 0.4)
+	var lights := sim.police_lights()   # off once it has given up or is driving off (D-145)
+	var red_on := lights and ph < 0.25 and (ph < 0.08 or ph > 0.15)
+	var blue_on := lights and ph >= 0.25 and (ph < 0.33 or ph > 0.4)
 	(_flashers[0] as Node3D).visible = red_on
 	(_flashers[1] as Node3D).visible = blue_on
 	# Screen wash while it's close (D-137): up to 45 % within 25 m.
@@ -1198,7 +1199,8 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	var d: float = absf(pd.s - sim.s)
 	var closing: float = (pd.v - sim.v) * (1.0 if pd.s < sim.s else -1.0)
 	_siren.pitch_scale = clampf(SOUND_SPEED / maxf(SOUND_SPEED - closing, 20.0), 0.7, 1.5)
-	_siren.volume_db = lerpf(_siren.volume_db, -4.0 - 26.0 * clampf(d / 200.0, 0.0, 1.0), 0.2)
+	var siren_db := -4.0 - 26.0 * clampf(d / 200.0, 0.0, 1.0) if lights else -80.0
+	_siren.volume_db = lerpf(_siren.volume_db, siren_db, 0.2)
 
 
 ## Radar detector (D-135): beeps faster as a speed camera gets closer, with a

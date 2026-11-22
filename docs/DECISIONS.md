@@ -1346,3 +1346,10 @@
 - **Bug (director):** hatchbacks didn't light up in the dark. The car shader's lamp boxes were measured on the red car, and the hatchback's lamps sit elsewhere.
 - **Fix:** lamp boxes are now per model (`LAMP_BOXES`, applied to each model's shared material). The hatchback uses a tail box with `tail_red_only`: its body is blue, so only the red lens texels glow. Its headlight box is set from its own lights. The red car keeps the shader defaults.
 - **Status:** Accepted
+
+### D-145 — Turbo Run: an escaped police car gives up, lights off
+- **Date:** 2026-11-22
+- **Bug (director):** after ESCAPED! the police car passed the player with its lights still on.
+- **Cause:** escaping reused the post-bust "leave" step, which speeds up and overtakes, and the view always flashed the light bar.
+- **Fix:** escaping now puts the police in a new "giveup" state: it eases to half the player's speed and drops behind, and is removed 300 m back. `sim.police_lights()` is true only while chasing or busting, and it drives the light bar, the siren and the screen wash. After a bust it still drives off ahead, but dark. A test checks that it never gets ahead of the player after giving up.
+- **Status:** Accepted

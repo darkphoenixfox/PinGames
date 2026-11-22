@@ -754,10 +754,17 @@ func test_racer_sim() -> void:
 	run.v = 60.0
 	run.gear = Sim.Gear.HIGH
 	var esc := false
+	var check_ok := true
 	run.step(dt, false, false)
 	for e in run.events:
 		esc = esc or e[0] == "police_escape"
-	check(esc and run.police.state == "leave", "outrunning the police long enough makes them give up")
+	check(esc and run.police.state == "giveup" and not run.police_lights(),
+		"outrunning the police long enough makes them give up, lights off")
+	for i in 60 * 6:
+		run.traffic.clear()
+		run.step(dt, false, false)
+		check_ok = check_ok and (run.police.is_empty() or run.police.s < run.s)
+	check(check_ok, "an escaped police car drops behind instead of passing")
 	# Countdown, then automatic throttle.
 	var c = Sim.new()
 	c.setup(7)

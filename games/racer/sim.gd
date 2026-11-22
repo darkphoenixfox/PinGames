@@ -442,7 +442,7 @@ func _update_police(dt: float) -> void:
 			if close and (spin_t > 0.0 or v < BUST_SPEED):
 				_bust()
 			elif police.t > POLICE_GIVE_UP or ds < -POLICE_LOST:
-				police.state = "leave"
+				police.state = "giveup"   # D-145: falls back, lights off
 				_add_score(ESCAPE_BONUS)
 				events.append(["police_escape"])
 		"bust":
@@ -456,6 +456,12 @@ func _update_police(dt: float) -> void:
 				busted_t = maxf(busted_t, 0.05)
 			elif busted_t <= 0.0 and spin_t <= 0.0:
 				police.state = "leave"
+		"giveup":
+			# Escaped (D-145): it eases off and drops behind, out of the race.
+			police.v = move_toward(police.v, v * 0.5, 14.0 * dt)
+			if ds < -300.0:
+				police = {}
+				return
 		"leave":
 			# Drive off ahead (D-139): it overtakes and disappears up the road.
 			police.v = move_toward(police.v, maxf(v + 25.0, 40.0), 18.0 * dt)
@@ -466,6 +472,11 @@ func _update_police(dt: float) -> void:
 	if police.state != "bust":
 		_police_obstacles(dt)
 	police.s += police.v * dt
+
+
+## Whether its light bar and siren are on (D-145): only while it's after you.
+func police_lights() -> bool:
+	return not police.is_empty() and (police.state == "chase" or police.state == "bust")
 
 
 ## Speed control towards a spot `want_ds` metres from the player (negative =
