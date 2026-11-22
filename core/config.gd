@@ -9,7 +9,7 @@ const PATH := "user://pingames.cfg"
 
 const DEFAULTS := {
 	"display": {
-		# windowed | 2screen | 3screen   (D-006, D-013)
+		# windowed | 2screen | 3screen | vr   (D-006, D-013, D-164)
 		"layout": "windowed",
 		"windowed_monitor": 0,
 		"table_monitor": 0,

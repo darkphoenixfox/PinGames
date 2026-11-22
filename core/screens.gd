@@ -3,12 +3,15 @@
 ##   windowed : 3 separate windows on one monitor (dev default): TABLE centred,
 ##              BACKGLASS + DMD stacked to its left (D-148)
 ##   3screen  : TABLE = main window, BACKGLASS and DMD in their own fullscreen windows
+##   vr       : a 3D pinball cabinet with the three screens on it, OpenXR when
+##              available, else a desktop preview camera (D-164)
 ##   2screen  : TABLE = main window, DMD framed at the bottom centre of the BACKGLASS
 ##              (games show their *_2screen backglass art, D-080)
 ## Games add their nodes to `table` / `backglass` (base coordinates, any render scale).
 extends Node
 
 const ScreenView = preload("res://core/screen_view.gd")
+const VrCabinet = preload("res://core/vr_cabinet.gd")
 const DMD_SHADER = preload("res://core/shaders/dmd_dots.gdshader")
 
 const TABLE_BASE := Vector2i(1080, 1920)
@@ -53,10 +56,14 @@ func setup(layout_name: String) -> void:
 	current_layout = layout_name
 	var sink := str(Config.get_value("display", "dmd_sink"))
 	dmd_in_backglass = sink != "hardware" and (layout_name == "2screen" or sink == "backglass")
+	if layout_name == "vr":
+		dmd_in_backglass = false   # the VR head has its own DMD panel (D-164)
 	if is_headless():
 		print("Screens: headless, layout '%s' not shown" % layout_name)
 		return
 	match layout_name:
+		"vr":
+			_setup_vr()
 		"3screen":
 			_setup_cabinet(false)
 		"2screen":
@@ -104,6 +111,23 @@ func _setup_windowed() -> void:
 	var dmw := _make_window("PinGames - DMD",
 		Rect2i(Vector2i(right_x, y0 + bg_size.y + TITLE_BAR), dmd_size), false)
 	_add_view(dmw, Dmd.texture(), 0, true)
+
+
+# --- vr: a 3D cabinet with the screens on it (D-164) ----------------------------
+func _setup_vr() -> void:
+	table.size = TABLE_BASE   # full resolution: it's read up close
+	var root := get_window()
+	root.mode = Window.MODE_WINDOWED
+	root.title = "PinGames - VR"
+	var mon := _clamp_monitor(int(Config.get_value("display", "windowed_monitor")))
+	var area := DisplayServer.screen_get_usable_rect(mon)
+	root.size = Vector2i(mini(1280, area.size.x - 40), mini(720, area.size.y - 80))
+	root.position = area.position + (area.size - root.size) / 2
+	var cab := VrCabinet.new()
+	cab.name = "VrCabinet"
+	add_child(cab)
+	_outputs.append(cab)
+	cab.build(table.get_texture(), backglass.get_texture(), Dmd.texture())
 
 
 # --- cabinet: fullscreen windows on separate monitors -------------------------

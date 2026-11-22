@@ -1464,3 +1464,17 @@
 - **Blinkers:** amber pixel glows at the vehicle's own right front and rear corners, set per model (`BLINKERS`), flash at about 1.4 Hz while yielding.
 - **Test:** a car and an oncoming car both reach their edges, slow down and indicate.
 - **Status:** Accepted
+
+### D-164 — VR cabinet layout (prototype, branch `vr-cabinet`)
+- **Date:** 2026-11-22
+- **Decision (director):** port the games to VR as a 3D pinball machine with the screens in the right places, built in Godot. PC VR first, with a placeholder cabinet; standalone Quest can follow.
+- **Design:** a new screen layout, `--layout=vr` (`core/vr_cabinet.gd`). The games are untouched and keep drawing into the Screens viewports.
+  - **Screens:** the cabinet shows the TABLE on a 43" playfield screen (0.95 × 0.535 m) under the glass, tilted 6.5°. The head carries the BACKGLASS on a 32" screen and the DMD as a 3D dot-matrix panel below it (`dmd_dots_3d.gdshader`).
+  - **Placeholder cabinet:** built from boxes in real-world metres: body, legs, chrome lockdown bar and rails, head, flipper and magna buttons on the sides, and a launch button on the front. It can be replaced by a director-made model.
+  - **TABLE resolution:** full 1080 × 1920, since it is read up close.
+- **OpenXR:** Godot's built-in OpenXR. `xr/openxr/enabled` stays false so normal runs never start a VR runtime. `scripts/run_vr.ps1` passes `--xr-mode on`. `xr/shaders/enabled` is true for stereo rendering.
+  - **With a runtime:** an XROrigin3D puts the player 0.42 m in front of the cabinet, centred on the headset.
+  - **Controllers** (default OpenXR action map) are fed in as InputEventActions, so the games see normal cabinet actions: triggers = flippers (with a haptic tick), grips = magna saves, right A = launch, left X = start, left Y = coin, right B = exit.
+  - **Without a runtime:** the layout falls back to a fixed player's-eye desktop camera, used for previews and screenshots.
+- **Not yet:** headset testing (none here), a real cabinet model, the operator-menu entry for the layout, nudging, standalone Quest export, and checking text legibility at arm's length.
+- **Status:** Prototype
