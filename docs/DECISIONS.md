@@ -1629,3 +1629,13 @@
 - **Tools kept:** `scripts/web_spikes.sh "<query>" [seconds]` builds, serves and runs the web build in headless Edge and prints slow frames next to game events (`DebugTools.mark`). `?log-shaders` logs every WebGL shader compiled, with its `#define` lines and material uniforms (a small page script in the Web preset's head include). `?no-focus-pause` turns off the focus pause for headless runs. Slow sound starts and DMD frames are logged too.
 - **Stopped here (director):** the web build isn't the main platform. Turbo Run benefits from the same general fixes but wasn't measured this way.
 - **Status:** Accepted
+
+### D-180 — Flat-screen Android APK
+- **Date:** 2026-11-22
+- **Decision (director):** an Android APK of the flat-screen version.
+- **Quest vs flat:** until now any Android build meant the Quest: `openxr/enabled.android` and `Config.layout()` returned "vr". Both now key on a custom `quest` feature tag, which only the Quest preset carries (`openxr/enabled.quest=true`). A new "Android" preset (`[preset.2]`) has no XR (`xr_mode=0`, no Meta plugin), package `org.pingames.flat`, arm64, Gradle, debug-signed. It excludes the addons and the VR cabinet model, and includes `*.txt` (levels).
+- **Flat Android behaves like the browser build:** the single-canvas `web` layout (D-173), the touch buttons at the sides on touch screens (D-177), and the focus pause when the app is switched away (D-178). The picker's quit still works there, because an app can close. The screen follows the device orientation (`display/window/handheld/orientation=6`, sensor; the Quest ignores it), and the layout switches between landscape and portrait.
+- **Build:** `scripts/build_android.ps1` waits for the APK to stop growing, then stops Godot, which may not exit after a headless export. The first build gave a 187 MB APK with only Godot's own libraries, no OpenXR loader, all 10 level files, and no VR model.
+- **Test:** the export test now checks every preset for `*.txt`, and that only the preset with the `quest` feature uses OpenXR mode.
+- **Note:** the existing Quest APK predates the `quest` tag, so rebuild it with `scripts/build_quest.ps1` before the next sideload.
+- **Status:** Accepted

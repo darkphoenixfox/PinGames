@@ -45,7 +45,7 @@ var _late_release := {}   # action -> true: release once it has been seen held
 static func wanted() -> bool:
 	if Config.cli.has("touch"):
 		return true
-	return OS.has_feature("web") and DisplayServer.is_touchscreen_available()
+	return (OS.has_feature("web") or OS.has_feature("android")) and DisplayServer.is_touchscreen_available()
 
 
 func _init() -> void:

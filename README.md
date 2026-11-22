@@ -91,6 +91,12 @@ Every run through `scripts/run.ps1` or the Godot binary is a debug build. Export
 | Exit | Backspace | Square |
 | Coin | 5 | — |
 
+## Android and Quest builds (D-170, D-180)
+
+- **Flat Android** (`scriptsuild_android.ps1` → `exports\PinGames-android.apk`): the browser build's single-screen layout, with the touch buttons at the sides, following the device orientation. It pauses when the app loses focus. Debug-signed for sideloading: `adb install -r exports\PinGames-android.apk`.
+- **Quest** (`scriptsuild_quest.ps1` → `exports\PinGames-quest.apk`): the VR cabinet. Only this build carries the `quest` feature tag, which turns on OpenXR and the VR layout.
+- **Requirements (both):** the Godot 4.7.2 Android templates, plus the Android SDK and JDK 17 set in Godot's editor settings.
+
 ## Browser version (D-173 to D-175)
 
 - **Address:** https://web.phoenixfox.net/pingames/. It needs HTTPS: Godot's web build won't start on the plain-HTTP LAN address (http://192.168.1.150:8086/pingames/), because the browser requires a secure context.

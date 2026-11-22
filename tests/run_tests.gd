@@ -555,14 +555,22 @@ func _gd_files(dir: String) -> Array[String]:
 
 
 ## Turbo Run (D-089): track, auto throttle, drift, nitro, checkpoints, traffic.
-## The Quest export must carry the plain data files read with FileAccess
-## (D-172): levels (.txt). JSON is a resource and ships anyway.
+## Every export must carry the plain data files read with FileAccess
+## (D-172): levels (.txt). JSON is a resource and ships anyway. Only the Quest
+## build turns OpenXR on (the "quest" feature tag, D-180).
 func test_export_includes_data() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load("res://export_presets.cfg") != OK:
 		return
-	var inc := str(cfg.get_value("preset.0", "include_filter", ""))
-	check("*.txt" in inc, "the Quest export includes the .txt level files")
+	for sec in cfg.get_sections():
+		if sec.ends_with(".options"):
+			continue
+		var preset_name := str(cfg.get_value(sec, "name", sec))
+		var inc := str(cfg.get_value(sec, "include_filter", ""))
+		check("*.txt" in inc, "the %s export includes the .txt level files" % preset_name)
+		var feats := str(cfg.get_value(sec, "custom_features", ""))
+		var xr := int(cfg.get_value(sec + ".options", "xr_features/xr_mode", 0))
+		check((xr == 1) == ("quest" in feats), "%s: OpenXR mode only with the quest feature" % preset_name)
 
 
 ## Exported builds don't carry the CSV, only the imported translation (D-171):

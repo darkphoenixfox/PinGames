@@ -32,6 +32,8 @@ DebugTools="*res://core/debug_tools.gd"
 
 [display]
 
+window/handheld/orientation=6
+
 window/size/viewport_width=1600
 window/size/viewport_height=900
 window/subwindows/embed_subwindows=false
@@ -56,5 +58,5 @@ environment/defaults/default_clear_color=Color(0, 0, 0, 1)
 [xr]
 
 openxr/enabled=false
-openxr/enabled.android=true
+openxr/enabled.quest=true
 shaders/enabled=true

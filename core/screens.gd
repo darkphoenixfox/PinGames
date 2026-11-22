@@ -132,7 +132,7 @@ var _touch: TouchControls
 func _setup_web() -> void:
 	table.size = TABLE_BASE
 	var root := get_window()
-	if not OS.has_feature("web"):   # desktop preview (--web-preview): a browser-sized window
+	if not OS.has_feature("web") and not OS.has_feature("android"):   # desktop preview (--web-preview)
 		root.mode = Window.MODE_WINDOWED
 		var mon := _clamp_monitor(int(Config.get_value("display", "windowed_monitor")))
 		var area := DisplayServer.screen_get_usable_rect(mon)
