@@ -21,6 +21,7 @@ scripts\run.ps1                                  # picker, 3 windows on one moni
 scripts\run.ps1 --game=breakout                  # launch a game directly (Exit quits)
 scripts\run.ps1 --layout=3screen                 # cabinet: 3 monitors, fullscreen
 scripts\run.ps1 --layout=2screen                 # cabinet: DMD inside the backglass
+scripts\run_vr.ps1 [--game=racer]                # VR cabinet (OpenXR; desktop preview without a headset)
 scripts\test.ps1                                 # headless smoke tests
 ```
 - **Linux:** use `scripts/run.sh` / `scripts/test.sh`, with `GODOT_BIN` or `godot4` on your PATH.
@@ -29,7 +30,7 @@ scripts\test.ps1                                 # headless smoke tests
 ### Command-line options (after the script name)
 | Option | Meaning |
 |---|---|
-| `--layout=windowed\|2screen\|3screen` | Screen layout |
+| `--layout=windowed\|2screen\|3screen\|vr` | Screen layout (`vr`: 3D cabinet, D-164) |
 | `--game=<breakout\|shmup\|racer>` | Skip the picker. Exit returns to the frontend. |
 | `--lang=<locale>` | UI language |
 | `--section.key=value` | Override any setting for this run, e.g. `--display.table_rotation=90` |
