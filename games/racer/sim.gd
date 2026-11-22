@@ -61,6 +61,8 @@ const PERFECT_KICK := 3.0         # m/s added at once
 const PERFECT_TIME := 0.8         # s of extra pull after it
 const PERFECT_PULL := 0.6         # x ACCEL extra during that time
 const PERFECT_POINTS := 2000.0
+const START_KICK := 12.0          # m/s at GO after a perfect rev (D-118)
+const START_PULL_TIME := 1.5      # s of perfect-shift pull after it
 const REV_UP := 2.2               # rpm/s while revving on the grid (D-112)
 const REV_DOWN := 1.4
 ## After the clock runs out the car coasts (D-103): reaching a checkpoint
@@ -122,6 +124,7 @@ var boosting := false          # boost_t > 0 this step
 var pickups: Array = []        # nitro canisters on the road: {id, s, x}
 var _next_pickup_s := 300.0      # the first canister sits on the start straight
 var gear := Gear.LOW
+var freeze_time := false       # debug cheat (F in debug builds, D-118)
 var perfect_t := 0.0           # s of perfect-shift pull left (D-116)
 var rpm := 0.0                 # 0..1 (tachometer)
 var shift_hold := 0.0          # s both flippers held (for the shift)
@@ -183,6 +186,13 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 			if countdown <= 0.0:
 				state = State.RACE
 				events.append(["go"])
+				# Perfect start (D-118): revs held in the perfect-shift band at GO
+				# launch the car with a kick and extra pull.
+				if rpm >= PERFECT_FROM and rpm < PERFECT_TO:
+					v = START_KICK
+					perfect_t = START_PULL_TIME
+					_add_score(PERFECT_POINTS)
+					events.append(["perfect_start"])
 			_update_traffic(dt)
 			return
 		State.OVER:
@@ -203,7 +213,8 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 			if v < 1.0 and over_t > 1.5:
 				done = true
 			return
-	time_left -= dt
+	if not freeze_time:
+		time_left -= dt
 	if time_left <= 0.0:
 		time_left = 0.0
 		state = State.OVER

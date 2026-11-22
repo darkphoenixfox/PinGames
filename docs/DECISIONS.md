@@ -1125,3 +1125,9 @@
   - **Exhaust blast:** the boost is made visible with a long orange flame for its whole 0.8 s push, plus a backfire, a small camera shake and +5° of FOV.
   - **Steering delay:** halved, from 0.15 s to 0.075 s (D-114).
 - **Status:** Accepted
+
+### D-118 — Turbo Run: perfect start; debug cheat to freeze the clock
+- **Date:** 2026-11-22
+- **Perfect start (director):** if the revs are inside the perfect-shift band (rpm 0.69–0.87, D-117) at the moment of GO, the car launches at 12 m/s with 1.5 s of extra pull and 2,000 points. A PERFECT START! DMD animation, the sting, a backfire, the orange exhaust blast and a backglass flash go with it. Over-revving into the red, or not revving, gives a normal start.
+- **Debug cheat (director):** in debug builds, F (DebugTools' game-specific `debug_action`, D-057) toggles `sim.freeze_time`, which stops the race clock. It persists across races in the session and shows DEBUG: TIME FROZEN under the timer. Exported release builds ignore DebugTools, so cabinets are unaffected.
+- **Status:** Accepted

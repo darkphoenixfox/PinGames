@@ -263,6 +263,8 @@ var _tacho: Control
 var _gear_lever: Control
 var _shift_label: Label
 var _shift_big: Label
+var _frozen_label: Label
+var _freeze_time := false   # debug cheat: clock frozen (D-118)
 var _redline_t := 0.0       # s held at the redline in L (D-116)
 var _nitro_label: Label
 var _nitro_strip: ColorRect
@@ -292,6 +294,7 @@ func start(_players: int) -> void:
 	_manual_locked = str(Config.get_value("operator", "cabinet_buttons")) == "4"
 	# Cel shading (D-091); --rc-no-toon shows the plain look for comparison.
 	Toon.enabled = not Config.cli.has("rc-no-toon")
+	DebugTools.debug_action.connect(_on_debug_action)
 	_build_world()
 	_build_hud()
 	_build_backglass()
@@ -354,6 +357,7 @@ func _new_sim() -> void:
 	_over_dir = 0.0
 	_puff_list.clear()
 	sim.setup(7)
+	sim.freeze_time = _freeze_time
 	sim.manual = _manual_locked
 	sim.autopilot = Config.cli.has("rc-autopilot")
 	if Config.cli.has("rc-time"):  # dev: short clock to test TIME UP
@@ -502,6 +506,12 @@ func _handle_events() -> void:
 				_shake = 0.3
 			"high_beams":
 				Audio.sfx("rc_horn")
+			"perfect_start":
+				Audio.sfx("rc_perfect")
+				Audio.sfx("rc_backfire")
+				_dmd_anim("perfect", [tr("RC_PERFECT_START")])
+				_bg_flash = 0.6
+				_shake = 0.3
 			"perfect_shift":
 				Audio.sfx("rc_perfect")
 				Audio.sfx("rc_backfire")
@@ -1385,6 +1395,14 @@ func _build_hud() -> void:
 	_shift_big.offset_top = -260
 	_shift_big.modulate.a = 0.0
 	_hud.add_child(_shift_big)
+	_frozen_label = UI.label(tr("RC_DEBUG_FROZEN"), 24, UI.CYAN)
+	_frozen_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_frozen_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_frozen_label.offset_left = -300
+	_frozen_label.offset_right = 300
+	_frozen_label.offset_top = 236
+	_frozen_label.modulate.a = 1.0 if _freeze_time else 0.0
+	_hud.add_child(_frozen_label)
 
 	_drift_label = UI.label("", 60, UI.YELLOW)
 	_drift_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -1588,6 +1606,18 @@ func _update_night(delta: float) -> void:
 	_env.fog_light_color = _day_fog.lerp(Color(0.05, 0.06, 0.16), k)
 	var on := k > 0.0
 	get_tree().call_group(NIGHT_GROUP, "set_visible", on)
+
+
+## Debug builds only (DebugTools, D-057): F freezes / unfreezes the race clock
+## (D-118). Shown on the HUD so it isn't left on by accident.
+func _on_debug_action(action: StringName) -> void:
+	if action != &"fire_line":
+		return
+	_freeze_time = not _freeze_time
+	if sim != null:
+		sim.freeze_time = _freeze_time
+	if is_instance_valid(_frozen_label):
+		_frozen_label.modulate.a = 1.0 if _freeze_time else 0.0
 
 
 ## Plays one of the DMD event animations (D-115) with its translated texts.

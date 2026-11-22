@@ -7,7 +7,8 @@
 ##   C  game-specific "clear the level" (Tilt Breaker: instant level complete)
 ##   U  game-specific: Tilt Breaker drops the next power-up capsule over the ship
 ##   F  game-specific debug action (`debug_action` signal, e.g. Tilt Breaker's
-##      piercing plasma that destroys everything in a vertical line)
+##      piercing plasma that destroys everything in a vertical line; Turbo Run
+##      freezes the race clock, D-118)
 extends Node
 
 const UI = preload("res://core/ui/ui.gd")

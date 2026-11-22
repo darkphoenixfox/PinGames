@@ -603,6 +603,24 @@ func test_racer_sim() -> void:
 	for i in 60:
 		rv.step(dt, false, false)
 	check(revved > 0.8 and rv.rpm < 0.2 and rv.v == 0.0, "flippers rev the engine during the countdown (%.2f)" % revved)
+	# Perfect start (D-118): revs in the perfect band at GO launch the car.
+	var good = Sim.new()
+	good.setup(7)
+	var plain = Sim.new()
+	plain.setup(7)
+	var launched := false
+	for i in 60 * 3 + 10:
+		var hold: bool = good.rpm < (Sim.PERFECT_FROM + Sim.PERFECT_TO) * 0.5
+		good.step(dt, hold, false)
+		plain.step(dt, false, false)
+		for e in good.events:
+			launched = launched or e[0] == "perfect_start"
+	check(launched and good.v > plain.v + 8.0, "a perfect rev at GO launches faster (%.0f vs %.0f m/s)" % [good.v, plain.v])
+	good.freeze_time = true
+	var t_before: float = good.time_left
+	for i in 60:
+		good.step(dt, false, false)
+	check(good.time_left == t_before, "the debug cheat freezes the clock")
 	# Gears (D-103): L tops out at its rev limit; both flippers held 0.5 s shift
 	# to H, which then reaches top speed. H is slow off the line.
 	for i in 60 * 8:
