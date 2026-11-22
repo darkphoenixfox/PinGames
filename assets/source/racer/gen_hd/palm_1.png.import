@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bf13e5hxdnve"
-path="res://.godot/imported/nitro.png-d1f27f6af2adb24f278d5a01b2ac1e68.ctex"
+uid="uid://cftc5fqmpfw3i"
+path="res://.godot/imported/palm_1.png-90945227ae0741b06c59116e1a3e00d0.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/racer/nitro.png"
-dest_files=["res://.godot/imported/nitro.png-d1f27f6af2adb24f278d5a01b2ac1e68.ctex"]
+source_file="res://assets/source/racer/gen_hd/palm_1.png"
+dest_files=["res://.godot/imported/palm_1.png-90945227ae0741b06c59116e1a3e00d0.ctex"]
 
 [params]
 

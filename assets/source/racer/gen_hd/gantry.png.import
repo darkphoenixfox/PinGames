@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c00s0mm8vjwvg"
-path="res://.godot/imported/palm_2.png-b99178c1403cd95365c2e921ef286166.ctex"
+uid="uid://dq7fovbw6xdd3"
+path="res://.godot/imported/gantry.png-34f3b8fb77bd56832f6a345ebed68530.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/racer/palm_2.png"
-dest_files=["res://.godot/imported/palm_2.png-b99178c1403cd95365c2e921ef286166.ctex"]
+source_file="res://assets/source/racer/gen_hd/gantry.png"
+dest_files=["res://.godot/imported/gantry.png-34f3b8fb77bd56832f6a345ebed68530.ctex"]
 
 [params]
 

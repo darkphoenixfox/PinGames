@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ykjio0ygomtf"
-path="res://.godot/imported/gantry.png-1ca6512fa1e0a2027ec27bd5c9914ebf.ctex"
+uid="uid://bapktdq2cy6q5"
+path="res://.godot/imported/bush_1.png-0ecfa88515dd5d671b8300afb72ca3cf.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/racer/gantry.png"
-dest_files=["res://.godot/imported/gantry.png-1ca6512fa1e0a2027ec27bd5c9914ebf.ctex"]
+source_file="res://assets/source/racer/gen_hd/bush_1.png"
+dest_files=["res://.godot/imported/bush_1.png-0ecfa88515dd5d671b8300afb72ca3cf.ctex"]
 
 [params]
 

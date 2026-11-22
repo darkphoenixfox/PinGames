@@ -1,28 +1,29 @@
-## TURBO RUN roadside sprites (D-107): pixel-art billboards in the 3D world,
-## super-scaler style. Each kind is a quad (base at the origin) textured with a
-## Qwen-Image sprite from assets/sprites/racer/, drawn unshaded (the sunset light
-## is painted in), alpha-scissored, nearest-filtered, and turned to face the
-## camera around its vertical axis. The gantry spans the road instead.
+## TURBO RUN roadside sprites (D-107, D-196): billboards in the 3D world,
+## super-scaler style. Each kind is a quad (base at the origin) with one painted
+## high-res cut-out from assets/sprites/racer/hd/, drawn by shaders/sprite.gdshader:
+## unshaded, alpha-scissored, turned to the camera around its vertical axis.
+## HD shows the art smoothly; RETRO is the shader pixelating it to the old
+## sprites' resolution with banded colours. The gantry spans the road instead.
 extends RefCounted
 
-const DIR := "res://assets/sprites/racer/"
-## kind -> [file, height in metres, billboard?, flip u?]
+const DIR := "res://assets/sprites/racer/hd/"
+const SHADER = preload("res://games/racer/shaders/sprite.gdshader")
+## kind -> [file, height in metres, billboard?, flip u?, retro texels tall]
 const KINDS := {
-	"palm_1": ["palm_1", 11.0, true, false],
-	"palm_2": ["palm_2", 9.5, true, false],
-	"bush_1": ["bush_1", 2.6, true, false],
-	"bush_2": ["bush_2", 2.0, true, false],
-	"sign_curve": ["sign_curve", 3.6, true, false],     # arrow turns right
-	"sign_curve_l": ["sign_curve", 3.6, true, true],    # mirrored: turns left
-	"sign_green": ["sign_green", 5.5, true, false],
-	"gantry": ["gantry", 12.9, false, false],
-	"nitro": ["nitro", 2.6, true, false],               # pick-up (D-115)
-	"speedtrap": ["speedtrap", 8.0, true, false],       # speed camera (D-135; oversized like the palms, D-137)
+	"palm_1": ["palm_1", 11.0, true, false, 294],
+	"palm_2": ["palm_2", 9.5, true, false, 224],
+	"bush_1": ["bush_1", 2.6, true, false, 91],
+	"bush_2": ["bush_2", 2.0, true, false, 77],
+	"sign_curve": ["sign_curve", 3.6, true, false, 134],     # arrow turns right
+	"sign_curve_l": ["sign_curve", 3.6, true, true, 134],    # mirrored: turns left
+	"sign_green": ["sign_green", 5.5, true, false, 113],
+	"gantry": ["gantry", 12.9, false, false, 151],
+	"nitro": ["nitro", 2.6, true, false, 126],               # pick-up (D-115)
+	"speedtrap": ["speedtrap", 8.0, true, false, 126],       # speed camera (D-135; oversized like the palms, D-137)
 }
 
 static var _meshes := {}
-## D-195 HD graphics: the high-res cut-outs (assets/sprites/racer/hd/), smoothly
-## filtered. set_hd() swaps the textures on the meshes already made.
+## D-195 HD graphics: smooth art; RETRO (default) pixelates it in the shader.
 static var hd := false
 ## Moonlit tint for the pre-lit sprites at night (D-113).
 const NIGHT_TINT := Color(0.3, 0.34, 0.58)
@@ -37,22 +38,17 @@ static func set_night(k: float) -> void:
 	for kind in _meshes:
 		if kind in UNTINTED:
 			continue
-		var m: StandardMaterial3D = (_meshes[kind] as QuadMesh).material
-		m.albedo_color = Color.WHITE.lerp(NIGHT_TINT, k)
+		_mat(kind).set_shader_parameter("tint", Color.WHITE.lerp(NIGHT_TINT, k))
 
 
 static func set_hd(on: bool) -> void:
 	hd = on
 	for kind in _meshes:
-		_apply_texture((_meshes[kind] as QuadMesh).material, KINDS[kind][0])
+		_mat(kind).set_shader_parameter("retro", not hd)
 
 
-static func _apply_texture(m: StandardMaterial3D, file: String) -> void:
-	var path := DIR + ("hd/" if hd else "") + file + ".png"
-	if not ResourceLoader.exists(path):
-		path = DIR + file + ".png"
-	m.albedo_texture = load(path)
-	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC if hd 		else BaseMaterial3D.TEXTURE_FILTER_NEAREST
+static func _mat(kind: String) -> ShaderMaterial:
+	return (_meshes[kind] as QuadMesh).material
 
 
 static func has(kind: String) -> bool:
@@ -65,23 +61,20 @@ static func mesh(kind: String) -> Mesh:
 	var spec: Array = KINDS[kind]
 	var tex: Texture2D = load(DIR + spec[0] + ".png")
 	var h: float = spec[1]
-	var w := h * tex.get_width() / float(tex.get_height())
-	var m := StandardMaterial3D.new()
-	_apply_texture(m, spec[0])
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-	m.alpha_scissor_threshold = 0.5
-	m.cull_mode = BaseMaterial3D.CULL_DISABLED
-	if spec[2]:
-		m.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
-		m.billboard_keep_scale = true
-	if spec[3]:
-		m.uv1_scale = Vector3(-1, 1, 1)
-		m.uv1_offset = Vector3(1, 0, 0)
+	var aspect := tex.get_width() / float(tex.get_height())
+	var w := h * aspect
+	var m := ShaderMaterial.new()
+	m.shader = SHADER
+	m.set_shader_parameter("tex", tex)
+	m.set_shader_parameter("retro", not hd)
+	var rt := float(spec[4])
+	m.set_shader_parameter("retro_size", Vector2(maxf(1.0, roundf(rt * aspect)), rt))
+	m.set_shader_parameter("billboard", spec[2])
+	m.set_shader_parameter("flip", spec[3])
+	m.set_shader_parameter("tint", Color.WHITE if kind in UNTINTED else Color.WHITE.lerp(NIGHT_TINT, _night))
 	var q := QuadMesh.new()
 	q.size = Vector2(w, h)
 	q.center_offset = Vector3(0, h * 0.5, 0)
-	m.albedo_color = Color.WHITE if kind in UNTINTED else Color.WHITE.lerp(NIGHT_TINT, _night)
 	q.material = m
 	_meshes[kind] = q
 	return q

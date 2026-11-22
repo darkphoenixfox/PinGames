@@ -9,6 +9,8 @@ into game sprites in assets/sprites/racer/.
 - HD (D-195): `--hd` writes assets/sprites/racer/hd/<name>.png instead: the same
   cut-out at the original's resolution (up to HD_MAX tall), Lanczos-scaled with
   soft alpha, for the game's HD graphics mode. The retro sprites are untouched.
+Since D-196 the game draws RETRO by pixelating the HD cut-outs in a shader, so
+the default run only writes the car-select sky; `--hd` writes the sprites.
 Run: python scripts/tools/prepare_racer_sprites.py [--hd]
 """
 import os
@@ -20,6 +22,8 @@ from sprite_cutout import cutout  # noqa: E402
 
 ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 SRC = os.path.join(ROOT, "assets", "source", "racer", "gen")
+# D-196: repainted HD originals (plants and signs); others fall back to SRC.
+SRC_HD = os.path.join(ROOT, "assets", "source", "racer", "gen_hd")
 DST = os.path.join(ROOT, "assets", "sprites", "racer")
 
 # name -> target height in pixels (world size is set in the game)
@@ -92,9 +96,21 @@ HD_MAX = 1024
 
 
 def sprite_hd(name):
-    img = cutout(Image.open(os.path.join(SRC, name + ".png")))
+    src = os.path.join(SRC_HD, name + ".png")
+    if not os.path.exists(src):
+        src = os.path.join(SRC, name + ".png")
+    img = cutout(Image.open(src))
     if name in HOLES:
         img = remove_grey_framed_holes(img)
+    if name.startswith(("bush", "palm")):
+        # Plants: drop the pale grey-white ground halo some generations leave
+        # (low saturation, very light); signs keep their white arrows.
+        px = img.load()
+        for y in range(img.height):
+            for x in range(img.width):
+                r, g, b, al = px[x, y]
+                if al and min(r, g, b) > 185 and max(r, g, b) - min(r, g, b) < 28:
+                    px[x, y] = (r, g, b, 0)
     img = img.crop(img.getbbox())
     if img.height > HD_MAX:
         img = img.resize((max(1, round(img.width * HD_MAX / img.height)), HD_MAX), Image.LANCZOS)
@@ -123,6 +139,6 @@ if __name__ == "__main__":
         sky_hd.save(os.path.join(DST, "hd", "sky.png"), optimize=True)
         print("hd/sky.png", sky_hd.size)
         sys.exit(0)
-    for n, h in SPRITES.items():
-        sprite(n, h)
+    # D-196: the game pixelates the HD cut-outs in a shader for RETRO, so the
+    # nearest-downscaled sprites (sprite()) are no longer written; only the sky.
     sky()

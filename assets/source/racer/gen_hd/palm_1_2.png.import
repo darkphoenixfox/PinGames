@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b7nj3x40a8jac"
-path="res://.godot/imported/bush_1.png-3256acbf3c3ccab150c043b45d0fef79.ctex"
+uid="uid://b0mb7dcf433ia"
+path="res://.godot/imported/palm_1_2.png-455441c2829c233859b0dd559dd5ee57.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/racer/bush_1.png"
-dest_files=["res://.godot/imported/bush_1.png-3256acbf3c3ccab150c043b45d0fef79.ctex"]
+source_file="res://assets/source/racer/gen_hd/palm_1_2.png"
+dest_files=["res://.godot/imported/palm_1_2.png-455441c2829c233859b0dd559dd5ee57.ctex"]
 
 [params]
 

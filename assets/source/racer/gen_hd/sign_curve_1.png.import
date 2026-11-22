@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://l65j4xmmn5ja"
-path="res://.godot/imported/sign_curve.png-80d14fe2293b161c08130c1f369d0755.ctex"
+uid="uid://dj7mgrxwxmr30"
+path="res://.godot/imported/sign_curve_1.png-f46c3383a1c5605ac19c58479499a35e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/racer/sign_curve.png"
-dest_files=["res://.godot/imported/sign_curve.png-80d14fe2293b161c08130c1f369d0755.ctex"]
+source_file="res://assets/source/racer/gen_hd/sign_curve_1.png"
+dest_files=["res://.godot/imported/sign_curve_1.png-f46c3383a1c5605ac19c58479499a35e.ctex"]
 
 [params]
 

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bhl5aot126yk3"
-path="res://.godot/imported/bush_2.png-eb64a75732802c7e8c6991ada7b062ae.ctex"
+uid="uid://dubvnjvqy8khd"
+path="res://.godot/imported/sign_curve.png-781fc0e439fde342b81d8fd3e1b3f2b6.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/racer/bush_2.png"
-dest_files=["res://.godot/imported/bush_2.png-eb64a75732802c7e8c6991ada7b062ae.ctex"]
+source_file="res://assets/source/racer/gen_hd/sign_curve.png"
+dest_files=["res://.godot/imported/sign_curve.png-781fc0e439fde342b81d8fd3e1b3f2b6.ctex"]
 
 [params]
 

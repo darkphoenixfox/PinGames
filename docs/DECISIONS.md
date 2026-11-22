@@ -1822,3 +1822,18 @@
 - **Notes:** the HD sprites come from pixel-art-styled generations, so they're crisp and detailed but keep a slight pixel character; painterly art would mean new generations. HD costs far more GPU than RETRO (about 4.5× the pixels plus MSAA), which is why RETRO is the default for phones and the web.
 - **Tests:** HD cut-outs exist for every sprite kind, and HD textures for all five car models.
 - **Status:** Accepted
+
+### D-196 — Turbo Run: repainted plants and signs; RETRO sprites by shader
+- **Date:** 2026-11-23
+- **Decision (director):** regenerate the plants and signs, then make the RETRO versions with a shader.
+- **New art:** both palms, both bushes, the curve sign, the green direction sign and the gantry, regenerated with Qwen-Image 2.1 on the local ComfyUI (approved, D-035). They're in a clean hand-painted style (no pixel art), on white for the cut-out, with the same compositions as before.
+  - `scripts/tools/gen_racer_props_hd.py` makes two candidates each into `assets/source/racer/gen_hd/`. The picks are copied to `<name>.png`: palm_1 #2, palm_2 #1, bush_1 #2, bush_2 #1, sign_curve #2 (a single right curve; #1 was an S-curve), sign_green #1, gantry #2.
+  - `prepare_racer_sprites.py --hd` cuts them out at up to 1024 px, Lanczos-scaled with soft alpha, and on plants clears the pale grey ground halo. Nitro and the speed trap keep their earlier art.
+- **One texture per sprite:** `sprites/racer/hd/<name>.png` is used by both modes. The nearest-downscaled pixel sprites are deleted, and the script's default run now only writes the car-select sky.
+- **Sprite shader** (`games/racer/shaders/sprite.gdshader`, replacing the StandardMaterial):
+  - unshaded, alpha-scissored at 0.5, with a Y-billboard that keeps the node's scale;
+  - mirroring (left curve sign) and the night tint as uniforms.
+  - **HD:** samples the art with linear, mipmapped, anisotropic filtering.
+  - **RETRO:** snaps the UVs to a coarse grid at each kind's old pixel-sprite height (palms 294/224 texels, bushes 91/77, signs 134/113, gantry 151, nitro and speed trap 126). Each cell reads the average colour from the matching mip level, then is banded to 12 levels per channel with a hard alpha edge.
+  - `Sprites.set_hd` and `set_night` set shader parameters.
+- **Status:** Accepted (amends D-107, D-195)
