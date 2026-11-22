@@ -42,6 +42,7 @@ const MODEL_TURN := Basis(Vector3.UP, PI)
 const SPRITE_ANGLES := 32
 ## Nose turn at full steer (rad): ~1.5 sprite steps, visible on straights.
 const STEER_YAW := 0.3
+const STEER_DELAY := 0.15   # s of steering before the nose turns (D-114)
 ## Crash animations (D-098): stepped at ANIM_FPS; a roll-over shows FLIP_FRAMES
 ## poses per full turn and hops FLIP_HOP metres.
 const ANIM_FPS := 10.0
@@ -52,7 +53,10 @@ const FLIP_HOP := 1.6
 ## TIME UP slide (D-105): 90 degrees in OVER_TURN_TIME s, OVER_TURN_FRAMES steps.
 const OVER_TURN_TIME := 0.6
 const OVER_TURN_FRAMES := 6.0
-const PICKUP_SCALE := 1.8           # nitro canisters read from far away (D-103)
+const PICKUP_SCALE := 1.8
+## Number plate spot on the red car's rear bumper (model space, D-114).
+const PLATE_Y := 0.5
+const PLATE_Z := -2.215           # nitro canisters read from far away (D-103)
 ## Roll-over phases (fractions of the animation, D-101): slew 90 degrees by
 ## FLIP_TURN_END, roll over until FLIP_ROLL_END, then lie still; in the last
 ## FLIP_UNTURN s of the stop the car turns back to face the road.
@@ -190,6 +194,9 @@ var _shift_flame_t := 0.0   # upshift exhaust flame left
 var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
 var _bg_dark := 0.0     # s of crash flicker left
 var _sky_h := 0.0
+var _vis_steer := 0.0      # the nose's steering, delayed and smoothed (D-114)
+var _steer_hold := 0.0
+var _steer_sign := 0.0
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
 var _music_i := FIRST_TRACK    # current race song index
@@ -625,6 +632,7 @@ func _build_cars() -> void:
 	_root.add_child(_car)
 	_car_body = _car_instance(0.0)
 	_player_lights = Night.add_car_lights(_car_body, "car", _puff_texture())
+	_add_plate(_car_body)
 	_car.add_child(_car_body)
 	_build_puffs()
 	# Nitro flames.
@@ -758,6 +766,34 @@ func _add_headlights(node: Node3D, kind: String) -> void:
 
 ## Nitro canister (D-103): a glowing cyan bottle with white bands, cel
 ## outlined; it spins and bobs in stepped sprite-like frames.
+## The hero car's rear number plate, "TRN" (D-114): a pale plate with dark
+## pixel-font letters on the rear bumper (model space: the rear is -Z).
+func _add_plate(body: Node3D) -> void:
+	var plate := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(0.56, 0.15)
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.95, 0.93, 0.82)
+	m.roughness = 0.6
+	q.material = m
+	plate.mesh = q
+	plate.position = Vector3(0.0, PLATE_Y, PLATE_Z)
+	plate.rotation_degrees = Vector3(0, 180, 0)   # face backwards
+	body.add_child(plate)
+	var label := Label3D.new()
+	label.text = tr("RC_PLATE")
+	label.font = load("res://assets/fonts/pinpixel.ttf")
+	label.font_size = 64
+	label.pixel_size = 0.0022
+	label.modulate = Color(0.08, 0.08, 0.15)
+	label.outline_size = 0
+	label.shaded = false
+	label.double_sided = false
+	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	label.position = Vector3(0.0, 0.0, 0.004)
+	plate.add_child(label)
+
+
 ## Night light under each lamp post (D-113): pool + cone + head glow, following
 ## the road's pitch so the pool lies on the road.
 func _add_lamp_lights(node: Node3D, lamps: Array) -> void:
@@ -1027,7 +1063,16 @@ func _animate(delta: float) -> void:
 	var f := tr_.frame(sim.s, sim.x)
 	_car.transform = f
 	# Steering visibly turns the nose even on straights (D-092).
-	var yaw := deg_to_rad(sim.drift_angle) - sim.steer * STEER_YAW
+	# The nose only turns once steering has been held for STEER_DELAY s, so
+	# short flipper taps don't twitch the car between sprite angles (D-114).
+	if absf(sim.steer) > 0.05 and signf(sim.steer) == _steer_sign:
+		_steer_hold += delta
+	else:
+		_steer_sign = signf(sim.steer) if absf(sim.steer) > 0.05 else 0.0
+		_steer_hold = 0.0
+	var vis_target := _steer_sign if _steer_hold >= STEER_DELAY else 0.0
+	_vis_steer = move_toward(_vis_steer, vis_target, delta * 4.0)
+	var yaw := deg_to_rad(sim.drift_angle) - _vis_steer * STEER_YAW
 	var crash_p := _anim_steps(sim.crash_progress(), sim.crash_anim)
 	if sim.spin_t > 0.0 and not sim.flipping:
 		# Spin-out: two full turns stepped like sprite frames, ending nose

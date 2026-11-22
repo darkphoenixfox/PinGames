@@ -68,6 +68,7 @@ const CAR_W := 1.95
 const SPIN_TIME := 1.3           # spin-out animation
 ## Every crash ends with the car stopped dead for CRASH_STOP s (D-101).
 const CRASH_STOP := 1.5
+const RECOVER_X := Track.ROAD_HALF - 1.9   # outer lane: where an off-road crash is put back
 ## Hitting a big roadside object (D-098) rolls the car over sideways instead.
 const FLIP_TIME := 1.33          # roll-over animation (D-105: 1.5x faster than 2.0)
 ## A roll-over keeps tumbling down the road (D-105), then lands on its side and
@@ -312,6 +313,11 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 		want = 0.0
 		if stalled():
 			v = 0.0
+			# A crash that ends off the road is put back on it (D-114): during the
+			# stop the car slides over to the outer lane, arriving as it ends.
+			var on_road := clampf(x, -RECOVER_X, RECOVER_X)
+			if x != on_road:
+				x = move_toward(x, on_road, absf(x - on_road) * dt / maxf(spin_t, dt))
 	steer = move_toward(steer, want, dt * 6.0)
 	var c := track.curvature(s)
 	var push := c * v * v * CENTRIFUGAL           # to the outside: +x on a left curve

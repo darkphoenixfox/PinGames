@@ -852,7 +852,14 @@ func test_racer_sim() -> void:
 		fl.step(dt, false, false)
 		slid = slid or fl.crash_slide
 		n_steps += 1
-	check(slid and fl.s - s_hit > 40.0 and fl.v == 0.0 and fl.stalled(),
+	# Off-road crash: the car is put back on the road by the end of the stop (D-114).
+	var off_x: float = fl.x
+	while fl.spin_t > 0.0:
+		fl.traffic.clear()
+		fl.step(dt, false, false)
+	check(absf(off_x) > Sim.RECOVER_X and absf(fl.x) <= Sim.RECOVER_X + 0.01,
+		"a crash that ends off the road is put back on it (x %.1f -> %.1f)" % [off_x, fl.x])
+	check(slid and fl.s - s_hit > 40.0,
 		"after the roll the car slides to a stop (%.0f m in all), then stays stopped" % (fl.s - s_hit))
 	fl.spin_t = 0.0
 	fl.flipping = false

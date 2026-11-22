@@ -1084,3 +1084,11 @@
   - **Lamp posts:** a light pool on the road under the head (pitched with the road), a faint vertical cone of light from the head, and a glow at the head. They are one MultiMesh per chunk.
 - **Dev flag:** `--rc-night` forces night from the start.
 - **Status:** Accepted
+
+### D-114 — Turbo Run: off-road crash recovery, TRN plate, steering delay
+- **Date:** 2026-11-22
+- **Decisions (director):**
+  - **Off-road crash recovery:** a crash that ends off the road puts the car back on it. During the 1.5 s stop, the car slides over to the outer lane (`RECOVER_X`, ±5.6 m) and arrives as the stop ends.
+  - **Number plate:** the hero car has a rear plate reading TRN (`RC_PLATE`): a pale 0.56 × 0.15 m plate with dark PinPixel letters on the rear bumper.
+  - **Steering delay:** the nose only turns once steering has been held for 0.15 s (`STEER_DELAY`), then eases in. Short flipper taps still steer the car, but no longer flick the sprite angle back and forth.
+- **Status:** Accepted
