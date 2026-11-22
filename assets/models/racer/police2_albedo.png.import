@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://d1lj0hgshqynn"
-path="res://.godot/imported/police_albedo.png-ccd843d6611aced6fafa0136dc960e28.ctex"
+uid="uid://cbssuo68aowxy"
+path="res://.godot/imported/police2_albedo.png-3d32ea688b9b7fdcac366a3693934d35.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/models/racer/police_albedo.png"
-dest_files=["res://.godot/imported/police_albedo.png-ccd843d6611aced6fafa0136dc960e28.ctex"]
+source_file="res://assets/models/racer/police2_albedo.png"
+dest_files=["res://.godot/imported/police2_albedo.png-3d32ea688b9b7fdcac366a3693934d35.ctex"]
 
 [params]
 

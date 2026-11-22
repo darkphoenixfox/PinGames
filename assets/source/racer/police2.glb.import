@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bgq53apcna1y3"
-path="res://.godot/imported/police.glb-6270f67bf6457d9c51fb8db44006d599.scn"
+uid="uid://cb2bc1r4lxxyh"
+path="res://.godot/imported/police2.glb-11ee60d0816bdd5b139ca0eb95c913a1.scn"
 
 [deps]
 
-source_file="res://assets/source/racer/police.glb"
-dest_files=["res://.godot/imported/police.glb-6270f67bf6457d9c51fb8db44006d599.scn"]
+source_file="res://assets/source/racer/police2.glb"
+dest_files=["res://.godot/imported/police2.glb-11ee60d0816bdd5b139ca0eb95c913a1.scn"]
 
 [params]
 

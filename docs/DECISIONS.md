@@ -1307,3 +1307,11 @@
   - **Test:** it stays parked for at least 1.5 s, then drives off ahead.
 - **Radar bar (director):** no background housing. It spans the full width at the very top of the TABLE: the black block in the middle, 5 balls spread evenly out to each screen edge, radius 24. The score/time/stage row moves down to y = 62 to sit below it.
 - **Status:** Accepted
+
+### D-140 — Turbo Run: new police car model (not based on a real car)
+- **Date:** 2026-11-22
+- **Decision (director):** `police2.glb` replaces the first police model. It mixes several cars, so it doesn't resemble any specific real car (resolving the D-135 note).
+- **Processing:** full 32.9k-tri mesh, 4.7 m long, the same orientation and light-bar position. It uses a 512 px texture, because at 256 px the POLICE lettering broke up.
+- **Removed:** the old model, its texture and its source are removed from the repo, so they don't ship.
+- **Note:** the new texture still carries "911" door lettering. It is used as supplied.
+- **Status:** Accepted

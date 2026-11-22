@@ -81,8 +81,8 @@ const HATCH_MODEL := "res://assets/models/racer/hatchback.glb"
 const HATCH_TEXTURE := "res://assets/models/racer/hatchback_albedo.png"
 const HATCH_POOL := 8
 ## Director's police car (D-135).
-const POLICE_MODEL := "res://assets/models/racer/police.glb"
-const POLICE_TEXTURE := "res://assets/models/racer/police_albedo.png"
+const POLICE_MODEL := "res://assets/models/racer/police2.glb"   # D-140: not modelled on a real car
+const POLICE_TEXTURE := "res://assets/models/racer/police2_albedo.png"
 const TRUCK2_TEXTURE := "res://assets/models/racer/truck2_albedo.png"
 
 const ACCENT := Color("ffd23e")
