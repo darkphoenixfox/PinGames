@@ -16,4 +16,4 @@ Thumbs.db
 
 # Temporary per-run overrides (scripts/dev_run.sh)
 override.cfg
-android/
+/android/
