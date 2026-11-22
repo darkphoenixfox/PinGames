@@ -30,6 +30,18 @@ var good_to := 2.0:
 			queue_redraw()
 const GOOD := Color("4fff7a")
 var labels: Array = []        # [[fraction, text], ...]
+## D-197 shift lamp: a round red light inside the dial (`lamp_at`, local
+## position; none while it is Vector2.INF). `lamp_on` lights it.
+var lamp_at := Vector2.INF:
+	set(v):
+		lamp_at = v
+		queue_redraw()
+var lamp_on := false:
+	set(v):
+		if v != lamp_on:
+			lamp_on = v
+			queue_redraw()
+const LAMP_R := 18.0
 var _hub := Vector2.ZERO
 
 
@@ -53,6 +65,18 @@ func setup(r: float, segs: int, label_list: Array, red: float = 2.0, colour: Col
 
 func hub() -> Vector2:
 	return _hub
+
+
+## Where a label at dial fraction `f` sits (local).
+func label_pos(f: float) -> Vector2:
+	var a := _angle(f)
+	return _hub + Vector2(cos(a), sin(a)) * (radius * 0.64)
+
+
+## A point on the arc's segments at fraction `f` (local), for pointing at it.
+func arc_point(f: float) -> Vector2:
+	var a := _angle(f)
+	return _hub + Vector2(cos(a), sin(a)) * (radius * 0.9)
 
 
 func set_value(v: float) -> void:
@@ -90,6 +114,18 @@ func _draw() -> void:
 		draw_colored_polygon(PackedVector2Array([
 			_hub + Vector2(cos(a0), sin(a0)) * r0, _hub + Vector2(cos(a0), sin(a0)) * radius,
 			_hub + Vector2(cos(a1), sin(a1)) * radius, _hub + Vector2(cos(a1), sin(a1)) * r0]), col)
+	# Shift lamp (D-197): a chrome ring, dark red glass when off; burning red
+	# with a glow when on.
+	if lamp_at != Vector2.INF:
+		draw_circle(lamp_at, LAMP_R + 3.0, Color(0.55, 0.57, 0.62), true, -1.0, false)
+		draw_circle(lamp_at, LAMP_R, Color(0.08, 0.02, 0.03), true, -1.0, false)
+		if lamp_on:
+			draw_circle(lamp_at, LAMP_R * 1.9, Color(1.0, 0.15, 0.1, 0.25), true, -1.0, false)
+			draw_circle(lamp_at, LAMP_R, Color("ff2a2a"), true, -1.0, false)
+			draw_circle(lamp_at + Vector2(-5, -5), LAMP_R * 0.45, Color(1.0, 0.75, 0.7), true, -1.0, false)
+		else:
+			draw_circle(lamp_at, LAMP_R - 2.0, Color(0.32, 0.05, 0.06), true, -1.0, false)
+			draw_circle(lamp_at + Vector2(-5, -5), LAMP_R * 0.3, Color(0.6, 0.3, 0.32), true, -1.0, false)
 	# Needle: a tapered blade from the hub, plus the ring hub.
 	var a := _angle(value)
 	var dir := Vector2(cos(a), sin(a))

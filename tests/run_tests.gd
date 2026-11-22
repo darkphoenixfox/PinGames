@@ -29,6 +29,7 @@ func _initialize() -> void:
 	test_racer_sim()
 	test_racer_time_of_day()
 	test_racer_hd_assets()
+	test_racer_first_nitro()
 	test_exported_translation()
 	test_export_includes_data()
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -606,6 +607,17 @@ func test_exported_translation() -> void:
 ## Turbo Run time of day (D-193): stages 1-3 day, 4-5 sunset, 6-9 night, dawn at 10.
 ## HD graphics (D-195): every sprite kind has its HD cut-out and every car model
 ## its high-res texture in the shipped assets.
+## D-197: the race's first nitro canister sits in the player's path.
+func test_racer_first_nitro() -> void:
+	var Sim = load("res://games/racer/sim.gd")
+	var sm = Sim.new()
+	sm.setup(7)
+	sm.state = Sim.State.RACE
+	sm.step(1.0 / 60.0, false, false)
+	var first: Dictionary = sm.pickups[0]
+	check(absf(float(first.x) - sm.x) < Sim.PICKUP_DX and first.s > sm.s, "the first nitro sits in front of the car")
+
+
 func test_racer_hd_assets() -> void:
 	var Sprites = load("res://games/racer/sprites.gd")
 	var missing: Array = []
@@ -1013,8 +1025,12 @@ func test_racer_sim() -> void:
 		good.step(dt, false, false)
 	check(good.time_left == t_before, "the debug cheat freezes the clock")
 	# Gears (D-103): L tops out at its rev limit; both flippers held 0.5 s shift
-	# to H, which then reaches top speed. H is slow off the line.
+	# to H, which then reaches top speed. H is slow off the line. (The first
+	# canister sits in the car's path since D-197: keep nitro out of this.)
 	for i in 60 * 8:
+		c.pickups.clear()
+		c.boost_t = 0.0
+		c.boosting = false
 		c.step(dt, false, false)
 	check(c.gear == Sim.Gear.LOW and absf(c.v - c.l_top()) < 2.0 and c.rpm > Sim.REDLINE,
 		"low gear tops out at its rev limit (%.0f m/s, rpm %.2f)" % [c.v, c.rpm])

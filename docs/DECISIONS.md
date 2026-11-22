@@ -1837,3 +1837,14 @@
   - **RETRO:** snaps the UVs to a coarse grid at each kind's old pixel-sprite height (palms 294/224 texels, bushes 91/77, signs 134/113, gantry 151, nitro and speed trap 126). Each cell reads the average colour from the matching mip level, then is banded to 12 levels per channel with a hard alpha edge.
   - `Sprites.set_hd` and `set_night` set shader parameters.
 - **Status:** Accepted (amends D-107, D-195)
+
+### D-197 — Window placement, first nitro, shift lamp, REV! hint, ground skirts
+- **Date:** 2026-11-23
+- **Decisions (director):**
+  - **Window placement:** in the windowed layout the BACKGLASS and DMD sit to the right of the centred TABLE (D-148 had them on the left).
+  - **First nitro:** the race's first canister (300 m in) sits in the player's path, on the start line's centre, so players pick it up and learn what it does. Later canisters still take random lanes.
+  - **Shift lamp:** a round red lamp in the tachometer, between the 4, the 6 and the hub, in a chrome ring. It's dark red glass when off and lights red with a glow when the revs are in the perfect band: for a perfect shift in L during the race, and in the start band on the grid.
+  - **REV! hint:** during the countdown, a hand to the right of the tachometer points left at its green start band, bobbing, with REV! above it in the race's "sunset" title font. The hand (`assets/textures/racer/rev_hand.png`, `scripts/tools/gen_rev_hand.py`) follows the director's line-icon reference, mirrored, in the same gradient and outline as that font. It disappears at GO.
+- **Fix (director's screenshot of stage 3):** the ground strip beside the road ended in mid-air, so on hills its far edge showed as a raised green wave with sky under it; the old painted backdrop had hidden this. Each outer edge now hangs a skirt 400 m further out and 250 m lower, a gentle slope into the haze (a steeper one read as a grey wall).
+- **Tests:** the first nitro sits in front of the car. The low-gear test now clears pickups, because the first canister is in its path.
+- **Status:** Accepted (amends D-148, D-115)

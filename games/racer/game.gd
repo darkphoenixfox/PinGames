@@ -52,6 +52,7 @@ const SPRITE_ANGLES := 32
 ## Nose turn at full steer (rad): ~1.5 sprite steps, visible on straights.
 const SHIFT_RISE := 36.0    # px the SHIFT word rises each loop (D-158)
 const SHIFT_NAG := 3.0      # s at the redline in L before the big SHIFT (D-116)
+const REV_HAND := "res://assets/textures/racer/rev_hand.png"   # D-197
 const DIAL_R := 150.0        # tachometer and speedometer radius (D-149)
 const SPEEDO_MAX := 220      # mph on the speedometer dial (D-147; nitro on the fastest car ~206)
 const MAX_TRAVEL_YAW := 0.45   # rad: the most the nose follows sideways travel (D-124)
@@ -149,6 +150,8 @@ const MUSIC_TRACKS := [
 const CHUNK := 100.0             # metres of road per mesh chunk
 const VIEW_AHEAD := 900.0
 const VIEW_BEHIND := 60.0
+const SKIRT_OUT := 400.0   # m the ground's skirt reaches past the strip's edge (D-197)
+const SKIRT_DROP := 250.0  # m it falls: a gentle slope into the haze, not a wall
 const LATERAL := [-140.0, -70.0, -36.0, -18.0, -11.7, -8.7, -7.5, -3.75, 0.0, 3.75, 7.5, 8.7, 11.7, 18.0, 36.0, 70.0, 140.0]
 const TRAFFIC_POOL := 16
 const CAM_BACK := 8.0
@@ -331,6 +334,8 @@ var _stage_label: Label
 var _speed_label: Label
 var _speedo: Control
 var _tacho: Control
+var _rev_hint: Control       # D-197: pointing hand + REV! during the countdown
+var _rev_hand: TextureRect
 var _gear_lever: Control
 var _shift_big: Label
 var _shift_slot: Control
@@ -1484,19 +1489,32 @@ func _build_chunk(k: int) -> Node3D:
 	var n := int(CHUNK / Track.SAMPLE)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var cols := LATERAL.size()
+	var cols := LATERAL.size() + 2   # + a skirt at each outer edge (D-197)
 	for i in n + 1:
 		var s := s0 + i * Track.SAMPLE
 		# On the inside of a curve the ground stops well short of the centre of
 		# the turn, or it would fold back over the road (D-094).
 		var c := tr_.curvature(s)
 		var inside_max := 1e9 if absf(c) < 1e-5 else 0.75 / absf(c)
+		var xs: Array = []
 		for lx in LATERAL:
 			var x: float = lx
 			if signf(lx) == -signf(c):   # left turn (c > 0): inside is -x
 				x = signf(lx) * minf(absf(lx), maxf(inside_max, Track.ROAD_HALF + Track.RUMBLE + 4.0))
-			st.set_uv(Vector2(x, s))
-			st.add_vertex(tr_.point(s, x))
+			xs.append(x)
+		# Skirts (D-197): the ground strip's outer edges hang a steep slope far
+		# down into the fog, so on hills the edge never shows sky under it.
+		for j in cols:
+			if j == 0 or j == cols - 1:
+				var edge: float = xs[0] if j == 0 else xs[xs.size() - 1]
+				var side := signf(edge)
+				var p := tr_.point(s, edge) + tr_.right(s) * side * SKIRT_OUT
+				p.y -= SKIRT_DROP
+				st.set_uv(Vector2(edge + side * SKIRT_OUT, s))
+				st.add_vertex(p)
+			else:
+				st.set_uv(Vector2(xs[j - 1], s))
+				st.add_vertex(tr_.point(s, xs[j - 1]))
 	for i in n:
 		for j in cols - 1:
 			var a := i * cols + j
@@ -1881,6 +1899,8 @@ func _build_hud() -> void:
 	_tacho.good_from = _tach_of(Sim.PERFECT_FROM)
 	_tacho.good_to = _tach_of(Sim.PERFECT_TO)
 	tbox.add_child(_tacho)
+	# Shift lamp (D-197): between the 4, the 6 and the hub.
+	_tacho.lamp_at = (_tacho.hub() + _tacho.label_pos(4.0 / 8.0) + _tacho.label_pos(6.0 / 8.0)) / 3.0
 	var rpm_l := UI.label(tr("RC_RPM"), 24, UI.GREY)
 	rpm_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rpm_l.custom_minimum_size.x = _tacho.custom_minimum_size.x
@@ -2030,6 +2050,11 @@ func _update_hud(delta: float) -> void:
 	var countdown := sim.state == Sim.State.COUNTDOWN
 	_tacho.good_from = _tach_of(Sim.START_FROM if countdown else Sim.PERFECT_FROM)
 	_tacho.good_to = _tach_of(Sim.START_TO if countdown else Sim.PERFECT_TO)
+	# Shift lamp (D-197): red while a perfect shift (or, on the grid, a perfect
+	# start) is on: the revs are in the green band, in L.
+	var in_band := sim.rpm >= (Sim.START_FROM if countdown else Sim.PERFECT_FROM) 		and sim.rpm < (Sim.START_TO if countdown else Sim.PERFECT_TO)
+	_tacho.lamp_on = in_band and (countdown or (sim.gear == Sim.Gear.LOW and sim.state == Sim.State.RACE))
+	_update_rev_hint(countdown)
 	_gear_lever.set_gear(sim.gear == Sim.Gear.HIGH)
 	var shift_now := sim.gear == Sim.Gear.LOW and sim.rpm >= Sim.REDLINE
 	# Held at the redline in L for SHIFT_NAG s: a big blinking SHIFT in the
@@ -2153,6 +2178,34 @@ func _draw_dmd_revup(p) -> void:
 	var in_band := sim.rpm >= Sim.START_FROM and sim.rpm < Sim.START_TO
 	p.line(C.x, C.y, C.x + cos(na) * (R - 4), C.y + sin(na) * (R - 4), Dmd.GREEN if in_band else Dmd.WHITE)
 	p.disc(C.x, C.y, 1.5, Dmd.WHITE)
+
+
+## REV! hint (D-197): while the countdown runs, a hand to the right of the
+## tachometer points left at its green band with REV! above it, bobbing; it
+## goes when the race starts.
+func _update_rev_hint(countdown: bool) -> void:
+	if _rev_hint == null:
+		_rev_hint = Control.new()
+		_rev_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_rev_hand = TextureRect.new()
+		_rev_hand.texture = load(REV_HAND)
+		_rev_hand.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_rev_hand.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_rev_hand.size = Vector2(_rev_hand.texture.get_size()) * 2.0
+		_rev_hint.add_child(_rev_hand)
+		var lab := UI.styled_label(tr("RC_REV_HINT"), TITLE_FONT, 2)
+		lab.position = Vector2(30, -110)
+		_rev_hint.add_child(lab)
+		_hud.add_child(_rev_hint)
+	var show := countdown and _phase == "race"
+	_rev_hint.modulate.a = 1.0 if show else 0.0
+	if not show:
+		return
+	# The fingertip (the hand's left edge, middle) at the green band, plus a bob.
+	var band := (_tach_of(Sim.START_FROM) + _tach_of(Sim.START_TO)) * 0.5
+	var target: Vector2 = _tacho.global_position - _hud.global_position + _tacho.arc_point(band)
+	var bob := 10.0 + 10.0 * sin(_phase_t * 9.0)
+	_rev_hint.position = target + Vector2(bob, -_rev_hand.size.y * 0.5)
 
 
 ## DMD dashboard (D-103): segmented speedometer dial (the director's icon

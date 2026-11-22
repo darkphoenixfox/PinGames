@@ -89,7 +89,8 @@ func _setup_windowed() -> void:
 	# TABLE: portrait 9:16 at full height.
 	var table_size := Vector2i(h * 9 / 16, h)
 	# BACKGLASS (16:9) above DMD (4:1), same width w:  w*9/16 + TITLE_BAR + w/4 = h
-	# D-148: TABLE centred on the monitor, BACKGLASS + DMD stacked to its left.
+	# D-148: TABLE centred on the monitor, BACKGLASS + DMD stacked beside it;
+	# D-197: on its right (was its left).
 	var left_space := (area.size.x - table_size.x) / 2 - 16
 	var right_w := mini(int((h - TITLE_BAR) * 16.0 / 13.0), left_space)
 	var bg_size := Vector2i(right_w, right_w * 9 / 16)
@@ -105,7 +106,7 @@ func _setup_windowed() -> void:
 	root.position = Vector2i(x0, y0)
 	_add_view(root, table.get_texture(), 0, false)
 
-	var right_x := x0 - 12 - right_w   # left of the TABLE (name kept for the code below)
+	var right_x := x0 + table_size.x + 12   # right of the TABLE (D-197)
 	var bgw := _make_window("PinGames - BACKGLASS", Rect2i(Vector2i(right_x, y0), bg_size), false)
 	_add_view(bgw, backglass.get_texture(), 0, false)
 	if dmd_in_backglass:  # preview of the 2-screen cabinet look (D-080)

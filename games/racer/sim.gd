@@ -181,6 +181,7 @@ var boost_t := 0.0             # s of nitro boost left
 var boosting := false          # boost_t > 0 this step
 var pickups: Array = []        # nitro canisters on the road: {id, s, x}
 var _next_pickup_s := 300.0      # the first canister sits on the start straight
+var _next_id_pickups := 0        # canisters placed so far (the first goes in front, D-197)
 var car := DEFAULT_CAR           # index into CARS (D-122)
 var gear := Gear.LOW
 var _launch_t := 0.0
@@ -596,7 +597,11 @@ func _update_boost(dt: float) -> void:
 func _update_pickups() -> void:
 	while _next_pickup_s < s + 900.0:
 		var lane := _rng.randi_range(0, Track.LANES.size() - 1)
-		pickups.append({"id": _next_id, "s": _next_pickup_s, "x": Track.LANES[lane]})
+		# D-197: the race's first canister sits right in the player's path (the
+		# start line's centre), so new players pick it up and find out what it does.
+		var px: float = 0.0 if _next_id_pickups == 0 else Track.LANES[lane]
+		_next_id_pickups += 1
+		pickups.append({"id": _next_id, "s": _next_pickup_s, "x": px})
 		_next_id += 1
 		_next_pickup_s += _rng.randf_range(PICKUP_GAP_MIN, PICKUP_GAP_MAX)
 	for i in range(pickups.size() - 1, -1, -1):
