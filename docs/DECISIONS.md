@@ -1057,3 +1057,8 @@
 - **Decision (director):** the TABLE gear indicator becomes a shift lever with L and H positions, instead of a letter in a box.
 - **Implementation:** `games/racer/gear_lever.gd` draws a top-down shift gate with a slot, H at the top and L at the bottom. The knob is yellow in L and white in H, and the lit position's letter is bright. On a shift the knob slides between the two positions in 3 stepped frames over 0.12 s (sprite-like, D-098). The plate is a fixed 150 × 210 slot, so nothing else moves (D-096). The DMD gear box is unchanged.
 - **Status:** Accepted
+
+### D-111 — Turbo Run: Maximum Overdrive for stages 1–5
+- **Date:** 2026-11-22
+- **Decision (director):** stages 1–5 play "Maximum Overdrive" (Bogart VGM, D-104), carried on seamlessly from attract mode. Stage 6 switches to the CodeManu action songs, starting on action_3, and they change every 4 stages after that (stages 10, 14, …). This supersedes the stage-1 song in D-106 and the stage-5 switch in D-105.
+- **Status:** Accepted

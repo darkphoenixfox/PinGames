@@ -70,6 +70,7 @@ const TITLE_FONT := "sunset"
 ## The first race plays action_3 (director's pick).
 ## Attract mode: "Maximum Overdrive" by Bogart VGM, CC BY 3.0 (D-104).
 const MUSIC_STAGES := 4
+const OPENING_STAGES := 5   # stages played to Maximum Overdrive (D-111)
 const MUSIC_ATTRACT := "res://assets/audio/music/racer/bogart_maximum_overdrive.ogg"
 const FIRST_TRACK := 2
 const MUSIC_TRACKS := [
@@ -329,8 +330,9 @@ func _begin_race() -> void:
 	_phase_t = 0.0
 	_new_sim()
 	# Stage 1 is always action_3 (D-106; was: each race moved on a song).
+	# Stages 1-5 play Maximum Overdrive (D-111), carried on from attract.
 	_music_i = FIRST_TRACK
-	Audio.play_music(MUSIC_TRACKS[_music_i])
+	Audio.play_music(MUSIC_ATTRACT)
 	Audio.sfx("start")
 	_hud.visible = true
 	_show_mode()
@@ -380,8 +382,13 @@ func _handle_events() -> void:
 			"checkpoint":
 				_bg_flash = 1.2
 				Audio.sfx("rc_checkpoint")
-				# The song changes at stage 5, then every MUSIC_STAGES stages (D-105).
-				if int(e[1]) % MUSIC_STAGES == 0:
+				# Stage 6 starts the CodeManu songs (action_3 first), which then
+				# change every MUSIC_STAGES stages (D-105, D-111).
+				var stage := int(e[1]) + 1
+				if stage == OPENING_STAGES + 1:
+					_music_i = FIRST_TRACK
+					Audio.play_music(MUSIC_TRACKS[_music_i])
+				elif stage > OPENING_STAGES + 1 and (stage - OPENING_STAGES - 1) % MUSIC_STAGES == 0:
 					_music_i += 1
 					Audio.play_music(MUSIC_TRACKS[_music_i % MUSIC_TRACKS.size()])
 				# Reached on momentum after TIME UP: the race goes on (D-103).
