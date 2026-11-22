@@ -1702,3 +1702,14 @@
 - **Decision (director):** apply Claude's suggestion. The EASY car's checkpoint bonus goes from +6 s to +10 s over NORMAL (+44 s falling to +30 s). Its 55 s start and the HARD car (−4 s) are unchanged until the director has played them.
 - **Why:** `scripts/tools/racer_balance.gd` (autopilot, 8 track seeds, 8 checkpoints) put the EASY car 4.2 s per section slower than NORMAL. +6 s left only about 2 s of net help per checkpoint; +10 s gives about 6 s. HARD sits about 3.7 s per checkpoint behind NORMAL.
 - **Status:** Accepted (amends D-183)
+
+### D-188 — Radar lamps look like unlit lamps when off
+- **Date:** 2026-11-22
+- **Decision (director):** the radar bar's lights should look like real lamps switched off, not dark circles (reference: a sealed-beam lamp with a metal bezel and a clear ribbed lens).
+- **Off lamp** (`radar_bar.gd` `_off_pixel`, the same chunky 4 px pixels as D-143), from the outside in:
+  - a grey metal bezel, lighter top-left and darker bottom-right;
+  - a dark inner lip;
+  - a pale glass lens tinted only 16 % by its colour (blue or red), with alternating vertical ribs, slightly darker towards the reflector's centre and across the middle;
+  - a small white glint top-left.
+- **Lit lamps:** unchanged (glow halo, hot core).
+- **Status:** Accepted

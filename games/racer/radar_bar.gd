@@ -45,8 +45,10 @@ func _draw() -> void:
 			_pixel_ball(Vector2(c.x + side * off, c.y), col, on)
 
 
-## A chunky 16-bit lamp (D-143, D-150): drawn in PX-sized pixels. Off: a dark
-## glass ball. On: a pixel glow halo spills round it, and the ball itself burns
+## A chunky 16-bit lamp (D-143, D-150): drawn in PX-sized pixels. Off (D-188):
+## an unlit lamp: a grey metal bezel, a pale ribbed glass lens barely tinted
+## by its colour, the reflector bowl a little darker in the middle, and a
+## glint top-left. On: a pixel glow halo spills round it, and the ball itself burns
 ## from a near-white core through the full colour to a hot rim, like a lamp.
 func _pixel_ball(p: Vector2, col: Color, on: bool) -> void:
 	var n := int(R / PX)
@@ -69,7 +71,7 @@ func _pixel_ball(p: Vector2, col: Color, on: bool) -> void:
 				continue
 			var c: Color
 			if not on:
-				c = Color(0.02, 0.02, 0.04) if d > 0.86 else col.darkened(0.78 if (gx + gy) < 0 else 0.84)
+				c = _off_pixel(gx, gy, d, n, col)
 			else:
 				var core := (Vector2(gx, gy) - Vector2(-n * 0.2, -n * 0.25)).length() / n
 				if core < (0.45 if flash else 0.3):
@@ -81,3 +83,26 @@ func _pixel_ball(p: Vector2, col: Color, on: bool) -> void:
 				else:
 					c = col.lightened(0.15)      # hot rim instead of a dark outline
 			draw_rect(Rect2(p + Vector2(gx, gy) * PX, Vector2(PX, PX)), c)
+
+
+## One pixel of an unlit lamp (d: 0 centre .. 1 rim).
+func _off_pixel(gx: int, gy: int, d: float, n: int, col: Color) -> Color:
+	var lit_side := float(-(gx + gy)) / float(2 * n)   # +1 top-left .. -1 bottom-right
+	if d > 0.86:   # metal bezel, catching the light top-left
+		return Color(0.42, 0.44, 0.47).lerp(Color(0.72, 0.74, 0.76) if lit_side > 0.0 else Color(0.2, 0.21, 0.23), absf(lit_side))
+	if d > 0.74:   # dark inner lip where the glass sits
+		return Color(0.13, 0.14, 0.16)
+	# Glass over a reflector: pale, a hint of the lamp's colour, darker towards
+	# the bowl's centre, with vertical ribs.
+	var glass := Color(0.6, 0.63, 0.67).lerp(col, 0.16)
+	glass = glass.darkened(0.3 * (1.0 - d))
+	glass = glass.lightened(0.08) if gx % 2 == 0 else glass.darkened(0.06)
+	if gy == 0 or gy == -1:
+		glass = glass.darkened(0.08)   # the filament shield's shadow across the middle
+	# Glint: a small bright spot up and to the left.
+	var glint := Vector2(gx + n * 0.38, gy + n * 0.38).length()
+	if glint < 1.2:
+		return Color(0.97, 0.98, 1.0)
+	if glint < 2.0:
+		return glass.lightened(0.35)
+	return glass
