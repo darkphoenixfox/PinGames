@@ -1245,3 +1245,14 @@
 - **Date:** 2026-11-22
 - **Decision (director):** 50 % fewer tunnel lights. The ceiling lamps and their pools on the road are now every 24 m (was 12 m, D-127).
 - **Status:** Accepted
+
+### D-134 — Turbo Run: Doppler engine noise from passing traffic
+- **Date:** 2026-11-22
+- **Decision (director):** add Doppler-effect engine noises when passing nearby cars.
+- **Implementation:** two looping "buzz" engine voices (a saw at 110 Hz plus harmonics and a sub, with a little noise) follow the two nearest vehicles within 45 m.
+  - **Pitch:** classic Doppler on the closing speed, f × c / (c − v_closing), with an exaggerated c = 110 m/s so the drop is obvious. It rises as a car approaches, drops as you pass it, and drops hard for oncoming traffic.
+  - **Base pitch:** trucks sit lower (0.55 against 0.85 for cars).
+  - **Volume:** −6 dB close, falling to −36 dB at 45 m.
+  - Both are on the SFX bus, so they echo in tunnels (D-127).
+- **Not done:** left/right panning, which would need a 3D or per-voice bus setup.
+- **Status:** Accepted

@@ -85,6 +85,9 @@ const TITLE_FONT := "sunset"
 ## The first race plays action_3 (director's pick).
 ## Attract mode: "Maximum Overdrive" by Bogart VGM, CC BY 3.0 (D-104).
 const MUSIC_STAGES := 4
+const PASSERS := 2          # traffic engine voices (D-134)
+const PASS_RANGE := 45.0    # m: how far a car can be heard
+const SOUND_SPEED := 110.0  # m/s, exaggerated so the Doppler shift is obvious
 const OPENING_STAGES := 4   # stages played to Maximum Overdrive (D-111, D-129)
 ## Night (stage 5) crossfades to "Dreamstate" by Bogart VGM, CC BY 3.0 (D-129),
 ## which plays through stage 9; the CodeManu songs take over from stage 10.
@@ -262,6 +265,7 @@ var _engine: AudioStreamPlayer
 var _skid: AudioStreamPlayer
 var _engine_hi: AudioStreamPlayer
 var _wind: AudioStreamPlayer
+var _passers: Array = []    # AudioStreamPlayers for nearby traffic (D-134)
 var _hud: Control
 var _time_label: Label
 var _score_label: Label
@@ -1850,6 +1854,18 @@ func _build_audio_loops() -> void:
 	add_child(_wind)
 	_engine_hi.play()
 	_wind.play()
+	# Passing traffic (D-134): a buzzy engine loop per nearby vehicle.
+	var buzz := _loop_wav(func(t: float) -> float:
+		var ph := fmod(t * 110.0, 1.0)
+		return (ph * 2.0 - 1.0) * 0.35 + sin(TAU * 220.0 * t) * 0.2 + sin(TAU * 55.0 * t) * 0.25, 0.4, 0.06)
+	for i in PASSERS:
+		var pl := AudioStreamPlayer.new()
+		pl.bus = "SFX"
+		pl.stream = buzz
+		pl.volume_db = -80.0
+		add_child(pl)
+		pl.play()
+		_passers.append(pl)
 	_skid = AudioStreamPlayer.new()
 	_skid.bus = "SFX"
 	_skid.stream = _loop_wav(func(t: float) -> float:
@@ -1858,6 +1874,35 @@ func _build_audio_loops() -> void:
 	add_child(_skid)
 	_engine.play()
 	_skid.play()
+
+
+## Doppler engine noise from the nearest traffic (D-134). Pitch follows the
+## closing speed (an exaggerated "speed of sound" so it's clearly arcade), the
+## volume falls off with distance; trucks rumble lower.
+func _update_passers() -> void:
+	var near: Array = []
+	if sim != null and sim.state != Sim.State.COUNTDOWN:
+		for t in sim.traffic:
+			var ds: float = t.s - sim.s
+			var d := Vector2(ds, t.x - sim.x).length()
+			if d < PASS_RANGE:
+				near.append([d, t])
+		near.sort_custom(func(a, b): return a[0] < b[0])
+	for i in _passers.size():
+		var pl: AudioStreamPlayer = _passers[i]
+		if i >= near.size():
+			pl.volume_db = lerpf(pl.volume_db, -80.0, 0.2)
+			continue
+		var d: float = near[i][0]
+		var t: Dictionary = near[i][1]
+		var ds: float = t.s - sim.s
+		# Closing speed: positive while it approaches us, negative once past.
+		var closing: float = (sim.v - t.v) * signf(ds if absf(ds) > 0.5 else 1.0)
+		var doppler := clampf(SOUND_SPEED / maxf(SOUND_SPEED - closing, 20.0), 0.5, 2.2)
+		var base := 0.55 if t.get("kind", "car") == "truck" else 0.85
+		pl.pitch_scale = lerpf(pl.pitch_scale, base * doppler, 0.35)
+		var target := -6.0 - 30.0 * clampf(d / PASS_RANGE, 0.0, 1.0)
+		pl.volume_db = lerpf(pl.volume_db, target, 0.3)
 
 
 func _loop_wav(gen: Callable, seconds: float, noise: float) -> AudioStreamWAV:
@@ -1893,6 +1938,7 @@ func _update_audio() -> void:
 	_engine_hi.pitch_scale = pitch
 	_engine.volume_db = -11.0 + sim.throttle * 3.0 - rpm * 3.0 + (3.0 if revving else 0.0)
 	_engine_hi.volume_db = -34.0 + rpm * 22.0 + sim.throttle * 2.0 + (2.0 if revving else 0.0)
+	_update_passers()
 	_wind.volume_db = -46.0 + clampf(sim.v / Sim.MAX_SPEED, 0.0, 1.3) * 28.0
 	var squeal := sim.drifting or (sim.state == Sim.State.OVER and sim.v > 3.0) 		or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
 	_skid.volume_db = lerpf(_skid.volume_db, -10.0 if squeal else -60.0, 0.2)
