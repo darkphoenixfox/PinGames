@@ -48,6 +48,7 @@ const MODEL_TURN := Basis(Vector3.UP, PI)
 ## Cars snap to 32 views around the camera, like a sprite set (D-092).
 const SPRITE_ANGLES := 32
 ## Nose turn at full steer (rad): ~1.5 sprite steps, visible on straights.
+const SHIFT_RISE := 36.0    # px the SHIFT word rises each loop (D-158)
 const SHIFT_NAG := 3.0      # s at the redline in L before the big SHIFT (D-116)
 const DIAL_R := 150.0        # tachometer and speedometer radius (D-149)
 const SPEEDO_MAX := 220      # mph on the speedometer dial (D-147; nitro on the fastest car ~206)
@@ -306,6 +307,8 @@ var _speedo: Control
 var _tacho: Control
 var _gear_lever: Control
 var _shift_big: Label
+var _shift_slot: Control
+var _cops_flash := false
 var _nag_lever: Control     # animated shifter next to SHIFT (D-151)
 var _frozen_label: Label
 var _freeze_time := false   # debug cheat: clock frozen (D-118)
@@ -685,6 +688,7 @@ func _handle_events() -> void:
 				_shake = maxf(_shake, 0.25)
 			"police_spawn":
 				_center_message(tr("RC_POLICE"), 1.4)
+				_cops_flash = true   # red/blue flashing text (D-158)
 				Dmd.flash(tr("RC_POLICE"), 1.4, Dmd.RED)
 			"police_ram":
 				Audio.sfx("rc_bump")
@@ -1719,7 +1723,12 @@ func _build_hud() -> void:
 	nag.offset_bottom = -110
 	_shift_big = UI.label(tr("RC_SHIFT"), 144, UI.RED)
 	_shift_big.modulate.a = 0.0
-	nag.add_child(_shift_big)
+	# Fixed slot; the word moves inside it (D-158), so nothing else shifts.
+	var slot := Control.new()
+	slot.add_child(_shift_big)
+	_shift_slot = slot
+	_shift_big.position = Vector2(0, SHIFT_RISE)
+	nag.add_child(slot)
 	_nag_lever = GearLever.new()
 	_nag_lever.modulate.a = 0.0
 	nag.add_child(_nag_lever)
@@ -1770,6 +1779,7 @@ func _show_mode() -> void:
 func _center_message(text: String, seconds: float) -> void:
 	if is_instance_valid(_center):
 		_center.queue_free()
+	_cops_flash = false
 	var l := UI.styled_label(text, TITLE_FONT, 4)
 	l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -1802,6 +1812,12 @@ func _update_hud(delta: float) -> void:
 	_redline_t = _redline_t + delta if shift_now and sim.state == Sim.State.RACE else 0.0
 	var nagging := _redline_t >= SHIFT_NAG
 	_shift_big.modulate.a = 1.0 if nagging and fmod(_phase_t, 0.4) < 0.25 else 0.0
+	# Looping rise (D-158): up SHIFT_RISE px in 4 stepped frames, then back.
+	var rise := floorf(fmod(_phase_t, 0.5) / 0.5 * 4.0) / 4.0
+	_shift_big.position.y = SHIFT_RISE * (1.0 - rise)
+	var need := _shift_big.get_combined_minimum_size() + Vector2(0, SHIFT_RISE)
+	if _shift_slot.custom_minimum_size != need:   # size the slot once the label is laid out
+		_shift_slot.custom_minimum_size = need
 	_nag_lever.modulate.a = 1.0 if nagging else 0.0
 	if nagging:   # demo loop: sit in L, push up to H, hold; restart at L instantly (D-155)
 		var ph := fmod(_redline_t, 1.2)
@@ -1817,6 +1833,9 @@ func _update_hud(delta: float) -> void:
 		_drift_label.modulate.a = 1.0
 	else:
 		_drift_label.modulate.a = maxf(0.0, _drift_label.modulate.a - delta * 0.8)
+	if _cops_flash and is_instance_valid(_center):
+		var red := fmod(_phase_t, 0.24) < 0.12
+		_center.self_modulate = Color(1.0, 0.25, 0.2) if red else Color(0.35, 0.5, 1.0)
 	if _center_t > 0.0:
 		_center_t -= delta
 		if _center_t <= 0.0 and is_instance_valid(_center):
@@ -2022,6 +2041,7 @@ func _on_debug_action(action: StringName) -> void:
 		if sim != null and _phase == "race" and sim.state == Sim.State.RACE and sim.police.is_empty():
 			sim.police = {"s": sim.s - Sim.POLICE_BEHIND, "x": sim.x, "v": sim.v, "state": "chase", "t": 0.0}
 			_center_message(tr("RC_POLICE"), 1.4)
+			_cops_flash = true   # red/blue flashing text (D-158)
 			Dmd.flash(tr("RC_POLICE"), 1.4, Dmd.RED)
 		return
 	if action == &"skip_stage":

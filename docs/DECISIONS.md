@@ -1426,3 +1426,10 @@
 - **Date:** 2026-11-22
 - **Decision (director):** BUSTED shouldn't happen until the police car is closer. The bust range (`BUST_NEAR`) is now 12 m, down from 40 m. Crashing or dropping below 22 m/s only busts you with the police on your bumper or alongside. Tests: 20 m back is no bust, 8 m is.
 - **Status:** Accepted
+
+### D-158 — Turbo Run: rising SHIFT warning; THE COPS! flashes red and blue
+- **Date:** 2026-11-22
+- **Decisions (director):**
+  - **SHIFT:** the word rises 36 px in 4 stepped frames and loops twice a second. It moves inside its own fixed slot, sized from the label once laid out, so the shifter beside it stays put (D-096).
+  - **THE COPS!:** the centre message flashes alternately red and blue, about 4 times a second, like the light bar. It is a tint over the styled title font.
+- **Status:** Accepted
