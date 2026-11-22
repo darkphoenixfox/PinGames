@@ -45,26 +45,39 @@ func _draw() -> void:
 			_pixel_ball(Vector2(c.x + side * off, c.y), col, on)
 
 
-## A chunky 16-bit sphere (D-143): drawn in PX-sized pixels with a dark
-## outline, three shade bands and a highlight, no smooth edges.
+## A chunky 16-bit lamp (D-143, D-150): drawn in PX-sized pixels. Off: a dark
+## glass ball. On: a pixel glow halo spills round it, and the ball itself burns
+## from a near-white core through the full colour to a hot rim, like a lamp.
 func _pixel_ball(p: Vector2, col: Color, on: bool) -> void:
 	var n := int(R / PX)
+	if on:
+		var g := n + (5 if flash else 3)
+		for gy in range(-g, g + 1):
+			for gx in range(-g, g + 1):
+				var d := Vector2(gx + 0.5, gy + 0.5).length()
+				if d <= n + 0.5 or d > g + 0.5:
+					continue
+				var k := 1.0 - (d - n) / float(g - n + 1)
+				# Dithered falloff: fewer pixels further out (16-bit glow).
+				if (gx + gy) % 2 != 0 and k < 0.6:
+					continue
+				draw_rect(Rect2(p + Vector2(gx, gy) * PX, Vector2(PX, PX)), Color(col, (0.55 if flash else 0.35) * k))
 	for gy in range(-n, n + 1):
 		for gx in range(-n, n + 1):
 			var d := Vector2(gx + 0.5, gy + 0.5).length() / (n + 0.5)
 			if d > 1.0:
 				continue
 			var c: Color
-			if d > 0.86:
-				c = Color(0.02, 0.02, 0.04)
-			elif not on:
-				c = col.darkened(0.78 if (gx + gy) < 0 else 0.84)
+			if not on:
+				c = Color(0.02, 0.02, 0.04) if d > 0.86 else col.darkened(0.78 if (gx + gy) < 0 else 0.84)
 			else:
-				var lit_k := (Vector2(gx, gy) - Vector2(-n * 0.35, -n * 0.35)).length() / n
-				if lit_k < 0.28:
-					c = Color(1, 1, 1) if flash else col.lightened(0.6)
-				elif lit_k < 0.75:
-					c = col if flash else col.darkened(0.15)
+				var core := (Vector2(gx, gy) - Vector2(-n * 0.2, -n * 0.25)).length() / n
+				if core < (0.45 if flash else 0.3):
+					c = Color(1, 1, 1)
+				elif core < (0.7 if flash else 0.55):
+					c = col.lightened(0.55)
+				elif d < 0.86:
+					c = col
 				else:
-					c = col.darkened(0.45 if flash else 0.55)
+					c = col.lightened(0.15)      # hot rim instead of a dark outline
 			draw_rect(Rect2(p + Vector2(gx, gy) * PX, Vector2(PX, PX)), c)

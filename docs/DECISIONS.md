@@ -1378,3 +1378,10 @@
 - **Date:** 2026-11-22
 - **Decision (director):** the gear lever loses its background plate and the GEAR label. Only the outlined slot, the H/L marks and the knob remain. The tachometer and speedometer are now the same size (radius 150, `DIAL_R`).
 - **Status:** Accepted
+
+### D-150 — Turbo Run: "THE COPS!"; radar balls glow like lamps
+- **Date:** 2026-11-22
+- **Decisions (director):**
+  - **Message:** the police chase message reads THE COPS! instead of POLICE!.
+  - **Radar lamps:** lit radar balls look like real lights. A dithered pixel glow halo spills around each lit ball (wider and stronger on each beep), and the ball burns from a white core through a light tint to the full colour, with a hot rim instead of the dark outline. Unlit balls stay dark glass. Still chunky 4 px pixels.
+- **Status:** Accepted
