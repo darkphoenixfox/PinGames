@@ -231,7 +231,8 @@ var _beam_mat: StandardMaterial3D
 var _pix_vp: SubViewport
 var _police: Node3D          # D-135
 var _flashers: Array = []
-var _washes: Array = []      # red / blue screen-edge glows (D-137)
+var _washes: Array = []
+var _police_swing := 0.0     # 0..1 of the 90-degree stop turn (D-139)      # red / blue screen-edge glows (D-137)
 var _siren: AudioStreamPlayer
 var _radar_bar: Control
 var _radar_led := 0.0
@@ -1153,6 +1154,14 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	var h := tr_.heading(pd.s)
 	# Swerving in on the hero car: the nose turns towards it (the T-bone).
 	var lean := clampf((sim.x - float(pd.x)) * 0.12, -0.5, 0.5) if pd.state == "chase" and absf(pd.s - sim.s) < 12.0 else 0.0
+	# Busted (D-139): it swings 90 degrees across as it stops beside you, in
+	# stepped frames, and straightens again as it drives off.
+	var swing_to := 0.0
+	if pd.state == "bust":
+		swing_to = clampf(1.0 - absf(float(pd.v)) / 12.0, 0.0, 1.0)
+	_police_swing = move_toward(_police_swing, swing_to, delta * 2.5)
+	var side := 1.0 if float(pd.x) > sim.x else -1.0
+	lean += roundf(_police_swing * 4.0) / 4.0 * PI * 0.5 * side
 	_police.basis = _police.basis * Basis(Vector3.UP, _sprite_yaw(h - lean, cam_yaw) - h) * MODEL_TURN
 	var ph := fmod(_phase_t, 0.5)
 	var red_on := ph < 0.25 and (ph < 0.08 or ph > 0.15)
@@ -1554,7 +1563,7 @@ func _build_hud() -> void:
 	_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var top := HBoxContainer.new()
 	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	top.offset_top = 40
+	top.offset_top = 62   # below the radar bar (D-139)
 	top.offset_left = 40
 	top.offset_right = -40
 	_hud.add_child(top)
@@ -1669,13 +1678,13 @@ func _build_hud() -> void:
 	_frozen_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_frozen_label.offset_left = -300
 	_frozen_label.offset_right = 300
-	_frozen_label.offset_top = 290
+	_frozen_label.offset_top = 270
 	_frozen_label.modulate.a = 1.0 if _freeze_time else 0.0
 	_hud.add_child(_frozen_label)
 	# Radar detector light bar at the top, under the clock (D-137).
 	_radar_bar = RadarBar.new()
-	_radar_bar.position = Vector2((1080.0 - _radar_bar.custom_minimum_size.x) * 0.5, 232)
-	_radar_bar.size = _radar_bar.custom_minimum_size
+	_radar_bar.position = Vector2(0, 2)
+	_radar_bar.size = Vector2(1080, _radar_bar.custom_minimum_size.y)
 	_hud.add_child(_radar_bar)
 
 	_drift_label = UI.label("", 60, UI.YELLOW)

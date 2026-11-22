@@ -699,6 +699,19 @@ func test_racer_sim() -> void:
 		pb.step(dt, false, false)
 	check(pb.police.state == "bust" and absf(pb.police.s - pb.s) < 3.0,
 		"on a bust the police parks right beside the player (%.1f m)" % (pb.police.s - pb.s))
+	# ... stays parked for a while, then drives off ahead instead of vanishing (D-139).
+	var parked_for := 0.0
+	var gone_ahead := false
+	for i in 60 * 8:
+		pb.traffic.clear()
+		pb.step(dt, false, false)
+		if not pb.police.is_empty():
+			if pb.police.state == "bust" and absf(pb.police.v) < 2.0:
+				parked_for += dt
+			if pb.police.state == "leave" and pb.police.s > pb.s + 30.0:
+				gone_ahead = true
+	check(parked_for >= Sim.PARK_HOLD - 0.05 and gone_ahead,
+		"the police stays parked %.1f s, then drives off ahead" % parked_for)
 	# Outrunning it long enough: it gives up with a bonus.
 	var run = Sim.new()
 	run.setup(7)

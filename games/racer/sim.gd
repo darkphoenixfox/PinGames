@@ -121,6 +121,7 @@ const POLICE_LOST := 260.0      # m behind: lost you
 const BUST_SPEED := 22.0        # m/s: slower than this with police close = busted
 const BUST_NEAR := 40.0         # m: "close"
 const BUST_TIME := 3.5          # s held at the roadside
+const PARK_HOLD := 1.5          # s the police stands parked beside you (D-139)
 const FINE := 25000
 const ESCAPE_BONUS := 10000.0
 const FLIP_KINDS := ["palm", "rock", "lamp", "truck", "portal"]
@@ -440,14 +441,21 @@ func _update_police(dt: float) -> void:
 				_add_score(ESCAPE_BONUS)
 				events.append(["police_escape"])
 		"bust":
-			# Drive all the way up beside the stopped player and park there.
-			_police_follow(dt, 0.0, 12.0, 90.0, 18.0)   # brakes hard, backs up if it overshot
-			police.x = move_toward(police.x, x + (3.4 if x < 0.0 else -3.4), 4.0 * dt)
-			if busted_t <= 0.0 and spin_t <= 0.0:
+			# Hurry up beside the stopped player, swing across and park there
+			# (D-139). The player is held until it has stood parked PARK_HOLD s.
+			_police_follow(dt, 0.0, 30.0, 90.0, 18.0)
+			police.x = move_toward(police.x, x + (3.4 if x < 0.0 else -3.4), 6.0 * dt)
+			var parked := absf(ds) < 3.0 and absf(police.v) < 2.0
+			police.park_t = float(police.get("park_t", 0.0)) + (dt if parked else 0.0)
+			if police.park_t < PARK_HOLD:
+				busted_t = maxf(busted_t, 0.05)
+			elif busted_t <= 0.0 and spin_t <= 0.0:
 				police.state = "leave"
 		"leave":
-			police.v = move_toward(police.v, top_speed() * 1.1 if ds > -5.0 else 0.0, 15.0 * dt)
-			if absf(ds) > 300.0 or (ds < 0.0 and police.v < 1.0):
+			# Drive off ahead (D-139): it overtakes and disappears up the road.
+			police.v = move_toward(police.v, maxf(v + 25.0, 40.0), 18.0 * dt)
+			police.x = move_toward(police.x, 0.0 if absf(x) > 3.0 else (3.7 if x < 0.0 else -3.7), 3.0 * dt)
+			if ds > 350.0 or ds < -350.0:
 				police = {}
 				return
 	police.s += police.v * dt

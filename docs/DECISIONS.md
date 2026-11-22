@@ -1293,3 +1293,17 @@
 - **Date:** 2026-11-22
 - **Decision (director):** a debug cheat to spawn the police. The director first asked for P, which is already the global pause key (D-057), then chose another letter. DebugTools' O ("officer") emits `spawn_police` (debug builds only). Turbo Run starts a chase straight away, with the police 140 m behind and POLICE! shown, if a race is running and no police car is active.
 - **Status:** Accepted
+
+### D-139 — Turbo Run: police arrives, swings across and parks on a bust; full-width radar bar
+- **Date:** 2026-11-22
+- **Bug (director):** on a bust the police only appeared at the very end and vanished as soon as it stopped.
+  - **Arriving late:** while busted it approached at the player's speed plus at most 12 m/s, so with the player stopped it took most of the 3.5 s hold to arrive.
+  - **Vanishing:** the "leave" step stopped a police car that was even slightly behind the player and deleted it immediately.
+- **Fix:**
+  - **Arrival:** the bust approach closes at up to 30 m/s.
+  - **Park:** the player is held until the police has stood parked beside them for `PARK_HOLD` (1.5 s), on top of the 3.5 s bust time.
+  - **Swing:** as it stops, the view swings it 90° across in 4 stepped frames, and it straightens again as it leaves.
+  - **Leave:** it drives off forwards, overtaking up the road, and is only removed beyond 350 m.
+  - **Test:** it stays parked for at least 1.5 s, then drives off ahead.
+- **Radar bar (director):** no background housing. It spans the full width at the very top of the TABLE: the black block in the middle, 5 balls spread evenly out to each screen edge, radius 24. The score/time/stage row moves down to y = 62 to sit below it.
+- **Status:** Accepted
