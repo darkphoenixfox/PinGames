@@ -670,6 +670,35 @@ func test_racer_sim() -> void:
 		cop.traffic.clear()
 		cop.step(dt, false, false)
 	check(cop.busted_t <= 0.0 and (cop.police.is_empty() or cop.police.state == "leave"), "after the fine the police drive off")
+	# The police stays with the player instead of driving past (D-137).
+	var pc = Sim.new()
+	pc.setup(7)
+	pc.state = Sim.State.RACE
+	pc.manual = true
+	pc.gear = Sim.Gear.HIGH
+	pc.grace_t = 99.0          # no ramming: just watch it hold station
+	pc.police = {"s": pc.s - 100.0, "x": 0.0, "v": 40.0, "state": "chase", "t": 0.0}
+	var max_ahead := -999.0
+	for i in 60 * 8:
+		pc.s = clampf(pc.s, 0.0, 1e9)
+		pc.v = 40.0 if i < 240 else 25.0
+		pc.x = 0.0
+		pc.traffic.clear()
+		pc.step(dt, false, false, true)
+		if i > 120:
+			max_ahead = maxf(max_ahead, pc.police.s - pc.s)
+	check(max_ahead < 4.0 and pc.police.s - pc.s > -15.0,
+		"the police keeps alongside the player, not past (max %.1f m ahead)" % max_ahead)
+	var pb = Sim.new()
+	pb.setup(7)
+	pb.state = Sim.State.RACE
+	pb.police = {"s": pb.s - 3.0, "x": 0.0, "v": 80.0, "state": "chase", "t": 0.0}   # rams at full speed
+	pb.v = 10.0
+	for i in 60 * 3:
+		pb.traffic.clear()
+		pb.step(dt, false, false)
+	check(pb.police.state == "bust" and absf(pb.police.s - pb.s) < 3.0,
+		"on a bust the police parks right beside the player (%.1f m)" % (pb.police.s - pb.s))
 	# Outrunning it long enough: it gives up with a bonus.
 	var run = Sim.new()
 	run.setup(7)

@@ -189,7 +189,7 @@ func _place_dressing(s1: float) -> void:
 		_next_trap_s = avoid_every * TRAPS_FROM_STAGE + 300.0
 	while _next_trap_s > 0.0 and _next_trap_s < s1:
 		if absf(curvature(_next_trap_s)) < 1.0 / 400.0 and not in_tunnel(_next_trap_s):
-			_add_obj(_next_trap_s, ROAD_HALF + RUMBLE + 2.5, "speedtrap")
+			_add_obj(_next_trap_s, ROAD_HALF + RUMBLE + 1.6, "speedtrap")
 			_next_trap_s += _rng.randf_range(TRAP_GAP.x, TRAP_GAP.y)
 		else:
 			_next_trap_s += 80.0

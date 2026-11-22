@@ -1275,3 +1275,16 @@
 - **Date:** 2026-11-22
 - **Decision (director):** the director's `hatchback.glb` joins the car traffic. It is processed like the other models: full 56.5k-tri mesh, 4.0 m long, 256 px texture. Two in five traffic cars use it, fixed per vehicle, recoloured with the same per-car hue and lit at night and in tunnels. The pool is 8.
 - **Status:** Accepted
+
+### D-137 — Turbo Run: police stays with the player; launch lock; radar light bar; police screen wash; bigger speed cameras
+- **Date:** 2026-11-22
+- **Bug (director): sharp turn after a perfect rev.** Holding a flipper through GO was already ignored (D-131), but re-pressing one right after GO, while chasing the revs, still threw the car sideways at launch speed. Now no flipper steers for the first 1.0 s after GO (`LAUNCH_LOCK`).
+- **Bug (director): the police drove past the player.** It chased a target speed and carried its momentum past. It now keeps position relative to the player (`_police_follow`: the player's speed plus a capped correction towards a target gap).
+  - **Chasing:** it runs down the player's line, then holds alongside about 1 m behind and 2.8 m to one side.
+  - **Ram:** after 1.2 s it swerves in to slam the player. If it misses, it lines up again, switching sides if the player is near that edge.
+  - **Bust:** it brakes hard (90 m/s²), backs up if it overshot, and parks right beside the stopped player.
+  - Tests check that it never gets more than 4 m ahead, and that it parks within 3 m after ramming at full speed.
+- **Radar detector (director):** moved to the top of the screen under the clock, styled as a police light bar (`radar_bar.gd`): 5 blue balls, a black centre block, 5 red balls. They light from the centre outwards as the camera gets closer, and flash brighter with each beep. The RADAR box by the gear lever is gone.
+- **Police lights on screen (director):** while the police is within about 125 m, red and blue glows wash in from the left and right screen edges in time with its light bar, up to 45 % within 25 m (additive, under the HUD).
+- **Speed cameras visible (director):** they were drawn, but at 4.2 m by 1 m they vanished next to the 11 m palms. They are now 8 m tall, oversized like the other sprites, and 1.6 m from the kerb.
+- **Status:** Accepted

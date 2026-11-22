@@ -17,7 +17,7 @@ const KINDS := {
 	"sign_green": ["sign_green", 5.5, true, false],
 	"gantry": ["gantry", 12.9, false, false],
 	"nitro": ["nitro", 2.6, true, false],               # pick-up (D-115)
-	"speedtrap": ["speedtrap", 4.2, true, false],       # speed camera (D-135)
+	"speedtrap": ["speedtrap", 8.0, true, false],       # speed camera (D-135; oversized like the palms, D-137)
 }
 
 static var _meshes := {}

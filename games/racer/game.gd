@@ -26,6 +26,7 @@ const CAR_COLS := [Color("e8303a"), Color("ffd23e"), Color("3f8cff")]
 const NIGHT_GROUP := &"rc_night_lights"
 const Dial = preload("res://games/racer/dial.gd")
 const GearLever = preload("res://games/racer/gear_lever.gd")
+const RadarBar = preload("res://games/racer/radar_bar.gd")
 const UI = preload("res://core/ui/ui.gd")
 const Synth = preload("res://core/util/synth.gd")
 const ScoreTable = preload("res://core/util/score_table.gd")
@@ -230,8 +231,9 @@ var _beam_mat: StandardMaterial3D
 var _pix_vp: SubViewport
 var _police: Node3D          # D-135
 var _flashers: Array = []
+var _washes: Array = []      # red / blue screen-edge glows (D-137)
 var _siren: AudioStreamPlayer
-var _led: ColorRect
+var _radar_bar: Control
 var _radar_led := 0.0
 var _radar_beep_t := 0.0
 var _world_view: TextureRect
@@ -718,6 +720,32 @@ func _build_world() -> void:
 	post.set_shader_parameter("low_res", Vector2(PIXEL_RES))
 	view.material = post
 	add_to_table(view)
+	# Police light wash (D-137): red and blue glows from the screen edges.
+	var add_mat := CanvasItemMaterial.new()
+	add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	for i in 2:
+		var g := Gradient.new()
+		var c: Color = Color(1.0, 0.1, 0.08) if i == 0 else Color(0.15, 0.3, 1.0)
+		g.set_color(0, c if i == 0 else Color(c, 0.0))
+		g.set_color(1, Color(c, 0.0) if i == 0 else c)
+		var gt := GradientTexture2D.new()
+		gt.gradient = g
+		gt.width = 64
+		gt.height = 4
+		var wash := TextureRect.new()
+		wash.texture = gt
+		wash.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		wash.stretch_mode = TextureRect.STRETCH_SCALE
+		wash.material = add_mat
+		wash.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE if i == 0 else Control.PRESET_RIGHT_WIDE)
+		if i == 0:
+			wash.offset_right = 540
+		else:
+			wash.offset_left = -540
+		wash.modulate.a = 0.0
+		wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_to_table(wash)
+		_washes.append(wash)
 	var env := WorldEnvironment.new()
 	_env = Environment.new()
 	var sky_mat := ProceduralSkyMaterial.new()
@@ -1115,6 +1143,8 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	var tr_ := sim.track
 	if sim.police.is_empty():
 		_police.visible = false
+		for w in _washes:
+			(w as CanvasItem).modulate.a = 0.0
 		_siren.volume_db = lerpf(_siren.volume_db, -80.0, 0.1)
 		return
 	var pd: Dictionary = sim.police
@@ -1125,8 +1155,14 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	var lean := clampf((sim.x - float(pd.x)) * 0.12, -0.5, 0.5) if pd.state == "chase" and absf(pd.s - sim.s) < 12.0 else 0.0
 	_police.basis = _police.basis * Basis(Vector3.UP, _sprite_yaw(h - lean, cam_yaw) - h) * MODEL_TURN
 	var ph := fmod(_phase_t, 0.5)
-	(_flashers[0] as Node3D).visible = ph < 0.25 and (ph < 0.08 or ph > 0.15)
-	(_flashers[1] as Node3D).visible = ph >= 0.25 and (ph < 0.33 or ph > 0.4)
+	var red_on := ph < 0.25 and (ph < 0.08 or ph > 0.15)
+	var blue_on := ph >= 0.25 and (ph < 0.33 or ph > 0.4)
+	(_flashers[0] as Node3D).visible = red_on
+	(_flashers[1] as Node3D).visible = blue_on
+	# Screen wash while it's close (D-137): up to 45 % within 25 m.
+	var near := 1.0 - clampf((absf(pd.s - sim.s) - 25.0) / 100.0, 0.0, 1.0)
+	(_washes[0] as CanvasItem).modulate.a = 0.45 * near if red_on else 0.0
+	(_washes[1] as CanvasItem).modulate.a = 0.45 * near if blue_on else 0.0
 	var d: float = absf(pd.s - sim.s)
 	var closing: float = (pd.v - sim.v) * (1.0 if pd.s < sim.s else -1.0)
 	_siren.pitch_scale = clampf(SOUND_SPEED / maxf(SOUND_SPEED - closing, 20.0), 0.7, 1.5)
@@ -1145,8 +1181,8 @@ func _update_radar(delta: float) -> void:
 			_radar_beep_t = lerpf(1.1, 0.09, sim.radar)
 			_radar_led = minf(0.07, _radar_beep_t * 0.5)
 			Audio.sfx("rc_radar")
-	if is_instance_valid(_led):
-		_led.color = Color(1.0, 0.12, 0.1) if _radar_led > 0.0 else Color(0.25, 0.04, 0.05)
+	if is_instance_valid(_radar_bar):
+		_radar_bar.set_state(sim.radar if sim.state == Sim.State.RACE else 0.0, _radar_led > 0.0)
 
 
 ## Nitro pick-up (D-103, D-115): the 16-bit nitrous tank sprite (blue bottle
@@ -1587,25 +1623,6 @@ func _build_hud() -> void:
 	# Gear lever in an H/L gate (D-110).
 	_gear_lever = GearLever.new()
 	gbox.add_child(_gear_lever)
-	# Radar detector (D-135): a little black box with a red LED.
-	var radar := PanelContainer.new()
-	var rsb := StyleBoxFlat.new()
-	rsb.bg_color = Color(0.04, 0.04, 0.06, 0.9)
-	rsb.set_border_width_all(3)
-	rsb.border_color = Color(0.35, 0.35, 0.4)
-	rsb.set_content_margin_all(6)
-	radar.add_theme_stylebox_override("panel", rsb)
-	radar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	var rrow := HBoxContainer.new()
-	rrow.add_theme_constant_override("separation", 10)
-	_led = ColorRect.new()
-	_led.custom_minimum_size = Vector2(24, 24)
-	_led.color = Color(0.25, 0.04, 0.05)
-	rrow.add_child(_led)
-	rrow.add_child(UI.label(tr("RC_RADAR"), 24, UI.GREY))
-	radar.add_child(rrow)
-	gbox.add_child(radar)
-	gbox.move_child(radar, 0)
 	_nitro_label = UI.label(tr("RC_NITRO"), 24, UI.CYAN)
 	_nitro_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_nitro_label.modulate.a = 0.0
@@ -1652,9 +1669,14 @@ func _build_hud() -> void:
 	_frozen_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_frozen_label.offset_left = -300
 	_frozen_label.offset_right = 300
-	_frozen_label.offset_top = 236
+	_frozen_label.offset_top = 290
 	_frozen_label.modulate.a = 1.0 if _freeze_time else 0.0
 	_hud.add_child(_frozen_label)
+	# Radar detector light bar at the top, under the clock (D-137).
+	_radar_bar = RadarBar.new()
+	_radar_bar.position = Vector2((1080.0 - _radar_bar.custom_minimum_size.x) * 0.5, 232)
+	_radar_bar.size = _radar_bar.custom_minimum_size
+	_hud.add_child(_radar_bar)
 
 	_drift_label = UI.label("", 60, UI.YELLOW)
 	_drift_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)

@@ -79,6 +79,7 @@ const PERFECT_POINTS := 2000.0
 ## slower on the grid, so it can be held (D-128).
 const START_FROM := 0.58
 const START_TO := 0.93
+const LAUNCH_LOCK := 1.0         # s after GO when flippers don't steer (D-137)
 const START_KICK := 12.0          # m/s at GO after a perfect rev (D-118)
 const START_PULL_TIME := 1.5      # s of perfect-shift pull after it
 const REV_UP := 1.5               # rpm/s while revving on the grid (D-112; slower D-128)
@@ -113,7 +114,8 @@ const FLIP_SLIDE_DECEL := 11.0   # m/s^2 sliding on its side after the roll
 const RADAR_RANGE := 450.0      # m at which the detector starts beeping
 const TRAP_FACTOR := 1.5        # x the L-gear top speed that triggers a chase
 const POLICE_BEHIND := 140.0    # m behind the player it appears
-const POLICE_EXTRA := 14.0      # m/s faster than the player while chasing (capped)
+const CHASE_CLOSE := 16.0       # m/s faster than the player while closing in (D-137)
+const RAM_WINDUP := 1.2         # s alongside before it swerves in
 const POLICE_GIVE_UP := 22.0    # s of chase before it gives up
 const POLICE_LOST := 260.0      # m behind: lost you
 const BUST_SPEED := 22.0        # m/s: slower than this with police close = busted
@@ -162,6 +164,7 @@ var pickups: Array = []        # nitro canisters on the road: {id, s, x}
 var _next_pickup_s := 300.0      # the first canister sits on the start straight
 var car := DEFAULT_CAR           # index into CARS (D-122)
 var gear := Gear.LOW
+var _launch_t := 0.0
 var _rev_lock_l := false       # flipper held through GO (revving), not steering yet (D-131)
 var _rev_lock_r := false
 var freeze_time := false       # debug cheat (F in debug builds, D-118)
@@ -238,6 +241,7 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 				# each one is ignored until it is released (D-131).
 				_rev_lock_l = left
 				_rev_lock_r = right
+				_launch_t = LAUNCH_LOCK
 				# Perfect start (D-118): revs held in the perfect-shift band at GO
 				# launch the car with a kick and extra pull.
 				if rpm >= START_FROM and rpm < START_TO:
@@ -269,6 +273,12 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 		_rev_lock_l = false
 	if not right:
 		_rev_lock_r = false
+	# Launch (D-137): for the first moment after GO no flipper steers, so
+	# re-pressing one while chasing the perfect revs doesn't throw the car.
+	if _launch_t > 0.0:
+		_launch_t -= dt
+		left = false
+		right = false
 	left = left and not _rev_lock_l
 	right = right and not _rev_lock_r
 	if not freeze_time:
@@ -400,15 +410,26 @@ func _update_police(dt: float) -> void:
 	var ds: float = police.s - s            # < 0 behind us
 	match police.state:
 		"chase":
-			var target_v := minf(v + POLICE_EXTRA, nitro_speed() + 6.0)
-			if ds > -8.0:
-				target_v = v + 2.0           # alongside: match speed and swerve in
-			police.v = move_toward(police.v, target_v, 22.0 * dt)
-			# Line up beside the player, then swerve into it (the T-bone).
-			var side := 1.0 if x < 0.0 else -1.0
-			var tx: float = x + side * (2.6 if ds < -10.0 else 0.0)
-			police.x = move_toward(police.x, tx, (5.0 if ds < -10.0 else 7.0) * dt)
-			if spin_t <= 0.0 and grace_t <= 0.0 and absf(ds) < CAR_LEN * 0.8 					and absf(police.x - x) < CAR_W:
+			# Position-keeping (D-137): it closes in, then sits alongside a
+			# little behind, matching the player, and swerves in to slam it.
+			var side: float = police.get("side", 1.0 if x < 0.0 else -1.0)
+			police.side = side
+			police.ram_t = float(police.get("ram_t", 0.0))
+			var want_ds := -1.0
+			var want_x := x + side * 2.8
+			if ds < -12.0:
+				want_x = x                       # chase down the player's line
+				police.ram_t = 0.0
+			else:
+				police.ram_t += dt
+				if police.ram_t > RAM_WINDUP:
+					want_x = x + side * 0.4      # slam
+					if police.ram_t > RAM_WINDUP + 0.6:
+						police.ram_t = 0.0       # missed: line up again
+						police.side = -side if absf(x) > 4.0 and signf(x) == side else side
+			_police_follow(dt, want_ds, CHASE_CLOSE)
+			police.x = move_toward(police.x, want_x, (9.0 if police.ram_t > RAM_WINDUP else 5.0) * dt)
+			if spin_t <= 0.0 and grace_t <= 0.0 and absf(ds) < CAR_LEN * 0.9 					and absf(police.x - x) < CAR_W * 0.95:
 				_crash("car", police.x - x)
 				events.append(["police_ram"])
 			var close := ds > -BUST_NEAR
@@ -419,10 +440,8 @@ func _update_police(dt: float) -> void:
 				_add_score(ESCAPE_BONUS)
 				events.append(["police_escape"])
 		"bust":
-			# Pull up beside the stopped player.
-			# Ease to a stop right beside the player (backing up if it overshot).
-			var want_v := clampf(-(ds - 1.0) * 1.5 + v, -6.0, maxf(v, 0.0) + 20.0)
-			police.v = move_toward(police.v, want_v, 25.0 * dt)
+			# Drive all the way up beside the stopped player and park there.
+			_police_follow(dt, 0.0, 12.0, 90.0, 18.0)   # brakes hard, backs up if it overshot
 			police.x = move_toward(police.x, x + (3.4 if x < 0.0 else -3.4), 4.0 * dt)
 			if busted_t <= 0.0 and spin_t <= 0.0:
 				police.state = "leave"
@@ -432,6 +451,15 @@ func _update_police(dt: float) -> void:
 				police = {}
 				return
 	police.s += police.v * dt
+
+
+## Speed control towards a spot `want_ds` metres from the player (negative =
+## behind): match the player, plus a correction capped at `close` m/s ahead
+## and 15 m/s back. Police can't get stuck far ahead or overshoot.
+func _police_follow(dt: float, want_ds: float, close: float, rate: float = 40.0, back: float = 15.0) -> void:
+	var ds: float = police.s - s
+	var target := v + clampf((want_ds - ds) * 1.6, -back, close)
+	police.v = move_toward(police.v, maxf(target, -back), rate * dt)
 
 
 func _bust() -> void:
