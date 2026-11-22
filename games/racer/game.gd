@@ -309,6 +309,8 @@ var _gear_lever: Control
 var _shift_big: Label
 var _shift_slot: Control
 var _cops_flash := false
+var _nitro_pop: Label       # NITRO notice above the speedometer (D-159)
+var _nitro_pop_t := 0.0
 var _nag_lever: Control     # animated shifter next to SHIFT (D-151)
 var _frozen_label: Label
 var _freeze_time := false   # debug cheat: clock frozen (D-118)
@@ -647,7 +649,7 @@ func _handle_events() -> void:
 			"nitro", "nitro_refill":
 				_bg_flash = 0.6
 				Audio.sfx("rc_nitro")
-				_center_message(tr("RC_NITRO"), 0.8)
+				_nitro_pop_t = 0.8   # small notice over the speedometer (D-159)
 				_dmd_anim("nitro", [tr("RC_NITRO")])
 				_shake = 0.3
 			"high_beams":
@@ -1706,6 +1708,11 @@ func _build_hud() -> void:
 	_speed_label.custom_minimum_size = Vector2(160, 0)
 	_speed_label.position = _speedo.hub() + Vector2(-80, 24)
 	_speedo.add_child(_speed_label)
+	_nitro_pop = UI.styled_label(tr("RC_NITRO"), TITLE_FONT, 1)
+	_nitro_pop.custom_minimum_size = Vector2(320, 0)
+	_nitro_pop.position = _speedo.hub() + Vector2(-160, -DIAL_R - 70.0)
+	_nitro_pop.modulate.a = 0.0
+	_speedo.add_child(_nitro_pop)
 	var kmh := UI.label(tr("RC_KMH"), 24, UI.GREY)
 	kmh.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	kmh.custom_minimum_size.x = _speedo.custom_minimum_size.x
@@ -1833,6 +1840,8 @@ func _update_hud(delta: float) -> void:
 		_drift_label.modulate.a = 1.0
 	else:
 		_drift_label.modulate.a = maxf(0.0, _drift_label.modulate.a - delta * 0.8)
+	_nitro_pop_t = maxf(0.0, _nitro_pop_t - delta)
+	_nitro_pop.modulate.a = 1.0 if _nitro_pop_t > 0.0 and fmod(_nitro_pop_t, 0.2) > 0.06 else 0.0
 	if _cops_flash and is_instance_valid(_center):
 		var red := fmod(_phase_t, 0.24) < 0.12
 		_center.self_modulate = Color(1.0, 0.25, 0.2) if red else Color(0.35, 0.5, 1.0)

@@ -1433,3 +1433,8 @@
   - **SHIFT:** the word rises 36 px in 4 stepped frames and loops twice a second. It moves inside its own fixed slot, sized from the label once laid out, so the shifter beside it stays put (D-096).
   - **THE COPS!:** the centre message flashes alternately red and blue, about 4 times a second, like the light bar. It is a tint over the styled title font.
 - **Status:** Accepted
+
+### D-159 — Turbo Run: NITRO notice above the speedometer
+- **Date:** 2026-11-22
+- **Decision (director):** the nitro pick-up notice moves from mid-TABLE to just above the speedometer and gets smaller: the styled title font at scale 1 (the centre message used scale 4). It flickers for 0.8 s on each pick-up, by alpha in a fixed spot (D-096).
+- **Status:** Accepted
