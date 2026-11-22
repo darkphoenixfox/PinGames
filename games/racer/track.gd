@@ -24,11 +24,13 @@ const MAX_TURN := deg_to_rad(110.0)      # per curve section
 const MAX_HEADING := deg_to_rad(80.0)    # overall, from the start direction
 ## Roadside objects: [kind, collision radius]. Kinds are drawn by the view.
 const OBJ_RADIUS := {"palm": 0.6, "rock": 1.5, "chevron": 0.5, "lamp": 0.35, "gate": 0.0,
-	"bush": 0.0, "sign": 2.5, "gantry": 0.0}   # bushes are scenery: off-road stays as it was
+	"bush": 0.0, "sign": 2.5, "gantry": 0.0, "speedtrap": 0.4}   # bushes are scenery: off-road stays as it was
 ## Roadside dressing (D-107): bushes line the road densely, green direction
 ## signs stand on straights, and an overhead gantry spans the road now and then.
 const SIGN_EVERY := Vector2(350.0, 650.0)
 const GANTRY_EVERY := 1400.0
+const TRAPS_FROM_STAGE := 3     # speed cameras start after stage 3 (D-135)
+const TRAP_GAP := Vector2(1200.0, 2000.0)
 
 var seed_value := 1
 var pos := PackedVector3Array()
@@ -44,6 +46,7 @@ var tunnels: Array = []
 var _force_tunnel := false
 var avoid_every := 0.0          # checkpoint spacing to keep tunnels clear of (set by the sim)
 var _next_sign_s := 300.0
+var _next_trap_s := -1.0
 var _next_gantry_s := 700.0
 var _next_bush_s := 20.0
 
@@ -59,6 +62,7 @@ func setup(seed_in: int = 1) -> void:
 	_next_obj_s = 30.0
 	tunnels.clear()
 	_next_sign_s = 300.0
+	_next_trap_s = -1.0
 	_next_gantry_s = 700.0
 	_next_bush_s = 20.0
 	_add_section(START_STRAIGHT, 0.0, 0.0)
@@ -180,6 +184,15 @@ func _place_dressing(s1: float) -> void:
 				_add_obj(s + _rng.randf_range(0.0, 6.0),
 					side * (ROAD_HALF + RUMBLE + _rng.randf_range(2.2, 6.5)), "bush")
 		_next_bush_s += _rng.randf_range(9.0, 16.0)
+	# Speed cameras from stage 4 (D-135): on straights, right-hand verge.
+	if _next_trap_s < 0.0 and avoid_every > 0.0:
+		_next_trap_s = avoid_every * TRAPS_FROM_STAGE + 300.0
+	while _next_trap_s > 0.0 and _next_trap_s < s1:
+		if absf(curvature(_next_trap_s)) < 1.0 / 400.0 and not in_tunnel(_next_trap_s):
+			_add_obj(_next_trap_s, ROAD_HALF + RUMBLE + 2.5, "speedtrap")
+			_next_trap_s += _rng.randf_range(TRAP_GAP.x, TRAP_GAP.y)
+		else:
+			_next_trap_s += 80.0
 	while _next_sign_s < s1:
 		if absf(curvature(_next_sign_s)) < 1.0 / 400.0:
 			_add_obj(_next_sign_s, ROAD_HALF + RUMBLE + 5.5, "sign")
@@ -232,6 +245,15 @@ func _add_obj(s: float, x: float, kind: String, dir: float = 1.0) -> void:
 	if in_tunnel(s):
 		return   # nothing stands inside a tunnel (D-127)
 	objects.append({"s": s, "x": x, "kind": kind, "r": OBJ_RADIUS[kind], "dir": dir})
+
+
+## The next speed camera at or after s, or {} (D-135).
+func next_trap(s: float) -> Dictionary:
+	for i in range(_lower_bound(s), objects.size()):
+		var o: Dictionary = objects[i]
+		if o.kind == "speedtrap":
+			return o
+	return {}
 
 
 ## Index range [a, b) of objects with s in [s0, s1).

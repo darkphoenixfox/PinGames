@@ -26,6 +26,7 @@ SPRITES = {
     "sign_curve": 128, "sign_green": 112,
     "gantry": 144,
     "nitro": 128,
+    "speedtrap": 128,
 }
 
 

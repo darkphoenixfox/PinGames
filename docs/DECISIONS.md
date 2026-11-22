@@ -1256,3 +1256,22 @@
   - Both are on the SFX bus, so they echo in tunnels (D-127).
 - **Not done:** left/right panning, which would need a 3D or per-voice bus setup.
 - **Status:** Accepted
+
+### D-135 — Turbo Run: speed cameras, radar detector, police chases and fines
+- **Date:** 2026-11-22
+- **Decision (director):** speed traps beside the road (after stage 3), a radar detector, and a police car with sirens and flashers that tries to T-bone the hero car when it is caught speeding. A bust (slowing down or crashing) stops the police beside the player, plays a FINE animation on the DMD and deducts points, on top of the time lost.
+- **Speed cameras:** a Qwen-Image pixel sprite on a 4.2 m pole on the right verge, on straights and never in tunnels. They start after stage 3 (`TRAPS_FROM_STAGE`) and come every 1.2–2 km. They are solid (r 0.4).
+- **Radar detector:** `sim.radar` (0–1) rises over the last 450 m to the next camera. The view beeps (a short double chirp) with gaps shrinking from 1.1 s to 0.09 s, and a red LED lights with each beep. The LED is in a little RADAR box above the gear lever and as a dot on the DMD dashboard.
+- **Caught:** passing a camera faster than 1.5 × the car's L-gear limit (270 km/h on the normal car) spawns a police car 140 m behind, if none is active.
+- **Chase:** the police car closes at up to +14 m/s (capped near your nitro speed), lines up 2.6 m beside you, then swerves in. Contact is a crash (the T-bone), respecting the post-crash immunity.
+- **Bust:** crashing, or dropping below 22 m/s (79 km/h), with the police within 40 m. The player is held for 3.5 s (plus any crash time) and the police pulls up beside you (backing up if it overshot). The fine is 25,000, capped at the score. Then it drives off.
+- **Escape:** after 22 s of chase, or 260 m behind, it gives up. ESCAPED! and +10,000 (a small bonus I added).
+- **View:** the director's police car with a light bar of alternating red and blue additive glows. A looping two-tone siren with Doppler pitch and distance volume. The nose turns towards the player when swerving in. POLICE!, BUSTED! and ESCAPED! messages.
+- **DMD FINE animation:** the police car rolls up behind ours with its bar flashing, BUSTED! appears, then a ticket slides up showing FINE −amount.
+- **Note:** the police model has a crest badge and "911" lettering that echo a real car brand. It is used as supplied; the director may want those details changed.
+- **Status:** Accepted (tuning pending playtest)
+
+### D-136 — Turbo Run: hatchback in the traffic mix
+- **Date:** 2026-11-22
+- **Decision (director):** the director's `hatchback.glb` joins the car traffic. It is processed like the other models: full 56.5k-tri mesh, 4.0 m long, 256 px texture. Two in five traffic cars use it, fixed per vehicle, recoloured with the same per-car hue and lit at night and in tunnels. The pool is 8.
+- **Status:** Accepted

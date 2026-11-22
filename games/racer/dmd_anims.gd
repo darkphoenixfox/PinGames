@@ -12,6 +12,7 @@ const DURATIONS := {
 	"checkpoint": 1.6,
 	"drift": 1.0,
 	"perfect": 1.1,
+	"fine": 3.2,
 }
 
 const WHITE := Color(1, 1, 1)
@@ -263,3 +264,36 @@ func perfect(p, t: float, title: String) -> void:
 			if (i + int(t * 20.0)) % 2 == 0:
 				p.dot(64 + cos(a) * r, 12 + sin(a) * r * 0.45, GREEN if i % 2 == 0 else WHITE)
 		p.text_center(title, 8, 1, GREEN if _blink(t, 0.16) else WHITE)
+
+
+## Busted (D-135): a police car pulls up beside ours with its light bar
+## flashing, then a ticket slides out with the fine.
+func fine(p, t: float, title: String, label: String, amount: String) -> void:
+	p.line(0, 29, 127, 29, DARK.lightened(0.1))
+	_car(p, 10, 24, RED)
+	# Police car rolls in from the left and stops behind ours.
+	var px := lerpf(-16.0, 26.0, clampf(t / 0.6, 0.0, 1.0))
+	for r in CAR.size():
+		for c in CAR[r].length():
+			var k: String = CAR[r][c]
+			if k == "0":
+				continue
+			var col := WHITE if (r < 2 or c > 6) else DARK.lightened(0.2)
+			if k == "2":
+				col = CYAN * 0.6
+			elif k == "4":
+				col = DARK.lightened(0.3)
+			p.dot(px + c, 24 + r, col)
+	var red_on := fmod(t, 0.4) < 0.2
+	p.block(px + 5, 22, 2, 2, RED if red_on else DARK)
+	p.block(px + 7, 22, 2, 2, Color("3f6bff") if not red_on else DARK)
+	# Title, then the ticket.
+	if t > 0.5:
+		p.text(title, maxf(40.0, 127.0 - p.text_width(title, 2)), 1, 2, RED if _blink(t, 0.3) else WHITE)
+	if t > 1.1:
+		var k := clampf((t - 1.1) / 0.4, 0.0, 1.0)
+		var ty := lerpf(32.0, 16.0, k)
+		p.block(50, ty, 76, 14, WHITE)
+		p.block(50, ty, 76, 1, DIM)
+		p.text(label, 53, ty + 4, 1, DARK)
+		p.text(amount, 124 - p.text_width(amount), ty + 4, 1, RED)

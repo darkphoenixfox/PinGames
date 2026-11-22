@@ -624,6 +624,64 @@ func test_racer_sim() -> void:
 			scraped = scraped or e[0] == "scrape"
 	check(tn.in_tunnel and tn.x <= tn.track.TUNNEL_HALF - Sim.CAR_W * 0.5 + 0.01 and scraped,
 		"tunnel walls hold the car on the road (x %.1f)" % tn.x)
+	# Speed traps + police (D-135).
+	var pt = Sim.new()
+	pt.setup(7)
+	pt.track.ensure(20000.0)
+	var first_trap: Dictionary = pt.track.next_trap(0.0)
+	check(not first_trap.is_empty() and first_trap.s > Sim.CHECKPOINT_EVERY * 3.0,
+		"speed cameras start after stage 3 (first at %.0f m)" % first_trap.get("s", 0.0))
+	pt.state = Sim.State.RACE
+	pt.gear = Sim.Gear.HIGH
+	pt.s = first_trap.s - 300.0
+	pt.v = 30.0
+	pt.step(dt, false, false)
+	check(pt.radar > 0.2 and pt.radar < 0.5, "the radar detector picks up a camera ahead (%.2f)" % pt.radar)
+	# Slow past it: nothing happens.
+	pt.s = first_trap.s - 1.0
+	pt.traffic.clear()
+	pt.step(dt, false, false)
+	check(pt.police.is_empty(), "passing a camera slowly doesn't call the police")
+	var cop = Sim.new()
+	cop.setup(7)
+	cop.track.ensure(20000.0)
+	cop.state = Sim.State.RACE
+	cop.gear = Sim.Gear.HIGH
+	cop.s = first_trap.s - 1.0
+	cop.next_checkpoint = cop.s + 99999.0   # no checkpoint points in the way
+	cop.v = cop.l_top() * 1.6
+	cop.score = 100000
+	cop._score_f = 100000.0
+	cop.step(dt, false, false)
+	check(not cop.police.is_empty() and cop.police.s < cop.s - 100.0, "speeding past a camera calls a police car from behind")
+	# Slow right down with the police close: busted, fined, held.
+	cop.police.s = cop.s - 20.0
+	cop.v = 15.0
+	var fined := 0
+	var before: int = cop.score
+	for i in 5:
+		cop.traffic.clear()
+		cop.step(dt, false, false)
+		for e in cop.events:
+			if e[0] == "busted":
+				fined = int(e[1])
+	check(fined == Sim.FINE and cop.score < before - Sim.FINE + 2000 and cop.busted_t > 0.0, "slowing down with the police close is a bust and a fine")
+	for i in int((Sim.BUST_TIME + 1.0) * 60.0):
+		cop.traffic.clear()
+		cop.step(dt, false, false)
+	check(cop.busted_t <= 0.0 and (cop.police.is_empty() or cop.police.state == "leave"), "after the fine the police drive off")
+	# Outrunning it long enough: it gives up with a bonus.
+	var run = Sim.new()
+	run.setup(7)
+	run.state = Sim.State.RACE
+	run.police = {"s": run.s - 100.0, "x": 0.0, "v": 0.0, "state": "chase", "t": Sim.POLICE_GIVE_UP}
+	run.v = 60.0
+	run.gear = Sim.Gear.HIGH
+	var esc := false
+	run.step(dt, false, false)
+	for e in run.events:
+		esc = esc or e[0] == "police_escape"
+	check(esc and run.police.state == "leave", "outrunning the police long enough makes them give up")
 	# Countdown, then automatic throttle.
 	var c = Sim.new()
 	c.setup(7)

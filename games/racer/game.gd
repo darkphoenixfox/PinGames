@@ -75,6 +75,13 @@ const TRUCK_MODEL := "res://assets/models/racer/truck.glb"
 const TRUCK_TEXTURE := "res://assets/models/racer/truck_albedo.png"
 ## Director's second truck (D-121): a US-style tractor with a striped trailer.
 const TRUCK2_MODEL := "res://assets/models/racer/truck2.glb"
+## Director's hatchback (D-136), mixed into car traffic.
+const HATCH_MODEL := "res://assets/models/racer/hatchback.glb"
+const HATCH_TEXTURE := "res://assets/models/racer/hatchback_albedo.png"
+const HATCH_POOL := 8
+## Director's police car (D-135).
+const POLICE_MODEL := "res://assets/models/racer/police.glb"
+const POLICE_TEXTURE := "res://assets/models/racer/police_albedo.png"
 const TRUCK2_TEXTURE := "res://assets/models/racer/truck2_albedo.png"
 
 const ACCENT := Color("ffd23e")
@@ -167,6 +174,9 @@ const SOUNDS := {
 		[{"f": [131.0, 131.0], "t": 0.08, "w": "saw", "v": 0.14, "lp": 0.7, "env": "hold"},
 		 {"f": [196.0, 196.0], "t": 0.35, "w": "saw", "v": 0.14, "lp": 0.7}],
 		[{"f": [800.0, 5000.0], "t": 0.35, "w": "noise", "v": 0.22, "lp": 0.4, "env": "lin"}]], "reverb": [0.8, 0.25]},
+	# Radar detector chirp (D-135): a short, bright double blip.
+	"rc_radar": {"voices": [[{"f": [2900.0, 2900.0], "t": 0.035, "w": "square", "v": 0.12, "env": "hold", "gap": 0.02},
+		{"f": [2900.0, 2900.0], "t": 0.035, "w": "square", "v": 0.12, "env": "hold"}]]},
 	# Upshift backfire: a crackle and a thump.
 	"rc_backfire": {"voices": [[{"f": [1800.0, 300.0], "t": 0.12, "w": "lfsr", "v": 0.4, "lp": 0.3}],
 		[{"f": [110.0, 50.0], "t": 0.15, "w": "sine", "v": 0.5}]], "reverb": [0.3, 0.2]},
@@ -218,6 +228,12 @@ var _car_mats := {}         # model path -> ShaderMaterial
 var _car_outlines := {}     # model path -> outline ArrayMesh
 var _beam_mat: StandardMaterial3D
 var _pix_vp: SubViewport
+var _police: Node3D          # D-135
+var _flashers: Array = []
+var _siren: AudioStreamPlayer
+var _led: ColorRect
+var _radar_led := 0.0
+var _radar_beep_t := 0.0
 var _world_view: TextureRect
 var _showroom: Control
 var _select_hint: Label
@@ -248,7 +264,7 @@ var _travel := 0.0         # eased nose angle from sideways travel (D-128)
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
 var _music_i := FIRST_TRACK    # current race song index
-var _traffic_pool := {"car": [], "truck": [], "truck2": []}   # pools of Node3D per model
+var _traffic_pool := {"car": [], "hatch": [], "truck": [], "truck2": []}   # pools of Node3D per model
 ## Tyre smoke / dust (D-100): our own pooled billboard puffs in one MultiMesh.
 ## CPUParticles3D drew a stray pure-black puff at the emitter when toggled.
 const PUFF_MAX := 192
@@ -648,6 +664,19 @@ func _handle_events() -> void:
 			"bump":
 				Audio.sfx("rc_bump")
 				_shake = maxf(_shake, 0.25)
+			"police_spawn":
+				_center_message(tr("RC_POLICE"), 1.4)
+				Dmd.flash(tr("RC_POLICE"), 1.4, Dmd.RED)
+			"police_ram":
+				Audio.sfx("rc_bump")
+			"busted":
+				_center_message(tr("RC_BUSTED"), 2.5)
+				_dmd_anim("fine", [tr("RC_BUSTED"), tr("RC_FINE"), "-" + ScoreTable.format_score(int(e[1]))])
+				Audio.sfx("rc_time_up")
+			"police_escape":
+				_center_message(tr("RC_ESCAPED"), 1.4)
+				Dmd.flash(tr("RC_ESCAPED"), 1.2, Dmd.GREEN)
+				Audio.sfx("rc_perfect")
 			"crash":
 				_bg_dark = 0.8
 				Audio.sfx("rc_crash")
@@ -830,13 +859,15 @@ func _build_cars() -> void:
 		_car_body.add_child(flame)
 		_flames.append(flame)
 	for kind in _traffic_pool:
-		for i in (TRAFFIC_POOL if kind == "car" else Sim.MAX_TRUCKS):
+		var count: int = TRAFFIC_POOL if kind == "car" else (HATCH_POOL if kind == "hatch" else Sim.MAX_TRUCKS)
+		for i in count:
 			var t: Node3D
 			match kind:
 				"car": t = _car_instance(0.0)
+				"hatch": t = _car_instance(0.0, HATCH_MODEL, HATCH_TEXTURE)
 				"truck": t = _car_instance(0.0, TRUCK_MODEL, TRUCK_TEXTURE)
 				_: t = _car_instance(0.0, TRUCK2_MODEL, TRUCK2_TEXTURE)
-			var light_kind := "car" if kind == "car" else "truck"
+			var light_kind := "truck" if kind.begins_with("truck") else "car"
 			_add_headlights(t, light_kind)
 			t.set_meta("night", Night.add_car_lights(t, light_kind, _puff_texture()))
 			t.visible = false
@@ -847,6 +878,7 @@ func _build_cars() -> void:
 		pk.visible = false
 		_root.add_child(pk)
 		_pickup_nodes.append(pk)
+	_build_police()
 
 
 func _build_puffs() -> void:
@@ -1042,6 +1074,79 @@ func _prop_kind(o: Dictionary) -> String:
 		"sign":
 			return "sign_green"
 	return o.kind
+
+
+## Police car (D-135): the director's model with a light bar of flashing red
+## and blue glows, plus a looping two-tone siren.
+func _build_police() -> void:
+	_police = _car_instance(0.0, POLICE_MODEL, POLICE_TEXTURE)
+	_police.visible = false
+	_root.add_child(_police)
+	for c in [Color(1.0, 0.1, 0.1), Color(0.15, 0.35, 1.0)]:
+		var q := QuadMesh.new()
+		q.size = Vector2(1.1, 1.1)
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		m.albedo_texture = _puff_texture()
+		m.albedo_color = c
+		q.material = m
+		var f := MeshInstance3D.new()
+		f.mesh = q
+		f.position = Vector3(0.35 if c.r > 0.5 else -0.35, 1.52, 0.15)
+		_police.add_child(f)
+		_flashers.append(f)
+	_siren = AudioStreamPlayer.new()
+	_siren.bus = "SFX"
+	_siren.stream = _loop_wav(func(t: float) -> float:
+		var f := 700.0 if fmod(t, 1.0) < 0.5 else 960.0
+		var ph := fmod(t * f, 1.0)
+		return ((1.0 if ph < 0.5 else -1.0) * 0.25 + sin(TAU * f * t) * 0.2), 1.0, 0.0)
+	_siren.volume_db = -80.0
+	add_child(_siren)
+	_siren.play()
+	_radar_beep_t = 0.0
+
+
+func _animate_police(delta: float, cam_yaw: float) -> void:
+	var tr_ := sim.track
+	if sim.police.is_empty():
+		_police.visible = false
+		_siren.volume_db = lerpf(_siren.volume_db, -80.0, 0.1)
+		return
+	var pd: Dictionary = sim.police
+	_police.visible = true
+	_police.transform = tr_.frame(pd.s, pd.x)
+	var h := tr_.heading(pd.s)
+	# Swerving in on the hero car: the nose turns towards it (the T-bone).
+	var lean := clampf((sim.x - float(pd.x)) * 0.12, -0.5, 0.5) if pd.state == "chase" and absf(pd.s - sim.s) < 12.0 else 0.0
+	_police.basis = _police.basis * Basis(Vector3.UP, _sprite_yaw(h - lean, cam_yaw) - h) * MODEL_TURN
+	var ph := fmod(_phase_t, 0.5)
+	(_flashers[0] as Node3D).visible = ph < 0.25 and (ph < 0.08 or ph > 0.15)
+	(_flashers[1] as Node3D).visible = ph >= 0.25 and (ph < 0.33 or ph > 0.4)
+	var d: float = absf(pd.s - sim.s)
+	var closing: float = (pd.v - sim.v) * (1.0 if pd.s < sim.s else -1.0)
+	_siren.pitch_scale = clampf(SOUND_SPEED / maxf(SOUND_SPEED - closing, 20.0), 0.7, 1.5)
+	_siren.volume_db = lerpf(_siren.volume_db, -4.0 - 26.0 * clampf(d / 200.0, 0.0, 1.0), 0.2)
+
+
+## Radar detector (D-135): beeps faster as a speed camera gets closer, with a
+## red LED that lights with each beep (HUD and DMD).
+func _update_radar(delta: float) -> void:
+	_radar_led = maxf(0.0, _radar_led - delta)
+	if sim.radar <= 0.0 or sim.state != Sim.State.RACE:
+		_radar_beep_t = 0.0
+	else:
+		_radar_beep_t -= delta
+		if _radar_beep_t <= 0.0:
+			_radar_beep_t = lerpf(1.1, 0.09, sim.radar)
+			_radar_led = minf(0.07, _radar_beep_t * 0.5)
+			Audio.sfx("rc_radar")
+	if is_instance_valid(_led):
+		_led.color = Color(1.0, 0.12, 0.1) if _radar_led > 0.0 else Color(0.25, 0.04, 0.05)
 
 
 ## Nitro pick-up (D-103, D-115): the 16-bit nitrous tank sprite (blue bottle
@@ -1339,11 +1444,13 @@ func _animate(delta: float) -> void:
 			fl.scale = Vector3(1.0, sy, 1.0)
 			fl.position.z = -2.2 - 0.5 * sy   # keep the cone's base on the pipe
 	# Traffic
-	var used := {"car": 0, "truck": 0, "truck2": 0}
+	var used := {"car": 0, "hatch": 0, "truck": 0, "truck2": 0}
 	for t in sim.traffic:
 		var kind: String = t.get("kind", "car")
 		if kind == "truck" and int(t.id) % 2 == 1:
 			kind = "truck2"   # two truck models, fixed per vehicle (D-121)
+		elif kind == "car" and int(t.id) % 5 in [1, 3]:
+			kind = "hatch"    # the hatchback in the mix (D-136)
 		var pool: Array = _traffic_pool[kind]
 		if used[kind] >= pool.size():
 			continue
@@ -1354,7 +1461,7 @@ func _animate(delta: float) -> void:
 		var h := tr_.heading(t.s)
 		var wy := h + (PI if t.v < 0.0 else 0.0)     # oncoming faces us (D-099)
 		node.basis = node.basis * Basis(Vector3.UP, _sprite_yaw(wy, cam_yaw) - h) * MODEL_TURN
-		if kind == "car":
+		if kind == "car" or kind == "hatch":
 			for m in node.find_children("*", "MeshInstance3D", true, false):
 				(m as MeshInstance3D).set_instance_shader_parameter("hue", t.hue)
 				(m as MeshInstance3D).set_instance_shader_parameter("lamps", maxf(_night, 1.0 if sim.track.in_tunnel(t.s) else 0.0))
@@ -1367,6 +1474,8 @@ func _animate(delta: float) -> void:
 	for kind in _traffic_pool:
 		for i in range(used[kind], _traffic_pool[kind].size()):
 			(_traffic_pool[kind][i] as Node3D).visible = false
+	_animate_police(delta, cam_yaw)
+	_update_radar(delta)
 	# Nitro tanks bob on stepped frames (D-103, D-115).
 	for i in _pickup_nodes.size():
 		var pk: Node3D = _pickup_nodes[i]
@@ -1478,6 +1587,25 @@ func _build_hud() -> void:
 	# Gear lever in an H/L gate (D-110).
 	_gear_lever = GearLever.new()
 	gbox.add_child(_gear_lever)
+	# Radar detector (D-135): a little black box with a red LED.
+	var radar := PanelContainer.new()
+	var rsb := StyleBoxFlat.new()
+	rsb.bg_color = Color(0.04, 0.04, 0.06, 0.9)
+	rsb.set_border_width_all(3)
+	rsb.border_color = Color(0.35, 0.35, 0.4)
+	rsb.set_content_margin_all(6)
+	radar.add_theme_stylebox_override("panel", rsb)
+	radar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var rrow := HBoxContainer.new()
+	rrow.add_theme_constant_override("separation", 10)
+	_led = ColorRect.new()
+	_led.custom_minimum_size = Vector2(24, 24)
+	_led.color = Color(0.25, 0.04, 0.05)
+	rrow.add_child(_led)
+	rrow.add_child(UI.label(tr("RC_RADAR"), 24, UI.GREY))
+	radar.add_child(rrow)
+	gbox.add_child(radar)
+	gbox.move_child(radar, 0)
 	_nitro_label = UI.label(tr("RC_NITRO"), 24, UI.CYAN)
 	_nitro_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_nitro_label.modulate.a = 0.0
@@ -1612,6 +1740,9 @@ func _update_hud(delta: float) -> void:
 func _draw_dmd_dash(p) -> void:
 	if sim == null:
 		return
+	# Radar detector LED (D-135), top-left corner.
+	if _radar_led > 0.0:
+		p.disc(2, 2, 1.6, Dmd.RED)
 	const HUB := Vector2(17, 22)
 	const R := 16.0
 	const SEGS := 11

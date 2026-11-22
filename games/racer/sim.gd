@@ -105,6 +105,22 @@ const FLIP_TIME := 1.33          # roll-over animation (D-105: 1.5x faster than 
 const FLIP_SPEED := 30.0
 const FLIP_ROLL_DECEL := 6.0     # m/s^2 while rolling
 const FLIP_SLIDE_DECEL := 11.0   # m/s^2 sliding on its side after the roll
+## Speed traps and police (D-135). Passing a camera faster than 1.5x the
+## L-gear limit calls a police car from behind. It chases, pulls alongside and
+## swerves into the hero car (a T-bone). Crashing or slowing down while it is
+## close means BUSTED: it stops next to you, you're held, and a fine comes off
+## the score. Outrun it long enough and it gives up.
+const RADAR_RANGE := 450.0      # m at which the detector starts beeping
+const TRAP_FACTOR := 1.5        # x the L-gear top speed that triggers a chase
+const POLICE_BEHIND := 140.0    # m behind the player it appears
+const POLICE_EXTRA := 14.0      # m/s faster than the player while chasing (capped)
+const POLICE_GIVE_UP := 22.0    # s of chase before it gives up
+const POLICE_LOST := 260.0      # m behind: lost you
+const BUST_SPEED := 22.0        # m/s: slower than this with police close = busted
+const BUST_NEAR := 40.0         # m: "close"
+const BUST_TIME := 3.5          # s held at the roadside
+const FINE := 25000
+const ESCAPE_BONUS := 10000.0
 const FLIP_KINDS := ["palm", "rock", "lamp", "truck", "portal"]
 const SCRAPE_DRAG := 9.0        # m/s^2 lost scraping a tunnel wall (D-127)
 const NEAR_MISS_DX := 3.3
@@ -153,6 +169,10 @@ var perfect_t := 0.0           # s of perfect-shift pull left (D-116)
 var rpm := 0.0                 # 0..1 (tachometer)
 var shift_hold := 0.0          # s both flippers held (for the shift)
 var _shift_lock := false       # shifted: release both before shifting again
+var police: Dictionary = {}     # {s, x, v, state: chase|bust|leave, t} or empty (D-135)
+var busted_t := 0.0            # s left held by the police
+var radar := 0.0               # 0..1 closeness of the next speed camera (0 = none in range)
+var _trap_passed := -1.0       # s of the last camera judged
 var in_tunnel := false         # D-127
 var _scrape_t := 0.0
 var grace_t := 0.0             # s of traffic immunity left after a crash (D-125)
@@ -266,6 +286,8 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 	_drive(dt, left, right, gas, brake)
 	_update_boost(dt)
 	_update_grace(dt)
+	_update_traps()
+	_update_police(dt)
 	_update_traffic(dt)
 	_update_pickups()
 	_collide_objects()
@@ -353,6 +375,79 @@ func gear_pull() -> float:
 	return lerpf(GEAR_H_PULL_MIN, GEAR_H_PULL_MAX, clampf(rpm / 0.6, 0.0, 1.0))
 
 
+# --- speed traps + police (D-135) -----------------------------------------------------
+func _update_traps() -> void:
+	var trap := track.next_trap(s - 2.0)
+	radar = 0.0
+	if trap.is_empty():
+		return
+	var d: float = trap.s - s
+	if d < RADAR_RANGE:
+		radar = clampf(1.0 - d / RADAR_RANGE, 0.0, 1.0)
+	if d <= 0.0 and trap.s != _trap_passed:
+		_trap_passed = trap.s
+		var caught := v > l_top() * TRAP_FACTOR
+		events.append(["trap", caught])
+		if caught and police.is_empty() and busted_t <= 0.0:
+			police = {"s": s - POLICE_BEHIND, "x": x, "v": v, "state": "chase", "t": 0.0}
+			events.append(["police_spawn"])
+
+
+func _update_police(dt: float) -> void:
+	if police.is_empty():
+		return
+	police.t += dt
+	var ds: float = police.s - s            # < 0 behind us
+	match police.state:
+		"chase":
+			var target_v := minf(v + POLICE_EXTRA, nitro_speed() + 6.0)
+			if ds > -8.0:
+				target_v = v + 2.0           # alongside: match speed and swerve in
+			police.v = move_toward(police.v, target_v, 22.0 * dt)
+			# Line up beside the player, then swerve into it (the T-bone).
+			var side := 1.0 if x < 0.0 else -1.0
+			var tx: float = x + side * (2.6 if ds < -10.0 else 0.0)
+			police.x = move_toward(police.x, tx, (5.0 if ds < -10.0 else 7.0) * dt)
+			if spin_t <= 0.0 and grace_t <= 0.0 and absf(ds) < CAR_LEN * 0.8 					and absf(police.x - x) < CAR_W:
+				_crash("car", police.x - x)
+				events.append(["police_ram"])
+			var close := ds > -BUST_NEAR
+			if close and (spin_t > 0.0 or v < BUST_SPEED):
+				_bust()
+			elif police.t > POLICE_GIVE_UP or ds < -POLICE_LOST:
+				police.state = "leave"
+				_add_score(ESCAPE_BONUS)
+				events.append(["police_escape"])
+		"bust":
+			# Pull up beside the stopped player.
+			# Ease to a stop right beside the player (backing up if it overshot).
+			var want_v := clampf(-(ds - 1.0) * 1.5 + v, -6.0, maxf(v, 0.0) + 20.0)
+			police.v = move_toward(police.v, want_v, 25.0 * dt)
+			police.x = move_toward(police.x, x + (3.4 if x < 0.0 else -3.4), 4.0 * dt)
+			if busted_t <= 0.0 and spin_t <= 0.0:
+				police.state = "leave"
+		"leave":
+			police.v = move_toward(police.v, top_speed() * 1.1 if ds > -5.0 else 0.0, 15.0 * dt)
+			if absf(ds) > 300.0 or (ds < 0.0 and police.v < 1.0):
+				police = {}
+				return
+	police.s += police.v * dt
+
+
+func _bust() -> void:
+	police.state = "bust"
+	busted_t = BUST_TIME + maxf(spin_t, 0.0)
+	_end_drift()
+	if boosting:
+		boosting = false
+		boost_t = 0.0
+		events.append(["nitro_end"])
+	var fine := mini(FINE, score)
+	_score_f -= fine
+	score = int(_score_f)
+	events.append(["busted", fine])
+
+
 func _update_grace(dt: float) -> void:
 	grace_t = maxf(0.0, grace_t - dt)
 
@@ -390,6 +485,10 @@ func _update_pickups() -> void:
 
 func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	var want := (1.0 if right else 0.0) - (1.0 if left else 0.0)
+	if busted_t > 0.0:
+		busted_t -= dt
+		want = 0.0
+		v = move_toward(v, 0.0, BRAKE * 1.5 * dt)
 	if spin_t > 0.0:
 		# After the roll, the car slides on until it stops; the stop timer
 		# only runs once it has (D-106).
@@ -423,7 +522,7 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	# Throttle and brakes
 	var accel := 0.0
 	auto_braking = false
-	if state == State.OVER or spin_t > 0.0:
+	if state == State.OVER or spin_t > 0.0 or busted_t > 0.0:
 		throttle = 0.0
 		braking = false
 		accel = -(COAST_OVER if state == State.OVER else ((FLIP_SLIDE_DECEL if crash_slide else FLIP_ROLL_DECEL) if flipping else COAST_DRAG * 3.0))
