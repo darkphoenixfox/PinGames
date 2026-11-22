@@ -604,6 +604,22 @@ func test_exported_translation() -> void:
 func test_racer_sim() -> void:
 	var Sim = load("res://games/racer/sim.gd")
 	var dt := 1.0 / 60.0
+	# D-183: the cars set the clock: the easy car gets the most time, the hard car the least.
+	var times: Array = []
+	var bonuses: Array = []
+	var floors: Array = []
+	for i in Sim.CARS.size():
+		var c = Sim.new()
+		c.setup(7)
+		c.car = i
+		times.append(c.start_time())
+		bonuses.append(c.checkpoint_bonus())
+		c.checkpoints = 50
+		floors.append(c.checkpoint_bonus())
+	check(times[0] > times[1] and times[1] > times[2], "start clock: easy > normal > hard")
+	check(bonuses[0] > bonuses[1] and bonuses[1] > bonuses[2], "checkpoint time: easy > normal > hard")
+	check(floors[0] > floors[1] and floors[1] > floors[2] and floors[2] > 0.0, "checkpoint floor: easy > normal > hard")
+	check(times[1] == Sim.START_TIME and bonuses[1] == Sim.CHECKPOINT_BONUS, "normal car keeps the original clock")
 	var a = Sim.new()
 	a.setup(7)
 	var b = Sim.new()

@@ -448,6 +448,7 @@ func _new_sim() -> void:
 	sim.setup(7)
 	sim.freeze_time = _freeze_time
 	sim.car = _chosen_car
+	sim.time_left = sim.start_time()   # the car sets the clock (D-183)
 	sim.manual = _manual_locked
 	sim.autopilot = Config.cli.has("rc-autopilot")
 	if Config.cli.has("rc-time"):  # dev: short clock to test TIME UP

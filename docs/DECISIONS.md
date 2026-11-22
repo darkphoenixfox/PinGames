@@ -1658,3 +1658,15 @@
 - **Not changed:** one high-score table for all difficulties.
 - **Tests:** lives 5/3/2, speeds and caps rising with difficulty, Normal equal to the original constants, Hard never below one life, and a later pick keeping the level.
 - **Status:** Accepted
+
+### D-183 — Turbo Run cars set the clock
+- **Date:** 2026-11-22
+- **Decision (director):** the three cars also make the game easier or harder through the time on the clock. The numbers are Claude's proposal, for the director to tune.
+- **Values** (`Sim.CARS`: `time` and `bonus`):
+  - **EASY (red):** 55 s to start; checkpoints +6 s (+40 falling to +26).
+  - **NORMAL (yellow):** 45 s; +34 falling to +20 (unchanged).
+  - **HARD (blue):** 40 s; checkpoints −4 s (+30 falling to +16).
+  - The fall of 2 s per checkpoint is unchanged. The hard car is also the fastest, so it reaches checkpoints sooner, which partly makes up for its shorter clock.
+- **Where:** `Sim.start_time()` and `checkpoint_bonus()` read the chosen car. `_new_sim()` sets the clock after the car is applied, and `--rc-time` still overrides it. The car select panels gain a "START TIME 55 S" line between top speed and cornering.
+- **Tests:** start clock, checkpoint time and floor all ordered easy > normal > hard, and the normal car keeps the original numbers.
+- **Status:** Accepted

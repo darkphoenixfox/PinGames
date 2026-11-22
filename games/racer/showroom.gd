@@ -153,6 +153,9 @@ func _stats_box(i: int) -> Control:
 	var top := UI.label(tr("RC_STAT_TOP") % roundi(float(spec.top) * Sim.MPH), 36, UI.WHITE)
 	top.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(top)
+	var clock := UI.label(tr("RC_STAT_TIME") % roundi(float(spec.time)), 36, UI.WHITE)
+	clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(clock)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 8)

@@ -192,7 +192,7 @@ Rules:
 
 **Prototype (D-089), playable:**
 - **Road:** real 3D, not sprite scaling. It is an endless seeded road made of sections: straights, sweepers, medium curves and hairpins, with hills and dips. 4 lanes with kerbs, sand and grass, drawn with a 16-bit texel shader. Low-poly "PS2" props: palms, rocks, lamps and chevron signs on the outside of curves. Mountains on the horizon, sunset sky.
-- **Car select (D-122):** after Start, three cars spin on turntables: red EASY (259 km/h, high grip), yellow NORMAL (288 km/h) and blue HARD (317 km/h, slides wide). Their stats show under each car and on the DMD. Flippers choose, Launch/Start confirms, and after 15 s the highlighted car is taken.
+- **Car select (D-122):** after Start, three cars spin on turntables: red EASY (259 km/h, high grip), yellow NORMAL (288 km/h) and blue HARD (317 km/h, slides wide). Their stats (top speed, start time, cornering) show under each car and on the DMD. Flippers choose, Launch/Start confirms, and after 15 s the highlighted car is taken.
 - **Controls:**
   - Flippers steer.
   - **2+1:** throttle and braking are automatic. The car brakes by itself when a corner would throw it off and it isn't drifting.
@@ -204,7 +204,7 @@ Rules:
   - Steer *into* a corner at more than about 150 km/h to break loose. In manual mode, brake plus steer also starts a drift.
   - The car slides nose-in, keeps almost all its speed, smokes and scores drift points.
   - Letting go of the steering ends the drift and banks the points. Not drifting through a hairpin costs speed.
-- **Clock:** 45 s to start. A checkpoint every 2.3 km (D-101) adds time, from +34 s down to a minimum of +20 s. TIME UP ends the game, unless the coasting car still reaches the next checkpoint: then the time is added and the race goes on (D-103).
+- **Clock:** set by the car (D-183). EASY 55 s to start, NORMAL 45 s, HARD 40 s. A checkpoint every 2.3 km (D-101) adds time, falling 2 s per checkpoint: NORMAL from +34 s to a minimum of +20 s, EASY +6 s more (+40 to +26), HARD 4 s less (+30 to +16). TIME UP ends the game, unless the coasting car still reaches the next checkpoint: then the time is added and the race goes on (D-103).
 - **Traffic:** slower cars in the lanes, more after each checkpoint. Rear-ending one at speed spins you out, a light touch is a bump, and passing close is a NEAR MISS (+5,000).
 - **Roadside objects:** palms, rocks, lamps and signs crash you if you leave the road.
 - **Score:** distance, drift points, near misses, passes and checkpoints.

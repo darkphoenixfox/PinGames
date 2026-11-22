@@ -26,9 +26,11 @@ const NITRO_SPEED := 100.0     # m/s while nitro burns (normal car; see CARS)
 ## and grip (x steering authority, and the bend push is divided by it).
 ## Easy = slower but sticks to the road; hard = fastest but slides wide.
 const CARS := [
-	{"name": "RC_CAR_EASY", "hue": 0.0, "top": 72.0, "grip": 1.25},     # red
-	{"name": "RC_CAR_NORMAL", "hue": 0.16, "top": 80.0, "grip": 1.0},   # yellow
-	{"name": "RC_CAR_HARD", "hue": 0.62, "top": 88.0, "grip": 0.8},     # blue
+	# time: the starting clock (s); bonus: added to every checkpoint's time and
+	# to its floor (D-183), so the easy car gets more time, the hard car less.
+	{"name": "RC_CAR_EASY", "hue": 0.0, "top": 72.0, "grip": 1.25, "time": 55.0, "bonus": 6.0},     # red
+	{"name": "RC_CAR_NORMAL", "hue": 0.16, "top": 80.0, "grip": 1.0, "time": START_TIME, "bonus": 0.0},   # yellow
+	{"name": "RC_CAR_HARD", "hue": 0.62, "top": 88.0, "grip": 0.8, "time": 40.0, "bonus": -4.0},     # blue
 ]
 const DEFAULT_CAR := 1
 ## Shown speeds (D-147): the game's own speeds are arcade-fast; on screen
@@ -231,7 +233,13 @@ func speed_mph() -> int:
 
 
 func checkpoint_bonus() -> float:
-	return maxf(20.0, CHECKPOINT_BONUS - 2.0 * checkpoints)
+	var extra := float(CARS[car].bonus)
+	return maxf(20.0 + extra, CHECKPOINT_BONUS + extra - 2.0 * checkpoints)
+
+
+## The starting clock for the chosen car (D-183).
+func start_time() -> float:
+	return float(CARS[car].time)
 
 
 ## left/right = flippers, gas/brake = magna saves (manual mode only).
