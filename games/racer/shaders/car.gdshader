@@ -48,6 +48,15 @@ void vertex() {
 	mp = VERTEX;
 }
 
+// D-198: a box with soft edges (fading over `f` metres), so lamp light has
+// no hard rectangle round it.
+float soft_box(vec3 p, vec3 lo, vec3 hi, float f) {
+	vec3 q = vec3(abs(p.x), p.y, p.z);
+	vec3 a = smoothstep(lo - f, lo + f, q);
+	vec3 b = 1.0 - smoothstep(hi - f, hi + f, q);
+	return a.x * a.y * a.z * b.x * b.y * b.z;
+}
+
 float in_box(vec3 p, vec3 lo, vec3 hi) {
 	vec3 q = vec3(abs(p.x), p.y, p.z);
 	return step(lo.x, q.x) * step(q.x, hi.x) * step(lo.y, q.y) * step(q.y, hi.y) * step(lo.z, q.z) * step(q.z, hi.z);
@@ -81,9 +90,9 @@ void fragment() {
 	float redness = (c.r > 0.3 && c.r > c.g * 1.8 && c.r > c.b * 1.8) ? 1.0 : 0.0;
 	// Tail lamps (D-198): a dim running glow at night, full brightness braking
 	// (with a hot core), instead of one flat level.
-	float tail_mask = in_box(mp, tail_min, tail_max) * (tail_red_only ? redness : 1.0);
+	float tail_mask = soft_box(mp, tail_min, tail_max, 0.06) * (tail_red_only ? redness : 1.0);
 	float tail = tail_mask * max(lamps * 0.3, brake);
-	float head = in_box(mp, head_min, head_max) * lamps;
+	float head = soft_box(mp, head_min, head_max, 0.05) * lamps;
 	float top_k = clamp((mp.y - 0.3) / 0.9, 0.0, 1.0);   // the roof catches it most
 	EMISSION = ALBEDO * vec3(1.0, 0.62, 0.25) * overhead * (0.35 + 0.9 * top_k)
 		+ tail * vec3(1.0, 0.1, 0.06) * (0.4 + lum * 2.2) * 1.8

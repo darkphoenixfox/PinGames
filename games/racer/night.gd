@@ -165,6 +165,7 @@ static func add_car_lights(node: Node3D, kind: String, glow_tex: Texture2D, tail
 		t.size = Vector2(0.28, 0.28)
 		t.material = _mat(true, glow_tex)
 		t.material.albedo_color = Color(TAIL, 0)
+		_mats[_mats.size() - 1][1] = 0.6   # a soft halo, not a solid disc (D-198)
 		_tail_mesh = t
 	# Cars light their own lamp texels (car.gdshader, D-120); trucks (another
 	# model) keep glow dots.

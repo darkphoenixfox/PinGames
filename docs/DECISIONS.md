@@ -1862,3 +1862,11 @@
     - The hero's glows grow while braking (1.6×).
 - **Tests:** rams far apart don't add up, getting away clears the count, and running into the police car slows it without counting as a ram.
 - **Status:** Accepted (amends D-137, D-142, D-120)
+
+### D-199 — Tail lights: soft lamp light, glows on the lamps
+- **Date:** 2026-11-23
+- **Problem (director, with a screenshot):** the red tint round the hero's tail lamps was hard-edged, and the new glow circles weren't on the lamps.
+- **Soft lamp light:** `car.gdshader` lights the tail and head lamp areas through `soft_box`, which fades out over 6 cm (5 cm for the head lamps) instead of a hard box. The light spills softly onto the body.
+- **Glows on the lamps:** the glows from D-198 were placed in the car node's space by estimate. `_place_tails` now moves them onto the body mesh, in the model's own space, at the centre of the lamp area the shader lights (`LAMP_BOXES`, else the shader's defaults), 4 cm behind the mesh's rear surface. This is done for the hero, traffic cars, hatchbacks and the police car. They follow the night-lights holder's visibility.
+- **Size:** 0.6× when running and 0.95× when braking, at 60 % strength, so they read as a halo, not a solid disc.
+- **Status:** Accepted (amends D-198)

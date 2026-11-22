@@ -86,6 +86,37 @@ const TRUCK2_MODEL := "res://assets/models/racer/truck2.glb"
 const HATCH_MODEL := "res://assets/models/racer/hatchback.glb"
 const HATCH_TEXTURE := "res://assets/models/racer/hatchback_albedo.png"
 const HATCH_POOL := 8
+## Puts a car's night tail glows on its lamps (D-198): onto the body mesh, in
+## the model's own space, at the centre of the lamp area the car shader lights
+## (LAMP_BOXES, else the shader's defaults), just behind the rear surface.
+func _place_tails(car: Node3D, holder: Node3D, model: String) -> void:
+	var body: MeshInstance3D = null
+	for m in car.find_children("*", "MeshInstance3D", true, false):
+		if (m as MeshInstance3D).material_override is ShaderMaterial:
+			body = m
+			break
+	if body == null or body.mesh == null:
+		return
+	var lb: Dictionary = LAMP_BOXES.get(model, {})
+	var lo: Vector3 = lb.get("tail_min", Vector3(0.2, 0.7, -9.0))
+	var hi: Vector3 = lb.get("tail_max", Vector3(0.7, 0.9, -1.95))
+	var rear := body.mesh.get_aabb().position.z
+	var tails: Array = holder.get_meta("tails", [])
+	for i in tails.size():
+		var tl: Node3D = tails[i]
+		tl.reparent(body, false)
+		var sx := -1.0 if i == 0 else 1.0
+		tl.position = Vector3(sx * (lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5 + 0.04, rear - 0.04)
+		tl.scale = Vector3.ONE * 0.6
+	# They now live on the body: show them with the night lights holder.
+	holder.set_meta("tails", tails)
+	holder.visibility_changed.connect(func():
+		for tl in tails:
+			(tl as Node3D).visible = holder.visible)
+	for tl in tails:
+		(tl as Node3D).visible = holder.visible
+
+
 ## Rear lamp glow spots per model at night (D-198): x = half width, nose +Z.
 const TAIL_AT := {
 	"car": Vector3(0.62, 0.72, -2.2),
@@ -1085,6 +1116,7 @@ func _build_cars() -> void:
 	_root.add_child(_car)
 	_car_body = _car_instance(0.0)
 	_player_lights = Night.add_car_lights(_car_body, "car", _puff_texture(), TAIL_AT["car"])
+	_place_tails(_car_body, _player_lights, CAR_MODEL)
 	_add_plate(_car_body)
 	_car.add_child(_car_body)
 	_build_puffs()
@@ -1125,6 +1157,8 @@ func _build_cars() -> void:
 			_add_headlights(t, light_kind)
 			_add_blinkers(t, kind)
 			t.set_meta("night", Night.add_car_lights(t, light_kind, _puff_texture(), TAIL_AT.get(kind, Vector3.ZERO)))
+			if kind == "car" or kind == "hatch":
+				_place_tails(t, t.get_meta("night"), HATCH_MODEL if kind == "hatch" else CAR_MODEL)
 			t.visible = false
 			_root.add_child(t)
 			_traffic_pool[kind].append(t)
@@ -1358,6 +1392,7 @@ func _build_police() -> void:
 		_flashers.append(f)
 	# Night lights like the other cars (D-198).
 	_police_night = Night.add_car_lights(_police, "car", _puff_texture(), TAIL_AT["police"])
+	_place_tails(_police, _police_night, POLICE_MODEL)
 	# Siren light (D-198): the light bar lights the road and the cars around it,
 	# red and blue in turn, strongest at night: a coloured light each, plus a
 	# soft glow pool on the road (the fake-light look of the lamp pools).
@@ -1784,7 +1819,7 @@ func _animate(delta: float) -> void:
 		_player_lights.visible = _lamps > 0.0 and not (sim.spin_t > 0.0 and sim.flipping)
 		# Brake lights glow bigger than the running lights (D-198).
 		for tl in _player_lights.get_meta("tails", []):
-			(tl as Node3D).scale = Vector3.ONE * (1.6 if braking else 1.0)
+			(tl as Node3D).scale = Vector3.ONE * (0.95 if braking else 0.6)
 	var smoking := sim.drifting or sliding_out or _shift_smoke_t > 0.0 or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
 	_update_puffs(delta, smoking)
 	# Revving on the grid spits fire (D-116): pops while held high, and one as
