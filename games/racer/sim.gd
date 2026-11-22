@@ -92,6 +92,7 @@ const CAR_W := 1.95
 const SPIN_TIME := 1.3           # spin-out animation
 ## Every crash ends with the car stopped dead for CRASH_STOP s (D-101).
 const CRASH_STOP := 1.5
+const CRASH_GRACE := 3.0         # s immune to traffic once moving again (D-125)
 const RECOVER_X := Track.ROAD_HALF - 1.9   # outer lane: where an off-road crash is put back
 ## Hitting a big roadside object (D-098) rolls the car over sideways instead.
 const FLIP_TIME := 1.33          # roll-over animation (D-105: 1.5x faster than 2.0)
@@ -145,6 +146,7 @@ var perfect_t := 0.0           # s of perfect-shift pull left (D-116)
 var rpm := 0.0                 # 0..1 (tachometer)
 var shift_hold := 0.0          # s both flippers held (for the shift)
 var _shift_lock := false       # shifted: release both before shifting again
+var grace_t := 0.0             # s of traffic immunity left after a crash (D-125)
 var spin_t := 0.0              # crash timer (spin-out or flip)
 var flipping := false          # this crash is a roll-over (big obstacle)
 var crash_anim := 0.0          # animation length of the current crash (s)
@@ -243,6 +245,7 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 		right = false
 	_drive(dt, left, right, gas, brake)
 	_update_boost(dt)
+	_update_grace(dt)
 	_update_traffic(dt)
 	_update_pickups()
 	_collide_objects()
@@ -330,6 +333,10 @@ func gear_pull() -> float:
 	return lerpf(GEAR_H_PULL_MIN, GEAR_H_PULL_MAX, clampf(rpm / 0.6, 0.0, 1.0))
 
 
+func _update_grace(dt: float) -> void:
+	grace_t = maxf(0.0, grace_t - dt)
+
+
 func _update_boost(dt: float) -> void:
 	if boost_t <= 0.0:
 		return
@@ -369,6 +376,8 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 		crash_slide = flipping and spin_t <= CRASH_STOP and v > 0.5
 		if not crash_slide:
 			spin_t = maxf(spin_t - dt, 0.0)
+			if spin_t <= 0.0:
+				grace_t = CRASH_GRACE   # back on the move: traffic can't hit us yet
 			crash_slide = flipping and spin_t > 0.0 and spin_t <= CRASH_STOP and v > 0.5
 		want = 0.0
 		if stalled():
@@ -560,7 +569,7 @@ func _update_traffic(dt: float) -> void:
 			else:
 				_add_score(500.0)
 				events.append(["pass", t.id])
-		if state == State.RACE and spin_t <= 0.0 and absf(ds) < (CAR_LEN + tlen) * 0.5 				and absf(t.x - x) < (CAR_W + tw) * 0.5:
+		if state == State.RACE and spin_t <= 0.0 and grace_t <= 0.0 and absf(ds) < (CAR_LEN + tlen) * 0.5 				and absf(t.x - x) < (CAR_W + tw) * 0.5:
 			var rel: float = v - t.v
 			var big: bool = t.get("kind", "car") == "truck"
 			if t.v < 0.0 or (ds > 0.0 and rel > 22.0):

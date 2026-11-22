@@ -1255,6 +1255,8 @@ func _animate(delta: float) -> void:
 	var sliding_out := sim.state == Sim.State.OVER and sim.v > 3.0
 	_shift_smoke_t = maxf(0.0, _shift_smoke_t - delta)
 	_shift_flame_t = maxf(0.0, _shift_flame_t - delta)
+	# Immune after a crash (D-125): the car blinks, arcade style.
+	_car_body.visible = sim.grace_t <= 0.0 or fmod(_phase_t, 0.16) < 0.1
 	# Hero car's own lamps (D-120): night lights, and brake lights when braking.
 	var braking := sim.braking or sim.auto_braking or (sim.state == Sim.State.OVER and sim.v > 1.0)
 	for m in _car_body.find_children("*", "MeshInstance3D", true, false):

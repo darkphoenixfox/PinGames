@@ -1187,3 +1187,9 @@
   - **Nose angle:** the view points the nose along the actual direction of travel, atan(lat_v / v), clamped to ±0.45 rad; drifts keep their own angle. The car always faces where it goes.
   - **Taps:** short taps build so little sideways speed that the nose stays within one sprite step. The steering-delay workaround (D-114, D-117) and `STEER_YAW` are removed.
 - **Status:** Accepted
+
+### D-125 — Turbo Run: car crash animation on the DMD; 3 s of immunity after a crash
+- **Date:** 2026-11-22
+- **Crash animation (director: remove the blond-passenger animation, show the car crashing):** the side-view car races in with speed lines, hits a rock with a burst, cartwheels through the air on a ballistic arc in 4 stepped poses shedding debris, lands on its roof and smokes, while CRASH! shakes and blinks (1.9 s). The portraits from D-119 are removed.
+- **Immunity (director):** when the car starts moving again after a crash, it is immune to traffic for 3 s (`CRASH_GRACE`), so an oncoming car can't hit it straight away. Roadside objects still count. The hero car blinks while immune.
+- **Status:** Accepted

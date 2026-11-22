@@ -859,6 +859,12 @@ func test_racer_sim() -> void:
 		tr.step(dt, false, false)
 	check(absf(stopped_for - Sim.CRASH_STOP) < 0.05 and tr.v > 0.0,
 		"a crash ends with the car stopped for %.2f s, then it drives on" % stopped_for)
+	# Then 3 s of immunity to traffic (D-125).
+	check(tr.grace_t > 2.0, "after a crash the car is immune to traffic for a while")
+	tr.traffic = [{"id": 9, "s": tr.s + 1.0, "x": tr.x, "lane": 2, "v": -25.0, "hue": 0.0, "weave": 0.0,
+		"last_ds": 1.0, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W}]
+	tr.step(dt, false, false)
+	check(tr.spin_t <= 0.0, "an immune car drives through traffic")
 	# Traffic keeps to its side (D-099): right lanes go our way, left lanes come
 	# at us; some of it is trucks.
 	var tf = Sim.new()

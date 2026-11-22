@@ -8,7 +8,7 @@ const DURATIONS := {
 	"near_miss": 1.0,
 	"nitro": 1.1,
 	"shift": 0.7,
-	"crash": 2.0,
+	"crash": 1.9,
 	"checkpoint": 1.6,
 	"drift": 1.0,
 	"perfect": 1.1,
@@ -135,104 +135,88 @@ func shift(p, t: float, high: bool, label: String, h_txt: String, l_txt: String)
 	p.text(gear, 100, 9, 2, c2)
 
 
-## Crash (D-119): after a quick impact burst, the blond passenger yells at the
-## driver, who sits there in his sunglasses, sweating. Original pixel portraits.
-## Palette keys: k outline, s skin, S skin shade, y blond, Y blond shade,
-## h dark hair, g sunglasses, G lens shine, w white, b eye blue, r lips/mouth,
-## p pink top, c white shirt, R red jacket.
-const LADY := [
-	"....kkkkkkkk....",
-	"...kyyyyyyyyk...",
-	"..kyyyYyyyyyyk..",
-	".kyyyyyyyyyYyyk.",
-	".kyyssssssssyyk.",
-	".kyskkssssskkyk.",
-	"kyysskksskkssyyk",
-	"kyysswbsswbssyyk",
-	"kyyssssssssssyyk",
-	"kyyssssSSssssyyk",
-	"kyyyskkkkkksyyyk",
-	"kyyyskwwwwksyyyk",
-	"kyyyskrrrrksyyyk",
-	"kyyyyskkkksyyyyk",
-	"kyyyykkssskkyyyk",
-	"kYyypppssspppyYk",
-	".kpppppppppppppk",
-	"kppppppppppppppk",
+## Crash (D-125): the car races into a rock, the impact bursts, it cartwheels
+## through the air in stepped poses shedding debris, lands on its roof and
+## smokes, while CRASH! blinks.
+const ROCK := [
+	"..kkkk..",
+	".kggggk.",
+	"kgGggggk",
+	"kggggggk",
+	"kkkkkkkk",
 ]
-const LADY_SHUT := [   # mouth rows when closed (rows 10-13), still cross
-	"kyyysssssssssyyk",
-	"kyyysskkkkssyyyk",
-	"kyyyyssssssyyyyk",
-	"kyyyyysssssyyyyk",
-]
-const DRIVER := [
-	"....kkkkkkk.....",
-	"...khhhhhhhk....",
-	"..khhhhhhhhhk...",
-	"..khhhhhhhhhhk..",
-	"..khsshhhhsshk..",
-	"..ksssssssssssk.",
-	".kgggggggggggggk",
-	".kgGggggsgGggggk",
-	"..kgggggsgggggk.",
-	"..kssssSSsssssk.",
-	"..ksssssssssssk.",
-	"...ksskkkkkssk..",
-	"...ksssssssssk..",
-	"....kkssssskk...",
-	"...cccksssskccc.",
-	"..RRcccwwwcccRR.",
-	".RRRRcccwcccRRRR",
-	"RRRRRRcccccRRRRR",
-]
-const FACE_COLS := {
-	"k": Color(0.05, 0.04, 0.08), "s": Color("f2b48c"), "S": Color("c98a66"),
-	"y": Color("ffe066"), "Y": Color("d9a830"), "h": Color("4a2c1a"),
-	"g": Color(0.06, 0.06, 0.1), "G": Color("9fe8ff"), "w": Color(1, 1, 1),
-	"b": Color("3f8cff"), "r": Color("e8304a"), "p": Color("ff6fb0"),
-	"c": Color(0.95, 0.95, 0.95), "R": Color("d42828"),
-}
 
 
-func _face(p, rows: Array, x: float, y: float) -> void:
-	for r in rows.size():
-		var row: String = rows[r]
-		for c in row.length():
-			var k := row[c]
-			if k != ".":
-				p.dot(x + c, y + r, FACE_COLS[k])
+func _car_pose(p, pose: int, x: float, y: float) -> void:
+	# 0 upright, 1 nose down (vertical), 2 on its roof, 3 nose up (vertical)
+	match pose:
+		0:
+			_car(p, x, y, RED)
+		2:
+			for r in CAR.size():
+				for c in CAR[r].length():
+					var k: String = CAR[r][c]
+					if k != "0":
+						p.dot(x + c, y + 4 - r, RED if k == "1" else (CYAN if k == "2" else DARK.lightened(0.3)))
+		_:
+			# Side-on vertical: a tall narrow body, wheels on one side.
+			for r in 12:
+				var rr: int = r if pose == 1 else 11 - r
+				p.block(x + 4, y - 6 + rr, 4, 1, RED)
+				p.dot(x + 3, y - 6 + rr, CYAN if rr > 3 and rr < 8 else RED)
+			for w in [1, 9]:
+				var wy: int = w if pose == 1 else 11 - w
+				p.dot(x + 8, y - 6 + wy, DARK.lightened(0.3))
+				p.dot(x + 8, y - 5 + wy, DARK.lightened(0.3))
 
 
 func crash(p, t: float, title: String) -> void:
-	if t < 0.3:   # the impact first
-		_burst(p, 64, 16, t / 0.3, 40, 60.0)
+	var rock_x := 70.0
+	for r in ROCK.size():
+		var row: String = ROCK[r]
+		for c in row.length():
+			var k := row[c]
+			if k == "k":
+				p.dot(rock_x + c, 24 + r, DARK.lightened(0.15))
+			elif k == "g":
+				p.dot(rock_x + c, 24 + r, DIM)
+			elif k == "G":
+				p.dot(rock_x + c, 24 + r, WHITE * 0.7)
+	p.line(0, 29, 127, 29, DARK.lightened(0.1))   # the ground
+	const HIT := 0.35
+	if t < HIT:
+		# Racing in from the left with speed lines.
+		var x := lerpf(-14.0, rock_x - 12.0, t / HIT)
+		for i in 5:
+			var ly := 22.0 + i
+			p.line(x - 10 - (i * 7) % 12, ly, x - 2, ly, DIM)
+		_car(p, x, 23, RED)
 		return
-	var tt := t - 0.3
-	# The lady: shaking with rage, mouth snapping open and shut.
-	var shake := 1.0 if int(tt * 16.0) % 2 == 0 else -1.0
-	var yelling := int(tt * 8.0) % 2 == 0
-	var lady := LADY.duplicate()
-	if not yelling:
-		for i in 4:
-			lady[10 + i] = LADY_SHUT[i]
-	_face(p, lady, 44 + shake, 8)
-	# Anger mark: a red cross-vein popping by her head.
-	if int(tt * 6.0) % 2 == 0:
-		for d in [Vector2(0, 0), Vector2(2, 0), Vector2(1, -1), Vector2(1, 1), Vector2(0, 2), Vector2(2, 2)]:
-			p.dot(40 + d.x, 5 + d.y, RED)
-	# Shout lines towards the driver.
-	if yelling:
-		for i in 3:
-			p.line(62, 17 + i * 3 - 3, 66, 16 + i * 4 - 4, WHITE)
-	# The driver, unmoved behind his sunglasses, with a sweat drop sliding down.
-	_face(p, DRIVER, 70, 8)
-	var dy := fmod(tt * 14.0, 10.0)
-	p.dot(86, 9 + dy, CYAN)
-	p.dot(86, 10 + dy, CYAN)
-	p.dot(85, 10 + dy, WHITE)
-	if tt > 0.2:
-		p.text(title, 2, 12, 1, RED if _blink(tt, 0.2) else WHITE)
+	var tt := t - HIT
+	_burst(p, rock_x, 24, clampf(tt / 0.5, 0.0, 1.0), 30, 40.0)
+	# Cartwheel: a ballistic arc over the rock, 4 poses per turn, ~10 fps.
+	const AIR := 0.9
+	var k := clampf(tt / AIR, 0.0, 1.0)
+	var cx := lerpf(rock_x - 10.0, 104.0, k)
+	var cy := 23.0 - 20.0 * 4.0 * k * (1.0 - k)
+	var pose := (int(tt * 10.0) % 4) if k < 1.0 else 2
+	_car_pose(p, pose, cx, cy)
+	# Debris flying off.
+	for i in 8:
+		var dk := clampf(tt / 0.8, 0.0, 1.0)
+		var dx := rock_x + (i - 3.5) * 7.0 * dk + i
+		var dy := 24.0 - 14.0 * 4.0 * dk * (1.0 - dk) * (0.5 + (i % 3) * 0.3)
+		if dk < 1.0:
+			p.dot(dx, dy, ORANGE if i % 2 == 0 else WHITE)
+	# Landed upside down: smoke curls up.
+	if k >= 1.0:
+		for i in 6:
+			var sy := 22.0 - fmod(tt * 12.0 + i * 3.0, 18.0)
+			var sx := cx + 6 + sin(tt * 4.0 + i) * 2.0
+			p.dot(sx, sy, DIM if i % 2 == 0 else Color(0.5, 0.5, 0.55))
+	if tt > 0.1:
+		var shake := 0.0 if tt > 0.5 else (2.0 if int(tt * 30.0) % 2 == 0 else -2.0)
+		p.text(title, 4 + shake, 2, 2, RED if _blink(tt, 0.15) else WHITE)
 
 
 ## Checkpoint: a waving chequered flag and the time bonus.
