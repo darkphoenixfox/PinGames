@@ -47,8 +47,10 @@ func enter() -> void:
 	add_table(UI.fill(UI.DARK))
 	var col := UI.vstack(40)
 	add_table(col)
-	col.add_child(UI.label(tr("APP_TITLE"), 130, UI.YELLOW))
-	col.add_child(UI.label(tr("PICKER_TITLE") if locked_game.is_empty() else tr("PICKER_PLAY_AGAIN"), 60))
+	# Shell text in the shell's styled fonts (D-186): gold marquee titles, chrome headings.
+	col.add_child(UI.styled_label(tr("APP_TITLE"), UI.SHELL_TITLE_FONT, 3))
+	col.add_child(UI.styled_label(tr("PICKER_TITLE") if locked_game.is_empty() else tr("PICKER_PLAY_AGAIN"),
+		UI.SHELL_TEXT_FONT, 1))
 	col.add_child(UI.spacer(10))
 	_labels.clear()
 	for id in _ids:
@@ -66,10 +68,10 @@ func enter() -> void:
 		col.add_child(item)
 		_labels.append(item)
 	col.add_child(UI.spacer(30))
-	_hiscore = UI.label("", 46, UI.WHITE)
+	_hiscore = UI.styled_label("", UI.SHELL_TEXT_FONT, 1)
 	col.add_child(_hiscore)
 	col.add_child(UI.spacer(60))
-	_credits = UI.label("", 52, UI.GREEN)
+	_credits = UI.styled_label("", UI.SHELL_TITLE_FONT, 1)
 	col.add_child(_credits)
 	# Windows Sticky/Filter Keys shortcuts can freeze the Shift flippers (D-070).
 	for w in SystemChecks.warnings():
@@ -94,7 +96,7 @@ func enter() -> void:
 	add_backglass(_bg_logo)
 	_bg_art = Registry.backglass_rect(PlaceholderTexture2D.new())
 	add_backglass(_bg_art)
-	_bg_title = UI.label("", 170, UI.YELLOW)
+	_bg_title = UI.styled_label("", UI.SHELL_TITLE_FONT, 4)
 	_bg_title.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_bg_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_bg_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -160,8 +162,8 @@ func _show_quit_confirm() -> void:
 	if _quit_overlay == null:
 		_quit_overlay = add_table(UI.fill(Color(0, 0, 0, 0.88))) as Control
 		var col := UI.vstack(50)
-		col.add_child(UI.label(tr("QUIT_CONFIRM"), 110, UI.YELLOW))
-		var hint := UI.label(tr("QUIT_HINT"), 56, UI.WHITE)
+		col.add_child(UI.styled_label(tr("QUIT_CONFIRM"), UI.SHELL_TITLE_FONT, 2))
+		var hint := UI.styled_label(tr("QUIT_HINT"), UI.SHELL_TEXT_FONT, 1)
 		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		col.add_child(hint)
 		_quit_overlay.add_child(col)

@@ -1683,3 +1683,16 @@
 - **Layout:** the turntables move left of centre (`CAR_X` −1.9 m). Each car gets a card on the right half of the TABLE (x 662, 384 px wide), centred on its own row, so nothing overlaps.
 - **Card:** a dark panel with a 4 px border and a soft glow in the car's colour (green EASY, yellow NORMAL, red HARD). The name sits at the top, then TOP SPEED, CORNERING and TIME, each a bar of 5 rounded segments with its value (mph, start seconds). Speed maps 72–88 m/s to 2–5 segments, time 40–55 s to 2–5, and cornering keeps its grip mapping. The chosen card is full colour; the others are darkened (modulate), not made see-through, so the sunset doesn't wash them out.
 - **Status:** Accepted
+
+### D-186 — Shell text in styled fonts
+- **Date:** 2026-11-22
+- **Decision (director):** the main attract mode's text, other than the logos, looked too simple and unappealing; use the better fonts.
+- **Two shell styles**, made by `gen_title_fonts.py` like the game titles (D-062):
+  - `marquee`: gold chrome with a light band and a red-brown 3D drop, for titles and prompts.
+  - `chrome`: silver-blue chrome split at the horizon, for headings, scores and status.
+  - Use them as `UI.SHELL_TITLE_FONT` / `UI.SHELL_TEXT_FONT`. One scale step is about 47 px.
+- **Picker:** PINGAMES in marquee ×3, SELECT GAME / PLAY AGAIN and the high-score line in chrome ×1, the credits status in marquee ×1, the backglass fallback title in marquee ×4, and the quit confirm in marquee / chrome. The small button hint and the Windows warnings stay in PinPixel.
+- **Attract:**
+  - **Title page:** PINGAMES in marquee ×3, then the games as their logos (no longer coloured text). PRESS START is in marquee ×2 and blinks (modulate.a, D-096); the credits are in chrome. The backglass shows PINGAMES in marquee ×5.
+  - **High-score pages:** the game's logo, HIGH SCORES in marquee ×2, the leader in gold, and the rest in chrome. A game without backglass art shows its title in its own styled font.
+- **Status:** Accepted

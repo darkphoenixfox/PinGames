@@ -13,6 +13,7 @@ var _dmd_time := 0.0
 var _dmd_line := 0
 var _page_nodes: Array[Node] = []
 var _dmd_lines: Array = []  # [text, color]
+var _blink: Control   # PRESS START on the title page (blinks with modulate.a, D-096)
 
 
 func allows_operator_combo() -> bool:
@@ -40,6 +41,8 @@ func on_action(action: StringName, pressed: bool) -> void:
 
 func _process(delta: float) -> void:
 	_page_time += delta
+	if is_instance_valid(_blink):
+		_blink.modulate.a = 1.0 if fmod(_page_time, 1.0) < 0.65 else 0.15
 	_dmd_time += delta
 	if _page_time >= PAGE_SECONDS:
 		_next_page()
@@ -66,16 +69,17 @@ func _next_page() -> void:
 
 
 func _title_page() -> void:
+	# Shell text in the shell's styled fonts (D-186); the games as their logos.
 	var col := UI.vstack(60)
-	col.add_child(UI.label(tr("APP_TITLE"), 150, UI.YELLOW))
+	col.add_child(UI.styled_label(tr("APP_TITLE"), UI.SHELL_TITLE_FONT, 3))
 	for id in Registry.ids():
-		var info := Registry.info(id)
-		col.add_child(UI.label(tr(info.title_key), 64, info.get("color", UI.CYAN)))
-	col.add_child(UI.spacer(80))
-	col.add_child(UI.label(tr("ATTRACT_PRESS_START"), 70, UI.WHITE))
-	col.add_child(UI.label(Credits.status_text(), 52, UI.GREEN))
+		col.add_child(_game_title(id, 380.0))
+	col.add_child(UI.spacer(40))
+	_blink = UI.styled_label(tr("ATTRACT_PRESS_START"), UI.SHELL_TITLE_FONT, 2)
+	col.add_child(_blink)
+	col.add_child(UI.styled_label(Credits.status_text(), UI.SHELL_TEXT_FONT, 1))
 	_page_nodes.append(add_table(col))
-	var bg := UI.label(tr("APP_TITLE"), 240, UI.YELLOW)
+	var bg := UI.styled_label(tr("APP_TITLE"), UI.SHELL_TITLE_FONT, 5)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_page_nodes.append(add_backglass(bg))
@@ -88,13 +92,15 @@ func _scores_page(id: String) -> void:
 	var accent: Color = info.get("color", UI.CYAN)
 	var table := HighScores.get_table(id)
 	var col := UI.vstack(26)
-	col.add_child(UI.label(tr(info.title_key), 96, accent))
-	col.add_child(UI.label(tr("ATTRACT_HIGH_SCORES"), 60, UI.WHITE))
+	col.add_child(_game_title(id, 520.0))
+	col.add_child(UI.spacer(10))
+	col.add_child(UI.styled_label(tr("ATTRACT_HIGH_SCORES"), UI.SHELL_TITLE_FONT, 2))
 	col.add_child(UI.spacer(30))
 	for i in table.size():
 		var row: Array = table[i]
 		var text := "%2d.  %s   %s" % [i + 1, row[0], ScoreTable.format_score(int(row[1]))]
-		col.add_child(UI.label(text, 56 if i > 0 else 66, UI.YELLOW if i == 0 else UI.WHITE))
+		# The leader in gold, the rest in chrome.
+		col.add_child(UI.styled_label(text, UI.SHELL_TITLE_FONT if i == 0 else UI.SHELL_TEXT_FONT, 1))
 	_page_nodes.append(add_table(col))
 	var fill := UI.fill(accent.darkened(0.85))
 	_page_nodes.append(add_backglass(fill))
@@ -102,7 +108,7 @@ func _scores_page(id: String) -> void:
 	if art:
 		_page_nodes.append(add_backglass(art))
 	else:
-		var bg := UI.label(tr(info.title_key), 180, accent)
+		var bg := UI.styled_label(tr(info.title_key), str(info.get("font", UI.SHELL_TITLE_FONT)), 4)
 		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 		bg.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		bg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -111,6 +117,19 @@ func _scores_page(id: String) -> void:
 	for i in mini(3, table.size()):
 		_dmd_lines.append(["%d. %s %s" % [i + 1, table[i][0], ScoreTable.format_score(int(table[i][1]))],
 			Dmd.YELLOW if i == 0 else Dmd.WHITE])
+
+
+## A game's logo (D-088), or its title in its own styled font.
+func _game_title(id: String, logo_h: float) -> Control:
+	var info := Registry.info(id)
+	if info.has("logo") and ResourceLoader.exists(str(info.logo)):
+		var r := TextureRect.new()
+		r.texture = load(info.logo)
+		r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		r.custom_minimum_size = Vector2(0, logo_h * 0.5)
+		return r
+	return UI.styled_label(tr(info.title_key), str(info.get("font", UI.SHELL_TITLE_FONT)), 2)
 
 
 func _show_dmd_line() -> void:

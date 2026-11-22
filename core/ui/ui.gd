@@ -35,6 +35,12 @@ static func label(text: String, size: int, color: Color = WHITE,
 
 ## Label in a per-game styled title font (D-062): colours are baked into the
 ## font, so no tint/outline; `scale` is the whole-number pixel multiple.
+## The shell's own styled fonts (D-186): gold marquee for titles and prompts,
+## silver chrome for headings, scores and status lines.
+const SHELL_TITLE_FONT := "marquee"
+const SHELL_TEXT_FONT := "chrome"
+
+
 static func styled_label(text: String, style: String, scale: int = 2,
 		align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_CENTER) -> Label:
 	var l := Label.new()
