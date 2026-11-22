@@ -49,6 +49,7 @@ const MODEL_TURN := Basis(Vector3.UP, PI)
 const SPRITE_ANGLES := 32
 ## Nose turn at full steer (rad): ~1.5 sprite steps, visible on straights.
 const SHIFT_NAG := 3.0      # s at the redline in L before the big SHIFT (D-116)
+const DIAL_R := 150.0        # tachometer and speedometer radius (D-149)
 const SPEEDO_MAX := 220      # mph on the speedometer dial (D-147; nitro on the fastest car ~206)
 const MAX_TRAVEL_YAW := 0.45   # rad: the most the nose follows sideways travel (D-124)
 ## Crash animations (D-098): stepped at ANIM_FPS; a roll-over shows FLIP_FRAMES
@@ -1654,7 +1655,7 @@ func _build_hud() -> void:
 	for i in 9:
 		if i % 2 == 0:
 			tl.append([i / 8.0, str(i)])
-	_tacho.setup(120.0, 16, tl, 7.0 / 8.0, UI.YELLOW)
+	_tacho.setup(DIAL_R, 16, tl, 7.0 / 8.0, UI.YELLOW)   # same size as the speedo (D-149)
 	# Perfect-shift band, just before the red (D-116).
 	_tacho.good_from = _tach_of(Sim.PERFECT_FROM)
 	_tacho.good_to = _tach_of(Sim.PERFECT_TO)
@@ -1668,9 +1669,6 @@ func _build_hud() -> void:
 	var gbox := UI.vstack(6)
 	gbox.alignment = BoxContainer.ALIGNMENT_END
 	gbox.custom_minimum_size.x = 200
-	var gl := UI.label(tr("RC_GEAR"), 24, UI.GREY)
-	gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	gbox.add_child(gl)
 	# Gear lever in an H/L gate (D-110).
 	_gear_lever = GearLever.new()
 	gbox.add_child(_gear_lever)
@@ -1694,7 +1692,7 @@ func _build_hud() -> void:
 	var sl := []
 	for k in range(0, SPEEDO_MAX + 1, 40):   # mph (D-147)
 		sl.append([k / float(SPEEDO_MAX), str(k)])
-	_speedo.setup(170.0, 24, sl, 2.0, UI.CYAN)
+	_speedo.setup(DIAL_R, 24, sl, 2.0, UI.CYAN)
 	sbox.add_child(_speedo)
 	_speed_label = UI.label("0", 60, UI.WHITE)
 	_speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

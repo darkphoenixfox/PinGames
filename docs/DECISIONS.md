@@ -1373,3 +1373,8 @@
 - **Date:** 2026-11-22
 - **Decision (director):** when the game opens in the windowed (dev) layout, the TABLE window sits centred on the monitor, and the BACKGLASS (with the DMD below it, or inside it on 2-screen settings) stacks to its left, sized to fit the space there. Cabinet layouts are unchanged.
 - **Status:** Accepted
+
+### D-149 — Turbo Run dashboard: plain gear lever, equal dials
+- **Date:** 2026-11-22
+- **Decision (director):** the gear lever loses its background plate and the GEAR label. Only the outlined slot, the H/L marks and the knob remain. The tachometer and speedometer are now the same size (radius 150, `DIAL_R`).
+- **Status:** Accepted

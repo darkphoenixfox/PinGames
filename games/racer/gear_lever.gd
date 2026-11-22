@@ -59,11 +59,9 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	# Plate
-	draw_rect(Rect2(0, 0, W, H), Color(0.05, 0.07, 0.12, 0.85))
-	draw_rect(Rect2(0, 0, W, H), UI.WHITE, false, 6.0)
+	# No plate (D-149): just the gate slot, outlined so it reads on the road.
 	var cx := W * 0.5 - 10.0
-	# Gate slot with stops at both ends
+	draw_rect(Rect2(cx - 12, SLOT_TOP - 12, 24, SLOT_BOTTOM - SLOT_TOP + 24), UI.GREY)
 	draw_rect(Rect2(cx - 9, SLOT_TOP - 9, 18, SLOT_BOTTOM - SLOT_TOP + 18), Color(0.0, 0.0, 0.02))
 	for y in [SLOT_TOP, SLOT_BOTTOM]:
 		draw_rect(Rect2(cx + 16, y - 3, 14, 6), UI.GREY)
