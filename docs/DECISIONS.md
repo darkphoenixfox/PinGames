@@ -1288,3 +1288,8 @@
 - **Police lights on screen (director):** while the police is within about 125 m, red and blue glows wash in from the left and right screen edges in time with its light bar, up to 45 % within 25 m (additive, under the HUD).
 - **Speed cameras visible (director):** they were drawn, but at 4.2 m by 1 m they vanished next to the 11 m palms. They are now 8 m tall, oversized like the other sprites, and 1.6 m from the kerb.
 - **Status:** Accepted
+
+### D-138 — Debug O: spawn a police car
+- **Date:** 2026-11-22
+- **Decision (director):** a debug cheat to spawn the police. The director first asked for P, which is already the global pause key (D-057), then chose another letter. DebugTools' O ("officer") emits `spawn_police` (debug builds only). Turbo Run starts a chase straight away, with the police 140 m behind and POLICE! shown, if a race is running and no police car is active.
+- **Status:** Accepted

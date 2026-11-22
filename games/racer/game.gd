@@ -1913,6 +1913,13 @@ func _exit_tree() -> void:
 ## Debug builds only (DebugTools, D-057): F freezes / unfreezes the race clock
 ## (D-118). Shown on the HUD so it isn't left on by accident.
 func _on_debug_action(action: StringName) -> void:
+	if action == &"spawn_police":
+		# Debug O (D-138): a police car comes from behind right away.
+		if sim != null and _phase == "race" and sim.state == Sim.State.RACE and sim.police.is_empty():
+			sim.police = {"s": sim.s - Sim.POLICE_BEHIND, "x": sim.x, "v": sim.v, "state": "chase", "t": 0.0}
+			_center_message(tr("RC_POLICE"), 1.4)
+			Dmd.flash(tr("RC_POLICE"), 1.4, Dmd.RED)
+		return
 	if action == &"skip_stage":
 		_debug_skip_to_night()
 		return

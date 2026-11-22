@@ -6,6 +6,7 @@
 ##      every press/release/focus change in user://input_log.txt (D-069)
 ##   C  game-specific "clear the level" (Tilt Breaker: instant level complete)
 ##   U  game-specific: Tilt Breaker drops the next power-up capsule over the ship
+##   O  game-specific "officer" (Turbo Run: a police car comes from behind, D-138)
 ##   S  game-specific "skip stage" (Turbo Run: jump to stage 5, night, D-121)
 ##   F  game-specific debug action (`debug_action` signal, e.g. Tilt Breaker's
 ##      piercing plasma that destroys everything in a vertical line; Turbo Run
@@ -53,6 +54,10 @@ func _input(event: InputEvent) -> void:
 		KEY_U:
 			if not get_tree().paused:
 				debug_action.emit(&"powerup")
+			get_viewport().set_input_as_handled()
+		KEY_O:
+			if not get_tree().paused:
+				debug_action.emit(&"spawn_police")
 			get_viewport().set_input_as_handled()
 		KEY_S:
 			if not get_tree().paused:
