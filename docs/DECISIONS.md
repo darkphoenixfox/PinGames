@@ -1139,3 +1139,9 @@
   - **SHIFT label:** the small blinking SHIFT above the gear lever is removed. The big SHIFT nag after 3 s at the redline (D-116) stays.
   - **Crash animation:** after a short impact burst, the DMD shows original pixel portraits. A blond passenger in a pink top yells at the driver: angry brows, a mouth snapping open and shut, a shaking head, an anger mark and shout lines. The driver, in a red jacket and black sunglasses, sits there with a sweat drop sliding down. CRASH! blinks on the left. The animation runs 2.0 s.
 - **Status:** Accepted
+
+### D-120 — Turbo Run: gear-dependent handling; car lamps light their own texture
+- **Date:** 2026-11-22
+- **Handling (director):** in H the car slides wider in bends (centrifugal push × 1.3). In L it grips (push × 0.85, steering authority × 1.3), so you downshift to hold the inside line.
+- **Car lamps (director: the red circles were misplaced; light up the car's texture instead):** `car.gdshader` adds emission to the model's own tail-light and headlight texels. They are picked by model-space boxes (rear |x| 0.2–0.7, y 0.7–0.9; front |x| 0.45–0.82, y 0.55–0.8) and scaled by texel brightness. Instance uniforms: `lamps` (night level) and `brake`. The hero car's brake lights come on when braking, auto-braking or coasting out after TIME UP. Traffic cars get `lamps` at night. The billboard glow dots are dropped for cars; trucks, a different model, keep them.
+- **Status:** Accepted

@@ -621,6 +621,32 @@ func test_racer_sim() -> void:
 		slow.step(dt, false, true)
 		fast.step(dt, false, true)
 	check(slow.x < 2.0 and fast.x > 6.0, "sideways movement scales with speed (%.1f m slow, %.1f m fast)" % [slow.x, fast.x])
+	# Handling by gear (D-120): in the same bend at the same speed, H drifts
+	# further to the outside than L.
+	var hg = Sim.new()
+	hg.setup(7)
+	hg.track.ensure(8000.0)
+	var bend := -1.0
+	for i in 4000:
+		if absf(hg.track.curvature(i * 2.0)) > 1.0 / 160.0:
+			bend = i * 2.0
+			break
+	var lg = Sim.new()
+	lg.setup(7)
+	lg.track.ensure(8000.0)
+	for sim_g in [hg, lg]:
+		sim_g.state = Sim.State.RACE
+		sim_g.manual = true
+		sim_g.s = bend
+	hg.gear = Sim.Gear.HIGH
+	for i in 30:
+		hg.v = 44.0
+		lg.v = 44.0
+		hg.step(dt, false, false, true)
+		lg.step(dt, false, false, true)
+	var cb: float = hg.track.curvature(bend)
+	check(bend > 0.0 and hg.x * signf(cb) > lg.x * signf(cb) + 0.5,
+		"high gear slides wider in a bend than low (%.1f vs %.1f m)" % [hg.x * signf(cb), lg.x * signf(cb)])
 	# Perfect start (D-118): revs in the perfect band at GO launch the car.
 	var good = Sim.new()
 	good.setup(7)

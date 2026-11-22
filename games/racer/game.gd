@@ -1175,6 +1175,13 @@ func _animate(delta: float) -> void:
 	var sliding_out := sim.state == Sim.State.OVER and sim.v > 3.0
 	_shift_smoke_t = maxf(0.0, _shift_smoke_t - delta)
 	_shift_flame_t = maxf(0.0, _shift_flame_t - delta)
+	# Hero car's own lamps (D-120): night lights, and brake lights when braking.
+	var braking := sim.braking or sim.auto_braking or (sim.state == Sim.State.OVER and sim.v > 1.0)
+	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
+		var gi := m as MeshInstance3D
+		if gi.material_override != null:   # the body, not its outline shell
+			gi.set_instance_shader_parameter("lamps", _night)
+			gi.set_instance_shader_parameter("brake", 1.0 if braking else 0.0)
 	if _player_lights != null:
 		_player_lights.visible = _night > 0.0 and not (sim.spin_t > 0.0 and sim.flipping)
 	var smoking := sim.drifting or sliding_out or _shift_smoke_t > 0.0 or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
@@ -1229,6 +1236,7 @@ func _animate(delta: float) -> void:
 		if kind == "car":
 			for m in node.find_children("*", "MeshInstance3D", true, false):
 				(m as MeshInstance3D).set_instance_shader_parameter("hue", t.hue)
+				(m as MeshInstance3D).set_instance_shader_parameter("lamps", _night)
 		(node.get_meta("night") as Node3D).visible = _night > 0.0
 		# High beams: flash-flash ... pause (D-105).
 		var ph := fmod(_phase_t + t.id * 0.13, 0.7)

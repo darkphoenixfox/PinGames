@@ -25,6 +25,9 @@ const NITRO_SPEED := 100.0     # m/s while nitro burns
 const ACCEL := 13.0
 const BRAKE := 22.0
 const COAST_DRAG := 4.0
+const H_SLIDE := 1.3            # D-120: H gear's extra push to the outside of bends
+const L_PUSH := 0.85            # L gear's reduced push
+const L_GRIP := 1.3             # L gear's extra steering authority
 const STEER_FULL_V := 40.0      # m/s for full steering authority (D-119; was 25 with a 0.3 floor)
 const STEER := 12.0            # lateral m/s at full steering authority
 const CENTRIFUGAL := 0.21      # lateral push = curvature * v^2 * this
@@ -349,9 +352,12 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	steer = move_toward(steer, want, dt * 6.0)
 	var c := track.curvature(s)
 	var push := c * v * v * CENTRIFUGAL           # to the outside: +x on a left curve
+	# Gears change the handling (D-120): H slides wide in bends, L grips, so
+	# downshifting is how you hold the inside line.
+	push *= H_SLIDE if gear == Gear.HIGH else L_PUSH
 	# Sideways speed grows with forward speed (D-119): slow cars barely move
 	# across the road; full authority from STEER_FULL_V.
-	var authority := clampf(v / STEER_FULL_V, 0.06, 1.0) * STEER
+	var authority := clampf(v / STEER_FULL_V, 0.06, 1.0) * STEER * (L_GRIP if gear == Gear.LOW else 1.0)
 	_update_drift(dt, want, c, brake)
 	var vmax := NITRO_SPEED if boosting else gear_top()
 	rpm = clampf(v / gear_top(), 0.0, 1.0)

@@ -161,6 +161,11 @@ static func add_car_lights(node: Node3D, kind: String, glow_tex: Texture2D) -> N
 		t.material = _mat(true, glow_tex)
 		t.material.albedo_color = Color(TAIL, 0)
 		_tail_mesh = t
+	# Cars light their own lamp texels (car.gdshader, D-120); trucks (another
+	# model) keep glow dots.
+	if kind == "car":
+		holder.visible = false
+		return holder
 	for sx in [-side, side]:
 		var d := MeshInstance3D.new()
 		d.mesh = _dot_mesh
