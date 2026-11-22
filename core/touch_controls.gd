@@ -1,23 +1,27 @@
-## On-screen cabinet buttons for the browser build on touch screens (D-176).
-## A strip of five buttons: big LEFT and RIGHT flippers at the outer edges
-## (thumbs), and EXIT, START and LAUNCH in the middle. They drive the same
-## CabinetInput actions as the keys (D-007), via Input.action_press/release.
-## The TABLE itself is a flipper pad too: touching its left or right half
-## holds that flipper (set `table_view`).
+## On-screen cabinet buttons for the browser build on touch screens (D-176, D-177).
+## Two columns at the sides of the screens, so the play area keeps its full
+## height: the left column has EXIT above a big LEFT flipper, the right column
+## START and LAUNCH above a big RIGHT flipper (flippers low, under the thumbs).
+## They drive the same CabinetInput actions as the keys (D-007), via
+## Input.action_press/release. The TABLE itself is a flipper pad too: touching
+## its left or right half holds that flipper (set `table_view`).
 ## Multi-touch: each finger is tracked on its own, so both flippers can be held
 ## together (gear shift), and a finger sliding off a button releases it.
-## --touch shows the strip on any device (mouse clicks work then, for testing).
-extends HBoxContainer
+## A small HIDE / SHOW BUTTONS toggle floats in the top-right corner (`toggle`).
+## --touch shows the controls on any device (mouse clicks work then, for testing).
+extends Node
 
 const UI = preload("res://core/ui/ui.gd")
 
-## [action, label key, stretch ratio]
-const BUTTONS := [
-	[&"flip_l", "TOUCH_LEFT", 2.2],
+## Top to bottom: [action, label key, stretch ratio]
+const LEFT_COLUMN := [
 	[&"exit", "TOUCH_EXIT", 1.0],
+	[&"flip_l", "TOUCH_LEFT", 3.0],
+]
+const RIGHT_COLUMN := [
 	[&"start", "TOUCH_START", 1.0],
-	[&"launch", "TOUCH_LAUNCH", 1.4],
-	[&"flip_r", "TOUCH_RIGHT", 2.2],
+	[&"launch", "TOUCH_LAUNCH", 1.3],
+	[&"flip_r", "TOUCH_RIGHT", 3.0],
 ]
 const COLORS := {
 	&"flip_l": Color(0.2, 0.55, 1.0), &"flip_r": Color(0.2, 0.55, 1.0),
@@ -26,6 +30,10 @@ const COLORS := {
 }
 const MOUSE := -100   # pointer id used for mouse clicks
 
+var left := VBoxContainer.new()
+var right := VBoxContainer.new()
+var toggle := Button.new()
+var _toggle_space := Control.new()
 var table_view: Control  # touches on its halves work the flippers
 var _buttons := {}        # action -> Panel
 var _fingers := {}        # pointer index -> action held by it
@@ -40,33 +48,79 @@ static func wanted() -> bool:
 	return OS.has_feature("web") and DisplayServer.is_touchscreen_available()
 
 
+func _init() -> void:
+	for col in [left, right]:
+		col.add_theme_constant_override("separation", 6)
+		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for b in LEFT_COLUMN:
+		left.add_child(_make_button(b))
+	right.add_child(_toggle_space)   # the corner toggle sits over this
+	for b in RIGHT_COLUMN:
+		right.add_child(_make_button(b))
+	_make_toggle()
+
+
 func _ready() -> void:
 	# Delayed releases happen in _process: run before CabinetInput polls, or
 	# it never sees the "just released" frame (and the picker acts on release).
 	process_priority = -100
-	add_theme_constant_override("separation", 6)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for b in BUTTONS:
-		var panel := Panel.new()
-		panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		panel.size_flags_stretch_ratio = b[2]
-		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var label := UI.label(tr(b[1]), _font_px, Color.WHITE)
-		label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		panel.add_child(label)
-		add_child(panel)
-		_buttons[b[0]] = panel
-		_style(b[0], false)
+	set_shown(bool(Config.get_value("display", "touch_controls")))
 
 
-## Height of the strip for a window of this size, and the label size to match.
+func _make_button(b: Array) -> Panel:
+	var panel := Panel.new()
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.size_flags_stretch_ratio = b[2]
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var label := UI.label(tr(b[1]), _font_px, Color.WHITE)
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(label)
+	_buttons[b[0]] = panel
+	_style(b[0], false)
+	return panel
+
+
+## Small corner button that hides or shows the columns. The choice is saved
+## (in the browser's storage on the web).
+func _make_toggle() -> void:
+	toggle.focus_mode = Control.FOCUS_NONE   # Space/Enter must stay game keys
+	toggle.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	toggle.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	for st in ["normal", "hover", "pressed", "focus"]:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.12, 0.12, 0.16, 0.7)
+		sb.border_color = Color(0.5, 0.5, 0.58, 0.8)
+		sb.set_border_width_all(2)
+		sb.set_corner_radius_all(10)
+		sb.set_content_margin_all(8)
+		toggle.add_theme_stylebox_override(st, sb)
+	toggle.pressed.connect(func():
+		set_shown(not left.visible)
+		Config.set_value("display", "touch_controls", left.visible)
+		Config.save())
+
+
+func set_shown(on: bool) -> void:
+	left.visible = on
+	right.visible = on
+	toggle.text = tr("TOUCH_HIDE") if on else tr("TOUCH_SHOW")
+	if not on:
+		_release_all()
+
+
+## Column width and label size for a window of this size.
 func fit(win: Vector2) -> void:
-	var h := clampf(minf(win.x, win.y) * 0.16, 56.0, 260.0)
-	custom_minimum_size.y = h
-	var px := maxi(12, int(h * 0.28 / 12.0) * 12)
+	var w := clampf(minf(win.x, win.y) * 0.17, 64.0, 240.0)
+	left.custom_minimum_size.x = w
+	right.custom_minimum_size.x = w
+	var px := maxi(12, int(w * 0.24 / 12.0) * 12)
+	toggle.add_theme_font_size_override("font_size", px)
+	toggle.offset_right = -6
+	toggle.offset_top = 6
+	_toggle_space.custom_minimum_size.y = px + 16 + 8
 	if px != _font_px:
 		_font_px = px
 		for panel in _buttons.values():
@@ -84,7 +138,7 @@ func _style(action: StringName, down: bool) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not is_visible_in_tree():
+	if not left.is_visible_in_tree():
 		return   # hidden: no buttons and no flipper pads
 	if event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
@@ -101,14 +155,15 @@ func _input(event: InputEvent) -> void:
 ## A finger is now at pos (far away = lifted): release what it held, press what it's on.
 func _finger(index: int, pos: Vector2) -> void:
 	var now: StringName = &""
-	for action in _buttons:
-		if (_buttons[action] as Control).get_global_rect().has_point(pos):
-			now = action
-			break
-	if now == &"" and is_instance_valid(table_view):
-		var r := table_view.get_global_rect()
-		if r.has_point(pos):
-			now = &"flip_l" if pos.x < r.get_center().x else &"flip_r"
+	if not toggle.get_global_rect().has_point(pos):
+		for action in _buttons:
+			if (_buttons[action] as Control).get_global_rect().has_point(pos):
+				now = action
+				break
+		if now == &"" and is_instance_valid(table_view):
+			var r := table_view.get_global_rect()
+			if r.has_point(pos):
+				now = &"flip_l" if pos.x < r.get_center().x else &"flip_r"
 	var before: StringName = _fingers.get(index, &"")
 	if now == before:
 		return
@@ -143,10 +198,18 @@ func _process(_delta: float) -> void:
 			Input.action_release(action)
 
 
-func _exit_tree() -> void:
+func _release_all() -> void:
 	for action in _fingers.values():
 		Input.action_release(action)
+		_style(action, false)
 	for action in _late_release:
 		Input.action_release(action)
 	_fingers.clear()
 	_late_release.clear()
+
+
+func _exit_tree() -> void:
+	_release_all()
+	for n in [left, right, toggle]:
+		if is_instance_valid(n) and n.get_parent() == null:
+			n.free()

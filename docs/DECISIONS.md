@@ -1596,3 +1596,11 @@
 - **HTTPS only:** Godot's web build requires a secure context, so the plain-HTTP LAN address (`http://192.168.1.150:8086/pingames/`) shows an error. Use https://web.phoenixfox.net/pingames/. This corrects D-173 and D-175, which listed the LAN address as working.
 - **Dev:** `--press=click:X.Y` clicks the mouse at window pixel X,Y. `--vr-cam=x,y,z` places the VR desktop-preview camera (for screenshots).
 - **Status:** Accepted
+
+### D-177 — Touch buttons at the sides; browser build installable as an app
+- **Date:** 2026-11-22
+- **Decision (director):** put the touch buttons beside the game area instead of under it, split to both sides on vertical layouts. They also asked for the web version to be installable as an app (Edge didn't offer it).
+- **Side columns** (supersedes D-176's bottom strip): `core/touch_controls.gd` builds two columns that the web layout places at the left and right edges, in landscape and portrait, so the screens keep their full height. Left column: EXIT above a big LEFT. Right column: START and LAUNCH above a big RIGHT. The flippers are low, under the thumbs. Column width is 17% of the window's short side (64–240 px). The HIDE / SHOW BUTTONS toggle floats in the top-right corner over a small space at the top of the right column. Everything else from D-176 stays: multi-touch, TABLE halves as flipper pads, the two-frame minimum press and the saved setting.
+- **Install as an app:** the Web preset's PWA option is on. The export adds `index.manifest.json` (name PinGames, standalone, black background, icons 144/180/512), `index.service.worker.js` (offline cache of the build) and `index.offline.html`. Edge and Chrome offer "Install" only for a page with a manifest and an active service worker, both of which it now has (checked in Chrome: worker active for `/pingames/`, manifest parsed). The HeroAR NGINX block needed `.json` in its MIME list (HeroAR DEC-0276, applied with `nginx -t` + `nginx -s reload`).
+- **Icon:** a placeholder ("PIN" / "GAMES" in PinPixel on a dark neon-bordered tile), from `scripts/tools/gen_app_icon.py`, to be replaced when the director has art. It is also the project icon (`config/icon`), so the Quest APK and the page's favicon use it.
+- **Status:** Accepted

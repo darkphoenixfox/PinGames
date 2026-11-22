@@ -118,12 +118,13 @@ func _setup_windowed() -> void:
 	_add_view(dmw, Dmd.texture(), 0, true)
 
 
-# --- web: all three screens on one page (D-173, D-176) --------------------------
+# --- web: all three screens on one page (D-173, D-176, D-177) -----------------
 ## A browser has one canvas. Landscape: the TABLE on the left at full height,
 ## the BACKGLASS and the DMD stacked on the right. Portrait (phones): the DMD
-## above the TABLE, no BACKGLASS. On touch screens the cabinet buttons run
-## along the bottom (core/touch_controls.gd); otherwise the keys are listed.
-var _web_page: VBoxContainer
+## above the TABLE, no BACKGLASS. On touch screens the cabinet buttons stand in
+## two columns at the left and right edges (core/touch_controls.gd), so the
+## screens keep their full height; otherwise the keys are listed.
+var _web_page: Control
 var _web_portrait := -1
 var _touch: TouchControls
 
@@ -140,9 +141,9 @@ func _setup_web() -> void:
 			want = Vector2i(450, 900)
 		root.size = Vector2i(mini(want.x, area.size.x - 40), mini(want.y, area.size.y - 80))
 		root.position = area.position + (area.size - root.size) / 2
-	_web_page = VBoxContainer.new()
+	_web_page = Control.new()
 	_web_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_web_page.add_theme_constant_override("separation", 6)
+	_web_page.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_web_page)
 	_outputs.append(_web_page)
 	_web_portrait = -1
@@ -163,11 +164,16 @@ func _web_layout() -> void:
 	_web_portrait = portrait
 	for c in _web_page.get_children():
 		c.queue_free()
+	_touch = null
 	var touch := TouchControls.wanted()
+	var row := HBoxContainer.new()
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	row.add_theme_constant_override("separation", 6)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_web_page.add_child(row)
 	var content: BoxContainer = VBoxContainer.new() if portrait == 1 else HBoxContainer.new()
-	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 6)
-	_web_page.add_child(content)
 	var t := ScreenView.new()
 	t.texture = table.get_texture()
 	if portrait == 1:
@@ -203,51 +209,17 @@ func _web_layout() -> void:
 			help.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
 			help.add_theme_font_size_override("font_size", 16)
 			right.add_child(help)
-	if touch:
-		var row := HBoxContainer.new()
-		row.alignment = BoxContainer.ALIGNMENT_END   # SHOW stays at the right while hidden
-		row.add_theme_constant_override("separation", 6)
-		_web_page.add_child(row)
-		_touch = TouchControls.new()
-		_touch.table_view = t
-		_touch.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(_touch)
-		_touch.fit(win)
-		row.add_child(_touch_toggle())
-		_show_touch(bool(Config.get_value("display", "touch_controls")))
-
-
-## Small button at the end of the strip that hides or shows the on-screen
-## buttons (D-176). While hidden only this button stays, and the screens get
-## the space. The choice is saved (in the browser's storage on the web).
-var _touch_btn: Button
-
-
-func _touch_toggle() -> Button:
-	_touch_btn = Button.new()
-	_touch_btn.focus_mode = Control.FOCUS_NONE   # Space/Enter must stay game keys
-	_touch_btn.size_flags_vertical = Control.SIZE_SHRINK_END
-	for st in ["normal", "hover", "pressed", "focus"]:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.12, 0.12, 0.16, 0.85)
-		sb.border_color = Color(0.5, 0.5, 0.58)
-		sb.set_border_width_all(2)
-		sb.set_corner_radius_all(12)
-		sb.set_content_margin_all(10)
-		_touch_btn.add_theme_stylebox_override(st, sb)
-	_touch_btn.pressed.connect(func():
-		var on := not _touch.visible
-		_show_touch(on)
-		Config.set_value("display", "touch_controls", on)
-		Config.save())
-	return _touch_btn
-
-
-func _show_touch(on: bool) -> void:
-	_touch.visible = on
-	_touch_btn.text = tr("TOUCH_HIDE") if on else tr("TOUCH_SHOW")
-	var px := maxi(12, int(_touch.custom_minimum_size.y * 0.22 / 12.0) * 12)
-	_touch_btn.add_theme_font_size_override("font_size", px)
+	if not touch:
+		row.add_child(content)
+		return
+	_touch = TouchControls.new()
+	_touch.table_view = t
+	_web_page.add_child(_touch)
+	row.add_child(_touch.left)
+	row.add_child(content)
+	row.add_child(_touch.right)
+	_web_page.add_child(_touch.toggle)   # floats over the top-right corner
+	_touch.fit(win)
 
 
 ## The DMD with its dot shader, kept exactly the DMD's shape so the dots never

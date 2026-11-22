@@ -6,6 +6,7 @@ config_version=5
 [application]
 
 config/name="PinGames"
+config/icon="res://assets/textures/shell/app_icon_512.png"
 config/description="Arcade-inspired games for virtual pinball cabinets."
 run/main_scene="res://shell/main.tscn"
 config/use_custom_user_dir=true
