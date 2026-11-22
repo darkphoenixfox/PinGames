@@ -1032,3 +1032,12 @@
 - **Art pipeline:** `scripts/tools/comfy_qwen.py` (Qwen-Image 2.1 through the local ComfyUI API) generates the art, and `scripts/tools/prepare_racer_sprites.py` cuts out the white background, removes grey-framed holes (the gantry truss) and does a whole-factor nearest downscale with hard alpha. Originals are kept in `assets/source/racer/gen/`. Passing the director's mock-up as a reference image made Qwen redraw the whole scene, so prompts describe the style in words instead.
 - **Next:** road dressing to match the highway look (the kerbs and sand are still the race-track style), lighting tuning, speed streaks, sparks.
 - **Status:** Accepted (in progress)
+
+### D-108 — Tilt Breaker uses its 2-screen backglass everywhere; new logos
+- **Date:** 2026-11-22
+- **Decisions (director):**
+  - **Tilt Breaker backglass:** the `_2screen` backglass art (framed with room for the DMD, D-080) is used on 3-screen cabinets too, in game and on the shell screens (`backglass` info key → `backglass_on_2screen.png`). The 3-screen textures are removed; their originals stay in `assets/source/breakout/`.
+  - **Tilt Breaker logo:** the updated `tilt_breaker_logo_horiz.png` (the i is now dotted with a plasma orb) gives a new DMD logo.
+  - **Turbo Run logo:** the director's `turborun_logo.png` is the picker logo and the DMD logo (79 × 32). It also appears on the attract screen and the backglass, replacing the styled text title. The backglass shows the game's sunset sky with the logo until there's real backglass art. The PROTOTYPE label is gone.
+- **Pending:** the updated `breaker_lights_off_2screen.png` has the orb-dotted i, but `breaker_lights_on_2screen.png` in the asset folder is still the old lit art without it. Pairing them would make the logo change shape when it lights, so the backglass light textures wait for a matching lit version.
+- **Status:** Accepted

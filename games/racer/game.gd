@@ -24,6 +24,8 @@ const ROAD_SHADER = preload("res://games/racer/shaders/road.gdshader")
 const CAR_SHADER = preload("res://games/racer/shaders/car.gdshader")
 const PIXEL_POST = preload("res://games/racer/shaders/pixel_post.gdshader")
 const SKY_SHADER = preload("res://games/racer/shaders/sky_panorama.gdshader")
+const LOGO := "res://assets/textures/racer/logo.png"
+const DMD_LOGO := "res://assets/textures/racer/dmd_logo.png"
 const SKY_TEXTURE := "res://assets/sprites/racer/sky.png"
 const SKY_RADIUS := 2000.0
 const SKY_BELOW := 70.0     # ring bottom below the camera: mountains sit on the horizon
@@ -188,7 +190,8 @@ var _shake := 0.0
 
 
 func get_info() -> Dictionary:
-	return {"id": "racer", "title_key": "GAME_RACER_TITLE", "color": ACCENT, "font": TITLE_FONT, "buttons_min": 3}
+	return {"id": "racer", "title_key": "GAME_RACER_TITLE", "color": ACCENT, "font": TITLE_FONT, "buttons_min": 3,
+		"logo": LOGO, "dmd_logo": DMD_LOGO}   # director's logo (D-108)
 
 
 func start(_players: int) -> void:
@@ -278,7 +281,7 @@ func _enter_attract() -> void:
 	_hud.visible = false
 	_attract_ui = UI.vstack(60)
 	_attract_ui.add_child(UI.spacer(200))
-	_attract_ui.add_child(UI.styled_label(tr("GAME_RACER_TITLE"), TITLE_FONT, 4))
+	_attract_ui.add_child(_logo_rect(900))
 	_attract_blink = UI.styled_label(tr("RC_PRESS_START"), TITLE_FONT, 2)
 	_attract_ui.add_child(_attract_blink)
 	var hint := UI.label(tr("RC_HOW_TO"), 36, UI.WHITE)
@@ -287,7 +290,7 @@ func _enter_attract() -> void:
 	_attract_ui.add_child(hint)
 	_attract_ui.alignment = BoxContainer.ALIGNMENT_BEGIN
 	add_to_table(_attract_ui)
-	Dmd.show_text(tr("GAME_RACER_TITLE"), tr("RC_PRESS_START"), Dmd.YELLOW, Dmd.WHITE)
+	Dmd.show_image(load(DMD_LOGO))
 
 
 func _attract_tick() -> void:
@@ -297,7 +300,7 @@ func _attract_tick() -> void:
 	var step := int(_phase_t / 3.0) % 3
 	if step != int((_phase_t - get_process_delta_time()) / 3.0) % 3 or _phase_t < 0.05:
 		match step:
-			0: Dmd.show_text(tr("GAME_RACER_TITLE"), tr("RC_PRESS_START"), Dmd.YELLOW, Dmd.WHITE)
+			0: Dmd.show_image(load(DMD_LOGO))
 			1: Dmd.show_text(tr("RC_SHIFT_HINT"), tr("RC_NITRO_HINT"), Dmd.CYAN, Dmd.WHITE)
 			2: Dmd.show_text(tr("ATTRACT_HIGH_SCORES"), _top_score_line(), Dmd.YELLOW, Dmd.WHITE)
 
@@ -1306,16 +1309,28 @@ func _draw_dmd_dash(p) -> void:
 
 
 func _build_backglass() -> void:
-	add_to_backglass(UI.fill(Color(0.1, 0.06, 0.22)))
-	var sun := ColorRect.new()
-	sun.color = SKY_HORIZON
-	sun.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	sun.offset_top = -380
-	add_to_backglass(sun)
-	var box := UI.vstack(40)
-	box.add_child(UI.styled_label(tr("GAME_RACER_TITLE"), TITLE_FONT, 6))
-	box.add_child(UI.label(tr("RC_PROTOTYPE"), 48, UI.WHITE))
+	# The game's sunset sky with the logo on it (D-108), until there's backglass art.
+	var sky := TextureRect.new()
+	sky.texture = load(SKY_TEXTURE)
+	sky.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sky.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	sky.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	sky.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_to_backglass(sky)
+	var box := UI.vstack(0)
+	box.add_child(_logo_rect(1300))
 	add_to_backglass(box)
+
+
+func _logo_rect(width: float) -> TextureRect:
+	var tex: Texture2D = load(LOGO)
+	var r := TextureRect.new()
+	r.texture = tex
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	r.custom_minimum_size = Vector2(width, width * tex.get_height() / tex.get_width())
+	r.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	return r
 
 
 # --- audio ---------------------------------------------------------------------------

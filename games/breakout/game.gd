@@ -255,7 +255,7 @@ func get_info() -> Dictionary:
 	return {"id": "breakout", "title_key": "GAME_BREAKOUT_TITLE", "color": ACCENT, "font": TITLE_FONT,
 		"logo": "res://assets/textures/breakout/logo.png",
 		"dmd_logo": "res://assets/textures/breakout/dmd_logo.png", "buttons_min": 3,
-		"backglass": "res://assets/textures/breakout/backglass_on.png"}  # shell screens (D-088)
+		"backglass": "res://assets/textures/breakout/backglass_on_2screen.png"}  # shell screens (D-088, D-108)
 
 
 func start(_players: int) -> void:
@@ -1429,8 +1429,9 @@ func _build_backglass() -> void:
 	add_to_backglass(UI.fill(Color.BLACK))
 	var art := TextureRect.new()
 	art.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# 2-screen cabinets: art framed with room for the DMD at the bottom (D-080).
-	var sfx_2 := "_2screen" if Screens.dmd_in_backglass else ""
+	# The 2-screen art (room for the DMD at the bottom, D-080) is used on every
+	# cabinet, 3-screen too (director, D-108).
+	var sfx_2 := "_2screen"
 	art.texture = load("res://assets/textures/breakout/backglass_off%s.png" % sfx_2)
 	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED

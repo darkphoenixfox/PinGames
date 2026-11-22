@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cnxih3rgbbdom"
-path="res://.godot/imported/backglass_mask.png-87db7851e58740b97f8aa460cc70b8c2.ctex"
+uid="uid://gvoy5gfudoqc"
+path="res://.godot/imported/turborun_logo.png-b1596f7954d96978a9a2a8ef5e30ff01.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/textures/breakout/backglass_mask.png"
-dest_files=["res://.godot/imported/backglass_mask.png-87db7851e58740b97f8aa460cc70b8c2.ctex"]
+source_file="res://assets/source/racer/turborun_logo.png"
+dest_files=["res://.godot/imported/turborun_logo.png-b1596f7954d96978a9a2a8ef5e30ff01.ctex"]
 
 [params]
 
