@@ -44,6 +44,15 @@ func set_gear(is_high: bool) -> void:
 		_refresh_letters()
 
 
+## Jump straight to L with no travel (D-155): the SHIFT hint loop restarts
+## without showing a downshift.
+func snap_low() -> void:
+	high = false
+	_pos = 1.0
+	_refresh_letters()
+	queue_redraw()
+
+
 func _refresh_letters() -> void:
 	if _h_label == null:
 		return

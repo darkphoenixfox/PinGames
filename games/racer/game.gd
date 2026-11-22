@@ -563,7 +563,7 @@ func _begin_race() -> void:
 	_show_mode()
 	_center_message("3", 1.0)
 	Audio.sfx("rc_count")
-	Dmd.show_text(tr("RC_GET_READY"), "3", Dmd.YELLOW, Dmd.WHITE)
+	Dmd.show_custom(_draw_dmd_revup)   # REV UP! with a live tacho (D-154)
 	_last_tick = -1
 
 
@@ -602,7 +602,7 @@ func _handle_events() -> void:
 			"count":
 				_center_message(str(e[1]), 1.0)
 				Audio.sfx("rc_count")
-				Dmd.show_text(tr("RC_GET_READY"), str(e[1]), Dmd.YELLOW, Dmd.WHITE)
+				Dmd.show_custom(_draw_dmd_revup)
 			"go":
 				_center_message(tr("RC_GO"), 1.0)
 				Audio.sfx("rc_go")
@@ -1803,8 +1803,13 @@ func _update_hud(delta: float) -> void:
 	var nagging := _redline_t >= SHIFT_NAG
 	_shift_big.modulate.a = 1.0 if nagging and fmod(_phase_t, 0.4) < 0.25 else 0.0
 	_nag_lever.modulate.a = 1.0 if nagging else 0.0
-	if nagging:   # demo loop: sit in L, push up to H, hold, snap back
-		_nag_lever.set_gear(fmod(_redline_t, 1.2) > 0.5)
+	if nagging:   # demo loop: sit in L, push up to H, hold; restart at L instantly (D-155)
+		var ph := fmod(_redline_t, 1.2)
+		if ph < 0.5:
+			if _nag_lever.high:
+				_nag_lever.snap_low()
+		else:
+			_nag_lever.set_gear(true)
 	_nitro_label.modulate.a = 1.0 if sim.boosting else 0.0
 	_nitro_strip.size.x = roundf(160.0 * sim.boost_t / Sim.NITRO_TIME)
 	if sim.drifting:
@@ -1821,6 +1826,38 @@ func _update_hud(delta: float) -> void:
 		_dmd_t = 0.12
 		Dmd.show_custom(_draw_dmd_dash)
 	score_changed.emit(0, sim.score)
+
+
+## DMD during the countdown (D-154): REV UP! and the count on the left; a
+## pixel tachometer on the right whose needle follows the player's revs, with
+## the perfect-start window in green (red past it). It wobbles at idle.
+func _draw_dmd_revup(p) -> void:
+	if sim == null or sim.state != Sim.State.COUNTDOWN:
+		return
+	var t := _phase_t
+	p.text(tr("RC_REV_UP"), 2, 2, 2, Dmd.YELLOW if fmod(t, 0.5) < 0.32 else Dmd.WHITE)
+	p.text(str(maxi(1, ceili(sim.countdown))), 2, 19, 1, Dmd.WHITE)
+	# Dial: centre bottom right, sweeping 180 degrees.
+	const C := Vector2(104, 29)
+	const R := 22.0
+	for i in 19:
+		var f := i / 18.0
+		var a := PI + f * PI
+		var col := Color(0.25, 0.27, 0.3)
+		if f >= Sim.START_FROM and f < Sim.START_TO:
+			col = Dmd.GREEN
+		elif f >= Sim.START_TO:
+			col = Dmd.RED
+		for k in 3:
+			var r := R - k
+			p.dot(C.x + cos(a) * r, C.y + sin(a) * r, col)
+	var v := sim.rpm
+	if sim.throttle <= 0.0:
+		v = 0.08 + 0.03 * sin(t * 25.0)   # idle wobble
+	var na := PI + clampf(v, 0.0, 1.0) * PI
+	var in_band := sim.rpm >= Sim.START_FROM and sim.rpm < Sim.START_TO
+	p.line(C.x, C.y, C.x + cos(na) * (R - 4), C.y + sin(na) * (R - 4), Dmd.GREEN if in_band else Dmd.WHITE)
+	p.disc(C.x, C.y, 1.5, Dmd.WHITE)
 
 
 ## DMD dashboard (D-103): segmented speedometer dial (the director's icon

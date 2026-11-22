@@ -1404,3 +1404,15 @@
 - **Problem (director):** the tunnel lights didn't seem to affect the car going under them. The lamps and their pools are flat painted polygons and light nothing.
 - **Fix:** `car.gdshader` gets an `overhead` instance uniform that adds sodium-orange emission over the car's own colours, strongest on the roof and upper body. The view sets it per car (hero, traffic) from its distance to the nearest ceiling lamp (`Tunnel.LIGHT_EVERY` grid): 1 directly underneath, fading over 6 m, 0 outside tunnels. Cars visibly brighten as they pass under each lamp.
 - **Status:** Accepted
+
+### D-154 — Turbo Run: REV UP! with a live tacho on the DMD during the countdown
+- **Date:** 2026-11-22
+- **Decision (director):** the countdown's GET READY DMD message becomes REV UP! with a tacho animation. The custom frame shows REV UP! blinking and the count on the left. On the right is a pixel half-dial whose arc marks the perfect-start window in green and the over-rev zone in red. Its needle follows the player's live revs (green while in the window) and wobbles at idle. The `RC_GET_READY` string is removed.
+- **Status:** Accepted
+
+### D-155 — Turbo Run: LOST THEM!; SHIFT hint only shows the upshift
+- **Date:** 2026-11-22
+- **Decisions (director):**
+  - **Message:** the police escape message reads LOST THEM! instead of ESCAPED!.
+  - **SHIFT hint:** the shifter next to SHIFT (D-151) looked like it was asking for a downshift when the knob slid back. It now only shows L → H: at the end of each loop the knob jumps straight back to L with no travel (`GearLever.snap_low`).
+- **Status:** Accepted
