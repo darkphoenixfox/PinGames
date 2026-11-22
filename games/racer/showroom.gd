@@ -10,7 +10,7 @@ const PIXEL_POST = preload("res://games/racer/shaders/pixel_post.gdshader")
 
 const RES := Vector2i(360, 640)
 const ROW_Y := [5.4, 0.0, -5.4]      # car heights in the showroom (m), top to bottom
-const SPIN := 0.9                     # rad/s (the chosen car spins faster)
+const SPIN := 1.2                     # rad/s, the chosen car only
 const SPRITE_ANGLES := 32
 const PIPS := 5
 const PANEL_W := 600.0
@@ -191,10 +191,10 @@ func _refresh() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	# Only the chosen car turns (stepped like a sprite set); the others hold
+	# their pose (D-123).
 	var step := TAU / SPRITE_ANGLES
+	_angles[selected] += delta * SPIN
 	for i in 3:
-		_angles[i] += delta * SPIN * (1.6 if i == selected else 0.6)
-		var a := roundf(float(_angles[i]) / step) * step   # stepped like a sprite set
+		var a := roundf(float(_angles[i]) / step) * step
 		(_cars[i] as Node3D).rotation = Vector3(0, a, 0)
-		var bob := 0.12 if i == selected and fmod(_t, 0.8) < 0.4 else 0.0
-		(_cars[i] as Node3D).position.y = float(ROW_Y[i]) + bob

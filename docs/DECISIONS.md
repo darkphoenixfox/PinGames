@@ -1172,3 +1172,8 @@
 - **In the race:** the hero car takes the chosen colour.
 - **Dev flag:** `--rc-car=N` picks the car directly (e.g. with `--rc-skip-intro`).
 - **Status:** Accepted (tuning pending playtest)
+
+### D-123 — Turbo Run showroom: only the chosen car turns, no bounce
+- **Date:** 2026-11-22
+- **Decision (director):** the selected car no longer bounces, and only the selected car rotates (1.2 rad/s, stepped through 32 angles). The other two hold their pose. This amends D-122.
+- **Status:** Accepted
