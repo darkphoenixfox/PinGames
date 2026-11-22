@@ -603,6 +603,24 @@ func test_racer_sim() -> void:
 	for i in 60:
 		rv.step(dt, false, false)
 	check(revved > 0.8 and rv.rpm < 0.2 and rv.v == 0.0, "flippers rev the engine during the countdown (%.2f)" % revved)
+	# Steering scales with speed (D-119): a slow car barely moves sideways.
+	var slow = Sim.new()
+	slow.setup(7)
+	slow.state = Sim.State.RACE
+	slow.manual = true
+	slow.v = 5.0
+	var fast = Sim.new()
+	fast.setup(7)
+	fast.state = Sim.State.RACE
+	fast.gear = Sim.Gear.HIGH
+	fast.v = 50.0
+	for i in 60:
+		slow.v = 5.0
+		slow.s = Sim.START_S + 50.0
+		fast.s = Sim.START_S + 50.0
+		slow.step(dt, false, true)
+		fast.step(dt, false, true)
+	check(slow.x < 2.0 and fast.x > 6.0, "sideways movement scales with speed (%.1f m slow, %.1f m fast)" % [slow.x, fast.x])
 	# Perfect start (D-118): revs in the perfect band at GO launch the car.
 	var good = Sim.new()
 	good.setup(7)

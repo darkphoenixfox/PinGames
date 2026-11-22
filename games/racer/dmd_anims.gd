@@ -8,7 +8,7 @@ const DURATIONS := {
 	"near_miss": 1.0,
 	"nitro": 1.1,
 	"shift": 0.7,
-	"crash": 1.3,
+	"crash": 2.0,
 	"checkpoint": 1.6,
 	"drift": 1.0,
 	"perfect": 1.1,
@@ -135,29 +135,104 @@ func shift(p, t: float, high: bool, label: String, h_txt: String, l_txt: String)
 	p.text(gear, 100, 9, 2, c2)
 
 
-## Crash: an impact burst, a tumbling car and a shaking CRASH!
+## Crash (D-119): after a quick impact burst, the blond passenger yells at the
+## driver, who sits there in his sunglasses, sweating. Original pixel portraits.
+## Palette keys: k outline, s skin, S skin shade, y blond, Y blond shade,
+## h dark hair, g sunglasses, G lens shine, w white, b eye blue, r lips/mouth,
+## p pink top, c white shirt, R red jacket.
+const LADY := [
+	"....kkkkkkkk....",
+	"...kyyyyyyyyk...",
+	"..kyyyYyyyyyyk..",
+	".kyyyyyyyyyYyyk.",
+	".kyyssssssssyyk.",
+	".kyskkssssskkyk.",
+	"kyysskksskkssyyk",
+	"kyysswbsswbssyyk",
+	"kyyssssssssssyyk",
+	"kyyssssSSssssyyk",
+	"kyyyskkkkkksyyyk",
+	"kyyyskwwwwksyyyk",
+	"kyyyskrrrrksyyyk",
+	"kyyyyskkkksyyyyk",
+	"kyyyykkssskkyyyk",
+	"kYyypppssspppyYk",
+	".kpppppppppppppk",
+	"kppppppppppppppk",
+]
+const LADY_SHUT := [   # mouth rows when closed (rows 10-13), still cross
+	"kyyysssssssssyyk",
+	"kyyysskkkkssyyyk",
+	"kyyyyssssssyyyyk",
+	"kyyyyysssssyyyyk",
+]
+const DRIVER := [
+	"....kkkkkkk.....",
+	"...khhhhhhhk....",
+	"..khhhhhhhhhk...",
+	"..khhhhhhhhhhk..",
+	"..khsshhhhsshk..",
+	"..ksssssssssssk.",
+	".kgggggggggggggk",
+	".kgGggggsgGggggk",
+	"..kgggggsgggggk.",
+	"..kssssSSsssssk.",
+	"..ksssssssssssk.",
+	"...ksskkkkkssk..",
+	"...ksssssssssk..",
+	"....kkssssskk...",
+	"...cccksssskccc.",
+	"..RRcccwwwcccRR.",
+	".RRRRcccwcccRRRR",
+	"RRRRRRcccccRRRRR",
+]
+const FACE_COLS := {
+	"k": Color(0.05, 0.04, 0.08), "s": Color("f2b48c"), "S": Color("c98a66"),
+	"y": Color("ffe066"), "Y": Color("d9a830"), "h": Color("4a2c1a"),
+	"g": Color(0.06, 0.06, 0.1), "G": Color("9fe8ff"), "w": Color(1, 1, 1),
+	"b": Color("3f8cff"), "r": Color("e8304a"), "p": Color("ff6fb0"),
+	"c": Color(0.95, 0.95, 0.95), "R": Color("d42828"),
+}
+
+
+func _face(p, rows: Array, x: float, y: float) -> void:
+	for r in rows.size():
+		var row: String = rows[r]
+		for c in row.length():
+			var k := row[c]
+			if k != ".":
+				p.dot(x + c, y + r, FACE_COLS[k])
+
+
 func crash(p, t: float, title: String) -> void:
-	var k := t / DURATIONS.crash
-	_burst(p, 64, 18, clampf(k * 1.6, 0.0, 1.0), 40, 60.0)
-	# Tumbling car: 4 stepped poses (upright, nose up, upside down, nose down).
-	var pose := int(t * 10.0) % 4
-	var cx := 58.0 + k * 20.0
-	match pose:
-		0: _car(p, cx, 20, RED)
-		1:
-			for r in 13:
-				p.block(cx + 4, 13 + r, 5, 1, RED if r % 6 else YELLOW)
-		2:
-			for r in CAR.size():
-				for c in CAR[r].length():
-					if CAR[r][c] != "0":
-						p.dot(cx + c, 24 - r, RED if CAR[r][c] == "1" else DARK.lightened(0.3))
-		3:
-			for r in 13:
-				p.block(cx + 4, 13 + r, 5, 1, RED if (12 - r) % 6 else DARK.lightened(0.3))
-	var shake := 0.0 if k > 0.5 else (2.0 if int(t * 30.0) % 2 == 0 else -2.0)
-	if k > 0.1:
-		p.text(title, 4 + shake, 2, 2, RED if _blink(t, 0.15) else WHITE)
+	if t < 0.3:   # the impact first
+		_burst(p, 64, 16, t / 0.3, 40, 60.0)
+		return
+	var tt := t - 0.3
+	# The lady: shaking with rage, mouth snapping open and shut.
+	var shake := 1.0 if int(tt * 16.0) % 2 == 0 else -1.0
+	var yelling := int(tt * 8.0) % 2 == 0
+	var lady := LADY.duplicate()
+	if not yelling:
+		for i in 4:
+			lady[10 + i] = LADY_SHUT[i]
+	_face(p, lady, 44 + shake, 8)
+	# Anger mark: a red cross-vein popping by her head.
+	if int(tt * 6.0) % 2 == 0:
+		for d in [Vector2(0, 0), Vector2(2, 0), Vector2(1, -1), Vector2(1, 1), Vector2(0, 2), Vector2(2, 2)]:
+			p.dot(40 + d.x, 5 + d.y, RED)
+	# Shout lines towards the driver.
+	if yelling:
+		for i in 3:
+			p.line(62, 17 + i * 3 - 3, 66, 16 + i * 4 - 4, WHITE)
+	# The driver, unmoved behind his sunglasses, with a sweat drop sliding down.
+	_face(p, DRIVER, 70, 8)
+	var dy := fmod(tt * 14.0, 10.0)
+	p.dot(86, 9 + dy, CYAN)
+	p.dot(86, 10 + dy, CYAN)
+	p.dot(85, 10 + dy, WHITE)
+	if tt > 0.2:
+		p.text(title, 2, 12, 1, RED if _blink(tt, 0.2) else WHITE)
 
 
 ## Checkpoint: a waving chequered flag and the time bonus.

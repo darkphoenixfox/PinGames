@@ -1131,3 +1131,11 @@
 - **Perfect start (director):** if the revs are inside the perfect-shift band (rpm 0.69–0.87, D-117) at the moment of GO, the car launches at 12 m/s with 1.5 s of extra pull and 2,000 points. A PERFECT START! DMD animation, the sting, a backfire, the orange exhaust blast and a backglass flash go with it. Over-revving into the red, or not revving, gives a normal start.
 - **Debug cheat (director):** in debug builds, F (DebugTools' game-specific `debug_action`, D-057) toggles `sim.freeze_time`, which stops the race clock. It persists across races in the session and shows DEBUG: TIME FROZEN under the timer. Exported release builds ignore DebugTools, so cabinets are unaffected.
 - **Status:** Accepted
+
+### D-119 — Turbo Run: speed-scaled steering, no small SHIFT label, crash portraits
+- **Date:** 2026-11-22
+- **Decisions (director):**
+  - **Steering:** sideways movement scales with speed. Authority is clamp(v / 40, 0.06, 1) × STEER (it was clamp(v / 25, 0.3, 1)), so a slow car barely moves across the road and full authority comes from 144 km/h.
+  - **SHIFT label:** the small blinking SHIFT above the gear lever is removed. The big SHIFT nag after 3 s at the redline (D-116) stays.
+  - **Crash animation:** after a short impact burst, the DMD shows original pixel portraits. A blond passenger in a pink top yells at the driver: angry brows, a mouth snapping open and shut, a shaking head, an anger mark and shout lines. The driver, in a red jacket and black sunglasses, sits there with a sweat drop sliding down. CRASH! blinks on the left. The animation runs 2.0 s.
+- **Status:** Accepted

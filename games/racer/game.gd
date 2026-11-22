@@ -261,7 +261,6 @@ var _speed_label: Label
 var _speedo: Control
 var _tacho: Control
 var _gear_lever: Control
-var _shift_label: Label
 var _shift_big: Label
 var _frozen_label: Label
 var _freeze_time := false   # debug cheat: clock frozen (D-118)
@@ -1344,10 +1343,6 @@ func _build_hud() -> void:
 	var gbox := UI.vstack(6)
 	gbox.alignment = BoxContainer.ALIGNMENT_END
 	gbox.custom_minimum_size.x = 200
-	_shift_label = UI.label(tr("RC_SHIFT"), 36, UI.RED)
-	_shift_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_shift_label.modulate.a = 0.0
-	gbox.add_child(_shift_label)
 	var gl := UI.label(tr("RC_GEAR"), 24, UI.GREY)
 	gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	gbox.add_child(gl)
@@ -1457,7 +1452,6 @@ func _update_hud(delta: float) -> void:
 	_tacho.set_value(_tach_value())
 	_gear_lever.set_gear(sim.gear == Sim.Gear.HIGH)
 	var shift_now := sim.gear == Sim.Gear.LOW and sim.rpm >= Sim.REDLINE
-	_shift_label.modulate.a = 1.0 if shift_now and fmod(_phase_t, 0.3) < 0.18 else 0.0
 	# Held at the redline in L for SHIFT_NAG s: a big blinking SHIFT in the
 	# middle of the screen, in the timer's font (D-116).
 	_redline_t = _redline_t + delta if shift_now and sim.state == Sim.State.RACE else 0.0

@@ -25,6 +25,7 @@ const NITRO_SPEED := 100.0     # m/s while nitro burns
 const ACCEL := 13.0
 const BRAKE := 22.0
 const COAST_DRAG := 4.0
+const STEER_FULL_V := 40.0      # m/s for full steering authority (D-119; was 25 with a 0.3 floor)
 const STEER := 12.0            # lateral m/s at full steering authority
 const CENTRIFUGAL := 0.21      # lateral push = curvature * v^2 * this
 const OFFROAD_SPEED := 36.0
@@ -348,7 +349,9 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	steer = move_toward(steer, want, dt * 6.0)
 	var c := track.curvature(s)
 	var push := c * v * v * CENTRIFUGAL           # to the outside: +x on a left curve
-	var authority := clampf(v / 25.0, 0.3, 1.0) * STEER
+	# Sideways speed grows with forward speed (D-119): slow cars barely move
+	# across the road; full authority from STEER_FULL_V.
+	var authority := clampf(v / STEER_FULL_V, 0.06, 1.0) * STEER
 	_update_drift(dt, want, c, brake)
 	var vmax := NITRO_SPEED if boosting else gear_top()
 	rpm = clampf(v / gear_top(), 0.0, 1.0)
