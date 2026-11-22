@@ -6,7 +6,8 @@
 ## Controls (D-007, D-089):
 ##   2+1 buttons: flippers steer; throttle AND braking are automatic (the car
 ##                lifts/brakes by itself when a corner would throw it off).
-##   4+1 buttons: magna_r = accelerate, magna_l = brake (manual mode).
+##   4+1 buttons (D-189): throttle stays automatic; magna_r = gear shifter
+##   (one press flips L <-> H), magna_l = brake (no auto-brake then).
 ##   Both flippers held 0.5 s = shift gear L <-> H (D-103). L pulls hard but
 ##   tops out early; H is slow off the line but reaches top speed.
 ## NITRO: drive through a canister on the road for 5 s of boost (D-103).
@@ -157,7 +158,8 @@ var track := Track.new()
 var state := State.COUNTDOWN
 var countdown := 3.0
 var events: Array = []
-var manual := false            # 4-button throttle/brake (auto-detected or forced)
+var manual := false            # 4-button layout: shifter + brake (auto-detected or forced, D-189)
+var shift_request := false     # 4-button shifter pressed: flip the gear on the next race step
 var autopilot := false         # attract demo + dev screenshots
 
 var s := START_S
@@ -242,8 +244,9 @@ func start_time() -> float:
 	return float(CARS[car].time)
 
 
-## left/right = flippers, gas/brake = magna saves (manual mode only).
-func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = false) -> void:
+## left/right = flippers, brake = left magna save (4-button mode only). `_gas` is
+## unused since D-189 (the throttle is automatic in both layouts).
+func step(dt: float, left: bool, right: bool, _gas: bool = false, brake: bool = false) -> void:
 	events.clear()
 	if autopilot:
 		var ap := _autopilot()
@@ -253,6 +256,7 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 	track.ensure(s + 1500.0)
 	match state:
 		State.COUNTDOWN:
+			shift_request = false   # the shifter does nothing on the grid
 			# Flippers rev the engine on the grid (D-112).
 			var rev := left or right
 			rpm = move_toward(rpm, 1.0 if rev else 0.0, dt * (REV_UP if rev else REV_DOWN))
@@ -279,6 +283,7 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 			_update_traffic(dt)
 			return
 		State.OVER:
+			shift_request = false
 			over_t += dt
 			# Coasting out: still steerable; a checkpoint reached on momentum
 			# puts the time back and the race goes on (D-103).
@@ -316,11 +321,17 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 		_end_drift()
 		events.append(["time_up"])
 		return
-	_shift_input(dt, left and right)
+	if manual:
+		# 4 buttons (D-189): the shifter button, not both flippers.
+		if shift_request:
+			shift(Gear.HIGH if gear == Gear.LOW else Gear.LOW)
+	else:
+		_shift_input(dt, left and right)
+	shift_request = false
 	if left and right:
 		left = false
 		right = false
-	_drive(dt, left, right, gas, brake)
+	_drive(dt, left, right, true, brake)
 	_update_boost(dt)
 	_update_grace(dt)
 	_update_traps()
@@ -647,9 +658,10 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 		braking = false
 		accel = -(COAST_OVER if state == State.OVER else ((FLIP_SLIDE_DECEL if crash_slide else FLIP_ROLL_DECEL) if flipping else COAST_DRAG * 3.0))
 	elif manual:
-		throttle = 1.0 if gas else 0.0
+		# 4 buttons (D-189): automatic throttle, the player's own brake (no auto-brake).
+		throttle = 0.0 if brake else 1.0
 		braking = brake
-		accel = (ACCEL * pull * (1.0 - pow(minf(v / vmax, 1.2), 2.0)) if gas else -COAST_DRAG) - (BRAKE if brake else 0.0)
+		accel = -BRAKE if brake else ACCEL * pull * (1.0 - pow(minf(v / vmax, 1.2), 2.0))
 	else:
 		throttle = 1.0
 		braking = false

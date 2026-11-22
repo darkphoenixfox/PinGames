@@ -1713,3 +1713,21 @@
   - a small white glint top-left.
 - **Lit lamps:** unchanged (glow halo, hot core).
 - **Status:** Accepted
+
+### D-189 — Turbo Run 4-button layout: shifter + brake
+- **Date:** 2026-11-22
+- **Decision (director):** the 4-button layout is left/right + shifter + brake. The throttle stays automatic as with 2 buttons, the shifter is a button instead of L+R, and the flippers rev on the grid. Update the on-screen text to match. (Supersedes the manual gas/brake of D-089 for 4+1.)
+- **Buttons:**
+  - Flippers: steer, and rev during the countdown.
+  - Magna R: the shifter. Each press flips L ↔ H in the race (`sim.shift_request`). Presses on the grid or after time-up are dropped. Holding both flippers no longer shifts in this mode.
+  - Magna L: brake. There's no auto-brake in this mode, because the player has a brake, and brake + steer still flicks into a drift.
+  - Perfect shifts work with the button as they did with L+R.
+- **Detection:** as before. The first magna press switches it on when `operator.cabinet_buttons` = auto, and it's always on with 4. It now stays on for the rest of the session's races (`_seen_magna`) instead of resetting each race.
+- **Text:**
+  - The attract how-to line has a 4-button version (`RC_HOW_TO_4`), now wrapped at 900 px with margins.
+  - The DMD attract hint reads "RIGHT MAGNA: SHIFT" (`RC_SHIFT_HINT_4`).
+  - The detection flash reads "SHIFTER + BRAKE".
+  - The HUD tag shows "2 BUTTONS" / "4 BUTTONS" instead of AUTO / MANUAL, since both layouts now have automatic throttle.
+  - The touch controls and the web hint are unchanged: touch is 2-button, and the keyboard's Ctrl keys are the magna saves.
+- **Tests:** in 4-button mode the throttle is automatic, the left magna brakes, the shifter flips the gear once, both flippers don't shift, and a shifter press on the grid is dropped.
+- **Status:** Accepted

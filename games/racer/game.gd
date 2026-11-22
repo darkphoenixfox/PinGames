@@ -4,10 +4,11 @@
 ## The pure race logic is in sim.gd / track.gd; this module draws it in 3D on
 ## the TABLE (low-poly "PS2" props, 16-bit textures), with DMD + BACKGLASS.
 ## Controls (D-007, D-089):
-##   flippers = steer; throttle/brake automatic (2+1 buttons)
-##   magna_r = accelerate, magna_l = brake (4+1: switches on at the first press
-##   when operator.cabinet_buttons = auto, always on when = 4)
-##   hold both flippers 0.5 s = shift gear L <-> H (D-103)
+##   flippers = steer (and rev on the grid); throttle automatic in both layouts
+##   2+1 buttons: hold both flippers 0.5 s = shift gear L <-> H (D-103), auto-brake
+##   4+1 buttons (D-189): magna_r = shifter (one press flips L <-> H),
+##   magna_l = brake; switches on at the first magna press when
+##   operator.cabinet_buttons = auto, always on when = 4
 ##   NITRO = drive through a canister on the road (5 s boost, D-103)
 extends "res://core/game_module.gd"
 
@@ -237,6 +238,7 @@ var sim: Sim
 var _phase := "attract"          # attract, race, finale
 var _phase_t := 0.0
 var _manual_locked := false      # operator.cabinet_buttons = 4
+static var _seen_magna := false  # a magna save was pressed this session (stays 4-button, D-189)
 var _root: Node3D
 var _cam: Camera3D
 var _env: Environment
@@ -401,10 +403,13 @@ func on_action(action: StringName, pressed: bool) -> void:
 			_finale_t = FINALE_END_AT
 		return
 	if (action == &"magna_l" or action == &"magna_r") and not sim.manual:
-		# 4-button cabinet detected: manual throttle/brake from now on (D-089).
+		# 4-button cabinet detected: shifter + brake from now on (D-189).
 		sim.manual = true
+		_seen_magna = true
 		_show_mode()
 		Dmd.flash(tr("RC_MANUAL"), 1.2, Dmd.CYAN)
+	if action == &"magna_r" and _phase == "race":
+		sim.shift_request = true
 
 
 func _process(delta: float) -> void:
@@ -426,7 +431,7 @@ func _process(delta: float) -> void:
 	elif _phase == "race":
 		var l := CabinetInput.is_down(&"flip_l")
 		var r := CabinetInput.is_down(&"flip_r")
-		sim.step(dt, l, r, CabinetInput.is_down(&"magna_r"), CabinetInput.is_down(&"magna_l"))
+		sim.step(dt, l, r, false, CabinetInput.is_down(&"magna_l"))
 		_handle_events()
 		_update_hud(delta)
 		if sim.done and _finale_t < 0.0:
@@ -449,7 +454,7 @@ func _new_sim() -> void:
 	sim.freeze_time = _freeze_time
 	sim.car = _chosen_car
 	sim.time_left = sim.start_time()   # the car sets the clock (D-183)
-	sim.manual = _manual_locked
+	sim.manual = _manual_locked or _seen_magna   # once detected, the next races keep it (D-189)
 	sim.autopilot = Config.cli.has("rc-autopilot")
 	if Config.cli.has("rc-time"):  # dev: short clock to test TIME UP
 		sim.time_left = float(str(Config.cli["rc-time"]))
@@ -473,9 +478,10 @@ func _enter_attract() -> void:
 	_attract_ui.add_child(_logo_rect(900))
 	_attract_blink = UI.styled_label(tr("RC_PRESS_START"), TITLE_FONT, 2)
 	_attract_ui.add_child(_attract_blink)
-	var hint := UI.label(tr("RC_HOW_TO"), 36, UI.WHITE)
+	var hint := UI.label(tr("RC_HOW_TO_4") if _four_buttons() else tr("RC_HOW_TO"), 36, UI.WHITE)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.custom_minimum_size.x = 900
+	hint.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # wraps at 900 px: no lines lost, margins kept
 	_attract_ui.add_child(hint)
 	_attract_ui.alignment = BoxContainer.ALIGNMENT_BEGIN
 	add_to_table(_attract_ui)
@@ -491,7 +497,8 @@ func _attract_tick() -> void:
 	if step != int((_phase_t - get_process_delta_time()) / 3.0) % 6 or _phase_t < 0.05:
 		match step:
 			0: Dmd.show_image(load(DMD_LOGO))
-			1: Dmd.show_text(tr("RC_SHIFT_HINT"), tr("RC_NITRO_HINT"), Dmd.CYAN, Dmd.WHITE)
+			1: Dmd.show_text(tr("RC_SHIFT_HINT_4") if _four_buttons() else tr("RC_SHIFT_HINT"),
+				tr("RC_NITRO_HINT"), Dmd.CYAN, Dmd.WHITE)
 			2: Dmd.show_text(tr("RC_CREDIT_MUSIC"), tr("RC_CREDIT_BOGART"), Dmd.DIM, Dmd.YELLOW)
 			3: Dmd.show_text(tr("ATTRACT_HIGH_SCORES"), _top_score_line(), Dmd.YELLOW, Dmd.WHITE)
 			4: Dmd.show_text(tr("RC_CREDIT_BOGART"), tr("RC_CREDIT_BOGART_URL"), Dmd.YELLOW, Dmd.WHITE)
@@ -1856,6 +1863,12 @@ func _tach_of(rpm: float) -> float:
 
 func _gear_text(g: int) -> String:
 	return tr("RC_GEAR_L") if g == Sim.Gear.LOW else tr("RC_GEAR_H")
+
+
+## The 4-button layout is in use: the operator set it, or a magna save was
+## pressed this session (D-189).
+func _four_buttons() -> bool:
+	return _manual_locked or (sim != null and sim.manual) or _seen_magna
 
 
 func _show_mode() -> void:

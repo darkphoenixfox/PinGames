@@ -198,8 +198,8 @@ Rules:
 - **Controls:**
   - Flippers steer.
   - **2+1:** throttle and braking are automatic. The car brakes by itself when a corner would throw it off and it isn't drifting.
-  - **4+1:** magna R = accelerate, magna L = brake. This switches on at the first magna press when `operator.cabinet_buttons` = auto, and is always on when it is 4.
-  - **Gears (D-103):** holding **both flippers for 0.5 s shifts L ↔ H**. L pulls hard but tops out at 180 km/h. H is slow off the line but reaches 288 km/h. Shift up when the tachometer hits the red (SHIFT blinks), and drop to L after a crash.
+  - **4+1 (D-189):** the throttle stays automatic. Magna R is the **shifter** (one press flips L ↔ H) and magna L **brakes** (no auto-brake then; brake + steer still flicks into a drift). The flippers steer and rev on the grid as in 2+1. This switches on at the first magna press when `operator.cabinet_buttons` = auto (and stays on for the session), and is always on when it is 4.
+  - **Gears (D-103):** with 2+1 buttons, holding **both flippers for 0.5 s shifts L ↔ H** (with 4+1, the magna R shifter does). L pulls hard but tops out at 180 km/h. H is slow off the line but reaches 288 km/h. Shift up when the tachometer hits the red (SHIFT blinks), and drop to L after a crash.
   - **NITRO (D-103):** drive through a nitro canister on the road for 5 s of boost (up to 360 km/h). Canisters sit in any lane, including the oncoming ones, every 0.7–1.2 km.
   - Launch/Start begins the race.
 - **Drifting (the core skill):**

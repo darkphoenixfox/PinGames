@@ -1287,8 +1287,22 @@ func test_racer_sim() -> void:
 	m.manual = true
 	for i in 60:
 		m.step(dt, false, false, false, false)
-	check(m.v < 1.0, "manual mode needs the gas button")
+	check(m.v > 8.0, "4-button mode: the throttle is automatic (D-189)")
+	var mv0: float = m.v
+	for i in 30:
+		m.step(dt, false, false, false, true)
+	check(m.v < mv0 - 5.0 and m.braking, "4-button mode: the left magna brakes")
+	# The shifter button flips the gear once per press; both flippers don't shift.
+	var g0: int = m.gear
+	m.shift_request = true
+	m.step(dt, false, false)
+	check(m.gear != g0 and not m.shift_request, "4-button shifter flips the gear")
+	var g1: int = m.gear
 	for i in 60:
-		m.step(dt, false, false, true, false)
-	check(m.v > 8.0, "manual gas accelerates")
+		m.step(dt, true, true)
+	check(m.gear == g1, "4-button mode: holding both flippers doesn't shift")
+	m.state = Sim.State.COUNTDOWN
+	m.shift_request = true
+	m.step(dt, false, false)
+	check(not m.shift_request, "a shifter press on the grid is dropped")
 
