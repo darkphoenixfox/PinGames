@@ -6,8 +6,9 @@ areas are painted pink, prepared for the game.
 - Turns the cabinet so the backglass faces the player (Godot +Z), centres it
   on X, puts its feet on the floor and its front edge at Z = 0.
 - Writes assets/models/vr/pinball_cabinet.glb (texture scaled to 2048) and
-  pinball_cabinet_screens.json: for each screen its centre, right and up axes
-  and size, in Godot coordinates, so the game lays the live screens on them.
+  a first pinball_cabinet_screens.json. The final placement is measured in
+  Godot's own space by scripts/tools/measure_vr_cabinet.gd: run it after this,
+  once Godot has imported the model.
 Usage: blender --background --python scripts/tools/prepare_vr_cabinet.py -- <in.glb> <out_dir>
 """
 import bpy, sys, os, json, math
@@ -137,12 +138,6 @@ for name, faces in regions.items():
         if acc >= tot * 0.5:
             plane = dval
             break
-    if name == "playfield":
-        from collections import Counter
-        hist = Counter()
-        for f in faces:
-            hist[round(f.center.dot(n), 2)] += f.area
-        print("PLANEHIST", sorted((k, round(v, 3)) for k, v in hist.items() if v > 0.002), "chosen", round(plane, 3))
     # Extents from all the region's faces (the plane filter trims the ends of a
     # slightly curved/stepped screen area), outliers trimmed below.
     pts = [me.vertices[i].co for f in faces for i in f.vertices]
