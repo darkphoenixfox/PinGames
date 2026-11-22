@@ -1416,3 +1416,8 @@
   - **Message:** the police escape message reads LOST THEM! instead of ESCAPED!.
   - **SHIFT hint:** the shifter next to SHIFT (D-151) looked like it was asking for a downshift when the knob slid back. It now only shows L → H: at the end of each loop the knob jumps straight back to L with no travel (`GearLever.snap_low`).
 - **Status:** Accepted
+
+### D-156 — Turbo Run: speed cameras trigger over 100 mph
+- **Date:** 2026-11-22
+- **Decision (director):** any speed over 100 mph (as shown, D-147) at a speed camera calls the police, for every car. This replaces the "1.5 × the L-gear limit" rule from D-135. In game terms it is 52.5 m/s: just above the normal car's L-gear limit, so in H you need to slow down for cameras. Tests check 99 mph passes and 101 mph is caught.
+- **Status:** Accepted

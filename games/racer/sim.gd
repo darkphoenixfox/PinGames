@@ -116,7 +116,7 @@ const FLIP_SLIDE_DECEL := 11.0   # m/s^2 sliding on its side after the roll
 ## close means BUSTED: it stops next to you, you're held, and a fine comes off
 ## the score. Outrun it long enough and it gives up.
 const RADAR_RANGE := 450.0      # m at which the detector starts beeping
-const TRAP_FACTOR := 1.5        # x the L-gear top speed that triggers a chase
+const TRAP_MPH := 100.0         # shown mph that triggers a chase at a camera (D-156)
 const POLICE_BEHIND := 140.0    # m behind the player it appears
 const CHASE_CLOSE := 16.0       # m/s faster than the player while closing in (D-137)
 const RAM_WINDUP := 1.2         # s alongside before it swerves in
@@ -412,7 +412,7 @@ func _update_traps() -> void:
 		radar = clampf(1.0 - d / RADAR_RANGE, 0.0, 1.0)
 	if d <= 0.0 and trap.s != _trap_passed:
 		_trap_passed = trap.s
-		var caught := v > l_top() * TRAP_FACTOR
+		var caught := v * MPH > TRAP_MPH   # D-156: over 100 mph on the speedometer
 		events.append(["trap", caught])
 		if caught and police.is_empty() and busted_t <= 0.0:
 			police = {"s": s - POLICE_BEHIND, "x": x, "v": v, "state": "chase", "t": 0.0}

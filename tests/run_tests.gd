@@ -649,8 +649,9 @@ func test_racer_sim() -> void:
 	pt.v = 30.0
 	pt.step(dt, false, false)
 	check(pt.radar > 0.2 and pt.radar < 0.5, "the radar detector picks up a camera ahead (%.2f)" % pt.radar)
-	# Slow past it: nothing happens.
-	pt.s = first_trap.s - 1.0
+	# 99 mph past it: nothing happens.
+	pt.v = 99.0 / Sim.MPH
+	pt.s = first_trap.s - 0.3
 	pt.traffic.clear()
 	pt.step(dt, false, false)
 	check(pt.police.is_empty(), "passing a camera slowly doesn't call the police")
@@ -659,9 +660,9 @@ func test_racer_sim() -> void:
 	cop.track.ensure(20000.0)
 	cop.state = Sim.State.RACE
 	cop.gear = Sim.Gear.HIGH
-	cop.s = first_trap.s - 1.0
+	cop.s = first_trap.s - 0.3
 	cop.next_checkpoint = cop.s + 99999.0   # no checkpoint points in the way
-	cop.v = cop.l_top() * 1.6
+	cop.v = 101.0 / Sim.MPH   # just over 100 mph
 	cop.score = 100000
 	cop._score_f = 100000.0
 	cop.step(dt, false, false)
