@@ -69,6 +69,9 @@ const CAR_TEXTURE := "res://assets/models/racer/red_car_albedo.png"
 ## Director's truck (D-099): 10 m, same orientation as the car.
 const TRUCK_MODEL := "res://assets/models/racer/truck.glb"
 const TRUCK_TEXTURE := "res://assets/models/racer/truck_albedo.png"
+## Director's second truck (D-121): a US-style tractor with a striped trailer.
+const TRUCK2_MODEL := "res://assets/models/racer/truck2.glb"
+const TRUCK2_TEXTURE := "res://assets/models/racer/truck2_albedo.png"
 
 const ACCENT := Color("ffd23e")
 const TITLE_FONT := "sunset"
@@ -138,23 +141,20 @@ const SOUNDS := {
 	"rc_bump": {"voices": [[{"f": [130.0, 45.0], "t": 0.22, "w": "sine", "v": 0.6}],
 		[{"f": [1800.0, 500.0], "t": 0.1, "w": "noise", "v": 0.25, "lp": 0.6}],
 		[{"f": [620.0, 540.0], "t": 0.12, "w": "triangle", "v": 0.1}]], "reverb": [0.3, 0.15]},
-	# Turbo: a rising whoosh, a growling saw and a sub-bass boom with a
-	# shimmering tail, in a big reverb (D-112).
+	# Nitro (D-121): an ignition "fwoomp" - a noise burst falling through a low
+	# pass, a growling engine roar and a sub boom; no tonal lead.
 	"rc_nitro": {"voices": [
-		[{"f": [300.0, 7000.0], "t": 0.45, "w": "noise", "v": 0.4, "lp": 0.25, "a": 0.02, "env": "lin"}],
-		[{"f": [55.0, 110.0], "t": 0.8, "w": "saw", "v": 0.3, "lp": 0.55, "vib": [28.0, 0.6], "env": "lin"}],
-		[{"f": [95.0, 42.0], "t": 0.6, "w": "sine", "v": 0.55}],
-		[{"f": [330.0, 1320.0], "t": 0.28, "w": "square", "v": 0.1, "lp": 0.35, "env": "hold"},
-		 {"f": [1320.0, 1320.0], "t": 0.35, "w": "square", "v": 0.08, "lp": 0.35, "vib": [12.0, 0.4]}]],
-		"reverb": [1.0, 0.3]},
-	# Perfect shift: a bright rising two-note sting with a shimmer (D-116).
+		[{"f": [6000.0, 400.0], "t": 0.55, "w": "noise", "v": 0.45, "lp": 0.35, "a": 0.01}],
+		[{"f": [70.0, 140.0], "t": 0.35, "w": "saw", "v": 0.3, "lp": 0.7, "vib": [32.0, 0.8], "env": "hold"},
+		 {"f": [140.0, 120.0], "t": 0.5, "w": "saw", "v": 0.25, "lp": 0.75, "vib": [32.0, 0.6]}],
+		[{"f": [80.0, 36.0], "t": 0.6, "w": "sine", "v": 0.6}]], "reverb": [0.8, 0.22]},
+	# Perfect shift / start (D-121): a rising brass stab with a turbo whoosh.
 	"rc_perfect": {"voices": [
-		[{"f": [880.0, 880.0], "t": 0.07, "w": "saw", "v": 0.16, "lp": 0.5, "env": "hold"},
-		 {"f": [1319.0, 1319.0], "t": 0.4, "w": "saw", "v": 0.16, "lp": 0.5, "vib": [7.0, 0.2]}],
-		[{"f": [440.0, 440.0], "t": 0.07, "w": "triangle", "v": 0.3, "env": "hold"},
-		 {"f": [659.0, 659.0], "t": 0.4, "w": "triangle", "v": 0.3}],
-		[{"f": [6000.0, 9000.0], "t": 0.3, "w": "noise", "v": 0.06, "lp": 0.1}]],
-		"echo": [0.09, 0.3, 0.35], "reverb": [0.8, 0.25]},
+		[{"f": [262.0, 262.0], "t": 0.08, "w": "saw", "v": 0.16, "lp": 0.6, "env": "hold"},
+		 {"f": [392.0, 392.0], "t": 0.35, "w": "saw", "v": 0.17, "lp": 0.55}],
+		[{"f": [131.0, 131.0], "t": 0.08, "w": "saw", "v": 0.14, "lp": 0.7, "env": "hold"},
+		 {"f": [196.0, 196.0], "t": 0.35, "w": "saw", "v": 0.14, "lp": 0.7}],
+		[{"f": [800.0, 5000.0], "t": 0.35, "w": "noise", "v": 0.22, "lp": 0.4, "env": "lin"}]], "reverb": [0.8, 0.25]},
 	# Upshift backfire: a crackle and a thump.
 	"rc_backfire": {"voices": [[{"f": [1800.0, 300.0], "t": 0.12, "w": "lfsr", "v": 0.4, "lp": 0.3}],
 		[{"f": [110.0, 50.0], "t": 0.15, "w": "sine", "v": 0.5}]], "reverb": [0.3, 0.2]},
@@ -169,19 +169,13 @@ const SOUNDS := {
 	# Near miss: a Doppler pass, engine tone dropping as it whooshes by.
 	"rc_near_miss": {"voices": [[{"f": [440.0, 150.0], "t": 0.5, "w": "saw", "v": 0.16, "lp": 0.6}],
 		[{"f": [4000.0, 500.0], "t": 0.45, "w": "noise", "v": 0.28, "lp": 0.45, "a": 0.05}]], "reverb": [0.4, 0.2]},
-	# Drift points banked: a bright bell cascade with an octave-down shadow and a
-	# coin shimmer, echoed (D-112).
+	# Drift points banked (D-121): a short brass stab over a tyre-release swoosh.
 	"rc_drift_bank": {"voices": [
-		[{"f": [1319.0, 1319.0], "t": 0.05, "w": "triangle", "v": 0.3, "env": "hold"},
-		 {"f": [1661.0, 1661.0], "t": 0.05, "w": "triangle", "v": 0.3, "env": "hold"},
-		 {"f": [1976.0, 1976.0], "t": 0.05, "w": "triangle", "v": 0.3, "env": "hold"},
-		 {"f": [2637.0, 2637.0], "t": 0.35, "w": "triangle", "v": 0.3, "vib": [6.0, 0.15]}],
-		[{"f": [659.0, 659.0], "t": 0.05, "w": "sine", "v": 0.25, "env": "hold"},
-		 {"f": [831.0, 831.0], "t": 0.05, "w": "sine", "v": 0.25, "env": "hold"},
-		 {"f": [988.0, 988.0], "t": 0.05, "w": "sine", "v": 0.25, "env": "hold"},
-		 {"f": [1319.0, 1319.0], "t": 0.4, "w": "sine", "v": 0.25}],
-		[{"f": [9000.0, 9000.0], "t": 0.15, "w": "noise", "v": 0.07, "lp": 0.1, "gap": 0.0}]],
-		"echo": [0.07, 0.3, 0.35], "reverb": [0.9, 0.25]},
+		[{"f": [294.0, 294.0], "t": 0.22, "w": "saw", "v": 0.16, "lp": 0.6, "a": 0.01}],
+		[{"f": [370.0, 370.0], "t": 0.22, "w": "saw", "v": 0.14, "lp": 0.6, "a": 0.01}],
+		[{"f": [440.0, 440.0], "t": 0.22, "w": "saw", "v": 0.12, "lp": 0.6, "a": 0.01}],
+		[{"f": [3000.0, 800.0], "t": 0.3, "w": "noise", "v": 0.2, "lp": 0.5}],
+		[{"f": [100.0, 55.0], "t": 0.2, "w": "sine", "v": 0.4}]], "reverb": [0.6, 0.22]},
 	# Low-time clock: a woodblock "tock" with a soft body (D-112).
 	"rc_tick": {"voices": [[{"f": [1900.0, 1600.0], "t": 0.05, "w": "triangle", "v": 0.35}],
 		[{"f": [950.0, 900.0], "t": 0.09, "w": "sine", "v": 0.25}],
@@ -236,7 +230,7 @@ var _steer_sign := 0.0
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
 var _music_i := FIRST_TRACK    # current race song index
-var _traffic_pool := {"car": [], "truck": []}   # pools of Node3D per kind
+var _traffic_pool := {"car": [], "truck": [], "truck2": []}   # pools of Node3D per model
 ## Tyre smoke / dust (D-100): our own pooled billboard puffs in one MultiMesh.
 ## CPUParticles3D drew a stray pure-black puff at the emitter when toggled.
 const PUFF_MAX := 192
@@ -721,9 +715,14 @@ func _build_cars() -> void:
 		_flames.append(flame)
 	for kind in _traffic_pool:
 		for i in (TRAFFIC_POOL if kind == "car" else Sim.MAX_TRUCKS):
-			var t := _car_instance(0.0) if kind == "car" else _car_instance(0.0, TRUCK_MODEL, TRUCK_TEXTURE)
-			_add_headlights(t, kind)
-			t.set_meta("night", Night.add_car_lights(t, kind, _puff_texture()))
+			var t: Node3D
+			match kind:
+				"car": t = _car_instance(0.0)
+				"truck": t = _car_instance(0.0, TRUCK_MODEL, TRUCK_TEXTURE)
+				_: t = _car_instance(0.0, TRUCK2_MODEL, TRUCK2_TEXTURE)
+			var light_kind := "car" if kind == "car" else "truck"
+			_add_headlights(t, light_kind)
+			t.set_meta("night", Night.add_car_lights(t, light_kind, _puff_texture()))
 			t.visible = false
 			_root.add_child(t)
 			_traffic_pool[kind].append(t)
@@ -1220,9 +1219,11 @@ func _animate(delta: float) -> void:
 			fl.scale = Vector3(1.0, sy, 1.0)
 			fl.position.z = -2.2 - 0.5 * sy   # keep the cone's base on the pipe
 	# Traffic
-	var used := {"car": 0, "truck": 0}
+	var used := {"car": 0, "truck": 0, "truck2": 0}
 	for t in sim.traffic:
 		var kind: String = t.get("kind", "car")
+		if kind == "truck" and int(t.id) % 2 == 1:
+			kind = "truck2"   # two truck models, fixed per vehicle (D-121)
 		var pool: Array = _traffic_pool[kind]
 		if used[kind] >= pool.size():
 			continue
@@ -1613,6 +1614,9 @@ func _update_night(delta: float) -> void:
 ## Debug builds only (DebugTools, D-057): F freezes / unfreezes the race clock
 ## (D-118). Shown on the HUD so it isn't left on by accident.
 func _on_debug_action(action: StringName) -> void:
+	if action == &"skip_stage":
+		_debug_skip_to_night()
+		return
 	if action != &"fire_line":
 		return
 	_freeze_time = not _freeze_time
@@ -1620,6 +1624,16 @@ func _on_debug_action(action: StringName) -> void:
 		sim.freeze_time = _freeze_time
 	if is_instance_valid(_frozen_label):
 		_frozen_label.modulate.a = 1.0 if _freeze_time else 0.0
+
+
+## Debug S (D-121): jump to stage 5 (night falls) without driving there.
+func _debug_skip_to_night() -> void:
+	if sim == null or _phase != "race" or sim.checkpoints >= Night.NIGHT_STAGE - 1:
+		return
+	sim.checkpoints = Night.NIGHT_STAGE - 1
+	sim.next_checkpoint = sim.s + Sim.CHECKPOINT_EVERY
+	sim.time_left = maxf(sim.time_left, 60.0)
+	Dmd.flash(tr("RC_STAGE") % (sim.checkpoints + 1), 1.0, Dmd.CYAN)
 
 
 ## Plays one of the DMD event animations (D-115) with its translated texts.

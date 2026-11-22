@@ -1145,3 +1145,14 @@
 - **Handling (director):** in H the car slides wider in bends (centrifugal push × 1.3). In L it grips (push × 0.85, steering authority × 1.3), so you downshift to hold the inside line.
 - **Car lamps (director: the red circles were misplaced; light up the car's texture instead):** `car.gdshader` adds emission to the model's own tail-light and headlight texels. They are picked by model-space boxes (rear |x| 0.2–0.7, y 0.7–0.9; front |x| 0.45–0.82, y 0.55–0.8) and scaled by texel brightness. Instance uniforms: `lamps` (night level) and `brake`. The hero car's brake lights come on when braking, auto-braking or coasting out after TIME UP. Traffic cars get `lamps` at night. The billboard glow dots are dropped for cars; trucks, a different model, keep them.
 - **Status:** Accepted
+
+### D-121 — Turbo Run: second truck model, S skip-to-night cheat, nitro/drift/perfect sounds
+- **Date:** 2026-11-22
+- **Second truck (director):** `truck2.glb`, a US-style tractor with a striped trailer, mixes with the first truck. The full 35.8k-tri mesh is kept and scaled to 10 m (2.89 m wide, 3.18 m tall), so the sim's truck size still fits. The model is fixed per vehicle (odd traffic ids get truck2), with a pool of 4 per model.
+- **Debug S (director):** DebugTools' new S key (debug builds only) emits `skip_stage`. Turbo Run jumps to stage 5: the checkpoint count is set, the next checkpoint is moved one stage ahead, and the clock gets at least 60 s, so night falls.
+- **Sounds (director: nitro and drift still beeped):**
+  - **Nitro:** an ignition "fwoomp" (noise burst falling through a low-pass, a growling roar and a sub boom).
+  - **Drift points:** a short brass stab over a tyre-release swoosh.
+  - **Perfect shift/start:** a rising brass stab with a turbo whoosh.
+  - None of them has a tonal chiptune lead any more.
+- **Status:** Accepted
