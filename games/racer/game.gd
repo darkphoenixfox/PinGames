@@ -85,7 +85,12 @@ const TITLE_FONT := "sunset"
 ## The first race plays action_3 (director's pick).
 ## Attract mode: "Maximum Overdrive" by Bogart VGM, CC BY 3.0 (D-104).
 const MUSIC_STAGES := 4
-const OPENING_STAGES := 5   # stages played to Maximum Overdrive (D-111)
+const OPENING_STAGES := 4   # stages played to Maximum Overdrive (D-111, D-129)
+## Night (stage 5) crossfades to "Dreamstate" by Bogart VGM, CC BY 3.0 (D-129),
+## which plays through stage 9; the CodeManu songs take over from stage 10.
+const MUSIC_NIGHT := "res://assets/audio/music/racer/bogart_dreamstate.ogg"
+const NIGHT_STAGES := 5
+const NIGHT_XFADE := 6.0
 const MUSIC_ATTRACT := "res://assets/audio/music/racer/bogart_maximum_overdrive.ogg"
 const FIRST_TRACK := 2
 const MUSIC_TRACKS := [
@@ -427,12 +432,16 @@ func _attract_tick() -> void:
 	# Blink by alpha, not visibility: a hidden label collapses in its VBox and
 	# makes the text below it jump (D-096).
 	_attract_blink.modulate.a = 1.0 if fmod(_phase_t, 1.0) < 0.6 else 0.0
-	var step := int(_phase_t / 3.0) % 3
-	if step != int((_phase_t - get_process_delta_time()) / 3.0) % 3 or _phase_t < 0.05:
+	# DMD cycle; music credits (CC BY attribution, D-129) mixed in.
+	var step := int(_phase_t / 3.0) % 6
+	if step != int((_phase_t - get_process_delta_time()) / 3.0) % 6 or _phase_t < 0.05:
 		match step:
 			0: Dmd.show_image(load(DMD_LOGO))
 			1: Dmd.show_text(tr("RC_SHIFT_HINT"), tr("RC_NITRO_HINT"), Dmd.CYAN, Dmd.WHITE)
-			2: Dmd.show_text(tr("ATTRACT_HIGH_SCORES"), _top_score_line(), Dmd.YELLOW, Dmd.WHITE)
+			2: Dmd.show_text(tr("RC_CREDIT_MUSIC"), tr("RC_CREDIT_BOGART"), Dmd.DIM, Dmd.YELLOW)
+			3: Dmd.show_text(tr("ATTRACT_HIGH_SCORES"), _top_score_line(), Dmd.YELLOW, Dmd.WHITE)
+			4: Dmd.show_text(tr("RC_CREDIT_BOGART"), tr("RC_CREDIT_BOGART_URL"), Dmd.YELLOW, Dmd.WHITE)
+			5: Dmd.show_text(tr("RC_CREDIT_MUSIC"), tr("RC_CREDIT_CODEMANU"), Dmd.DIM, Dmd.CYAN)
 
 
 func _top_score_line() -> String:
@@ -568,10 +577,13 @@ func _handle_events() -> void:
 				# Stage 6 starts the CodeManu songs (action_3 first), which then
 				# change every MUSIC_STAGES stages (D-105, D-111).
 				var stage := int(e[1]) + 1
+				var later := OPENING_STAGES + NIGHT_STAGES + 1   # stage 10
 				if stage == OPENING_STAGES + 1:
+					Audio.play_music(MUSIC_NIGHT, NIGHT_XFADE)   # as the lights go down
+				elif stage == later:
 					_music_i = FIRST_TRACK
 					Audio.play_music(MUSIC_TRACKS[_music_i])
-				elif stage > OPENING_STAGES + 1 and (stage - OPENING_STAGES - 1) % MUSIC_STAGES == 0:
+				elif stage > later and (stage - later) % MUSIC_STAGES == 0:
 					_music_i += 1
 					Audio.play_music(MUSIC_TRACKS[_music_i % MUSIC_TRACKS.size()])
 				# Reached on momentum after TIME UP: the race goes on (D-103).

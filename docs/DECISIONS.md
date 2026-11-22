@@ -1215,3 +1215,10 @@
 - **Perfect start (director: a bit easier):** the start has its own wider window, rpm 0.58–0.93 (the shift window stays 0.69–0.87), and the grid revs move slower (up 1.5/s, down 1.0/s; was 2.2/1.4), so the needle is easier to hold in the band. During the countdown, the tachometer and the DMD bar show the start window.
 - **Snap at GO (director: holding a flipper as the car pulls away shifted its angle harshly):** at standstill the sideways speed was large compared with the forward speed, so the nose jumped to the clamp at once. Now steering authority starts at 0 when stopped (the 0.06 floor is gone), the travel angle fades in with speed up to 15 m/s, and the nose angle eases at 1.8 rad/s.
 - **Status:** Accepted
+
+### D-129 — Turbo Run: "Dreamstate" at nightfall; music credits on the attract DMD
+- **Date:** 2026-11-22
+- **Music (director):** at stage 5, as the lights go down, the music crossfades (6 s) from Maximum Overdrive to "Dreamstate" by Bogart VGM (`bogart_dreamstate.ogg`, converted from the director's MP3, 3:48, looped). Maximum Overdrive now covers stages 1–4, and Dreamstate stages 5–9. The CodeManu action songs start at stage 10 (action_3 first) and change every 4 stages. This amends D-111.
+- **License:** the director named the author but not the license. It is assumed CC BY 3.0 like the same author's Maximum Overdrive and flagged in CREDITS.md to confirm.
+- **Attribution (director):** the attract DMD cycle now has 6 pages of 3 s: logo, hint, "MUSIC BY / BOGART VGM", high score, "BOGART VGM / FACEBOOK.COM/BOGARTVGM" (marquee), "MUSIC BY / CODEMANU". CREDITS.md links Bogart VGM to https://www.facebook.com/BogartVGM/.
+- **Status:** Accepted (license to confirm)
