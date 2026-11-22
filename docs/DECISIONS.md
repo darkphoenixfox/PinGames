@@ -1848,3 +1848,17 @@
 - **Fix (director's screenshot of stage 3):** the ground strip beside the road ended in mid-air, so on hills its far edge showed as a raised green wave with sky under it; the old painted backdrop had hidden this. Each outer edge now hangs a skirt 400 m further out and 250 m lower, a gentle slope into the haze (a steeper one read as a grey wall).
 - **Tests:** the first nitro sits in front of the car. The low-gear test now clears pickups, because the first canister is in its path.
 - **Status:** Accepted (amends D-148, D-115)
+
+### D-198 — Turbo Run police: hitting it slows it, ram streaks, night lights, siren light; tail lights
+- **Date:** 2026-11-23
+- **Decisions (director):**
+  - **Hitting the police car slows it:** running into it from behind (the police car ahead) no longer counts as a police ram. It keeps 55 % of its speed and is shoved aside; the player keeps 92 % and bounces off a little. The same applies while it gives up or drives off. Contact from the side or from behind is still the police ramming the player.
+  - **Ram streaks:** the 3 rams that bust the player must come close together. The count clears when more than `HIT_STREAK` (6 s) passes since the last ram, or when the player gets `HIT_RESET_GAP` (40 m) ahead of it. The DMD flashes SHOOK THEM OFF.
+  - **Police lights at night:** the police car never received the night value, so it ran dark. It now gets head and tail lamps and the headlight beam at night, like every other car.
+  - **Siren light:** while the light bar flashes, a red and a blue point light (14 m range) and an additive glow pool on the road (11 m) alternate with the flashers. They're faint by day (0.7 / 18 %) and strong at night (2.6 / 70 %), lighting the road and nearby cars.
+  - **Tail lights:**
+    - The lamps run dim at night (0.3) and go full when braking, with a hot core, instead of one flat level.
+    - At night every car, including the hero, traffic cars, hatchbacks and the police car, has a soft red glow at each rear lamp (`TAIL_AT` per model), as the trucks already did.
+    - The hero's glows grow while braking (1.6×).
+- **Tests:** rams far apart don't add up, getting away clears the count, and running into the police car slows it without counting as a ram.
+- **Status:** Accepted (amends D-137, D-142, D-120)

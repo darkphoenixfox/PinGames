@@ -86,6 +86,12 @@ const TRUCK2_MODEL := "res://assets/models/racer/truck2.glb"
 const HATCH_MODEL := "res://assets/models/racer/hatchback.glb"
 const HATCH_TEXTURE := "res://assets/models/racer/hatchback_albedo.png"
 const HATCH_POOL := 8
+## Rear lamp glow spots per model at night (D-198): x = half width, nose +Z.
+const TAIL_AT := {
+	"car": Vector3(0.62, 0.72, -2.2),
+	"hatch": Vector3(0.62, 0.85, -2.0),
+	"police": Vector3(0.62, 0.75, -2.35),
+}
 ## Indicator spots per model, on its own right side (D-163).
 const BLINKERS := {
 	"car": [Vector3(-0.85, 0.65, -2.15), Vector3(-0.8, 0.6, 2.15)],
@@ -274,6 +280,9 @@ var _gfx_index := 0
 var _gfx_hint: Label
 var _police: Node3D          # D-135
 var _flashers: Array = []
+var _police_night: Node3D       # D-198: its head/tail lights at night
+var _siren_lights: Array = []   # D-198: [red, blue] OmniLight3D from the light bar
+var _siren_pools: Array = []    # D-198: [red, blue] glow pools on the road around it
 var _washes: Array = []
 var _police_swing := 0.0     # 0..1 of the 90-degree stop turn (D-139)      # red / blue screen-edge glows (D-137)
 var _siren: AudioStreamPlayer
@@ -886,6 +895,11 @@ func _handle_events() -> void:
 				Audio.sfx("rc_bump")
 				_shake = 0.45
 				_bg_dark = 0.3
+			"police_bumped":   # we ran into the police car (D-198)
+				Audio.sfx("rc_bump")
+				_shake = 0.3
+			"police_hits_reset":   # its rams start counting again (D-198)
+				Dmd.flash(tr("RC_RAMS_RESET"), 1.0, Dmd.GREEN)
 			"busted":
 				_center_message(tr("RC_BUSTED"), 2.5)
 				_dmd_anim("fine", [tr("RC_BUSTED"), tr("RC_FINE"), "-" + ScoreTable.format_score(int(e[1]))])
@@ -1070,7 +1084,7 @@ func _build_cars() -> void:
 	_car = Node3D.new()
 	_root.add_child(_car)
 	_car_body = _car_instance(0.0)
-	_player_lights = Night.add_car_lights(_car_body, "car", _puff_texture())
+	_player_lights = Night.add_car_lights(_car_body, "car", _puff_texture(), TAIL_AT["car"])
 	_add_plate(_car_body)
 	_car.add_child(_car_body)
 	_build_puffs()
@@ -1110,7 +1124,7 @@ func _build_cars() -> void:
 			var light_kind := "truck" if kind.begins_with("truck") else "car"
 			_add_headlights(t, light_kind)
 			_add_blinkers(t, kind)
-			t.set_meta("night", Night.add_car_lights(t, light_kind, _puff_texture()))
+			t.set_meta("night", Night.add_car_lights(t, light_kind, _puff_texture(), TAIL_AT.get(kind, Vector3.ZERO)))
 			t.visible = false
 			_root.add_child(t)
 			_traffic_pool[kind].append(t)
@@ -1342,6 +1356,36 @@ func _build_police() -> void:
 		f.position = Vector3(-0.35 if c.r > 0.5 else 0.35, 1.52, 0.15)
 		_police.add_child(f)
 		_flashers.append(f)
+	# Night lights like the other cars (D-198).
+	_police_night = Night.add_car_lights(_police, "car", _puff_texture(), TAIL_AT["police"])
+	# Siren light (D-198): the light bar lights the road and the cars around it,
+	# red and blue in turn, strongest at night: a coloured light each, plus a
+	# soft glow pool on the road (the fake-light look of the lamp pools).
+	for c in [Color(1.0, 0.12, 0.1), Color(0.2, 0.4, 1.0)]:
+		var l := OmniLight3D.new()
+		l.light_color = c
+		l.omni_range = 14.0
+		l.light_energy = 0.0
+		l.shadow_enabled = false
+		l.position = Vector3(-0.35 if c.r > 0.5 else 0.35, 1.9, 0.15)
+		_police.add_child(l)
+		_siren_lights.append(l)
+		var pool := MeshInstance3D.new()
+		var pq := PlaneMesh.new()
+		pq.size = Vector2(11.0, 11.0)
+		var pm := StandardMaterial3D.new()
+		pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		pm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		pm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		pm.albedo_texture = _puff_texture()
+		pm.albedo_color = Color(c, 0.0)
+		pm.no_depth_test = false
+		pq.material = pm
+		pool.mesh = pq
+		pool.position = Vector3(-1.2 if c.r > 0.5 else 1.2, 0.08, 0.0)
+		pool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_police.add_child(pool)
+		_siren_pools.append(pool)
 	_siren = AudioStreamPlayer.new()
 	_siren.bus = "SFX"
 	_siren.stream = _loop_wav(func(t: float) -> float:
@@ -1388,6 +1432,18 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	var blue_on := lights and ph >= 0.25 and (ph < 0.33 or ph > 0.4)
 	(_flashers[0] as Node3D).visible = red_on
 	(_flashers[1] as Node3D).visible = blue_on
+	# Its own head/tail lights at night (D-198), like every other car.
+	for m in _police.find_children("*", "MeshInstance3D", true, false):
+		if (m as MeshInstance3D).material_override is ShaderMaterial:
+			InstParam.set_param(m as MeshInstance3D, "lamps", _lamps)
+	_police_night.visible = _lamps > 0.0
+	# Siren light around the car (D-198), red and blue in turn, stronger at night.
+	var glow := lerpf(0.7, 2.6, _night)
+	for i in 2:
+		var on: bool = red_on if i == 0 else blue_on
+		(_siren_lights[i] as OmniLight3D).light_energy = glow if on else 0.0
+		var pm := ((_siren_pools[i] as MeshInstance3D).mesh as PlaneMesh).material as StandardMaterial3D
+		pm.albedo_color.a = lerpf(0.18, 0.7, _night) if on else 0.0
 	# Screen wash while it's close (D-137): up to 45 % within 25 m.
 	var near := 1.0 - clampf((absf(pd.s - sim.s) - 25.0) / 100.0, 0.0, 1.0)
 	# Same sides as the light bar seen from behind (D-147): blue left, red right.
@@ -1726,6 +1782,9 @@ func _animate(delta: float) -> void:
 			InstParam.set_param(gi, "brake", 1.0 if braking else 0.0)
 	if _player_lights != null:
 		_player_lights.visible = _lamps > 0.0 and not (sim.spin_t > 0.0 and sim.flipping)
+		# Brake lights glow bigger than the running lights (D-198).
+		for tl in _player_lights.get_meta("tails", []):
+			(tl as Node3D).scale = Vector3.ONE * (1.6 if braking else 1.0)
 	var smoking := sim.drifting or sliding_out or _shift_smoke_t > 0.0 or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
 	_update_puffs(delta, smoking)
 	# Revving on the grid spits fire (D-116): pops while held high, and one as

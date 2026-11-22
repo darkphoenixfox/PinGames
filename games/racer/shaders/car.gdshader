@@ -79,12 +79,15 @@ void fragment() {
 		}
 	}
 	float redness = (c.r > 0.3 && c.r > c.g * 1.8 && c.r > c.b * 1.8) ? 1.0 : 0.0;
-	float tail = in_box(mp, tail_min, tail_max) * clamp(lamps * 0.7 + brake, 0.0, 1.5)
-		* (tail_red_only ? redness : 1.0);
+	// Tail lamps (D-198): a dim running glow at night, full brightness braking
+	// (with a hot core), instead of one flat level.
+	float tail_mask = in_box(mp, tail_min, tail_max) * (tail_red_only ? redness : 1.0);
+	float tail = tail_mask * max(lamps * 0.3, brake);
 	float head = in_box(mp, head_min, head_max) * lamps;
 	float top_k = clamp((mp.y - 0.3) / 0.9, 0.0, 1.0);   // the roof catches it most
 	EMISSION = ALBEDO * vec3(1.0, 0.62, 0.25) * overhead * (0.35 + 0.9 * top_k)
-		+ tail * vec3(1.0, 0.12, 0.08) * (0.6 + lum * 2.0) * 1.6
+		+ tail * vec3(1.0, 0.1, 0.06) * (0.4 + lum * 2.2) * 1.8
+		+ tail_mask * brake * vec3(1.0, 0.5, 0.4) * lum * 0.9
 		+ head * vec3(1.0, 0.95, 0.8) * (0.3 + lum * 1.6) * 1.4;
 	ROUGHNESS = toon ? 0.8 : 0.35;
 	METALLIC = toon ? 0.0 : 0.25;

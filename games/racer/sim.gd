@@ -125,6 +125,10 @@ const CHASE_CLOSE := 16.0       # m/s faster than the player while closing in (D
 const RAM_WINDUP := 1.2         # s alongside before it swerves in
 const POLICE_TOP := 1.06        # x the player car's top speed (D-142): nitro outruns it
 const POLICE_HITS := 3          # hits to stop the player
+const HIT_STREAK := 6.0         # D-198: s between rams before the count starts again
+const HIT_RESET_GAP := 40.0     # D-198: m ahead of the police that also clears the count
+const RAMMED_SLOW := 0.55       # D-198: speed the police keeps when the player runs into it
+const RAMMER_SLOW := 0.92       # D-198: speed the player keeps doing it
 const HIT_SLOW := 0.78          # speed kept per hit
 const HIT_BOUNCE := 9.0         # m/s sideways shove
 const POLICE_BUMP_SLOW := 0.55  # speed the police keeps after hitting traffic
@@ -469,8 +473,16 @@ func _update_police(dt: float) -> void:
 			_police_follow(dt, want_ds, CHASE_CLOSE)
 			police.x = move_toward(police.x, want_x, (9.0 if police.ram_t > RAM_WINDUP else 5.0) * dt)
 			police.hit_cd = maxf(0.0, float(police.get("hit_cd", 0.0)) - dt)
+			# The rams only count close together (D-198): a pause, or getting
+			# well ahead of it, starts the count again.
+			if int(police.get("hits", 0)) > 0 and (police.t - float(police.get("last_hit_t", 0.0)) > HIT_STREAK 					or ds < -HIT_RESET_GAP):
+				police.hits = 0
+				events.append(["police_hits_reset"])
 			if spin_t <= 0.0 and grace_t <= 0.0 and police.hit_cd <= 0.0 and absf(ds) < CAR_LEN * 0.9 					and absf(police.x - x) < CAR_W * 0.95:
-				_police_hit()
+				if ds > CAR_LEN * 0.3:
+					_hit_police()       # we ran into it from behind (D-198)
+				else:
+					_police_hit()
 			var close := ds > -BUST_NEAR
 			if close and (spin_t > 0.0 or v < BUST_SPEED):
 				_bust()
@@ -494,12 +506,14 @@ func _update_police(dt: float) -> void:
 			elif busted_t <= 0.0 and spin_t <= 0.0:
 				police.state = "leave"
 		"giveup":
+			_check_hit_police(ds, dt)
 			# Escaped (D-145): it eases off and drops behind, out of the race.
 			police.v = move_toward(police.v, v * 0.5, 14.0 * dt)
 			if ds < -300.0:
 				police = {}
 				return
 		"leave":
+			_check_hit_police(ds, dt)
 			# Drive off ahead (D-139): it overtakes and disappears up the road.
 			police.v = move_toward(police.v, maxf(v + 25.0, 40.0), 18.0 * dt)
 			police.x = move_toward(police.x, 0.0 if absf(x) > 3.0 else (3.7 if x < 0.0 else -3.7), 3.0 * dt)
@@ -529,10 +543,31 @@ func _police_follow(dt: float, want_ds: float, close: float, rate: float = 40.0,
 	police.v = move_toward(police.v, maxf(target, -back), rate * dt)
 
 
+## Running into a police car that isn't ramming us (D-198).
+func _check_hit_police(ds: float, dt: float) -> void:
+	police.hit_cd = maxf(0.0, float(police.get("hit_cd", 0.0)) - dt)
+	if police.hit_cd <= 0.0 and spin_t <= 0.0 and absf(ds) < CAR_LEN * 0.9 and absf(float(police.x) - x) < CAR_W * 0.95:
+		_hit_police()
+
+
+## The player runs into the police car (D-198): it loses most of its speed and
+## is shoved aside; the player loses a little.
+func _hit_police() -> void:
+	police.hit_cd = 0.8
+	police.v = minf(float(police.v), v) * RAMMED_SLOW
+	var away := signf(float(police.x) - x) if absf(float(police.x) - x) > 0.05 else 1.0
+	police.x = float(police.x) + away * 1.4
+	v *= RAMMER_SLOW
+	lat_v = -away * HIT_BOUNCE * 0.5
+	_end_drift()
+	events.append(["police_bumped"])
+
+
 ## The police car slams into the player (D-142): both bounce apart and the
 ## player loses speed; the third hit spins the player out (then it's a bust).
 func _police_hit() -> void:
 	police.hits = int(police.get("hits", 0)) + 1
+	police.last_hit_t = police.t
 	police.hit_cd = 0.8
 	police.ram_t = 0.0
 	var away := signf(x - float(police.x)) if absf(x - float(police.x)) > 0.05 else -float(police.side)

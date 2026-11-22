@@ -30,6 +30,7 @@ func _initialize() -> void:
 	test_racer_time_of_day()
 	test_racer_hd_assets()
 	test_racer_first_nitro()
+	test_racer_police_rams()
 	test_exported_translation()
 	test_export_includes_data()
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -616,6 +617,42 @@ func test_racer_first_nitro() -> void:
 	sm.step(1.0 / 60.0, false, false)
 	var first: Dictionary = sm.pickups[0]
 	check(absf(float(first.x) - sm.x) < Sim.PICKUP_DX and first.s > sm.s, "the first nitro sits in front of the car")
+
+
+## D-198: rams only count close together; running into the police slows it.
+func test_racer_police_rams() -> void:
+	var Sim = load("res://games/racer/sim.gd")
+	var dt := 1.0 / 60.0
+	# Two rams, then a long pause: the count starts again.
+	var a = Sim.new()
+	a.setup(7)
+	a.state = Sim.State.RACE
+	a.freeze_time = true
+	a.grace_t = 0.0
+	a.police = {"s": a.s - 2.0, "x": a.x, "v": a.v, "state": "chase", "t": 0.0, "hits": 2, "last_hit_t": 0.0, "side": 1.0}
+	a.police.t = Sim.HIT_STREAK + 1.0
+	a.police.hit_cd = 9.0   # no new ram this step
+	a.step(dt, false, false)
+	check(int(a.police.get("hits", 0)) == 0, "rams far apart in time don't add up to a bust")
+	# Getting well ahead of it clears the count too.
+	var b = Sim.new()
+	b.setup(7)
+	b.state = Sim.State.RACE
+	b.freeze_time = true
+	b.police = {"s": b.s - Sim.HIT_RESET_GAP - 10.0, "x": b.x, "v": b.v, "state": "chase", "t": 1.0, "hits": 2, "last_hit_t": 0.5, "side": 1.0}
+	b.step(dt, false, false)
+	check(int(b.police.get("hits", 0)) == 0, "pulling away from the police clears its rams")
+	# Running into it from behind: it slows hard, we lose a little.
+	var c = Sim.new()
+	c.setup(7)
+	c.state = Sim.State.RACE
+	c.freeze_time = true
+	c.grace_t = 0.0
+	c.v = 50.0
+	c.police = {"s": c.s + Sim.CAR_LEN * 0.6, "x": c.x, "v": 48.0, "state": "chase", "t": 1.0, "side": 1.0}
+	c.step(dt, false, false)
+	check(float(c.police.v) < 30.0 and c.v > 40.0 and int(c.police.get("hits", 0)) == 0,
+		"running into the police car slows it, not a ram (%.0f / %.0f m/s)" % [float(c.police.v), c.v])
 
 
 func test_racer_hd_assets() -> void:

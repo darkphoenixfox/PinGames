@@ -137,7 +137,10 @@ static func lamp_mesh() -> Mesh:
 
 ## Adds the night lights to a car or truck model (model space: front is +Z,
 ## origin on the ground). Returns the holder so it can be hidden.
-static func add_car_lights(node: Node3D, kind: String, glow_tex: Texture2D) -> Node3D:
+## `tail_at` (D-198): where a car model's rear lamps are (x = half width);
+## they get soft red glows at night, kept in the holder's "tails" meta so
+## braking can make them bigger.
+static func add_car_lights(node: Node3D, kind: String, glow_tex: Texture2D, tail_at := Vector3.ZERO) -> Node3D:
 	var holder := Node3D.new()
 	holder.name = "NightLights"
 	node.add_child(holder)
@@ -166,6 +169,16 @@ static func add_car_lights(node: Node3D, kind: String, glow_tex: Texture2D) -> N
 	# Cars light their own lamp texels (car.gdshader, D-120); trucks (another
 	# model) keep glow dots.
 	if kind == "car":
+		var tails: Array = []
+		if tail_at != Vector3.ZERO:
+			for sx in [-tail_at.x, tail_at.x]:
+				var tl := MeshInstance3D.new()
+				tl.mesh = _tail_mesh
+				tl.position = Vector3(sx, tail_at.y, tail_at.z)
+				tl.scale = Vector3.ONE * 1.0
+				holder.add_child(tl)
+				tails.append(tl)
+		holder.set_meta("tails", tails)
 		holder.visible = false
 		return holder
 	for sx in [-side, side]:
