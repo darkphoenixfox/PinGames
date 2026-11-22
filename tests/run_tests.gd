@@ -638,6 +638,23 @@ func test_racer_sim() -> void:
 		lo.step(dt, false, false)
 		hi.step(dt, false, false)
 	check(lo.v > hi.v * 1.5, "low gear pulls away much faster than high (%.0f vs %.0f m/s)" % [lo.v, hi.v])
+	# Perfect shift (D-116): upshifting inside the window gives a boost; at the
+	# redline it doesn't.
+	var ps = Sim.new()
+	ps.setup(7)
+	ps.state = Sim.State.RACE
+	ps.v = Sim.GEAR_L_TOP * 0.82
+	ps.rpm = 0.82
+	var v0: float = ps.v
+	ps.shift(Sim.Gear.HIGH)
+	var perfect_ev: bool = ps.events.any(func(e): return e[0] == "perfect_shift")
+	check(perfect_ev and ps.v > v0 + 2.0 and ps.perfect_t > 0.0, "a perfect upshift gives a boost")
+	var late = Sim.new()
+	late.setup(7)
+	late.state = Sim.State.RACE
+	late.rpm = 0.95
+	late.shift(Sim.Gear.HIGH)
+	check(not late.events.any(func(e): return e[0] == "perfect_shift"), "an upshift at the redline is not perfect")
 	var q = Sim.new()
 	q.setup(7)
 	q.state = Sim.State.RACE

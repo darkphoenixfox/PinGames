@@ -1092,3 +1092,27 @@
   - **Number plate:** the hero car has a rear plate reading TRN (`RC_PLATE`): a pale 0.56 × 0.15 m plate with dark PinPixel letters on the rear bumper.
   - **Steering delay:** the nose only turns once steering has been held for 0.15 s (`STEER_DELAY`), then eases in. Short flipper taps still steer the car, but no longer flick the sprite angle back and forth.
 - **Status:** Accepted
+
+### D-115 — Turbo Run: DMD event animations, nitrous tank pick-up
+- **Date:** 2026-11-22
+- **DMD animations (director: small animations for near miss, nitro, gear shift, crash, etc.):** `games/racer/dmd_anims.gd` holds pixel animations played with `Dmd.play`. They replace the plain text flashes.
+  - **Near miss:** another car whooshes past ours with sparks.
+  - **Nitro:** the car lunges forward on a flickering flame through speed lines.
+  - **Shift:** the knob jumps across an H/L gate in stepped frames. It isn't shown for a crash's own downshift.
+  - **Crash:** an impact burst, a car tumbling through 4 poses and a shaking CRASH!.
+  - **Checkpoint:** a waving chequered flag and the time bonus.
+  - **Drift:** the banked points rise out of a ring of sparkles.
+- **Nitro pick-up:** a Qwen-Image 16-bit nitrous tank sprite (a blue bottle with a big red N) replaces the cyan 3D canister. It is a 2.6 m camera-facing billboard bobbing on stepped frames, and it is untinted at night so it stays readable.
+- **Status:** Accepted
+
+### D-116 — Turbo Run: perfect shift, SHIFT warning, rev flames, engine and sound pass, California plate
+- **Date:** 2026-11-22
+- **Decisions (director):**
+  - **Perfect shift:** a green band on the tachometer (TABLE dial and DMD bar) covers rpm 0.78–0.87, just below the red. Upshifting inside it gives +3 m/s, 0.8 s of extra pull (+0.6 × ACCEL) and 2,000 points, with PERFECT SHIFT! on the TABLE, a DMD animation, a sting and a backglass flash.
+  - **SHIFT warning:** after 3 s at the redline in L, a big blinking SHIFT appears mid-screen in the timer's font (PinPixel 144, red).
+  - **Exhaust flames:** the upshift flame is shorter (0.16 s, a third of the length) and yellow. Nitro still burns blue. Revving on the grid spits short yellow flames with a backfire while held high, and once as the revs drop.
+  - **Engine:** three layers mixed by rpm and speed, 16/32-bit rather than realistic. A firing-pulse body with uneven cylinders and a sub tone; a harmonic whine that rises with the revs; filtered wind noise with speed. Revving on the grid is louder, and the rev limiter bounces.
+  - **Sound effects:** the chiptune beeps are replaced with racing-style ones. Soft start-light tones; GO over a brass stab; a brass fanfare with a timpani boom for checkpoints; a falling brass phrase for time up; a Doppler pass for near misses; a mechanical clunk for gear changes; a thud and clank for bumps; boom, metal crunch and breaking glass for crashes.
+  - **Number plate:** California style, drawn once into a 192 × 96 viewport texture. A cream plate, red CALIFORNIA, orange stripes and sun, bold navy TRN and an orange THE GOLDEN STATE, all as translation keys. It is oversized (0.6 × 0.3 m) so TRN reads at pixel scale.
+  - **Finale:** the distance uses the score's styled font, tinted cyan.
+- **Status:** Accepted

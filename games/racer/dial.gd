@@ -17,6 +17,10 @@ var segments := 24
 var value := 0.0              # 0..1
 var red_from := 2.0           # 0..1, > 1 = no red zone
 var lit := UI.CYAN
+## Perfect-shift band (D-116), 0..1 of the dial; drawn green. Empty = none.
+var good_from := 2.0
+var good_to := 2.0
+const GOOD := Color("4fff7a")
 var labels: Array = []        # [[fraction, text], ...]
 var _hub := Vector2.ZERO
 
@@ -68,10 +72,13 @@ func _draw() -> void:
 		var r0 := radius - depth
 		var on := value >= (float(i) + 0.5) / segments
 		var col := DIM
+		var good := f >= good_from and f < good_to
 		if on:
-			col = RED if f >= red_from else lit
+			col = RED if f >= red_from else (GOOD if good else lit)
 		elif f >= red_from:
 			col = RED.darkened(0.7)
+		elif good:
+			col = GOOD.darkened(0.65)
 		draw_colored_polygon(PackedVector2Array([
 			_hub + Vector2(cos(a0), sin(a0)) * r0, _hub + Vector2(cos(a0), sin(a0)) * radius,
 			_hub + Vector2(cos(a1), sin(a1)) * radius, _hub + Vector2(cos(a1), sin(a1)) * r0]), col)

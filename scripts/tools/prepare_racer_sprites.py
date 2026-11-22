@@ -25,6 +25,7 @@ SPRITES = {
     "bush_1": 96, "bush_2": 72,
     "sign_curve": 128, "sign_green": 112,
     "gantry": 144,
+    "nitro": 128,
 }
 
 

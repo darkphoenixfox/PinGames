@@ -16,18 +16,23 @@ const KINDS := {
 	"sign_curve_l": ["sign_curve", 3.6, true, true],    # mirrored: turns left
 	"sign_green": ["sign_green", 5.5, true, false],
 	"gantry": ["gantry", 12.9, false, false],
+	"nitro": ["nitro", 2.6, true, false],               # pick-up (D-115)
 }
 
 static var _meshes := {}
 ## Moonlit tint for the pre-lit sprites at night (D-113).
 const NIGHT_TINT := Color(0.3, 0.34, 0.58)
 static var _night := 0.0
+## Kinds that stay bright at night (pick-ups must stay readable).
+const UNTINTED := ["nitro"]
 
 
 ## Darkens every sprite towards the night tint (0 = day, 1 = night).
 static func set_night(k: float) -> void:
 	_night = k
 	for kind in _meshes:
+		if kind in UNTINTED:
+			continue
 		var m: StandardMaterial3D = (_meshes[kind] as QuadMesh).material
 		m.albedo_color = Color.WHITE.lerp(NIGHT_TINT, k)
 
@@ -59,7 +64,7 @@ static func mesh(kind: String) -> Mesh:
 	var q := QuadMesh.new()
 	q.size = Vector2(w, h)
 	q.center_offset = Vector3(0, h * 0.5, 0)
-	m.albedo_color = Color.WHITE.lerp(NIGHT_TINT, _night)
+	m.albedo_color = Color.WHITE if kind in UNTINTED else Color.WHITE.lerp(NIGHT_TINT, _night)
 	q.material = m
 	_meshes[kind] = q
 	return q

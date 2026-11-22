@@ -53,6 +53,14 @@ const GEAR_H_PULL_MIN := 0.3     # x ACCEL at 0 rpm in H (lugging) ...
 const GEAR_H_PULL_MAX := 1.05    # ... rising to this at 60 % rpm
 const SHIFT_HOLD := 0.5          # s both flippers held to shift
 const REDLINE := 0.88
+## Perfect shift window on the tachometer (D-116): upshift from L in this rpm
+## band, just before the redline, for a small boost.
+const PERFECT_FROM := 0.78
+const PERFECT_TO := 0.87
+const PERFECT_KICK := 3.0         # m/s added at once
+const PERFECT_TIME := 0.8         # s of extra pull after it
+const PERFECT_PULL := 0.6         # x ACCEL extra during that time
+const PERFECT_POINTS := 2000.0
 const REV_UP := 2.2               # rpm/s while revving on the grid (D-112)
 const REV_DOWN := 1.4
 ## After the clock runs out the car coasts (D-103): reaching a checkpoint
@@ -114,6 +122,7 @@ var boosting := false          # boost_t > 0 this step
 var pickups: Array = []        # nitro canisters on the road: {id, s, x}
 var _next_pickup_s := 300.0      # the first canister sits on the start straight
 var gear := Gear.LOW
+var perfect_t := 0.0           # s of perfect-shift pull left (D-116)
 var rpm := 0.0                 # 0..1 (tachometer)
 var shift_hold := 0.0          # s both flippers held (for the shift)
 var _shift_lock := false       # shifted: release both before shifting again
@@ -245,8 +254,15 @@ func _shift_input(dt: float, both: bool) -> void:
 func shift(g: int) -> void:
 	if g == gear:
 		return
+	var perfect := g == Gear.HIGH and state == State.RACE and spin_t <= 0.0 		and rpm >= PERFECT_FROM and rpm < PERFECT_TO
 	gear = g
 	events.append(["shift", gear])
+	if perfect:
+		# Perfect shift (D-116): a kick of speed and a moment of extra pull.
+		v += PERFECT_KICK
+		perfect_t = PERFECT_TIME
+		_add_score(PERFECT_POINTS)
+		events.append(["perfect_shift"])
 
 
 ## Autopilot (attract demo): shift up near the redline, down when slow.
@@ -347,6 +363,10 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 			braking = true
 			throttle = 0.0
 			accel = -BRAKE * 0.8
+	if perfect_t > 0.0:
+		perfect_t = maxf(0.0, perfect_t - dt)
+		if spin_t <= 0.0 and state == State.RACE:
+			accel += ACCEL * PERFECT_PULL
 	if boosting and spin_t <= 0.0:
 		accel = maxf(accel, ACCEL * 1.8 * (1.0 - v / NITRO_SPEED))
 	if drifting:

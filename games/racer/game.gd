@@ -17,6 +17,7 @@ const Scenery = preload("res://games/racer/scenery.gd")
 const Toon = preload("res://games/racer/toon.gd")
 const Sprites = preload("res://games/racer/sprites.gd")
 const Night = preload("res://games/racer/night.gd")
+const DmdAnims = preload("res://games/racer/dmd_anims.gd")
 const NIGHT_GROUP := &"rc_night_lights"
 const Dial = preload("res://games/racer/dial.gd")
 const GearLever = preload("res://games/racer/gear_lever.gd")
@@ -42,6 +43,7 @@ const MODEL_TURN := Basis(Vector3.UP, PI)
 const SPRITE_ANGLES := 32
 ## Nose turn at full steer (rad): ~1.5 sprite steps, visible on straights.
 const STEER_YAW := 0.3
+const SHIFT_NAG := 3.0      # s at the redline in L before the big SHIFT (D-116)
 const STEER_DELAY := 0.15   # s of steering before the nose turns (D-114)
 ## Crash animations (D-098): stepped at ANIM_FPS; a roll-over shows FLIP_FRAMES
 ## poses per full turn and hops FLIP_HOP metres.
@@ -53,9 +55,9 @@ const FLIP_HOP := 1.6
 ## TIME UP slide (D-105): 90 degrees in OVER_TURN_TIME s, OVER_TURN_FRAMES steps.
 const OVER_TURN_TIME := 0.6
 const OVER_TURN_FRAMES := 6.0
-const PICKUP_SCALE := 1.8
 ## Number plate spot on the red car's rear bumper (model space, D-114).
 const PLATE_Y := 0.5
+const PLATE_SIZE := Vector2(0.6, 0.3)   # oversized so TRN reads at pixel scale
 const PLATE_Z := -2.215           # nitro canisters read from far away (D-103)
 ## Roll-over phases (fractions of the animation, D-101): slew 90 degrees by
 ## FLIP_TURN_END, roll over until FLIP_ROLL_END, then lie still; in the last
@@ -105,22 +107,37 @@ const FINALE_SKIP_AT := 1.5
 const FINALE_END_AT := 6.0
 
 const SOUNDS := {
-	"rc_count": {"voices": [[{"f": [880.0, 880.0], "t": 0.18, "w": "pulse25", "v": 0.3, "env": "hold"}]], "echo": [0.08, 0.2, 0.4]},
-	"rc_go": {"voices": [[{"f": [1760.0, 1760.0], "t": 0.6, "w": "pulse25", "v": 0.3, "vib": [8.0, 0.2]}],
-		[{"f": [880.0, 880.0], "t": 0.6, "w": "triangle", "v": 0.3}]], "echo": [0.1, 0.3, 0.5]},
+	# Start lights: a soft sine "boop" with an octave shimmer (D-116).
+	"rc_count": {"voices": [[{"f": [440.0, 440.0], "t": 0.28, "w": "sine", "v": 0.45, "a": 0.005, "env": "hold"}],
+		[{"f": [880.0, 880.0], "t": 0.22, "w": "triangle", "v": 0.12, "a": 0.005}]], "reverb": [0.5, 0.25]},
+	# GO: the high start tone over a brass stab chord and a drum boom.
+	"rc_go": {"voices": [[{"f": [880.0, 880.0], "t": 0.7, "w": "sine", "v": 0.4, "a": 0.005, "env": "hold"}],
+		[{"f": [220.0, 220.0], "t": 0.6, "w": "saw", "v": 0.14, "lp": 0.6, "a": 0.02}],
+		[{"f": [330.0, 330.0], "t": 0.6, "w": "saw", "v": 0.12, "lp": 0.6, "a": 0.02}],
+		[{"f": [440.0, 440.0], "t": 0.6, "w": "saw", "v": 0.1, "lp": 0.6, "a": 0.02}],
+		[{"f": [90.0, 45.0], "t": 0.4, "w": "sine", "v": 0.5}]], "reverb": [0.9, 0.3]},
+	# Checkpoint: a rising brass fanfare over a timpani boom.
 	"rc_checkpoint": {"voices": [
-		[{"f": [784.0, 784.0], "t": 0.09, "w": "pulse25", "v": 0.22, "env": "hold"},
-		 {"f": [988.0, 988.0], "t": 0.09, "w": "pulse25", "v": 0.22, "env": "hold"},
-		 {"f": [1175.0, 1175.0], "t": 0.09, "w": "pulse25", "v": 0.22, "env": "hold"},
-		 {"f": [1568.0, 1568.0], "t": 0.5, "w": "pulse25", "v": 0.24, "vib": [7.0, 0.3]}],
-		[{"f": [196.0, 196.0], "t": 0.27, "w": "triangle", "v": 0.35, "env": "hold"},
-		 {"f": [392.0, 392.0], "t": 0.5, "w": "triangle", "v": 0.35}]], "echo": [0.1, 0.3, 0.5]},
+		[{"f": [262.0, 262.0], "t": 0.08, "w": "saw", "v": 0.18, "lp": 0.55, "env": "hold"},
+		 {"f": [330.0, 330.0], "t": 0.08, "w": "saw", "v": 0.18, "lp": 0.55, "env": "hold"},
+		 {"f": [392.0, 392.0], "t": 0.08, "w": "saw", "v": 0.18, "lp": 0.55, "env": "hold"},
+		 {"f": [523.0, 523.0], "t": 0.6, "w": "saw", "v": 0.2, "lp": 0.5, "vib": [5.5, 0.15]}],
+		[{"f": [131.0, 131.0], "t": 0.24, "w": "saw", "v": 0.14, "lp": 0.7, "env": "hold"},
+		 {"f": [196.0, 196.0], "t": 0.6, "w": "saw", "v": 0.14, "lp": 0.7}],
+		[{"f": [95.0, 50.0], "t": 0.5, "w": "sine", "v": 0.55}]], "reverb": [1.1, 0.3]},
+	# Crash: an impact boom, crunching metal and breaking glass.
 	"rc_crash": {"voices": [
-		[{"f": [3000.0, 90.0], "t": 0.9, "w": "lfsr", "v": 0.45, "lp": 0.4}],
-		[{"f": [120.0, 35.0], "t": 0.5, "w": "sine", "v": 0.6}],
-		[{"f": [5200.0, 1800.0], "t": 0.35, "w": "noise", "v": 0.15}]], "reverb": [0.8, 0.3]},
-	"rc_bump": {"voices": [[{"f": [160.0, 50.0], "t": 0.2, "w": "sine", "v": 0.6}],
-		[{"f": [2400.0, 600.0], "t": 0.12, "w": "lfsr", "v": 0.25}]]},
+		[{"f": [3000.0, 90.0], "t": 0.9, "w": "lfsr", "v": 0.42, "lp": 0.45}],
+		[{"f": [110.0, 32.0], "t": 0.6, "w": "sine", "v": 0.65}],
+		[{"f": [5200.0, 1800.0], "t": 0.35, "w": "noise", "v": 0.16}],
+		[{"f": [3520.0, 3520.0], "t": 0.04, "w": "triangle", "v": 0.08, "gap": 0.03},
+		 {"f": [2960.0, 2960.0], "t": 0.04, "w": "triangle", "v": 0.07, "gap": 0.05},
+		 {"f": [4186.0, 4186.0], "t": 0.05, "w": "triangle", "v": 0.06, "gap": 0.04},
+		 {"f": [3136.0, 3136.0], "t": 0.06, "w": "triangle", "v": 0.05}]], "reverb": [0.9, 0.3]},
+	# Bump: a body thud with a metal clank.
+	"rc_bump": {"voices": [[{"f": [130.0, 45.0], "t": 0.22, "w": "sine", "v": 0.6}],
+		[{"f": [1800.0, 500.0], "t": 0.1, "w": "noise", "v": 0.25, "lp": 0.6}],
+		[{"f": [620.0, 540.0], "t": 0.12, "w": "triangle", "v": 0.1}]], "reverb": [0.3, 0.15]},
 	# Turbo: a rising whoosh, a growling saw and a sub-bass boom with a
 	# shimmering tail, in a big reverb (D-112).
 	"rc_nitro": {"voices": [
@@ -130,6 +147,14 @@ const SOUNDS := {
 		[{"f": [330.0, 1320.0], "t": 0.28, "w": "square", "v": 0.1, "lp": 0.35, "env": "hold"},
 		 {"f": [1320.0, 1320.0], "t": 0.35, "w": "square", "v": 0.08, "lp": 0.35, "vib": [12.0, 0.4]}]],
 		"reverb": [1.0, 0.3]},
+	# Perfect shift: a bright rising two-note sting with a shimmer (D-116).
+	"rc_perfect": {"voices": [
+		[{"f": [880.0, 880.0], "t": 0.07, "w": "saw", "v": 0.16, "lp": 0.5, "env": "hold"},
+		 {"f": [1319.0, 1319.0], "t": 0.4, "w": "saw", "v": 0.16, "lp": 0.5, "vib": [7.0, 0.2]}],
+		[{"f": [440.0, 440.0], "t": 0.07, "w": "triangle", "v": 0.3, "env": "hold"},
+		 {"f": [659.0, 659.0], "t": 0.4, "w": "triangle", "v": 0.3}],
+		[{"f": [6000.0, 9000.0], "t": 0.3, "w": "noise", "v": 0.06, "lp": 0.1}]],
+		"echo": [0.09, 0.3, 0.35], "reverb": [0.8, 0.25]},
 	# Upshift backfire: a crackle and a thump.
 	"rc_backfire": {"voices": [[{"f": [1800.0, 300.0], "t": 0.12, "w": "lfsr", "v": 0.4, "lp": 0.3}],
 		[{"f": [110.0, 50.0], "t": 0.15, "w": "sine", "v": 0.5}]], "reverb": [0.3, 0.2]},
@@ -138,10 +163,12 @@ const SOUNDS := {
 		[{"f": [5000.0, 3000.0], "t": 0.16, "w": "noise", "v": 0.12, "lp": 0.4}]]},
 	"rc_horn": {"voices": [[{"f": [392.0, 392.0], "t": 0.18, "w": "square", "v": 0.14, "env": "hold", "lp": 0.5}],
 		[{"f": [494.0, 494.0], "t": 0.18, "w": "square", "v": 0.14, "env": "hold", "lp": 0.5}]], "echo": [0.26, 0.5, 1.5]},
-	"rc_shift": {"voices": [[{"f": [180.0, 90.0], "t": 0.12, "w": "square", "v": 0.25},
-		{"f": [900.0, 900.0], "t": 0.04, "w": "noise", "v": 0.2}]]},
-	"rc_near_miss": {"voices": [[{"f": [3000.0, 500.0], "t": 0.35, "w": "noise", "v": 0.3, "lp": 0.5}],
-		[{"f": [900.0, 500.0], "t": 0.3, "w": "saw", "v": 0.1, "lp": 0.6}]]},
+	# Gear change: a mechanical clunk.
+	"rc_shift": {"voices": [[{"f": [150.0, 60.0], "t": 0.09, "w": "sine", "v": 0.5}],
+		[{"f": [2200.0, 900.0], "t": 0.04, "w": "lfsr", "v": 0.18, "lp": 0.4}]]},
+	# Near miss: a Doppler pass, engine tone dropping as it whooshes by.
+	"rc_near_miss": {"voices": [[{"f": [440.0, 150.0], "t": 0.5, "w": "saw", "v": 0.16, "lp": 0.6}],
+		[{"f": [4000.0, 500.0], "t": 0.45, "w": "noise", "v": 0.28, "lp": 0.45, "a": 0.05}]], "reverb": [0.4, 0.2]},
 	# Drift points banked: a bright bell cascade with an octave-down shadow and a
 	# coin shimmer, echoed (D-112).
 	"rc_drift_bank": {"voices": [
@@ -159,9 +186,13 @@ const SOUNDS := {
 	"rc_tick": {"voices": [[{"f": [1900.0, 1600.0], "t": 0.05, "w": "triangle", "v": 0.35}],
 		[{"f": [950.0, 900.0], "t": 0.09, "w": "sine", "v": 0.25}],
 		[{"f": [7000.0, 7000.0], "t": 0.012, "w": "noise", "v": 0.18, "lp": 0.2}]], "reverb": [0.35, 0.18]},
-	"rc_time_up": {"voices": [[{"f": [660.0, 660.0], "t": 0.3, "w": "pulse25", "v": 0.25, "env": "hold"},
-		{"f": [494.0, 494.0], "t": 0.3, "w": "pulse25", "v": 0.25, "env": "hold"},
-		{"f": [330.0, 330.0], "t": 0.8, "w": "pulse25", "v": 0.25, "vib": [5.0, 0.3]}]], "echo": [0.12, 0.3, 0.5]},
+	# Time up: a falling brass phrase and a low boom.
+	"rc_time_up": {"voices": [
+		[{"f": [392.0, 392.0], "t": 0.25, "w": "saw", "v": 0.18, "lp": 0.6, "env": "hold"},
+		 {"f": [330.0, 330.0], "t": 0.25, "w": "saw", "v": 0.18, "lp": 0.6, "env": "hold"},
+		 {"f": [262.0, 220.0], "t": 0.9, "w": "saw", "v": 0.2, "lp": 0.65, "vib": [4.0, 0.25]}],
+		[{"f": [131.0, 110.0], "t": 1.4, "w": "saw", "v": 0.12, "lp": 0.75}],
+		[{"f": [70.0, 40.0], "t": 0.8, "w": "sine", "v": 0.5}]], "reverb": [1.2, 0.3]},
 }
 
 var sim: Sim
@@ -182,6 +213,7 @@ var _car_outlines := {}     # model path -> outline ArrayMesh
 var _beam_mat: StandardMaterial3D
 var _pix_vp: SubViewport
 var _bg_mat: ShaderMaterial
+var _anims := DmdAnims.new()
 var _night := 0.0           # 0 = day, 1 = night (D-113)
 var _night_shown := -1.0
 var _sky_mat: ShaderMaterial
@@ -189,6 +221,10 @@ var _sky_proc: ProceduralSkyMaterial
 var _day_top := Color.BLACK
 var _day_fog := Color.BLACK
 var _player_lights: Node3D
+var _flame_mats: Array = []
+var _rev_pop_t := 0.0
+var _rev_popped := false
+var _last_rpm := 0.0
 var _shift_smoke_t := 0.0   # downshift tyre smoke left (D-112)
 var _shift_flame_t := 0.0   # upshift exhaust flame left
 var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
@@ -215,6 +251,8 @@ var _cam_ready := false
 var _cam_x := 0.0
 var _engine: AudioStreamPlayer
 var _skid: AudioStreamPlayer
+var _engine_hi: AudioStreamPlayer
+var _wind: AudioStreamPlayer
 var _hud: Control
 var _time_label: Label
 var _score_label: Label
@@ -224,6 +262,8 @@ var _speedo: Control
 var _tacho: Control
 var _gear_lever: Control
 var _shift_label: Label
+var _shift_big: Label
+var _redline_t := 0.0       # s held at the redline in L (D-116)
 var _nitro_label: Label
 var _nitro_strip: ColorRect
 var _pickup_nodes: Array = []   # pooled nitro canisters
@@ -402,7 +442,10 @@ func _finale(delta: float) -> void:
 		_finale_ui.add_child(UI.spacer(30))
 		_finale_ui.add_child(UI.styled_label(tr("RC_FINAL_SCORE"), TITLE_FONT, 2))
 		_finale_ui.add_child(UI.styled_label(ScoreTable.format_score(sim.score), TITLE_FONT, 2))
-		_finale_ui.add_child(UI.label(tr("RC_DISTANCE") % (sim.s / 1000.0), 48, UI.WHITE))
+		# Distance in the score's styled font, tinted cyan (D-116).
+		var dist := UI.styled_label(tr("RC_DISTANCE") % (sim.s / 1000.0), TITLE_FONT, 2)
+		dist.add_theme_color_override("font_color", Color(0.55, 0.9, 1.0))
+		_finale_ui.add_child(dist)
 		add_to_table(_finale_ui)
 		Dmd.show_text(tr("DMD_GAME_OVER"), ScoreTable.format_score(sim.score), Dmd.RED, Dmd.YELLOW)
 	if _finale_t >= FINALE_END_AT:
@@ -438,7 +481,7 @@ func _handle_events() -> void:
 				# Reached on momentum after TIME UP: the race goes on (D-103).
 				var saved: bool = e.size() > 3 and e[3]
 				_center_message(tr("RC_JUST_MADE_IT") if saved else tr("RC_CHECKPOINT"), 1.6)
-				Dmd.flash(tr("RC_EXTENDED") % int(e[2]), 1.6, Dmd.GREEN)
+				_dmd_anim("checkpoint", [tr("RC_CHECKPOINT"), tr("RC_EXTENDED") % int(e[2])])
 			"time_up":
 				Audio.sfx("rc_time_up")
 				_center_message(tr("RC_TIME_UP"), 3.0)
@@ -449,31 +492,39 @@ func _handle_events() -> void:
 				if int(e[1]) > 0:
 					Audio.sfx("rc_drift_bank")
 					_drift_label.text = tr("RC_DRIFT_POINTS") % ScoreTable.format_score(int(e[1]))
+					_dmd_anim("drift", [tr("RC_DRIFT"), ScoreTable.format_score(int(e[1]))])
 					_drift_label.modulate.a = 1.0
 			"nitro", "nitro_refill":
 				_bg_flash = 0.6
 				Audio.sfx("rc_nitro")
 				_center_message(tr("RC_NITRO"), 0.8)
-				Dmd.flash(tr("RC_NITRO"), 0.6, Dmd.CYAN)
+				_dmd_anim("nitro", [tr("RC_NITRO")])
 				_shake = 0.3
 			"high_beams":
 				Audio.sfx("rc_horn")
+			"perfect_shift":
+				Audio.sfx("rc_perfect")
+				_center_message(tr("RC_PERFECT_SHIFT"), 1.0)
+				_dmd_anim("perfect", [tr("RC_PERFECT_SHIFT")])
+				_bg_flash = 0.5
+				_shift_flame_t = 0.45
 			"shift":
 				Audio.sfx("rc_shift")
 				# Upshift: a short exhaust flame + backfire; downshift: tyre smoke
 				# + a chirp (D-112).
 				if int(e[1]) == Sim.Gear.HIGH:
-					_shift_flame_t = 0.25
+					_shift_flame_t = 0.16
 					Audio.sfx("rc_backfire")
 				else:
 					_shift_smoke_t = 0.5
 					if sim.spin_t <= 0.0:
 						Audio.sfx("rc_chirp")
-				Dmd.flash(tr("RC_GEAR_FLASH") % _gear_text(int(e[1])), 0.5, Dmd.YELLOW)
+				if sim.spin_t <= 0.0:   # a crash's own downshift shows the crash instead
+					_dmd_anim("shift", [int(e[1]) == Sim.Gear.HIGH, tr("RC_GEAR"), tr("RC_GEAR_H"), tr("RC_GEAR_L")])
 			"near_miss":
 				_bg_flash = 0.4
 				Audio.sfx("rc_near_miss")
-				Dmd.flash(tr("RC_NEAR_MISS"), 0.8, Dmd.YELLOW)
+				_dmd_anim("near_miss", [tr("RC_NEAR_MISS"), "+" + ScoreTable.format_score(5000)])
 			"pass":
 				pass
 			"bump":
@@ -483,7 +534,7 @@ func _handle_events() -> void:
 				_bg_dark = 0.8
 				Audio.sfx("rc_crash")
 				_shake = 0.8
-				Dmd.flash(tr("RC_CRASH"), 1.0, Dmd.RED)
+				_dmd_anim("crash", [tr("RC_CRASH")])
 
 
 # --- world ---------------------------------------------------------------------------
@@ -644,6 +695,7 @@ func _build_cars() -> void:
 		cone.height = 1.0
 		cone.radial_segments = 6
 		var fm := StandardMaterial3D.new()
+		_flame_mats.append(fm)
 		fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		fm.albedo_color = Color(0.5, 0.8, 1.0)
 		fm.emission_enabled = true
@@ -764,34 +816,67 @@ func _add_headlights(node: Node3D, kind: String) -> void:
 	node.set_meta("beams", beams)
 
 
-## Nitro canister (D-103): a glowing cyan bottle with white bands, cel
-## outlined; it spins and bobs in stepped sprite-like frames.
-## The hero car's rear number plate, "TRN" (D-114): a pale plate with dark
-## pixel-font letters on the rear bumper (model space: the rear is -Z).
+## The hero car's rear number plate, "TRN" (D-114, D-116): California style.
+## A cream plate with a red state name, orange stripes and a setting sun, bold
+## navy letters and an orange motto, drawn once into a small viewport texture.
 func _add_plate(body: Node3D) -> void:
 	var plate := MeshInstance3D.new()
+	var vp := SubViewport.new()
+	vp.size = Vector2i(192, 96)
+	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	vp.transparent_bg = false
+	plate.add_child(vp)
+	var bg := ColorRect.new()
+	bg.color = Color(0.9, 0.88, 0.8)
+	bg.size = Vector2(192, 96)
+	vp.add_child(bg)
+	var face := ColorRect.new()
+	face.color = Color(0.98, 0.97, 0.92)
+	face.position = Vector2(4, 4)
+	face.size = Vector2(184, 88)
+	vp.add_child(face)
+	for st in [[30.0, 5.0], [38.0, 3.0]]:
+		var stripe := ColorRect.new()
+		stripe.color = Color(0.93, 0.6, 0.15)
+		stripe.position = Vector2(10, st[0])
+		stripe.size = Vector2(172, st[1])
+		vp.add_child(stripe)
+	var sun := Polygon2D.new()
+	var pts := PackedVector2Array()
+	for i in 20:
+		var a := TAU * i / 20.0
+		pts.append(Vector2(96 + cos(a) * 15.0, 22 + sin(a) * 15.0))
+	sun.polygon = pts
+	sun.color = Color(0.95, 0.62, 0.15)
+	vp.add_child(sun)
+	var state := _plate_label(tr("RC_PLATE_STATE"), 24, Color(0.85, 0.12, 0.12), 2, 2)
+	vp.add_child(state)
+	var num := _plate_label(tr("RC_PLATE"), 60, Color(0.08, 0.12, 0.42), 30, 3)
+	vp.add_child(num)
+	var motto := _plate_label(tr("RC_PLATE_MOTTO"), 12, Color(0.85, 0.52, 0.1), 76, 0)
+	vp.add_child(motto)
 	var q := QuadMesh.new()
-	q.size = Vector2(0.56, 0.15)
+	q.size = PLATE_SIZE
 	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.95, 0.93, 0.82)
+	m.albedo_texture = vp.get_texture()
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	m.roughness = 0.6
 	q.material = m
 	plate.mesh = q
 	plate.position = Vector3(0.0, PLATE_Y, PLATE_Z)
 	plate.rotation_degrees = Vector3(0, 180, 0)   # face backwards
 	body.add_child(plate)
-	var label := Label3D.new()
-	label.text = tr("RC_PLATE")
-	label.font = load("res://assets/fonts/pinpixel.ttf")
-	label.font_size = 64
-	label.pixel_size = 0.0022
-	label.modulate = Color(0.08, 0.08, 0.15)
-	label.outline_size = 0
-	label.shaded = false
-	label.double_sided = false
-	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	label.position = Vector3(0.0, 0.0, 0.004)
-	plate.add_child(label)
+
+
+## One centred line of plate text; `bold` adds a same-colour outline.
+func _plate_label(text: String, size: int, col: Color, y: float, bold: int) -> Label:
+	var l := UI.label(text, size, col)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.position = Vector2(0, y)
+	l.size = Vector2(192, size + 8)
+	l.add_theme_constant_override("outline_size", bold)
+	l.add_theme_color_override("font_outline_color", col)
+	return l
 
 
 ## Night light under each lamp post (D-113): pool + cone + head glow, following
@@ -835,52 +920,14 @@ func _prop_kind(o: Dictionary) -> String:
 	return o.kind
 
 
+## Nitro pick-up (D-103, D-115): the 16-bit nitrous tank sprite (blue bottle
+## with a big N), a camera-facing billboard that bobs on stepped frames.
 func _build_pickup() -> Node3D:
 	var n := Node3D.new()
-	var body := CylinderMesh.new()
-	body.top_radius = 0.42
-	body.bottom_radius = 0.42
-	body.height = 1.3
-	body.radial_segments = 8
-	var m := StandardMaterial3D.new()
-	m.albedo_color = UI.CYAN
-	m.emission_enabled = true
-	m.emission = UI.CYAN
-	m.emission_energy_multiplier = 1.2
-	m.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
-	body.material = m
 	var mi := MeshInstance3D.new()
-	mi.mesh = body
+	mi.mesh = Sprites.mesh("nitro")
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	n.add_child(mi)
-	var cap := CylinderMesh.new()
-	cap.top_radius = 0.18
-	cap.bottom_radius = 0.3
-	cap.height = 0.35
-	cap.radial_segments = 8
-	var wm := StandardMaterial3D.new()
-	wm.albedo_color = Color.WHITE
-	wm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	cap.material = wm
-	var ci := MeshInstance3D.new()
-	ci.mesh = cap
-	ci.position.y = 0.82
-	n.add_child(ci)
-	for y in [-0.3, 0.3]:
-		var band := CylinderMesh.new()
-		band.top_radius = 0.44
-		band.bottom_radius = 0.44
-		band.height = 0.12
-		band.radial_segments = 8
-		band.material = wm
-		var bi := MeshInstance3D.new()
-		bi.mesh = band
-		bi.position.y = y
-		n.add_child(bi)
-	if Toon.enabled:
-		for c in n.get_children():
-			var o := MeshInstance3D.new()
-			o.mesh = Toon.outline_mesh((c as MeshInstance3D).mesh)
-			c.add_child(o)
 	return n
 
 
@@ -1123,11 +1170,29 @@ func _animate(delta: float) -> void:
 		_player_lights.visible = _night > 0.0 and not (sim.spin_t > 0.0 and sim.flipping)
 	var smoking := sim.drifting or sliding_out or _shift_smoke_t > 0.0 or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
 	_update_puffs(delta, smoking)
+	# Revving on the grid spits fire (D-116): pops while held high, and one as
+	# the revs drop.
+	if sim.state == Sim.State.COUNTDOWN:
+		_rev_pop_t -= delta
+		var falling := sim.rpm < _last_rpm - 0.005
+		if (sim.rpm > 0.7 and not falling and _rev_pop_t <= 0.0) or (falling and _last_rpm > 0.75 and not _rev_popped):
+			_shift_flame_t = 0.14
+			_rev_pop_t = randf_range(0.18, 0.4)
+			_rev_popped = falling
+			Audio.sfx("rc_backfire")
+		if not falling:
+			_rev_popped = false
+	_last_rpm = sim.rpm
 	var burning := sim.boosting or _shift_flame_t > 0.0
+	# Nitro burns blue; upshift and rev pops are short and yellow (D-116).
+	var pop := not sim.boosting
+	for m in _flame_mats:
+		(m as StandardMaterial3D).albedo_color = Color(1.0, 0.85, 0.3) if pop else Color(0.5, 0.8, 1.0)
+		(m as StandardMaterial3D).emission = Color(1.0, 0.6, 0.15) if pop else Color(0.4, 0.7, 1.0)
 	for fl in _flames:
 		fl.visible = burning
 		if burning:
-			var short := 0.5 if not sim.boosting else 1.0   # upshift pop is short
+			var short := 0.32 if pop else 1.0
 			var sy := (0.8 + randf() * 0.7) * short
 			fl.scale = Vector3(1.0, sy, 1.0)
 			fl.position.z = -2.2 - 0.5 * sy   # keep the cone's base on the pipe
@@ -1157,15 +1222,14 @@ func _animate(delta: float) -> void:
 	for kind in _traffic_pool:
 		for i in range(used[kind], _traffic_pool[kind].size()):
 			(_traffic_pool[kind][i] as Node3D).visible = false
-	# Nitro canisters: spin + bob on stepped frames (D-103).
+	# Nitro tanks bob on stepped frames (D-103, D-115).
 	for i in _pickup_nodes.size():
 		var pk: Node3D = _pickup_nodes[i]
 		if i < sim.pickups.size():
 			var pd: Dictionary = sim.pickups[i]
 			pk.visible = true
 			var st := floorf(_phase_t * ANIM_FPS) / ANIM_FPS
-			pk.transform = Transform3D(Basis(Vector3.UP, st * 3.0).scaled(Vector3.ONE * PICKUP_SCALE),
-				tr_.point(pd.s, pd.x, 1.7 + 0.3 * sin(st * 4.0)))
+			pk.transform = Transform3D(Basis.IDENTITY, tr_.point(pd.s, pd.x, 0.35 + 0.3 * absf(sin(st * 4.0))))
 		else:
 			pk.visible = false
 	# Chase camera: behind and above, looking down the road; FOV opens with speed.
@@ -1250,6 +1314,9 @@ func _build_hud() -> void:
 		if i % 2 == 0:
 			tl.append([i / 8.0, str(i)])
 	_tacho.setup(120.0, 16, tl, 7.0 / 8.0, UI.YELLOW)
+	# Perfect-shift band, just before the red (D-116).
+	_tacho.good_from = _tach_of(Sim.PERFECT_FROM)
+	_tacho.good_to = _tach_of(Sim.PERFECT_TO)
 	tbox.add_child(_tacho)
 	var rpm_l := UI.label(tr("RC_RPM"), 24, UI.GREY)
 	rpm_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1303,6 +1370,15 @@ func _build_hud() -> void:
 	sbox.add_child(kmh)
 	bottom.add_child(sbox)
 
+	_shift_big = UI.label(tr("RC_SHIFT"), 144, UI.RED)
+	_shift_big.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_shift_big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shift_big.offset_left = -500
+	_shift_big.offset_right = 500
+	_shift_big.offset_top = -260
+	_shift_big.modulate.a = 0.0
+	_hud.add_child(_shift_big)
+
 	_drift_label = UI.label("", 60, UI.YELLOW)
 	_drift_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_drift_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1314,7 +1390,11 @@ func _build_hud() -> void:
 
 ## Tachometer needle 0..1: idle at 1/8, the gear's top speed near the end.
 func _tach_value() -> float:
-	return lerpf(0.11, 1.0, sim.rpm)
+	return _tach_of(sim.rpm)
+
+
+func _tach_of(rpm: float) -> float:
+	return lerpf(0.11, 1.0, rpm)
 
 
 func _gear_text(g: int) -> String:
@@ -1353,6 +1433,10 @@ func _update_hud(delta: float) -> void:
 	_gear_lever.set_gear(sim.gear == Sim.Gear.HIGH)
 	var shift_now := sim.gear == Sim.Gear.LOW and sim.rpm >= Sim.REDLINE
 	_shift_label.modulate.a = 1.0 if shift_now and fmod(_phase_t, 0.3) < 0.18 else 0.0
+	# Held at the redline in L for SHIFT_NAG s: a big blinking SHIFT in the
+	# middle of the screen, in the timer's font (D-116).
+	_redline_t = _redline_t + delta if shift_now and sim.state == Sim.State.RACE else 0.0
+	_shift_big.modulate.a = 1.0 if _redline_t >= SHIFT_NAG and fmod(_phase_t, 0.4) < 0.25 else 0.0
 	_nitro_label.modulate.a = 1.0 if sim.boosting else 0.0
 	_nitro_strip.size.x = roundf(160.0 * sim.boost_t / Sim.NITRO_TIME)
 	if sim.drifting:
@@ -1436,10 +1520,13 @@ func _draw_dmd_dash(p) -> void:
 		var red := f >= 7.0 / 8.0
 		var on := tach >= f
 		var c := Color(0.16, 0.18, 0.22)
+		var good := f >= _tach_of(Sim.PERFECT_FROM) and f < _tach_of(Sim.PERFECT_TO)
 		if on:
-			c = Dmd.RED if red else (Dmd.YELLOW if f > 0.6 else Dmd.GREEN)
+			c = Dmd.RED if red else (Dmd.WHITE if good else (Dmd.YELLOW if f > 0.6 else Dmd.GREEN))
 		elif red:
 			c = Color(0.35, 0.08, 0.1)
+		elif good:
+			c = Color(0.1, 0.35, 0.15)   # perfect-shift band (D-116)
 		if shift_now and fmod(_phase_t, 0.24) < 0.12:
 			c = Dmd.RED
 		p.block(38 + i * 5, 27, 4, 5, c)
@@ -1496,6 +1583,11 @@ func _update_night(delta: float) -> void:
 	get_tree().call_group(NIGHT_GROUP, "set_visible", on)
 
 
+## Plays one of the DMD event animations (D-115) with its translated texts.
+func _dmd_anim(name: String, args: Array) -> void:
+	Dmd.play(Callable(_anims, name).bindv(args), DmdAnims.DURATIONS[name])
+
+
 ## Backglass lights each frame (D-109). Attract: the logo blinks slowly, the
 ## lights are on. Race: both on; nitro, checkpoints and near misses flash the
 ## lights; a crash knocks them out briefly. Game over: only the logo stays.
@@ -1532,15 +1624,37 @@ func _logo_rect(width: float) -> TextureRect:
 # --- audio ---------------------------------------------------------------------------
 ## Looping engine and tyre-squeal streams, generated here (Synth makes one-shots).
 func _build_audio_loops() -> void:
+	# Engine (D-116): three layers mixed by rpm and speed, 16/32-bit style rather
+	# than realistic. Each loop holds a whole number of cycles (0.4 s).
+	# Body: a firing-pulse train (80 Hz) with uneven cylinders and a sub tone.
 	_engine = AudioStreamPlayer.new()
 	_engine.bus = "SFX"
 	_engine.stream = _loop_wav(func(t: float) -> float:
-		var f := 55.0
-		var saw := fmod(t * f, 1.0) * 2.0 - 1.0
-		var pulse := 1.0 if fmod(t * f * 2.0, 1.0) < 0.3 else -1.0
-		return saw * 0.35 + pulse * 0.12 + sin(TAU * f * 0.5 * t) * 0.3, 0.4, 0.0)
+		var fire := t * 80.0
+		var ph := fmod(fire, 1.0)
+		var amp: float = [1.0, 0.82, 0.94, 0.78][int(fire) % 4]
+		var pulse := exp(-ph * 5.0) * (sin(TAU * ph * 2.0) * 0.7 + sin(TAU * ph * 5.0) * 0.25)
+		return pulse * amp * 0.75 + sin(TAU * 40.0 * t) * 0.22, 0.4, 0.04)
 	_engine.volume_db = -8.0
 	add_child(_engine)
+	# Whine: soft harmonics of 160 Hz, rising with the revs.
+	_engine_hi = AudioStreamPlayer.new()
+	_engine_hi.bus = "SFX"
+	_engine_hi.stream = _loop_wav(func(t: float) -> float:
+		var v := 0.0
+		for n in range(1, 7):
+			v += sin(TAU * 160.0 * n * t) / n * (1.0 if n % 2 == 1 else -0.6)
+		return v * 0.32, 0.4, 0.0)
+	_engine_hi.volume_db = -60.0
+	add_child(_engine_hi)
+	# Wind: filtered noise that grows with speed.
+	_wind = AudioStreamPlayer.new()
+	_wind.bus = "SFX"
+	_wind.stream = _loop_wav(func(_t: float) -> float: return 0.0, 1.0, 0.7)
+	_wind.volume_db = -60.0
+	add_child(_wind)
+	_engine_hi.play()
+	_wind.play()
 	_skid = AudioStreamPlayer.new()
 	_skid.bus = "SFX"
 	_skid.stream = _loop_wav(func(t: float) -> float:
@@ -1576,9 +1690,14 @@ func _update_audio() -> void:
 	if _engine == null:
 		return
 	var rpm := sim.rpm
-	_engine.pitch_scale = 0.6 + rpm * 1.9 + (0.25 if sim.boosting else 0.0)
-	if sim.state == Sim.State.COUNTDOWN and rpm > 0.97 and fmod(_phase_t * 18.0, 1.0) < 0.5:
-		_engine.pitch_scale -= 0.2   # rev limiter bouncing (D-112)
-	_engine.volume_db = -14.0 + sim.throttle * 4.0 + rpm * 2.0
+	var pitch := 0.55 + rpm * 1.5 + (0.2 if sim.boosting else 0.0)
+	if rpm > 0.97 and fmod(_phase_t * 18.0, 1.0) < 0.5:
+		pitch -= 0.15   # rev limiter bouncing (D-112)
+	var revving := sim.state == Sim.State.COUNTDOWN and sim.throttle > 0.0
+	_engine.pitch_scale = pitch
+	_engine_hi.pitch_scale = pitch
+	_engine.volume_db = -11.0 + sim.throttle * 3.0 - rpm * 3.0 + (3.0 if revving else 0.0)
+	_engine_hi.volume_db = -34.0 + rpm * 22.0 + sim.throttle * 2.0 + (2.0 if revving else 0.0)
+	_wind.volume_db = -46.0 + clampf(sim.v / Sim.MAX_SPEED, 0.0, 1.3) * 28.0
 	var squeal := sim.drifting or (sim.state == Sim.State.OVER and sim.v > 3.0) 		or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
 	_skid.volume_db = lerpf(_skid.volume_db, -10.0 if squeal else -60.0, 0.2)
