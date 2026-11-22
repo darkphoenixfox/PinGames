@@ -706,12 +706,34 @@ func test_racer_sim() -> void:
 		pb.traffic.clear()
 		pb.step(dt, false, false)
 		if not pb.police.is_empty():
-			if pb.police.state == "bust" and absf(pb.police.v) < 2.0:
-				parked_for += dt
+			if pb.police.state == "bust":
+				parked_for = float(pb.police.get("park_t", 0.0))
 			if pb.police.state == "leave" and pb.police.s > pb.s + 30.0:
 				gone_ahead = true
 	check(parked_for >= Sim.PARK_HOLD - 0.05 and gone_ahead,
 		"the police stays parked %.1f s, then drives off ahead" % parked_for)
+	# Police hits (D-142): each slows the player and bounces the cars apart;
+	# the third spins the player out. Nitro outruns it.
+	var ph = Sim.new()
+	ph.setup(7)
+	ph.state = Sim.State.RACE
+	ph.gear = Sim.Gear.HIGH
+	ph.v = 70.0
+	ph.police = {"s": ph.s, "x": 0.5, "v": 70.0, "state": "chase", "t": 0.0, "side": 1.0}
+	ph._police_hit()
+	check(ph.spin_t <= 0.0 and ph.v < 70.0 and ph.v > 45.0 and ph.lat_v != 0.0,
+		"a police hit slows and shoves the player without stopping it")
+	ph.police.hit_cd = 0.0
+	ph._police_hit()
+	ph.police.hit_cd = 0.0
+	ph._police_hit()
+	check(ph.spin_t > 0.0, "the third police hit spins the player out")
+	var nz = Sim.new()
+	nz.setup(7)
+	nz.police = {"s": 0.0, "x": 0.0, "v": 0.0, "state": "chase", "t": 0.0}
+	nz.v = nz.nitro_speed()
+	nz._police_follow(10.0, 0.0, 100.0, 1000.0)
+	check(float(nz.police.v) < nz.nitro_speed() - 5.0, "the police can't keep up with nitro")
 	# Outrunning it long enough: it gives up with a bonus.
 	var run = Sim.new()
 	run.setup(7)

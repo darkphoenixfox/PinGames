@@ -12,6 +12,7 @@ const RES := Vector2i(360, 640)
 const ROW_Y := [5.4, 0.0, -5.4]      # car heights in the showroom (m), top to bottom
 const SPIN := 1.2                     # rad/s, the chosen car only
 const SPRITE_ANGLES := 32
+const START_ANGLE := 0.6
 const PIPS := 5
 const PANEL_W := 600.0
 const ROW_COLS := [Color("4fff7a"), Color("ffd23e"), Color("ff3b4f")]   # easy, normal, hard
@@ -25,7 +26,7 @@ var _ring_mat_on: StandardMaterial3D
 var _ring_mat_off: StandardMaterial3D
 var _boxes: Array = []
 var _t := 0.0
-var _angles := [0.6, 2.2, 4.0]
+var _angles := [START_ANGLE, START_ANGLE, START_ANGLE]   # all start alike (D-142)
 
 
 ## make_car: Callable(hue) -> Node3D (the game's car instance with its outline).

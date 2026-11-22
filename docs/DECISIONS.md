@@ -1320,3 +1320,14 @@
 - **Date:** 2026-11-22
 - **Clarification (director):** the "911" lettering on the police car is the US emergency phone number, a normal police livery detail, not a car model badge. It stays. This closes the notes in D-135 and D-140.
 - **Status:** Accepted
+
+### D-142 — Turbo Run: police aims at you, gets hit in three goes, can be outrun with nitro; no CHECKPOINT notice; showroom start angle
+- **Date:** 2026-11-22
+- **Decisions (director):**
+  - **Aim:** while chasing, the police car's nose points at the hero car (atan of the sideways gap over the distance ahead, clamped to ±0.9 rad, still snapped to the sprite angles).
+  - **Speed:** its top speed is 1.06 × the player car's own top. Normal driving can't shake it, but nitro (+20 m/s) outruns it.
+  - **Hits:** a police hit no longer stops the player at once. Each hit keeps 78 % of the speed and shoves the player 9 m/s sideways, away from the police car. The police bounces the other way and drops below the player's speed, and there's a 0.8 s cooldown between hits. The third hit spins the player out, which leads to a bust. Each hit shakes the camera and flickers the backglass.
+  - **Police collisions:** traffic slows the police to 55 % and shoves it aside; tunnel walls hold it in and slow it.
+  - **Checkpoints:** CHECKPOINT no longer shows mid-TABLE; the gate, DMD animation and sound remain. JUST MADE IT! still shows when a checkpoint saves the race.
+  - **Showroom:** all three cars start at the same rotation angle.
+- **Status:** Accepted

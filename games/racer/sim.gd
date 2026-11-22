@@ -116,6 +116,11 @@ const TRAP_FACTOR := 1.5        # x the L-gear top speed that triggers a chase
 const POLICE_BEHIND := 140.0    # m behind the player it appears
 const CHASE_CLOSE := 16.0       # m/s faster than the player while closing in (D-137)
 const RAM_WINDUP := 1.2         # s alongside before it swerves in
+const POLICE_TOP := 1.06        # x the player car's top speed (D-142): nitro outruns it
+const POLICE_HITS := 3          # hits to stop the player
+const HIT_SLOW := 0.78          # speed kept per hit
+const HIT_BOUNCE := 9.0         # m/s sideways shove
+const POLICE_BUMP_SLOW := 0.55  # speed the police keeps after hitting traffic
 const POLICE_GIVE_UP := 22.0    # s of chase before it gives up
 const POLICE_LOST := 260.0      # m behind: lost you
 const BUST_SPEED := 22.0        # m/s: slower than this with police close = busted
@@ -430,9 +435,9 @@ func _update_police(dt: float) -> void:
 						police.side = -side if absf(x) > 4.0 and signf(x) == side else side
 			_police_follow(dt, want_ds, CHASE_CLOSE)
 			police.x = move_toward(police.x, want_x, (9.0 if police.ram_t > RAM_WINDUP else 5.0) * dt)
-			if spin_t <= 0.0 and grace_t <= 0.0 and absf(ds) < CAR_LEN * 0.9 					and absf(police.x - x) < CAR_W * 0.95:
-				_crash("car", police.x - x)
-				events.append(["police_ram"])
+			police.hit_cd = maxf(0.0, float(police.get("hit_cd", 0.0)) - dt)
+			if spin_t <= 0.0 and grace_t <= 0.0 and police.hit_cd <= 0.0 and absf(ds) < CAR_LEN * 0.9 					and absf(police.x - x) < CAR_W * 0.95:
+				_police_hit()
 			var close := ds > -BUST_NEAR
 			if close and (spin_t > 0.0 or v < BUST_SPEED):
 				_bust()
@@ -458,6 +463,8 @@ func _update_police(dt: float) -> void:
 			if ds > 350.0 or ds < -350.0:
 				police = {}
 				return
+	if police.state != "bust":
+		_police_obstacles(dt)
 	police.s += police.v * dt
 
 
@@ -467,7 +474,46 @@ func _update_police(dt: float) -> void:
 func _police_follow(dt: float, want_ds: float, close: float, rate: float = 40.0, back: float = 15.0) -> void:
 	var ds: float = police.s - s
 	var target := v + clampf((want_ds - ds) * 1.6, -back, close)
+	# Its top speed (D-142): a bit over the player car's own, below nitro, so
+	# a nitro burst gets away.
+	target = minf(target, top_speed() * POLICE_TOP)
 	police.v = move_toward(police.v, maxf(target, -back), rate * dt)
+
+
+## The police car slams into the player (D-142): both bounce apart and the
+## player loses speed; the third hit spins the player out (then it's a bust).
+func _police_hit() -> void:
+	police.hits = int(police.get("hits", 0)) + 1
+	police.hit_cd = 0.8
+	police.ram_t = 0.0
+	var away := signf(x - float(police.x)) if absf(x - float(police.x)) > 0.05 else -float(police.side)
+	if police.hits >= POLICE_HITS:
+		_crash("car", police.x - x)
+	else:
+		v *= HIT_SLOW
+		lat_v = away * HIT_BOUNCE
+		police.x = float(police.x) - away * 1.2
+		police.v = minf(float(police.v), v) - 4.0
+		_end_drift()
+	events.append(["police_ram", police.hits])
+
+
+## Police vs. traffic and tunnel walls (D-142): they slow and shove it too.
+func _police_obstacles(dt: float) -> void:
+	for t in traffic:
+		var tl: float = t.get("len", CAR_LEN)
+		var tw: float = t.get("w", CAR_W)
+		if absf(float(t.s) - float(police.s)) < (CAR_LEN + tl) * 0.5 				and absf(float(t.x) - float(police.x)) < (CAR_W + tw) * 0.5 				and float(police.get("bump_cd", 0.0)) <= 0.0:
+			police.v = float(police.v) * POLICE_BUMP_SLOW
+			police.x = float(police.x) + signf(float(police.x) - float(t.x) + 0.01) * 1.5
+			police.bump_cd = 0.5
+			events.append(["police_bump"])
+	police.bump_cd = maxf(0.0, float(police.get("bump_cd", 0.0)) - dt)
+	if track.in_tunnel(float(police.s)):
+		var lim := Track.TUNNEL_HALF - CAR_W * 0.5
+		if absf(float(police.x)) > lim:
+			police.x = signf(float(police.x)) * lim
+			police.v = maxf(0.0, float(police.v) - SCRAPE_DRAG * 1.5 * dt)
 
 
 func _bust() -> void:

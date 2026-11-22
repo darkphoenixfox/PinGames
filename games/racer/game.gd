@@ -611,7 +611,10 @@ func _handle_events() -> void:
 					Audio.play_music(MUSIC_TRACKS[_music_i % MUSIC_TRACKS.size()])
 				# Reached on momentum after TIME UP: the race goes on (D-103).
 				var saved: bool = e.size() > 3 and e[3]
-				_center_message(tr("RC_JUST_MADE_IT") if saved else tr("RC_CHECKPOINT"), 1.6)
+				# No CHECKPOINT notice mid-TABLE (D-142): the gate, DMD and sound
+				# say it; JUST MADE IT! still shows when it saves the race.
+				if saved:
+					_center_message(tr("RC_JUST_MADE_IT"), 1.6)
 				_dmd_anim("checkpoint", [tr("RC_CHECKPOINT"), tr("RC_EXTENDED") % int(e[2])])
 			"time_up":
 				Audio.sfx("rc_time_up")
@@ -672,6 +675,8 @@ func _handle_events() -> void:
 				Dmd.flash(tr("RC_POLICE"), 1.4, Dmd.RED)
 			"police_ram":
 				Audio.sfx("rc_bump")
+				_shake = 0.45
+				_bg_dark = 0.3
 			"busted":
 				_center_message(tr("RC_BUSTED"), 2.5)
 				_dmd_anim("fine", [tr("RC_BUSTED"), tr("RC_FINE"), "-" + ScoreTable.format_score(int(e[1]))])
@@ -1153,7 +1158,11 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	_police.transform = tr_.frame(pd.s, pd.x)
 	var h := tr_.heading(pd.s)
 	# Swerving in on the hero car: the nose turns towards it (the T-bone).
-	var lean := clampf((sim.x - float(pd.x)) * 0.12, -0.5, 0.5) if pd.state == "chase" and absf(pd.s - sim.s) < 12.0 else 0.0
+	# While chasing, its nose points at the hero car (D-142).
+	var lean := 0.0
+	if pd.state == "chase":
+		var ahead := maxf(sim.s - float(pd.s) + 6.0, 4.0)
+		lean = clampf(atan2(sim.x - float(pd.x), ahead), -0.9, 0.9)
 	# Busted (D-139): it swings 90 degrees across as it stops beside you, in
 	# stepped frames, and straightens again as it drives off.
 	var swing_to := 0.0
