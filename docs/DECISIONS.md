@@ -1564,3 +1564,12 @@
 - **Hosting:** the HeroAR stack's NGINX (Portainer stack `heroar`, see that repo's docs/DEPLOYMENT.md) serves `K:\heroar\www` statically, with `.wasm` as application/wasm. The build goes in `K:\heroar\www\pingames\`, so it's at https://web.phoenixfox.net/pingames/ (LAN: http://192.168.1.150:8086/pingames/). The HeroAR client deploy copies with `robocopy /E` and never deletes, so the folder survives it. No HeroAR config change and no restart were needed. `scripts/deploy_web.ps1` builds and mirrors it.
 - **Possible improvement:** NGINX doesn't gzip `.wasm` or `.pck` (its `gzip_types` leaves them out), so the first load is about 145 MB. That's fine on the LAN, but adding them to HeroAR's nginx.conf would cut it a lot. It's left untouched for now.
 - **Status:** Accepted
+
+### D-174 — Web build served pre-compressed
+- **Date:** 2026-11-22
+- **Decision (director):** add NGINX compression for the web build and restart the container, making whatever HeroAR changes are needed.
+- **NGINX:** `location ^~ /pingames/` with `gzip_static on`, MIME types and `no-cache`, plus `application/wasm` in `gzip_types` (HeroAR DEC-0275, committed there).
+- **Deploy:** `scripts/deploy_web.ps1` writes `.gz` copies of `index.wasm`, `index.pck` and `index.js` before mirroring.
+- **Rollout:** the config was validated with `nginx -t` inside the running container through Portainer's API before `heroar-web` was restarted. The HeroHold site and `/healthz` were fine afterwards.
+- **Result:** the engine downloads as 10 MB instead of 40 MB. The 104 MB game data hardly compresses, because its textures and music are already compressed formats.
+- **Status:** Accepted
