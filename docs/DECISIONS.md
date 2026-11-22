@@ -1516,3 +1516,8 @@
 - **Controls:** the left stick walks relative to where the player looks (1.4 m/s, kept 0.3 m inside the walls). The right stick snap-turns 45° per push, about the player's head. Clicking the left stick returns the player to the front of the cabinet, facing it.
 - **Config:** the saved cabinet placement (`display.vr_cabinet`) is removed.
 - **Status:** Accepted (prototype)
+
+### D-169 — VR: right stick sets the player's height
+- **Date:** 2026-11-22
+- **Decision (director):** the right stick changes the player's height, not their rotation. Up/down raises or lowers the play space at 0.4 m/s, from −0.8 to +0.6 m, for example to play seated. Snap turning is removed; players turn physically. Recentring (left stick click) keeps the chosen height. This amends D-168.
+- **Status:** Accepted

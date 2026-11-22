@@ -8,8 +8,8 @@
 ##   triggers = flippers, grips = magna saves, right A = launch,
 ##   left X = start, left Y = coin, right B (hold) = exit.
 ## Moving around (D-168): the cabinet stands fixed in the middle of the room;
-## left stick walks, right stick snap-turns, click the left stick to return to
-## the front of the cabinet.
+## left stick walks, right stick up/down changes your height, click the left
+## stick to return to the front of the cabinet.
 ## Without one it falls back to a fixed player's-eye camera (desktop preview,
 ## also used for screenshots).
 ##
@@ -55,7 +55,6 @@ var _controllers := {}
 var _cab: Node3D            # the cabinet (fixed in the middle of the room, D-168)
 var _cam: Node3D
 var _origin: XROrigin3D
-var _turn_ready := true     # snap turn: one step per push of the stick
 
 
 func build(table_tex: Texture2D, backglass_tex: Texture2D, dmd_tex: Texture2D) -> void:
@@ -99,10 +98,10 @@ func _start_xr() -> bool:
 
 # --- moving around the room (D-168) --------------------------------------------------
 ## The cabinet stays put in the middle of the room; the sticks move the player.
-## Left stick walks (relative to where you look), right stick snap-turns 45
-## degrees, clicking the left stick returns you to the spot in front of it.
+## Left stick walks (relative to where you look), right stick up/down changes
+## your height, clicking the left stick returns you to the spot in front of it.
 const WALK_SPEED := 1.4       # m/s
-const SNAP_TURN := 45.0       # degrees per push
+const LIFT_SPEED := 0.4       # m/s, right stick height (D-169)
 const DEAD := 0.25
 
 
@@ -123,26 +122,15 @@ func _process(delta: float) -> void:
 		p.x = clampf(p.x, -half.x, half.x)
 		p.z = clampf(p.z, zc - half.y, zc + half.y)
 		_origin.position = p
-	if absf(r.x) > 0.6 and _turn_ready:
-		_turn_ready = false
-		_turn_around_head(-signf(r.x) * deg_to_rad(SNAP_TURN))
-	elif absf(r.x) < 0.3:
-		_turn_ready = true
+	# Right stick up/down: your height (D-169), e.g. to play seated or to
+	# match a taller/shorter cabinet stance.
+	if absf(r.y) > DEAD:
+		_origin.position.y = clampf(_origin.position.y + r.y * LIFT_SPEED * delta, -0.8, 0.6)
 
 
-## Turns the play space about the player's head, so they don't slide sideways.
-func _turn_around_head(angle: float) -> void:
-	var head := _cam.global_position
-	var t := _origin.global_transform
-	t.origin -= head
-	t = Transform3D(Basis(Vector3.UP, angle), Vector3.ZERO) * t
-	t.origin += head
-	_origin.global_transform = t
-
-
-## Back to the spot in front of the cabinet, facing it.
+## Back to the spot in front of the cabinet, facing it (your height is kept).
 func recenter() -> void:
-	_origin.transform = Transform3D(Basis.IDENTITY, Vector3(0, 0, STAND))
+	_origin.transform = Transform3D(Basis.IDENTITY, Vector3(0, _origin.position.y, STAND))
 	XRServer.center_on_hmd(XRServer.RESET_BUT_KEEP_TILT, true)
 
 
