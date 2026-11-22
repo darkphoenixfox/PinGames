@@ -97,6 +97,8 @@ func save() -> void:
 func layout() -> String:
 	if OS.has_feature("android"):
 		return "vr"   # the Quest build is the VR cabinet (D-170)
+	if OS.has_feature("web") or cli.has("web-preview"):
+		return "web"  # the browser build tiles all screens on one canvas (D-173)
 	return str(get_value("display", "layout"))
 
 

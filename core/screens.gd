@@ -5,6 +5,7 @@
 ##   3screen  : TABLE = main window, BACKGLASS and DMD in their own fullscreen windows
 ##   vr       : a 3D pinball cabinet with the three screens on it, OpenXR when
 ##              available, else a desktop preview camera (D-164)
+##   web      : one browser canvas: TABLE left, BACKGLASS + DMD right (D-173)
 ##   2screen  : TABLE = main window, DMD framed at the bottom centre of the BACKGLASS
 ##              (games show their *_2screen backglass art, D-080)
 ## Games add their nodes to `table` / `backglass` (base coordinates, any render scale).
@@ -56,14 +57,16 @@ func setup(layout_name: String) -> void:
 	current_layout = layout_name
 	var sink := str(Config.get_value("display", "dmd_sink"))
 	dmd_in_backglass = sink != "hardware" and (layout_name == "2screen" or sink == "backglass")
-	if layout_name == "vr":
-		dmd_in_backglass = false   # the VR head has its own DMD panel (D-164)
+	if layout_name == "vr" or layout_name == "web":
+		dmd_in_backglass = false   # VR head / web page show their own DMD panel (D-164, D-173)
 	if is_headless():
 		print("Screens: headless, layout '%s' not shown" % layout_name)
 		return
 	match layout_name:
 		"vr":
 			_setup_vr()
+		"web":
+			_setup_web()
 		"3screen":
 			_setup_cabinet(false)
 		"2screen":
@@ -111,6 +114,63 @@ func _setup_windowed() -> void:
 	var dmw := _make_window("PinGames - DMD",
 		Rect2i(Vector2i(right_x, y0 + bg_size.y + TITLE_BAR), dmd_size), false)
 	_add_view(dmw, Dmd.texture(), 0, true)
+
+
+# --- web: all three screens on one page (D-173) ---------------------------------
+## A browser has one canvas: the TABLE on the left at full height, the BACKGLASS
+## and the DMD stacked on the right, and the keyboard controls under them.
+func _setup_web() -> void:
+	table.size = TABLE_BASE
+	if not OS.has_feature("web"):   # desktop preview (--web-preview): a browser-sized window
+		var root := get_window()
+		root.mode = Window.MODE_WINDOWED
+		var mon := _clamp_monitor(int(Config.get_value("display", "windowed_monitor")))
+		var area := DisplayServer.screen_get_usable_rect(mon)
+		root.size = Vector2i(mini(1280, area.size.x - 40), mini(720, area.size.y - 80))
+		root.position = area.position + (area.size - root.size) / 2
+	var page := HBoxContainer.new()
+	page.set_anchors_preset(Control.PRESET_FULL_RECT)
+	page.add_theme_constant_override("separation", 8)
+	add_child(page)
+	_outputs.append(page)
+	var t := ScreenView.new()
+	t.texture = table.get_texture()
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	t.size_flags_stretch_ratio = 0.9
+	page.add_child(t)
+	var right := VBoxContainer.new()
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.size_flags_stretch_ratio = 1.6
+	right.add_theme_constant_override("separation", 8)
+	page.add_child(right)
+	var bg := ScreenView.new()
+	bg.texture = backglass.get_texture()
+	bg.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	bg.size_flags_stretch_ratio = 2.2
+	right.add_child(bg)
+	var d := ScreenView.new()
+	d.texture = Dmd.texture()
+	d.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var mat := ShaderMaterial.new()
+	mat.shader = DMD_SHADER
+	mat.set_shader_parameter("dots", Vector2(Dmd.size))
+	mat.set_shader_parameter("tint", Dmd.color)
+	mat.set_shader_parameter("mono", Dmd.mono)
+	d.material = mat
+	# Exactly the DMD's shape, so the dot shader never covers the margins.
+	var box := AspectRatioContainer.new()
+	box.ratio = float(Dmd.size.x) / Dmd.size.y
+	box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.size_flags_stretch_ratio = 0.6
+	box.add_child(d)
+	right.add_child(box)
+	var help := Label.new()
+	help.text = tr("WEB_CONTROLS")
+	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	help.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
+	help.add_theme_font_size_override("font_size", 16)
+	right.add_child(help)
 
 
 # --- vr: a 3D cabinet with the screens on it (D-164) ----------------------------

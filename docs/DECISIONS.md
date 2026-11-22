@@ -1554,3 +1554,13 @@
 - **Export test:** the exported Quest package (`--export-pack`) was run on the desktop with `--main-pack`, outside the project folder. Both games run with all content, texts and levels. Only the deliberately excluded Windows XR library is missing there.
 - **Test:** the Quest preset must include `*.txt`.
 - **Status:** Accepted
+
+### D-173 — Browser version, served at web.phoenixfox.net/pingames/
+- **Date:** 2026-11-22
+- **Decision (director):** a web browser version of the flat-screen prototype, served under a subpath of the existing NAS web server.
+- **Layout `web`** (`Screens._setup_web`): a browser has one canvas, so the TABLE fills the left at full height, the BACKGLASS and the dot-matrix DMD stack on the right (the DMD sits in an AspectRatioContainer so the dot shader stays on the panel), and the keyboard controls are listed under them (`WEB_CONTROLS`). `Config.layout()` picks it on the web feature. On the desktop, `--web-preview` shows it in a browser-sized window.
+- **Renderer:** browsers use Godot's Compatibility (WebGL 2) renderer. Both games were checked on the desktop under `--rendering-method gl_compatibility` and render correctly.
+- **Export preset "Web":** the non-threaded template, so no COOP/COEP headers are needed and any static server works. It includes `*.txt` (levels, D-172) and excludes sources, tests, scripts, docs, the XR addon and the VR cabinet model. Output is about 104 MB of game data plus a 40 MB engine file.
+- **Hosting:** the HeroAR stack's NGINX (Portainer stack `heroar`, see that repo's docs/DEPLOYMENT.md) serves `K:\heroar\www` statically, with `.wasm` as application/wasm. The build goes in `K:\heroar\www\pingames\`, so it's at https://web.phoenixfox.net/pingames/ (LAN: http://192.168.1.150:8086/pingames/). The HeroAR client deploy copies with `robocopy /E` and never deletes, so the folder survives it. No HeroAR config change and no restart were needed. `scripts/deploy_web.ps1` builds and mirrors it.
+- **Possible improvement:** NGINX doesn't gzip `.wasm` or `.pck` (its `gzip_types` leaves them out), so the first load is about 145 MB. That's fine on the LAN, but adding them to HeroAR's nginx.conf would cut it a lot. It's left untouched for now.
+- **Status:** Accepted
