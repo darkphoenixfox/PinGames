@@ -12,6 +12,14 @@ const ROAD_HALF := 7.5         # 4 lanes of 3.75 m
 const LANES := [-5.625, -1.875, 1.875, 5.625]
 const RUMBLE := 1.2            # red/white kerb outside the road edge
 const START_STRAIGHT := 400.0
+const TUNNEL_MIN := 220.0
+const TUNNEL_MAX := 520.0
+const TUNNEL_GAP := 1200.0       # m between tunnels
+const TUNNEL_FIRST := 900.0      # no tunnel before this
+const TUNNEL_CHANCE := 0.35      # of eligible sections
+const TUNNEL_MAX_CURV := 1.0 / 260.0
+const TUNNEL_HALF := ROAD_HALF + 0.3   # wall distance from the centre line (road edge)
+const TUNNEL_HEIGHT := 6.5
 const MAX_TURN := deg_to_rad(110.0)      # per curve section
 const MAX_HEADING := deg_to_rad(80.0)    # overall, from the start direction
 ## Roadside objects: [kind, collision radius]. Kinds are drawn by the view.
@@ -31,6 +39,9 @@ var objects: Array = []
 var _rng := RandomNumberGenerator.new()
 var _built_to := 0.0   # metres generated so far
 var _next_obj_s := 30.0
+## Tunnels (D-127): Vector2(s_start, s_end), in order.
+var tunnels: Array = []
+var avoid_every := 0.0          # checkpoint spacing to keep tunnels clear of (set by the sim)
 var _next_sign_s := 300.0
 var _next_gantry_s := 700.0
 var _next_bush_s := 20.0
@@ -45,6 +56,7 @@ func setup(seed_in: int = 1) -> void:
 	objects.clear()
 	_built_to = 0.0
 	_next_obj_s = 30.0
+	tunnels.clear()
 	_next_sign_s = 300.0
 	_next_gantry_s = 700.0
 	_next_bush_s = 20.0
@@ -111,6 +123,7 @@ func _add_section(len: float, c: float, dh: float) -> void:
 		curv.append(ck)
 	var s0 := _built_to
 	_built_to = (pos.size() - 1) * SAMPLE
+	_maybe_tunnel(s0, _built_to, c)
 	_place_objects(s0, _built_to)
 
 
@@ -171,7 +184,45 @@ func _place_dressing(s1: float) -> void:
 			_next_gantry_s += 60.0   # try a bit further on, out of the bend
 
 
+# --- tunnels (D-127) ---------------------------------------------------------------
+## Some gentle sections become tunnels: walls at the road's edges, a roof, no
+## roadside objects inside. Kept clear of checkpoints (avoid_every) and the start.
+func _maybe_tunnel(s0: float, s1: float, c: float) -> void:
+	if s1 - s0 < TUNNEL_MIN + 40.0 or absf(c) > TUNNEL_MAX_CURV or s0 < TUNNEL_FIRST:
+		return
+	if not tunnels.is_empty() and s0 - (tunnels[-1] as Vector2).y < TUNNEL_GAP:
+		return
+	if _rng.randf() > TUNNEL_CHANCE:
+		return
+	var a := s0 + 20.0
+	var b := minf(s1 - 20.0, a + TUNNEL_MAX)
+	if avoid_every > 0.0:
+		# No checkpoint gate inside, or within 60 m of either portal.
+		var k := ceilf((a - 60.0) / avoid_every) * avoid_every
+		if k <= b + 60.0:
+			return
+	tunnels.append(Vector2(a, b))
+
+
+## True when s is inside a tunnel.
+func in_tunnel(s: float) -> bool:
+	return tunnel_at(s) != Vector2.ZERO
+
+
+## The tunnel containing s, or Vector2.ZERO.
+func tunnel_at(s: float) -> Vector2:
+	for t in tunnels:
+		var tv: Vector2 = t
+		if s >= tv.x and s <= tv.y:
+			return tv
+		if tv.x > s:
+			break
+	return Vector2.ZERO
+
+
 func _add_obj(s: float, x: float, kind: String, dir: float = 1.0) -> void:
+	if in_tunnel(s):
+		return   # nothing stands inside a tunnel (D-127)
 	objects.append({"s": s, "x": x, "kind": kind, "r": OBJ_RADIUS[kind], "dir": dir})
 
 

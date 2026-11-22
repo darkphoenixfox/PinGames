@@ -588,6 +588,35 @@ func test_racer_sim() -> void:
 				break
 		check(max_h < deg_to_rad(85.0) and not near,
 			"racer road (seed %d) never doubles back (max heading %.0f deg)" % [seed_i, rad_to_deg(max_h)])
+	# Tunnels (D-127): some exist, clear of checkpoints, with nothing inside;
+	# their walls hold the car on the road.
+	var tt_ = load("res://games/racer/track.gd").new()
+	tt_.avoid_every = 2300.0
+	tt_.setup(7)
+	tt_.ensure(30000.0)
+	var clear := true
+	for tv in tt_.tunnels:
+		var k := ceilf((tv.x - 60.0) / 2300.0) * 2300.0
+		clear = clear and k > tv.y + 60.0
+		for o in tt_.objects_between(tv.x, tv.y):
+			clear = false
+	check(tt_.tunnels.size() >= 3 and clear, "tunnels appear, clear of checkpoints and empty (%d)" % tt_.tunnels.size())
+	var tn = Sim.new()
+	tn.setup(7)
+	tn.track.ensure(30000.0)
+	var tun: Vector2 = tn.track.tunnels[0]
+	tn.state = Sim.State.RACE
+	tn.gear = Sim.Gear.HIGH
+	tn.s = tun.x + 10.0
+	tn.v = 50.0
+	var scraped := false
+	for i in 90:
+		tn.traffic.clear()
+		tn.step(dt, false, true)
+		for e in tn.events:
+			scraped = scraped or e[0] == "scrape"
+	check(tn.in_tunnel and tn.x <= tn.track.TUNNEL_HALF - Sim.CAR_W * 0.5 + 0.01 and scraped,
+		"tunnel walls hold the car on the road (x %.1f)" % tn.x)
 	# Countdown, then automatic throttle.
 	var c = Sim.new()
 	c.setup(7)
@@ -597,7 +626,7 @@ func test_racer_sim() -> void:
 	# Flippers rev the engine on the grid (D-112).
 	var rv = Sim.new()
 	rv.setup(7)
-	for i in 30:
+	for i in 45:
 		rv.step(dt, true, false)
 	var revved: float = rv.rpm
 	for i in 60:
@@ -672,7 +701,7 @@ func test_racer_sim() -> void:
 	plain.setup(7)
 	var launched := false
 	for i in 60 * 3 + 10:
-		var hold: bool = good.rpm < (Sim.PERFECT_FROM + Sim.PERFECT_TO) * 0.5
+		var hold: bool = good.rpm < (Sim.START_FROM + Sim.START_TO) * 0.5
 		good.step(dt, hold, false)
 		plain.step(dt, false, false)
 		for e in good.events:

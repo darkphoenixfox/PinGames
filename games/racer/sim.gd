@@ -75,10 +75,14 @@ const PERFECT_KICK := 3.0         # m/s added at once
 const PERFECT_TIME := 0.8         # s of extra pull after it
 const PERFECT_PULL := 0.6         # x ACCEL extra during that time
 const PERFECT_POINTS := 2000.0
+## The perfect-start window is wider than the shift one, and the revs move
+## slower on the grid, so it can be held (D-128).
+const START_FROM := 0.58
+const START_TO := 0.93
 const START_KICK := 12.0          # m/s at GO after a perfect rev (D-118)
 const START_PULL_TIME := 1.5      # s of perfect-shift pull after it
-const REV_UP := 2.2               # rpm/s while revving on the grid (D-112)
-const REV_DOWN := 1.4
+const REV_UP := 1.5               # rpm/s while revving on the grid (D-112; slower D-128)
+const REV_DOWN := 1.0
 ## After the clock runs out the car coasts (D-103): reaching a checkpoint
 ## before it stops extends the time and the race goes on.
 const COAST_OVER := 7.0          # m/s^2 decel while coasting out
@@ -101,7 +105,8 @@ const FLIP_TIME := 1.33          # roll-over animation (D-105: 1.5x faster than 
 const FLIP_SPEED := 30.0
 const FLIP_ROLL_DECEL := 6.0     # m/s^2 while rolling
 const FLIP_SLIDE_DECEL := 11.0   # m/s^2 sliding on its side after the roll
-const FLIP_KINDS := ["palm", "rock", "lamp", "truck"]
+const FLIP_KINDS := ["palm", "rock", "lamp", "truck", "portal"]
+const SCRAPE_DRAG := 9.0        # m/s^2 lost scraping a tunnel wall (D-127)
 const NEAR_MISS_DX := 3.3
 const TRUCK_LEN := 10.0
 const TRUCK_W := 2.66
@@ -146,6 +151,8 @@ var perfect_t := 0.0           # s of perfect-shift pull left (D-116)
 var rpm := 0.0                 # 0..1 (tachometer)
 var shift_hold := 0.0          # s both flippers held (for the shift)
 var _shift_lock := false       # shifted: release both before shifting again
+var in_tunnel := false         # D-127
+var _scrape_t := 0.0
 var grace_t := 0.0             # s of traffic immunity left after a crash (D-125)
 var spin_t := 0.0              # crash timer (spin-out or flip)
 var flipping := false          # this crash is a roll-over (big obstacle)
@@ -166,6 +173,7 @@ var done := false
 
 func setup(seed_in: int = 7) -> void:
 	_rng.seed = seed_in * 31 + 5
+	track.avoid_every = CHECKPOINT_EVERY
 	track.setup(seed_in)
 	track.ensure(2000.0)
 
@@ -206,7 +214,7 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 				events.append(["go"])
 				# Perfect start (D-118): revs held in the perfect-shift band at GO
 				# launch the car with a kick and extra pull.
-				if rpm >= PERFECT_FROM and rpm < PERFECT_TO:
+				if rpm >= START_FROM and rpm < START_TO:
 					v = START_KICK
 					perfect_t = START_PULL_TIME
 					_add_score(PERFECT_POINTS)
@@ -395,7 +403,7 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	push *= (H_SLIDE if gear == Gear.HIGH else L_PUSH) / grip()
 	# Sideways speed grows with forward speed (D-119): slow cars barely move
 	# across the road; full authority from STEER_FULL_V.
-	var authority := clampf(v / STEER_FULL_V, 0.06, 1.0) * STEER * (L_GRIP if gear == Gear.LOW else 1.0) * grip()
+	var authority := clampf(v / STEER_FULL_V, 0.0, 1.0) * STEER * (L_GRIP if gear == Gear.LOW else 1.0) * grip()
 	_update_drift(dt, want, c, brake)
 	var vmax := nitro_speed() if boosting else gear_top()
 	rpm = clampf(v / gear_top(), 0.0, 1.0)
@@ -453,7 +461,9 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	if spin_t > 0.0:
 		lat_v = lat
 	x = clampf(x + lat_v * dt, -WALL, WALL)
+	var was_in := track.in_tunnel(s)
 	s += v * dt
+	_tunnel_walls(dt, was_in)
 
 
 func _update_drift(dt: float, want: float, c: float, brake: bool) -> void:
@@ -483,6 +493,28 @@ func _update_drift(dt: float, want: float, c: float, brake: bool) -> void:
 			drift_points += v * dt * 25.0
 	var target := drift_dir * DRIFT_ANGLE if drifting else 0.0
 	drift_angle = move_toward(drift_angle, target, dt * (120.0 if drifting else 90.0))
+
+
+## Tunnel walls stand on the road's edges (D-127). Driving in off the road hits
+## the portal; inside, the car is held between the walls and scrapes along them.
+func _tunnel_walls(dt: float, was_in: bool) -> void:
+	in_tunnel = track.in_tunnel(s)
+	if not in_tunnel:
+		return
+	var limit := Track.TUNNEL_HALF - CAR_W * 0.5
+	if not was_in and absf(x) > limit + 0.8 and spin_t <= 0.0 and state == State.RACE:
+		_crash("portal", -x)   # rolls away from... the wall it hit
+	if absf(x) > limit:
+		var side := signf(x)
+		x = side * limit
+		if lat_v * side > 0.0:
+			lat_v = -lat_v * 0.3
+		if v > 8.0 and spin_t <= 0.0:
+			v = maxf(0.0, v - SCRAPE_DRAG * dt)
+			_scrape_t -= dt
+			if _scrape_t <= 0.0:
+				_scrape_t = 0.25
+				events.append(["scrape", side])
 
 
 func _end_drift() -> void:

@@ -18,8 +18,16 @@ var value := 0.0              # 0..1
 var red_from := 2.0           # 0..1, > 1 = no red zone
 var lit := UI.CYAN
 ## Perfect-shift band (D-116), 0..1 of the dial; drawn green. Empty = none.
-var good_from := 2.0
-var good_to := 2.0
+var good_from := 2.0:
+	set(v):
+		if v != good_from:
+			good_from = v
+			queue_redraw()
+var good_to := 2.0:
+	set(v):
+		if v != good_to:
+			good_to = v
+			queue_redraw()
 const GOOD := Color("4fff7a")
 var labels: Array = []        # [[fraction, text], ...]
 var _hub := Vector2.ZERO

@@ -19,6 +19,7 @@ const Sprites = preload("res://games/racer/sprites.gd")
 const Night = preload("res://games/racer/night.gd")
 const DmdAnims = preload("res://games/racer/dmd_anims.gd")
 const Showroom = preload("res://games/racer/showroom.gd")
+const Tunnel = preload("res://games/racer/tunnel.gd")
 const SELECT_TIME := 15.0   # s to choose a car before the highlighted one is taken
 ## Car colours on the DMD, matching Sim.CARS' hues (red, yellow, blue).
 const CAR_COLS := [Color("e8303a"), Color("ffd23e"), Color("3f8cff")]
@@ -59,8 +60,8 @@ const FLIP_HOP := 1.6
 const OVER_TURN_TIME := 0.6
 const OVER_TURN_FRAMES := 6.0
 ## Number plate spot on the red car's rear bumper (model space, D-114).
-const PLATE_Y := 0.5
-const PLATE_SIZE := Vector2(0.6, 0.3)   # oversized so TRN reads at pixel scale
+const PLATE_Y := 0.56     # raised clear of the bumper's bottom edge (D-127)
+const PLATE_SIZE := Vector2(0.51, 0.255)   # oversized so TRN reads at pixel scale (15 % smaller, D-127)
 const PLATE_Z := -2.215           # nitro canisters read from far away (D-103)
 ## Roll-over phases (fractions of the animation, D-101): slew 90 degrees by
 ## FLIP_TURN_END, roll over until FLIP_ROLL_END, then lie still; in the last
@@ -217,6 +218,10 @@ var _bg_mat: ShaderMaterial
 var _anims := DmdAnims.new()
 var _night := 0.0           # 0 = day, 1 = night (D-113)
 var _night_shown := -1.0
+var _tunnel_k := 0.0        # 0 outside .. 1 inside a tunnel (D-127)
+var _tunnel_shown := -1.0
+var _lamps := 0.0           # car lights level: max(night, tunnel)
+var _reverb: AudioEffectReverb
 var _sky_mat: ShaderMaterial
 var _sky_proc: ProceduralSkyMaterial
 var _day_top := Color.BLACK
@@ -231,6 +236,7 @@ var _shift_flame_t := 0.0   # upshift exhaust flame left
 var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
 var _bg_dark := 0.0     # s of crash flicker left
 var _sky_h := 0.0
+var _travel := 0.0         # eased nose angle from sideways travel (D-128)
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
 var _music_i := FIRST_TRACK    # current race song index
@@ -296,6 +302,16 @@ func start(_players: int) -> void:
 	_build_hud()
 	_build_backglass()
 	_build_audio_loops()
+	# Tunnel reverb on the effects bus (D-127), removed again when the game ends.
+	var bus := AudioServer.get_bus_index("SFX")
+	if bus >= 0:
+		_reverb = AudioEffectReverb.new()
+		_reverb.room_size = 0.75
+		_reverb.damping = 0.35
+		_reverb.spread = 0.8
+		_reverb.dry = 1.0
+		_reverb.wet = 0.0
+		AudioServer.add_bus_effect(bus, _reverb)
 	if Config.cli.has("rc-car"):   # dev: race with car 0 (easy) / 1 / 2 (hard), D-122
 		_chosen_car = clampi(int(str(Config.cli["rc-car"])), 0, Sim.CARS.size() - 1)
 	if Config.cli.has("rc-skip-intro"):
@@ -1125,6 +1141,7 @@ func _build_chunk(k: int) -> Node3D:
 		node.add_child(mmi)
 		if kind == "lamp":
 			_add_lamp_lights(node, list)
+	Tunnel.build(node, tr_, s0, s0 + CHUNK)   # D-127
 	# Start line and checkpoint gates.
 	var cp := ceilf(s0 / Sim.CHECKPOINT_EVERY) * Sim.CHECKPOINT_EVERY
 	if s0 <= Sim.START_LINE and s0 + CHUNK > Sim.START_LINE:
@@ -1205,10 +1222,14 @@ func _animate(delta: float) -> void:
 	# The nose points where the car is going (D-124): the angle of its sideways
 	# speed against its forward speed, so it never skates sideways while facing
 	# straight. Short taps barely build sideways speed, so they don't twitch it.
+	# Eased, and faded in with speed, so a flipper held at GO doesn't snap the
+	# car sideways (D-128).
 	var travel := 0.0
 	if not sim.drifting:
-		travel = clampf(atan2(sim.lat_v, maxf(sim.v, 6.0)), -MAX_TRAVEL_YAW, MAX_TRAVEL_YAW)
-	var yaw := deg_to_rad(sim.drift_angle) - travel
+		travel = clampf(atan2(sim.lat_v, maxf(sim.v, 12.0)), -MAX_TRAVEL_YAW, MAX_TRAVEL_YAW)
+		travel *= clampf(sim.v / 15.0, 0.0, 1.0)
+	_travel = move_toward(_travel, travel, delta * 1.8)
+	var yaw := deg_to_rad(sim.drift_angle) - _travel
 	var crash_p := _anim_steps(sim.crash_progress(), sim.crash_anim)
 	if sim.spin_t > 0.0 and not sim.flipping:
 		# Spin-out: two full turns stepped like sprite frames, ending nose
@@ -1262,10 +1283,10 @@ func _animate(delta: float) -> void:
 	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
 		var gi := m as MeshInstance3D
 		if gi.material_override != null:   # the body, not its outline shell
-			gi.set_instance_shader_parameter("lamps", _night)
+			gi.set_instance_shader_parameter("lamps", _lamps)
 			gi.set_instance_shader_parameter("brake", 1.0 if braking else 0.0)
 	if _player_lights != null:
-		_player_lights.visible = _night > 0.0 and not (sim.spin_t > 0.0 and sim.flipping)
+		_player_lights.visible = _lamps > 0.0 and not (sim.spin_t > 0.0 and sim.flipping)
 	var smoking := sim.drifting or sliding_out or _shift_smoke_t > 0.0 or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
 	_update_puffs(delta, smoking)
 	# Revving on the grid spits fire (D-116): pops while held high, and one as
@@ -1320,8 +1341,8 @@ func _animate(delta: float) -> void:
 		if kind == "car":
 			for m in node.find_children("*", "MeshInstance3D", true, false):
 				(m as MeshInstance3D).set_instance_shader_parameter("hue", t.hue)
-				(m as MeshInstance3D).set_instance_shader_parameter("lamps", _night)
-		(node.get_meta("night") as Node3D).visible = _night > 0.0
+				(m as MeshInstance3D).set_instance_shader_parameter("lamps", maxf(_night, 1.0 if sim.track.in_tunnel(t.s) else 0.0))
+		(node.get_meta("night") as Node3D).visible = _lamps > 0.0
 		# High beams: flash-flash ... pause (D-105).
 		var ph := fmod(_phase_t + t.id * 0.13, 0.7)
 		var beam_on: bool = t.get("flash", false) and (ph < 0.1 or (ph > 0.2 and ph < 0.3))
@@ -1542,6 +1563,9 @@ func _update_hud(delta: float) -> void:
 	UI.set_color(_speed_label, UI.CYAN if sim.boosting else UI.WHITE)
 	_speedo.set_value(sim.v * 3.6 / 360.0)
 	_tacho.set_value(_tach_value())
+	var countdown := sim.state == Sim.State.COUNTDOWN
+	_tacho.good_from = _tach_of(Sim.START_FROM if countdown else Sim.PERFECT_FROM)
+	_tacho.good_to = _tach_of(Sim.START_TO if countdown else Sim.PERFECT_TO)
 	_gear_lever.set_gear(sim.gear == Sim.Gear.HIGH)
 	var shift_now := sim.gear == Sim.Gear.LOW and sim.rpm >= Sim.REDLINE
 	# Held at the redline in L for SHIFT_NAG s: a big blinking SHIFT in the
@@ -1631,7 +1655,8 @@ func _draw_dmd_dash(p) -> void:
 		var red := f >= 7.0 / 8.0
 		var on := tach >= f
 		var c := Color(0.16, 0.18, 0.22)
-		var good := f >= _tach_of(Sim.PERFECT_FROM) and f < _tach_of(Sim.PERFECT_TO)
+		var cd := sim.state == Sim.State.COUNTDOWN   # the start window on the grid (D-128)
+		var good := f >= _tach_of(Sim.START_FROM if cd else Sim.PERFECT_FROM) 			and f < _tach_of(Sim.START_TO if cd else Sim.PERFECT_TO)
 		if on:
 			c = Dmd.RED if red else (Dmd.WHITE if good else (Dmd.YELLOW if f > 0.6 else Dmd.GREEN))
 		elif red:
@@ -1671,11 +1696,25 @@ func _update_night(delta: float) -> void:
 	elif _phase != "attract" and sim != null and sim.checkpoints >= Night.NIGHT_STAGE - 1:
 		target = 1.0
 	_night = move_toward(_night, target, delta / Night.FADE)
+	# Tunnels (D-127): lights on and daylight dimmed while inside, any stage;
+	# the effects bus gets a reverb.
+	var in_t := sim != null and sim.in_tunnel
+	_tunnel_k = move_toward(_tunnel_k, 1.0 if in_t else 0.0, delta / 0.4)
+	_lamps = maxf(_night, _tunnel_k)
+	if _reverb != null:
+		_reverb.wet = 0.45 * _tunnel_k
+	if is_equal_approx(_night, _night_shown) and is_equal_approx(_tunnel_k, _tunnel_shown):
+		return
+	_tunnel_shown = _tunnel_k
+	Night.set_level(_lamps)
+	get_tree().call_group(NIGHT_GROUP, "set_visible", _lamps > 0.0)
+	var dim := 1.0 - 0.85 * _tunnel_k
 	if is_equal_approx(_night, _night_shown):
+		_sun.light_energy = lerpf(1.1, 0.22, _night) * dim
+		_env.ambient_light_energy = lerpf(0.7, 0.4, _night) * (1.0 - 0.5 * _tunnel_k)
 		return
 	_night_shown = _night
 	var k := _night
-	Night.set_level(k)
 	Sprites.set_night(k)
 	if _sky_mat != null:
 		_sky_mat.set_shader_parameter("night", k)
@@ -1686,12 +1725,20 @@ func _update_night(delta: float) -> void:
 		_sky_proc.sky_top_color = top
 		_sky_proc.sky_horizon_color = top
 	_env.ambient_light_color = Color(0.85, 0.65, 0.8).lerp(Color(0.3, 0.36, 0.62), k)
-	_env.ambient_light_energy = lerpf(0.7, 0.4, k)
-	_sun.light_energy = lerpf(1.1, 0.22, k)
+	_env.ambient_light_energy = lerpf(0.7, 0.4, k) * (1.0 - 0.5 * _tunnel_k)
+	_sun.light_energy = lerpf(1.1, 0.22, k) * dim
 	_sun.light_color = Color(1.0, 0.85, 0.7).lerp(Color(0.55, 0.65, 1.0), k)
 	_env.fog_light_color = _day_fog.lerp(Color(0.05, 0.06, 0.16), k)
-	var on := k > 0.0
-	get_tree().call_group(NIGHT_GROUP, "set_visible", on)
+
+
+func _exit_tree() -> void:
+	# Take the tunnel reverb off the shared effects bus (D-127).
+	var bus := AudioServer.get_bus_index("SFX")
+	if _reverb != null and bus >= 0:
+		for i in range(AudioServer.get_bus_effect_count(bus) - 1, -1, -1):
+			if AudioServer.get_bus_effect(bus, i) == _reverb:
+				AudioServer.remove_bus_effect(bus, i)
+	super._exit_tree()
 
 
 ## Debug builds only (DebugTools, D-057): F freezes / unfreezes the race clock

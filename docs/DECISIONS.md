@@ -1198,3 +1198,20 @@
 - **Date:** 2026-11-22
 - **Decision (director):** the traffic immunity after a crash lasts 5 s (was 3 s, D-125).
 - **Status:** Accepted
+
+### D-127 — Turbo Run: tunnels; smaller, higher number plate
+- **Date:** 2026-11-22
+- **Tunnels (director):** cars turn their lights on inside, even in day stages; car noises get reverb; the walls are on the limits of the road.
+  - **Track:** gentle sections (|curvature| < 1/260) after 900 m become tunnels 220–520 m long, with a 35 % chance and at least 1.2 km between them. They stay clear of checkpoint gates (60 m either side), and no roadside objects are placed inside (`Track.tunnels`, `in_tunnel()`).
+  - **Walls:** they stand on the road's edges (`TUNNEL_HALF` = 7.8 m). Inside, the car is held between them and scrapes along them (−9 m/s² and a scrape event); driving in off the road hits the portal and rolls the car.
+  - **Look** (`games/racer/tunnel.gd`): pre-lit concrete walls and roof with panel seams, a yellow guide stripe and grime, following the road's curve and hills. Sodium ceiling lamps every 12 m cast orange pools of light on the road (flat additive polygons). A concrete face surrounds each portal.
+  - **Inside:** the scene's light dims by 85 %. All car lights come on (hero car beam and lamp texels; traffic lamps when that car is inside), via `_lamps` = max(night, tunnel). Lamp-post pools follow the same level.
+  - **Reverb:** an `AudioEffectReverb` on the SFX bus fades to 45 % wet inside, so engine, tyres and effects echo off the walls. It is removed from the bus when the game ends.
+- **Number plate (director):** 15 % smaller (0.51 × 0.255 m) and raised 6 cm, so it no longer touches the bumper's bottom edge.
+- **Status:** Accepted
+
+### D-128 — Turbo Run: easier perfect start; no sideways snap at GO
+- **Date:** 2026-11-22
+- **Perfect start (director: a bit easier):** the start has its own wider window, rpm 0.58–0.93 (the shift window stays 0.69–0.87), and the grid revs move slower (up 1.5/s, down 1.0/s; was 2.2/1.4), so the needle is easier to hold in the band. During the countdown, the tachometer and the DMD bar show the start window.
+- **Snap at GO (director: holding a flipper as the car pulls away shifted its angle harshly):** at standstill the sideways speed was large compared with the forward speed, so the nose jumped to the clamp at once. Now steering authority starts at 0 when stopped (the 0.06 floor is gone), the travel angle fades in with speed up to 15 m/s, and the nose angle eases at 1.8 rad/s.
+- **Status:** Accepted
