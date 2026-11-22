@@ -273,6 +273,25 @@ func test_breakout_powerups(Sim) -> void:
 ## Tetrahedron enemy (D-052): blocked by a full rack, descends through a gap,
 ## orbits at the bottom, dies to the plasma, destroys the ship on contact.
 ## Level complete (D-068): enemies explode, play pauses, next_level loads level 2.
+## Difficulty (D-182): plasma start speed and cap, lives from the operator's balls.
+func test_breakout_difficulty(Sim) -> void:
+	var e = Sim.new()
+	e.setup(3, "easy")
+	var n = Sim.new()
+	n.setup(3)
+	var h = Sim.new()
+	h.setup(3, "hard")
+	check(e.balls_left == 5 and n.balls_left == 3 and h.balls_left == 2, "lives: easy 5, normal 3, hard 2")
+	check(e.ball_speed < n.ball_speed and n.ball_speed < h.ball_speed, "serve speed rises with difficulty")
+	check(e.ball_max_speed < n.ball_max_speed and n.ball_max_speed < h.ball_max_speed, "speed cap rises with difficulty")
+	check(n.ball_speed == Sim.BALL_START_SPEED and n.ball_max_speed == Sim.BALL_MAX_SPEED, "normal keeps the original tuning")
+	var one = Sim.new()
+	one.setup(1, "hard")
+	check(one.balls_left == 1, "hard never goes below one life")
+	n.set_difficulty("hard", 3)
+	check(n.balls_left == 2 and n.balls_total == 2 and n.ball_speed == 10.0 and n.level == 1, "picking later keeps the level")
+
+
 func test_breakout_levels(Sim) -> void:
 	var lv = Sim.new()
 	lv.setup(3)
@@ -535,6 +554,7 @@ func test_breakout_sim() -> void:
 		broken += dbg.events.filter(func(e): return e[0] == "brick").size()
 	check(broken >= 4, "debug line destroys a full column (%d)" % broken)
 	test_breakout_levels(Sim)
+	test_breakout_difficulty(Sim)
 	test_breakout_powerups(Sim)
 	test_breakout_enemies(Sim)
 

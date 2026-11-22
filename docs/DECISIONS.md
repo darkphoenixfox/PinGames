@@ -1648,3 +1648,13 @@
 - **Publishing:** `scripts/build_android.ps1 -Deploy` builds and copies it there.
 - **Note:** it is debug-signed, so Android asks to allow installs from the browser ("unknown sources") the first time.
 - **Status:** Accepted
+
+### D-182 — Tilt Breaker difficulty levels
+- **Date:** 2026-11-22
+- **Decision (director):** three difficulty levels with different base ball speeds and more or fewer lives. The numbers below are Claude's proposal, for the director to tune.
+- **Values** (`Sim.DIFFICULTIES`): Easy 6.8 → 11.5 u/s, operator balls + 2. Normal 8.5 → 13.5 u/s (the original tuning), operator balls. Hard 10.0 → 15.5 u/s, operator balls − 1 (at least 1). With the default 3 balls that gives 5 / 3 / 2 lives. The speed-up per ship hit (+0.25) is the same for all; extra balls from the Bounce power-up start at the difficulty's speed.
+- **Choosing (2+1 buttons, D-007):** PRESS START now opens a DIFFICULTY screen on the TABLE: three rows with the ball speed and lives. The flippers (or magna saves) move, and LAUNCH / START confirm. The DMD shows the choice and its lives. Thirty idle seconds go back to attract. The choice is saved (`breakout.difficulty`) and preselected next time, except during scripted `--press` runs, which mustn't write `user://`. `--tb-difficulty=easy|normal|hard` sets it for dev runs, including `--tb-skip-intro`.
+- **DMD status:** the life dots count the game's starting lives (`sim.balls_total`), no longer the operator setting.
+- **Not changed:** one high-score table for all difficulties.
+- **Tests:** lives 5/3/2, speeds and caps rising with difficulty, Normal equal to the original constants, Hard never below one life, and a later pick keeping the level.
+- **Status:** Accepted

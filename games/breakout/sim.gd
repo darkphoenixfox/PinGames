@@ -26,6 +26,14 @@ const DASH_COOLDOWN := 0.6
 const BALL_R := 0.16
 const BALL_START_SPEED := 8.5
 const BALL_MAX_SPEED := 13.5          # reasonable cap, reached after ~20 returns
+## Difficulty (D-182): the plasma's start speed and cap, and lives added to the
+## operator's balls per game (at least 1). Normal is the original tuning.
+const DIFFICULTIES := {
+	"easy": {"start": 6.8, "max": 11.5, "balls": 2},
+	"normal": {"start": BALL_START_SPEED, "max": BALL_MAX_SPEED, "balls": 0},
+	"hard": {"start": 10.0, "max": 15.5, "balls": -1},
+}
+const DIFFICULTY_ORDER := ["easy", "normal", "hard"]
 const SPEEDUP_PER_PADDLE_HIT := 0.25  # noticeable speed-up per ship hit (D-054)
 const MIN_VERTICAL := 0.28
 const AUTO_SERVE_SECONDS := 6.0
@@ -101,6 +109,10 @@ enum State { SERVE, PLAY, LEVEL_CLEAR, OVER }
 var state := State.SERVE
 var score := 0
 var balls_left := 3
+var balls_total := 3   # lives at the start of the game (DMD status dots)
+var difficulty := "normal"
+var ball_start_speed := BALL_START_SPEED
+var ball_max_speed := BALL_MAX_SPEED
 var level := 1
 
 var paddle_x := 0.0
@@ -169,12 +181,27 @@ var bricks: Array = []
 var events: Array = []
 
 
-func setup(balls: int) -> void:
-	balls_left = maxi(1, balls)
+func setup(balls: int, diff: String = "normal") -> void:
+	set_difficulty(diff, balls)
 	score = 0
 	level = 1
 	build_rack()
 	_reset_serve()
+
+
+## Picks the difficulty before play starts (D-182): ball speeds and lives from
+## the operator's balls per game. Doesn't touch the level or the score.
+func set_difficulty(diff: String, operator_balls: int) -> void:
+	if not DIFFICULTIES.has(diff):
+		diff = "normal"
+	difficulty = diff
+	var d: Dictionary = DIFFICULTIES[diff]
+	ball_start_speed = d.start
+	ball_max_speed = d.max
+	balls_left = maxi(1, operator_balls + int(d.balls))
+	balls_total = balls_left
+	if state == State.SERVE:
+		ball_speed = ball_start_speed
 
 
 ## Builds the bricks of the current level from its text file.
@@ -421,8 +448,8 @@ func _fire(lvl: int) -> void:
 			power = 0.0
 			var nose := Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BALL_R - 0.05)
 			var ang := deg_to_rad(randf_range(-12.0, 12.0))
-			extra_balls.append({"pos": nose, "vel": Vector2(sin(ang), -cos(ang)) * BALL_START_SPEED,
-				"speed": BALL_START_SPEED})
+			extra_balls.append({"pos": nose, "vel": Vector2(sin(ang), -cos(ang)) * ball_start_speed,
+				"speed": ball_start_speed})
 			events.append(["bounce_ball", nose])
 		_:
 			power = maxf(0.0, power - BLAST_COST * lvl)
@@ -566,7 +593,7 @@ func _serve() -> void:
 func _reset_serve() -> void:
 	state = State.SERVE
 	_held_time = 0.0
-	ball_speed = BALL_START_SPEED
+	ball_speed = ball_start_speed
 	ball_vel = Vector2.ZERO
 	ball_pos = Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BALL_R - 0.01)
 
@@ -642,7 +669,7 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 	if vel.y > 0.0 and pos.y < PADDLE_Y:
 		var pr := paddle_rect()
 		if not BP.collide_circle_rect(pos, BALL_R, pr).is_empty():
-			speed = minf(speed + SPEEDUP_PER_PADDLE_HIT, BALL_MAX_SPEED)
+			speed = minf(speed + SPEEDUP_PER_PADDLE_HIT, ball_max_speed)
 			vel = BP.paddle_bounce(pos.x, paddle_x, PADDLE_W * 0.5, speed, paddle_vx)
 			pos.y = pr.position.y - BALL_R
 			events.append(["paddle", null])
@@ -650,7 +677,7 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 			for gx in ghost_xs():
 				var gr := Rect2(gx - PADDLE_W * 0.5, pr.position.y, PADDLE_W, PADDLE_H)
 				if not BP.collide_circle_rect(pos, BALL_R, gr).is_empty():
-					speed = minf(speed + SPEEDUP_PER_PADDLE_HIT, BALL_MAX_SPEED)
+					speed = minf(speed + SPEEDUP_PER_PADDLE_HIT, ball_max_speed)
 					vel = BP.paddle_bounce(pos.x, gx, PADDLE_W * 0.5, speed, 0.0)
 					pos.y = gr.position.y - BALL_R
 					events.append(["ghost", gx])

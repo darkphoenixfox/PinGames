@@ -264,7 +264,7 @@ func start(_players: int) -> void:
 	for s in SOUNDS:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
 	sim = Sim.new()
-	sim.setup(int(Config.get_value("operator", "balls_per_game")))
+	sim.setup(int(Config.get_value("operator", "balls_per_game")), _start_difficulty())
 	if Config.cli.has("tb-level"):  # dev: start at level N
 		sim.level = maxi(1, int(str(Config.cli["tb-level"])))
 		sim.build_rack()
@@ -287,7 +287,16 @@ func on_action(action: StringName, pressed: bool) -> void:
 		return
 	if _phase == "attract":
 		if action == &"start" or action == &"launch":
-			_begin_intro()
+			_enter_select()
+		return
+	if _phase == "select":
+		match action:
+			&"flip_l", &"magna_l":
+				_move_select(-1)
+			&"flip_r", &"magna_r":
+				_move_select(1)
+			&"launch", &"start":
+				_confirm_select()
 		return
 	if _phase == "intro":
 		return
@@ -310,6 +319,12 @@ func _process(delta: float) -> void:
 	if _phase == "attract":
 		_attract(delta)
 		_animate(delta)
+		return
+	if _phase == "select":
+		_animate(delta)
+		if _phase_t > SELECT_IDLE_SECONDS:   # walked away: back to attract
+			_select_ui.queue_free()
+			_enter_attract()
 		return
 	if _phase == "intro":
 		_animate(delta)
@@ -476,7 +491,7 @@ func _refresh_status() -> void:
 		return  # the finale / attract / intro own the DMD
 	var pu: String = sim.powerup
 	var pcol: Color = POWERUP_COLORS.get(pu, Dmd.YELLOW)
-	Dmd.show_status(sim.score, sim.balls_left, int(Config.get_value("operator", "balls_per_game")),
+	Dmd.show_status(sim.score, sim.balls_left, sim.balls_total,
 		sim.power, 3, ACCENT, pcol, sim.level, pu, pcol, sim.blasts_enabled(), _low_power_t > 0.0)
 
 
@@ -534,7 +549,7 @@ func _animate(delta: float) -> void:
 	_animate_powerups(delta)
 	_animate_recharge_flash(delta)
 	# Ship respawn: hidden briefly after being destroyed, then blinks while invulnerable.
-	if _phase == "attract":
+	if _phase == "attract" or _phase == "select":
 		_paddle.visible = false
 	elif _phase == "intro":
 		pass  # positioned and shown by _intro()
@@ -1029,6 +1044,89 @@ func _attract(delta: float) -> void:
 		var step: Array = _attract_steps[_attract_step]
 		(step[0] as Callable).call()
 		_attract_left = step[1]
+
+
+# --- difficulty select (D-182) -----------------------------------------------------
+## After PRESS START: EASY / NORMAL / HARD, chosen with the flippers, LAUNCH to
+## go. The choice sets the plasma's speed and the lives, and is remembered.
+const SELECT_IDLE_SECONDS := 30.0
+const DIFF_NAME := {"easy": "TB_DIFF_EASY", "normal": "TB_DIFF_NORMAL", "hard": "TB_DIFF_HARD"}
+const DIFF_SPEED := {"easy": "TB_SPEED_SLOW", "normal": "TB_SPEED_NORMAL", "hard": "TB_SPEED_FAST"}
+var _select_ui: Control
+var _select_rows: Array = []   # [name label, info label] per difficulty
+var _select_index := 1
+
+
+## --tb-difficulty=easy|normal|hard (dev), else the last choice, else normal.
+func _start_difficulty() -> String:
+	var d := str(Config.cli.get("tb-difficulty", Config.get_value("breakout", "difficulty", "normal")))
+	return d if Sim.DIFFICULTIES.has(d) else "normal"
+
+
+func _lives_for(d: String) -> int:
+	return maxi(1, int(Config.get_value("operator", "balls_per_game")) + int(Sim.DIFFICULTIES[d].balls))
+
+
+func _enter_select() -> void:
+	_phase = "select"
+	_phase_t = 0.0
+	if is_instance_valid(_attract_ui):
+		_attract_ui.queue_free()
+	Audio.sfx("select")
+	Dmd.play(Callable(), 0.0)   # stop the attract animation so the choice shows
+	_select_index = maxi(0, Sim.DIFFICULTY_ORDER.find(_start_difficulty()))
+	_select_ui = UI.vstack(70)
+	_select_ui.add_child(UI.styled_label(tr("TB_DIFFICULTY"), TITLE_FONT, 2))
+	_select_rows.clear()
+	for d in Sim.DIFFICULTY_ORDER:
+		var row := VBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		var name_l := UI.label("", 96, UI.WHITE)
+		var info_l := UI.label(tr("TB_DIFF_INFO") % [tr(DIFF_SPEED[d]), _lives_for(d)], 36, UI.WHITE)
+		row.add_child(name_l)
+		row.add_child(info_l)
+		_select_ui.add_child(row)
+		_select_rows.append([name_l, info_l, row])
+	_select_ui.add_child(UI.label(tr("TB_SELECT_HINT"), 36, UI.CYAN))
+	add_to_table(_select_ui)
+	_refresh_select()
+
+
+func _move_select(step: int) -> void:
+	var i := clampi(_select_index + step, 0, Sim.DIFFICULTY_ORDER.size() - 1)
+	_phase_t = 0.0
+	if i == _select_index:
+		Audio.sfx("error")
+		return
+	_select_index = i
+	Audio.sfx("move")
+	_refresh_select()
+
+
+func _refresh_select() -> void:
+	for i in _select_rows.size():
+		var d: String = Sim.DIFFICULTY_ORDER[i]
+		var on := i == _select_index
+		var name_l: Label = _select_rows[i][0]
+		name_l.text = ("> %s <" % tr(DIFF_NAME[d])) if on else tr(DIFF_NAME[d])
+		name_l.add_theme_color_override("font_color", UI.YELLOW if on else UI.WHITE)
+		(_select_rows[i][2] as Control).modulate.a = 1.0 if on else 0.4
+	var cur: String = Sim.DIFFICULTY_ORDER[_select_index]
+	# The DMD line is short: the lives only (the speed is on the TABLE).
+	Dmd.show_text(tr(DIFF_NAME[cur]), tr("TB_DIFF_DMD") % _lives_for(cur), Dmd.YELLOW, Dmd.WHITE)
+
+
+func _confirm_select() -> void:
+	var d: String = Sim.DIFFICULTY_ORDER[_select_index]
+	sim.set_difficulty(d, int(Config.get_value("operator", "balls_per_game")))
+	# Remembered for next time (not from scripted test runs, which mustn't save).
+	if not Config.cli.has("press") and str(Config.get_value("breakout", "difficulty", "normal")) != d:
+		Config.set_value("breakout", "difficulty", d)
+		Config.save()
+	if is_instance_valid(_select_ui):
+		_select_ui.queue_free()
+	_refresh_status()
+	_begin_intro()
 
 
 func _begin_intro() -> void:

@@ -93,9 +93,16 @@ Rules:
 | Ship line / drain line | z = 5.9 / 7.3 | the plasma is lost once it passes the planet's horizon |
 | Paddle top speed / accel / stop | 11 / 70 / 90 per s | crosses the field in ~0.8 s |
 | Dash (magna save) | 26 u/s for 0.12 s, 0.6 s cooldown | |
-| Ball start / max speed | 8.5 → 13.5 u/s | +0.25 per ship hit (max after about 20 returns, D-054) |
+| Ball start / max speed | 8.5 → 13.5 u/s (Normal) | +0.25 per ship hit (max after about 20 returns, D-054); see Difficulty |
 | Paddle return angle | up to 60° from vertical | by hit position, plus a little paddle "english" |
 | Auto-serve | 6 s | the ball launches by itself if Launch isn't pressed |
+
+**Difficulty (D-182):** after PRESS START the player picks EASY, NORMAL or HARD (flippers choose, LAUNCH goes; the last choice is remembered, and NORMAL is the first default).
+| Difficulty | Ball start → max | Lives |
+|---|---|---|
+| Easy | 6.8 → 11.5 u/s | operator balls + 2 (5 by default) |
+| Normal | 8.5 → 13.5 u/s | operator balls (3) |
+| Hard | 10.0 → 15.5 u/s | operator balls − 1, at least 1 (2) |
 
 **Camera:** orthographic, leaning 20° towards the player (D-040).
 
