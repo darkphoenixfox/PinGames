@@ -1051,3 +1051,9 @@
   - The info key `backglass` points at the lit art for the shell screens.
 - **Tilt Breaker:** the director re-saved `breaker_lights_on_2screen.png` with the orb-dotted i, matching the off art, so the 2-screen light textures are rebuilt (engines 3, shots 5, impacts 8, logo 2 regions). This resolves D-108's pending item.
 - **Status:** Accepted
+
+### D-110 — Turbo Run gear indicator is a lever in an H/L gate
+- **Date:** 2026-11-22
+- **Decision (director):** the TABLE gear indicator becomes a shift lever with L and H positions, instead of a letter in a box.
+- **Implementation:** `games/racer/gear_lever.gd` draws a top-down shift gate with a slot, H at the top and L at the bottom. The knob is yellow in L and white in H, and the lit position's letter is bright. On a shift the knob slides between the two positions in 3 stepped frames over 0.12 s (sprite-like, D-098). The plate is a fixed 150 × 210 slot, so nothing else moves (D-096). The DMD gear box is unchanged.
+- **Status:** Accepted

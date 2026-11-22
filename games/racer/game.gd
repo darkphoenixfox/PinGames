@@ -17,6 +17,7 @@ const Scenery = preload("res://games/racer/scenery.gd")
 const Toon = preload("res://games/racer/toon.gd")
 const Sprites = preload("res://games/racer/sprites.gd")
 const Dial = preload("res://games/racer/dial.gd")
+const GearLever = preload("res://games/racer/gear_lever.gd")
 const UI = preload("res://core/ui/ui.gd")
 const Synth = preload("res://core/util/synth.gd")
 const ScoreTable = preload("res://core/util/score_table.gd")
@@ -177,7 +178,7 @@ var _stage_label: Label
 var _speed_label: Label
 var _speedo: Control
 var _tacho: Control
-var _gear_label: Label
+var _gear_lever: Control
 var _shift_label: Label
 var _nitro_label: Label
 var _nitro_strip: ColorRect
@@ -1097,7 +1098,7 @@ func _build_hud() -> void:
 	# never move anything (D-096).
 	var bottom := HBoxContainer.new()
 	bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.offset_top = -330
+	bottom.offset_top = -390
 	bottom.offset_bottom = -24
 	bottom.offset_left = 24
 	bottom.offset_right = -24
@@ -1130,20 +1131,9 @@ func _build_hud() -> void:
 	var gl := UI.label(tr("RC_GEAR"), 24, UI.GREY)
 	gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	gbox.add_child(gl)
-	var frame := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.05, 0.07, 0.12, 0.85)
-	sb.border_color = UI.WHITE
-	sb.set_border_width_all(6)
-	sb.set_content_margin_all(6)
-	frame.add_theme_stylebox_override("panel", sb)
-	frame.custom_minimum_size = Vector2(120, 120)
-	frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_gear_label = UI.label("", 84, UI.WHITE)
-	_gear_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_gear_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	frame.add_child(_gear_label)
-	gbox.add_child(frame)
+	# Gear lever in an H/L gate (D-110).
+	_gear_lever = GearLever.new()
+	gbox.add_child(_gear_lever)
 	_nitro_label = UI.label(tr("RC_NITRO"), 24, UI.CYAN)
 	_nitro_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_nitro_label.modulate.a = 0.0
@@ -1224,8 +1214,7 @@ func _update_hud(delta: float) -> void:
 	UI.set_color(_speed_label, UI.CYAN if sim.boosting else UI.WHITE)
 	_speedo.set_value(sim.v * 3.6 / 360.0)
 	_tacho.set_value(_tach_value())
-	_gear_label.text = _gear_text(sim.gear)
-	UI.set_color(_gear_label, UI.YELLOW if sim.gear == Sim.Gear.LOW else UI.WHITE)
+	_gear_lever.set_gear(sim.gear == Sim.Gear.HIGH)
 	var shift_now := sim.gear == Sim.Gear.LOW and sim.rpm >= Sim.REDLINE
 	_shift_label.modulate.a = 1.0 if shift_now and fmod(_phase_t, 0.3) < 0.18 else 0.0
 	_nitro_label.modulate.a = 1.0 if sim.boosting else 0.0
