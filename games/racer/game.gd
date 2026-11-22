@@ -116,8 +116,11 @@ const TITLE_FONT := "sunset"
 ## Attract mode: "Maximum Overdrive" by Bogart VGM, CC BY 3.0 (D-104).
 const MUSIC_STAGES := 4
 const PASSERS := 2          # traffic engine voices (D-134)
-const PASS_RANGE := 45.0    # m: how far a car can be heard
-const SOUND_SPEED := 110.0  # m/s, exaggerated so the Doppler shift is obvious
+const PASS_RANGE := 70.0    # m: how far a car can be heard (D-192: was 45)
+const SOUND_SPEED := 85.0   # m/s, exaggerated so the Doppler shift is obvious (D-192: was 110)
+const ENGINE_GAIN_DB := -0.92   # D-192: the hero car's engine 10% lower (0.9x)
+const PASS_DUCK_DB := 4.0       # D-192: engine + wind dip while a car passes close
+const PASS_DUCK_RANGE := 15.0   # m
 const OPENING_STAGES := 5   # stages played to Maximum Overdrive (D-111, D-129; 5 since D-191)
 ## Night (stage 6, D-191) crossfades to "Dreamstate" by Bogart VGM, CC BY 3.0
 ## (D-129), which plays through stage 9; the CodeManu songs take over from stage 10.
@@ -308,6 +311,7 @@ var _cam_pos := Vector3.ZERO
 var _cam_ready := false
 var _cam_x := 0.0
 var _engine: AudioStreamPlayer
+var _pass_duck := 0.0       # dB the hero's engine and wind dip for a passing car (D-192)
 var _skid: AudioStreamPlayer
 var _engine_hi: AudioStreamPlayer
 var _wind: AudioStreamPlayer
@@ -2328,7 +2332,8 @@ func _build_audio_loops() -> void:
 	# Passing traffic (D-134): a buzzy engine loop per nearby vehicle.
 	var buzz := _loop_wav(func(t: float) -> float:
 		var ph := fmod(t * 110.0, 1.0)
-		return (ph * 2.0 - 1.0) * 0.35 + sin(TAU * 220.0 * t) * 0.2 + sin(TAU * 55.0 * t) * 0.25, 0.4, 0.06)
+		# D-192: brighter (upper harmonics) so it cuts through the hero's engine.
+		return (ph * 2.0 - 1.0) * 0.3 + sin(TAU * 220.0 * t) * 0.18 + sin(TAU * 55.0 * t) * 0.2 			+ sin(TAU * 440.0 * t) * 0.12 + sin(TAU * 660.0 * t) * 0.07, 0.4, 0.06)
 	for i in PASSERS:
 		var pl := AudioStreamPlayer.new()
 		pl.bus = "SFX"
@@ -2352,6 +2357,7 @@ func _build_audio_loops() -> void:
 ## volume falls off with distance; trucks rumble lower.
 func _update_passers() -> void:
 	var near: Array = []
+	_pass_duck = 0.0
 	if sim != null and sim.state != Sim.State.COUNTDOWN:
 		for t in sim.traffic:
 			var ds: float = t.s - sim.s
@@ -2371,9 +2377,11 @@ func _update_passers() -> void:
 		var closing: float = (sim.v - t.v) * signf(ds if absf(ds) > 0.5 else 1.0)
 		var doppler := clampf(SOUND_SPEED / maxf(SOUND_SPEED - closing, 20.0), 0.5, 2.2)
 		var base := 0.55 if t.get("kind", "car") == "truck" else 0.85
-		pl.pitch_scale = lerpf(pl.pitch_scale, base * doppler, 0.35)
-		var target := -6.0 - 30.0 * clampf(d / PASS_RANGE, 0.0, 1.0)
+		pl.pitch_scale = lerpf(pl.pitch_scale, base * doppler, 0.5)   # a sharp drop at the pass
+		var target := -2.0 - 30.0 * clampf(d / PASS_RANGE, 0.0, 1.0)
 		pl.volume_db = lerpf(pl.volume_db, target, 0.3)
+		if i == 0:   # the nearest car ducks the hero's engine and the wind (D-192)
+			_pass_duck = PASS_DUCK_DB * clampf(1.0 - d / PASS_DUCK_RANGE, 0.0, 1.0)
 
 
 func _loop_wav(gen: Callable, seconds: float, noise: float) -> AudioStreamWAV:
@@ -2407,9 +2415,9 @@ func _update_audio() -> void:
 	var revving := sim.state == Sim.State.COUNTDOWN and sim.throttle > 0.0
 	_engine.pitch_scale = pitch
 	_engine_hi.pitch_scale = pitch
-	_engine.volume_db = -11.0 + sim.throttle * 3.0 - rpm * 3.0 + (3.0 if revving else 0.0)
-	_engine_hi.volume_db = -34.0 + rpm * 22.0 + sim.throttle * 2.0 + (2.0 if revving else 0.0)
+	_engine.volume_db = -11.0 + sim.throttle * 3.0 - rpm * 3.0 + (3.0 if revving else 0.0) + ENGINE_GAIN_DB - _pass_duck
+	_engine_hi.volume_db = -34.0 + rpm * 22.0 + sim.throttle * 2.0 + (2.0 if revving else 0.0) + ENGINE_GAIN_DB - _pass_duck
 	_update_passers()
-	_wind.volume_db = -46.0 + clampf(sim.v / Sim.MAX_SPEED, 0.0, 1.3) * 28.0
+	_wind.volume_db = -46.0 + clampf(sim.v / Sim.MAX_SPEED, 0.0, 1.3) * 28.0 - _pass_duck
 	var squeal := sim.drifting or (sim.state == Sim.State.OVER and sim.v > 3.0) 		or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
 	_skid.volume_db = lerpf(_skid.volume_db, -10.0 if squeal else -60.0, 0.2)

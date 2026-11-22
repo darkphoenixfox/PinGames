@@ -1756,3 +1756,17 @@
 - **Music:** Dreamstate now crossfades in at stage 6 with the night (`OPENING_STAGES` 5, `NIGHT_STAGES` 4); the CodeManu songs still start at stage 10.
 - **Dev:** `--rc-sunset` forces the sunset look; `--rc-night` forces night.
 - **Status:** Accepted (amends D-113, D-129)
+
+### D-192 — Turbo Run: hero engine 10% lower, noticeable passing Doppler
+- **Date:** 2026-11-22
+- **Decision (director):** the hero car's sound 10% lower; the passing cars' Doppler noticeable.
+- **Hero engine:** both engine layers get `ENGINE_GAIN_DB` −0.92 dB (0.9× amplitude).
+- **Why the passes were lost:** their loop was a low buzz (55–220 Hz) under the hero's engine, at most −6 dB and only within 45 m, and the wind covered it at speed.
+- **Fix:**
+  - The traffic loop is brighter, with 440 and 660 Hz partials.
+  - Passes are louder (−2 dB up close, falling 30 dB over the range) and heard from 70 m (`PASS_RANGE`).
+  - The Doppler is stronger: `SOUND_SPEED` is 85 m/s (was 110), which also affects the siren. The pitch follows faster (lerp 0.5), so it drops sharply at the moment of passing.
+  - While the nearest car is within 15 m, the hero's engine and the wind duck by up to 4 dB (`PASS_DUCK_DB`).
+  - Oncoming cars close at about 100 m/s and get the biggest shift.
+- **Not checked by ear:** Claude can't listen; the director should judge it.
+- **Status:** Accepted (amends D-134)
