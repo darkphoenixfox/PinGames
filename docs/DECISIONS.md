@@ -1770,3 +1770,26 @@
   - Oncoming cars close at about 100 m/s and get the biggest shift.
 - **Not checked by ear:** Claude can't listen; the director should judge it.
 - **Status:** Accepted (amends D-134)
+
+### D-193 — Turbo Run: procedural sky with a moving sun
+- **Date:** 2026-11-22
+- **Decision (director):** rebuild the sky to be realistic and to move from day to night (colour palette and sun movement). The graded painting showed two suns at the horizon (it was mirrored round the ring), and at hill crests the bottom of the sky dome showed brown.
+- **Replaced:** the painted panorama ring (D-107), its lid and longer far plane (D-190), and the daylight grade (D-191) are gone, along with `sky_panorama.gdshader`. The painting stays only as the car-select backdrop.
+- **New sky** (`games/racer/shaders/sky.gdshader`, a Godot sky shader drawn at infinity, so it has no edges):
+  - a zenith-to-horizon gradient, plus a glow towards the sun that is strongest at the horizon;
+  - one sun disc with a halo;
+  - a moon (pale disc with seas) and twinkling stars at night;
+  - fbm clouds on a flat layer, drifting and lit between shade and lit colours by the sun;
+  - two mountain ridges (fbm on a circle, so no seam), hazy far and darker near;
+  - below the horizon, haze in the fog colour, so crests look over a seamless horizon.
+  The hash is sine-free; `sin()` of large numbers gave blocky square cloud edges on the GPU.
+- **Time of day** (`games/racer/sky.gd`, pure functions):
+  - Race progress (stages played plus the fraction of this one) maps to an hour: stage 1 13:00, stage 4 16:24, stage 6 18:18, stage 10 05:36, stage 11 06:36, then +1.2 h per stage.
+  - The sun's elevation is 50°·sin(π(h−6)/12) and its azimuth runs from behind (sunrise) to the right (noon) to ahead of the road's start (sunset). It's fixed in the world, so it swings as the road turns.
+  - The moon rides ahead-left, up to about 30°.
+  - Six palette keyframes by sun elevation (45°, 15°, 3°, −3°, −9°, −20°) set the sky colours, cloud colours, ridges, the light's colour and energy, and the ambient light. The fog is the horizon colour mixed with the far ridge.
+  - The directional light follows the sun, and the moon once the sun is below −4°.
+  - `night_level` (−8°..2°) drives the headlights, lamps and night sprites.
+- **Dev:** `--rc-tod=<progress>` picks a time; `--rc-sunset` and `--rc-night` still work.
+- **Tests:** day for stages 1–3, low sun in 4–5, set by the end of 5, night 6–9, sun up in 10, one sun setting ahead, the moon up at midnight, and a smooth palette.
+- **Status:** Accepted (supersedes D-107's backdrop, D-190 and D-191's grade; D-191's stage plan stands)

@@ -27,6 +27,7 @@ func _initialize() -> void:
 	test_ball_physics()
 	test_breakout_sim()
 	test_racer_sim()
+	test_racer_time_of_day()
 	test_exported_translation()
 	test_export_includes_data()
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -599,6 +600,32 @@ func test_exported_translation() -> void:
 	var t := load("res://core/locale/strings.en.translation") as Translation
 	check(t != null and t.get_message("RC_TIME") != "" and t.get_message("GAME_RACER_TITLE") != "",
 		"the imported translation (used by exported builds) loads with the game texts")
+
+
+## Turbo Run time of day (D-193): stages 1-3 day, 4-5 sunset, 6-9 night, dawn at 10.
+func test_racer_time_of_day() -> void:
+	var T = load("res://games/racer/sky.gd")
+	var el := func(p: float) -> float: return T.sun_elevation(T.hour_at(p))
+	var day_ok := true
+	for p in [0.0, 1.0, 2.0, 2.9]:
+		day_ok = day_ok and el.call(p) > 15.0
+	check(day_ok, "stages 1-3: the sun is well up")
+	check(el.call(3.0) > 0.0 and el.call(3.0) < 25.0 and el.call(4.5) > 0.0 and el.call(4.5) < 8.0, "stages 4-5: the sun is low (sunset)")
+	check(el.call(4.99) < 0.0, "the sun has set by the end of stage 5")
+	var night_ok := true
+	for p in [5.2, 6.0, 7.0, 8.0, 8.9]:
+		night_ok = night_ok and T.night_level(el.call(p)) > 0.5
+	check(night_ok, "stages 6-9: night (lights on)")
+	check(el.call(9.9) > 0.0, "the sun is back up in stage 10 (dawn)")
+	# One sun: its direction is a single unit vector, ahead of the road at sunset.
+	var sd: Vector3 = T.sun_dir(18.0)
+	check(is_equal_approx(sd.length(), 1.0) and sd.z < -0.9, "the sun sets ahead of the road's start")
+	var md: Vector3 = T.moon_dir(24.0)
+	check(md.y > 0.3 and md.z < 0.0, "the moon is up ahead at midnight")
+	var a: Dictionary = T.palette(10.0)
+	var b: Dictionary = T.palette(10.5)
+	check((a.zenith as Color).is_equal_approx(b.zenith) == false and absf((a.zenith as Color).b - (b.zenith as Color).b) < 0.05,
+		"the palette changes smoothly with the sun's elevation")
 
 
 func test_racer_sim() -> void:

@@ -36,15 +36,14 @@ const ScoreTable = preload("res://core/util/score_table.gd")
 const ROAD_SHADER = preload("res://games/racer/shaders/road.gdshader")
 const CAR_SHADER = preload("res://games/racer/shaders/car.gdshader")
 const PIXEL_POST = preload("res://games/racer/shaders/pixel_post.gdshader")
-const SKY_SHADER = preload("res://games/racer/shaders/sky_panorama.gdshader")
+const SKY_SHADER = preload("res://games/racer/shaders/sky.gdshader")   # D-193
+const TimeOfDay = preload("res://games/racer/sky.gd")
 const LOGO := "res://assets/textures/racer/logo.png"
 const BG_DIR := "res://assets/textures/racer/"
 ## Shared lit-backglass shader (D-058; generic: off art + on art + group masks).
 const BACKGLASS_SHADER = preload("res://games/breakout/shaders/backglass_lights.gdshader")
 const DMD_LOGO := "res://assets/textures/racer/dmd_logo.png"
 const SKY_TEXTURE := "res://assets/sprites/racer/sky.png"
-const SKY_RADIUS := 2000.0
-const SKY_BELOW := 70.0     # ring bottom below the camera: mountains sit on the horizon
 const CAR_MODEL := "res://assets/models/racer/red_car.glb"
 ## The model's nose points +Z; turn it to face down the road (-Z).
 const MODEL_TURN := Basis(Vector3.UP, PI)
@@ -148,8 +147,6 @@ const CAM_HEIGHT := 2.3            # low, close to the road (D-098; was 3.6)
 const CAM_CAR_DEG := 15.9
 const CAM_LOOK := 30.0
 const CAM_FOV := 58.0
-const SKY_TOP := Color(0.16, 0.18, 0.5)
-const SKY_HORIZON := Color(1.0, 0.55, 0.42)
 const FINALE_TEXT_AT := 0.6
 const FINALE_SKIP_AT := 1.5
 const FINALE_END_AT := 6.0
@@ -246,7 +243,6 @@ var _root: Node3D
 var _cam: Camera3D
 var _env: Environment
 var _sun: DirectionalLight3D
-var _mountains: MeshInstance3D
 var _road_mat: ShaderMaterial
 var _chunks := {}                # chunk index -> Node3D
 var _car: Node3D                 # player car (road frame)
@@ -268,20 +264,15 @@ var _showroom: Control
 var _select_hint: Label
 var _chosen_car := Sim.DEFAULT_CAR
 var _bg_mat: ShaderMaterial
-var _sky_cap_mat: ShaderMaterial   # lid over the sky ring (D-190)
 var _anims := DmdAnims.new()
 var _night := 0.0           # 0 = day, 1 = night (D-113)
-var _day := 1.0             # D-191: 1 = clear daylight (stages 1-3), 0 = the sunset painting
-var _day_shown := -1.0
-var _night_shown := -1.0
+var _tod_p := -1.0          # D-193: time-of-day progress (stages played, smoothed)
+var _lamps_shown := -1.0
 var _tunnel_k := 0.0        # 0 outside .. 1 inside a tunnel (D-127)
 var _tunnel_shown := -1.0
 var _lamps := 0.0           # car lights level: max(night, tunnel)
 var _reverb: AudioEffectReverb
-var _sky_mat: ShaderMaterial
-var _sky_proc: ProceduralSkyMaterial
-var _day_top := Color.BLACK
-var _day_fog := Color.BLACK
+var _sky_mat: ShaderMaterial     # the procedural sky (D-193)
 var _player_lights: Node3D
 var _flame_mats: Array = []
 var _rev_pop_t := 0.0
@@ -291,7 +282,6 @@ var _shift_smoke_t := 0.0   # downshift tyre smoke left (D-112)
 var _shift_flame_t := 0.0   # upshift exhaust flame left
 var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
 var _bg_dark := 0.0     # s of crash flicker left
-var _sky_h := 0.0
 var _wheel_phase := 0.0
 var _travel := 0.0         # eased nose angle from sideways travel (D-128)
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
@@ -742,14 +732,6 @@ func _handle_events() -> void:
 
 
 # --- world ---------------------------------------------------------------------------
-## Average colour of one row of an image (sky backdrop edges, D-107).
-func _row_colour(im: Image, y: int) -> Color:
-	var c := Color(0, 0, 0)
-	for x in range(0, im.get_width(), 8):
-		c += im.get_pixel(x, y)
-	return c / ceilf(im.get_width() / 8.0)
-
-
 func _build_world() -> void:
 	_root = Node3D.new()
 	_root.name = "TurboRunWorld"
@@ -803,23 +785,23 @@ func _build_world() -> void:
 		_washes.append(wash)
 	var env := WorldEnvironment.new()
 	_env = Environment.new()
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = SKY_TOP
-	sky_mat.sky_horizon_color = SKY_HORIZON
-	sky_mat.ground_horizon_color = SKY_HORIZON
-	sky_mat.ground_bottom_color = Color(0.3, 0.25, 0.3)
-	sky_mat.sun_angle_max = 8.0
+	# The sky (D-193): procedural, one sun, driven by the time of day.
+	var sky_mat := ShaderMaterial.new()
+	sky_mat.shader = SKY_SHADER
+	_sky_mat = sky_mat
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
+	sky.radiance_size = Sky.RADIANCE_SIZE_32   # lighting uses colours, not the sky's radiance
 	_env.background_mode = Environment.BG_SKY
 	_env.sky = sky
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	_env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	_env.ambient_light_color = Color(0.75, 0.65, 0.8)
 	_env.ambient_light_energy = 0.7
 	_env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	_env.fog_enabled = true
 	_env.fog_mode = Environment.FOG_MODE_DEPTH
-	_env.fog_light_color = SKY_HORIZON.lerp(Color(0.7, 0.6, 0.8), 0.4)
+	_env.fog_light_color = Color(0.66, 0.78, 0.92)   # set by the time of day each frame
 	_env.fog_depth_begin = 250.0
 	_env.fog_depth_end = VIEW_AHEAD - 50.0
 	_env.fog_sky_affect = 0.0
@@ -830,67 +812,19 @@ func _build_world() -> void:
 	_root.add_child(env)
 
 	_sun = DirectionalLight3D.new()
-	_sun.rotation_degrees = Vector3(-28, 160, 0)
+	_sun.rotation_degrees = Vector3(-28, 160, 0)   # aimed by the time of day each frame (D-193)
 	_sun.light_color = Color(1.0, 0.85, 0.7)
 	_sun.light_energy = 1.1
-	_sun.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY   # the painted sun is in the backdrop
+	_sun.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY   # the sky shader draws its own sun
 	_root.add_child(_sun)
 
 	_cam = Camera3D.new()
 	_cam.keep_aspect = Camera3D.KEEP_WIDTH
 	_cam.fov = CAM_FOV
 	_cam.near = 0.3
-	# Past the sky ring's top rim (~3040 m away; D-190): with 2600 the ring's
-	# upper part was cut off and the plain sky showed above it as a lighter arc.
-	_cam.far = 3200.0
+	_cam.far = 2600.0   # the sky is drawn at infinity (D-193)
 	_root.add_child(_cam)
 	_cam.current = true
-
-	# Sky backdrop (D-107): the pixel-art sunset panorama on a tall ring. Above
-	# it the sky is the image's top colour; distant ground fogs into the
-	# mountains' colour.
-	var sky_img: Texture2D = load(SKY_TEXTURE)
-	var sky_h := PI * SKY_RADIUS * sky_img.get_height() / float(sky_img.get_width())
-	var ring := CylinderMesh.new()
-	ring.top_radius = SKY_RADIUS
-	ring.bottom_radius = SKY_RADIUS
-	ring.height = sky_h
-	ring.radial_segments = 96
-	ring.cap_top = false
-	ring.cap_bottom = false
-	var mmat := ShaderMaterial.new()
-	_sky_mat = mmat
-	mmat.shader = SKY_SHADER
-	mmat.set_shader_parameter("sky", sky_img)
-	mmat.set_shader_parameter("height", sky_h)
-	_sky_h = sky_h
-	var im := sky_img.get_image()
-	var top := _row_colour(im, 0)
-	sky_mat.sky_top_color = top
-	sky_mat.sky_horizon_color = top
-	_sky_proc = sky_mat
-	_day_top = top
-	sky_mat.sky_curve = 1.0
-	_env.fog_light_color = _row_colour(im, im.get_height() - 4)
-	_day_fog = _env.fog_light_color
-	_env.ambient_light_color = Color(0.85, 0.65, 0.8)
-	_mountains = MeshInstance3D.new()
-	_mountains.mesh = ring
-	_mountains.material_override = mmat
-	_mountains.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_root.add_child(_mountains)
-	# Lid over the ring (D-190): the same shader, sampling the image's top row,
-	# so looking up (hills, crests) shows no lighter circle at the opening.
-	var lid := MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(SKY_RADIUS * 2.2, SKY_RADIUS * 2.2)
-	lid.mesh = plane
-	_sky_cap_mat = mmat.duplicate()
-	_sky_cap_mat.set_shader_parameter("cap", true)
-	lid.material_override = _sky_cap_mat
-	lid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	lid.position = Vector3(0.0, sky_h * 0.5 - 0.5, 0.0)
-	_mountains.add_child(lid)
 
 	_road_mat = ShaderMaterial.new()
 	_road_mat.shader = ROAD_SHADER
@@ -1707,8 +1641,6 @@ func _animate(delta: float) -> void:
 		_cam.rotate_object_local(Vector3.RIGHT, deg_to_rad(float(str(Config.cli["rc-look-up"]))))
 	var fov := CAM_FOV + sim.v / Sim.MAX_SPEED * 6.0 + (8.0 if sim.boosting else (5.0 if sim.perfect_t > 0.0 else 0.0))
 	_cam.fov = lerpf(_cam.fov, fov, 1.0 - exp(-delta * 4.0))
-	_mountains.position = Vector3(_cam.position.x, _cam.position.y - SKY_BELOW + _sky_h * 0.5, _cam.position.z)
-	_sun.rotation = Vector3(deg_to_rad(-25), tr_.heading(sim.s) + PI * 0.92, 0)
 
 
 # --- HUD -----------------------------------------------------------------------------
@@ -2154,24 +2086,17 @@ func _build_backglass() -> void:
 	add_to_backglass(art)
 
 
-## Night falls at stage 5 (D-113) over Night.FADE seconds: the backdrop,
-## light, fog and the pre-lit sprites darken to moonlit blue, and the fake
-## lights (car beams, tail lights, lamp pools) fade in. --rc-night forces it.
+## Time of day (D-193): the race's progress sets the hour (games/racer/sky.gd):
+## stages 1-3 day, 4-5 sunset, 6-9 night, dawn in 10. The sun and moon move,
+## the sky, light, ambient and fog take the palette of the sun's elevation, and
+## the fake lights (car beams, tail lights, lamp pools) come on as it gets dark.
+## --rc-tod=<progress> / --rc-sunset / --rc-night pick a time for screenshots.
 func _update_night(delta: float) -> void:
-	var target := 0.0
-	if Config.cli.has("rc-night"):
-		target = 1.0
-	elif _phase != "attract" and sim != null and sim.checkpoints >= Night.NIGHT_STAGE - 1 			and sim.checkpoints < Night.DAWN_STAGE - 1:
-		target = 1.0   # night for stages 6-9; dawn returns at stage 10 (D-143, D-191)
-	_night = move_toward(_night, target, delta / Night.FADE)
-	# Daylight for stages 1-3 (and the attract demo), the sunset painting from
-	# stage 4; dawn (stage 10+) keeps the sunset colours (D-191).
-	var day_target := 1.0
-	if Config.cli.has("rc-night") or Config.cli.has("rc-sunset"):
-		day_target = 0.0
-	elif _phase != "attract" and sim != null and sim.checkpoints >= Night.SUNSET_STAGE - 1:
-		day_target = 0.0
-	_day = move_toward(_day, day_target, delta / Night.FADE)
+	var p := _tod_progress()
+	_tod_p = p if _tod_p < 0.0 else move_toward(_tod_p, p, delta * 0.5)   # smooths jumps (new race, debug skips)
+	var hour := TimeOfDay.hour_at(_tod_p)
+	var el := TimeOfDay.sun_elevation(hour)
+	_night = TimeOfDay.night_level(el)
 	# Tunnels (D-127): lights on and daylight dimmed while inside, any stage;
 	# the effects bus gets a reverb.
 	var in_t := sim != null and sim.in_tunnel
@@ -2179,39 +2104,48 @@ func _update_night(delta: float) -> void:
 	_lamps = maxf(_night, _tunnel_k)
 	if _reverb != null:
 		_reverb.wet = 0.45 * _tunnel_k
-	if is_equal_approx(_night, _night_shown) and is_equal_approx(_tunnel_k, _tunnel_shown) 			and is_equal_approx(_day, _day_shown):
-		return
-	_tunnel_shown = _tunnel_k
-	Night.set_level(_lamps)
-	get_tree().call_group(NIGHT_GROUP, "set_visible", _lamps > 0.0)
-	var dim := 1.0 - 0.85 * _tunnel_k
-	if is_equal_approx(_night, _night_shown) and is_equal_approx(_day, _day_shown):
-		_sun.light_energy = lerpf(lerpf(1.1, 1.3, _day), 0.22, _night) * dim
-		_env.ambient_light_energy = lerpf(lerpf(0.7, 0.85, _day), 0.4, _night) * (1.0 - 0.5 * _tunnel_k)
-		return
-	_night_shown = _night
-	_day_shown = _day
-	var k := _night
-	var dk := _day
-	Sprites.set_night(k)
+	if absf(_lamps - _lamps_shown) > 0.002:
+		_lamps_shown = _lamps
+		Night.set_level(_lamps)
+		get_tree().call_group(NIGHT_GROUP, "set_visible", _lamps > 0.0)
+		Sprites.set_night(_night)
+	var pal := TimeOfDay.palette(el)
+	var fog: Color = (pal.horizon as Color).lerp(pal.ridge_far, 0.35)
 	if _sky_mat != null:
-		_sky_mat.set_shader_parameter("night", k)
-		_sky_mat.set_shader_parameter("day", dk)
-		if _sky_cap_mat != null:
-			_sky_cap_mat.set_shader_parameter("night", k)
-			_sky_cap_mat.set_shader_parameter("day", dk)
-		# Same grades as the backdrop shader, for the sky above it.
-		var lin := _day_top.srgb_to_linear().lerp(Color(0.12, 0.33, 0.82), dk)   # the shader works in linear colour
-		var l := lin.r * 0.3 + lin.g * 0.59 + lin.b * 0.11
-		var top := lin.lerp(Color(0.06, 0.07, 0.2) + Color(0.1, 0.12, 0.3) * l, k).linear_to_srgb()
-		_sky_proc.sky_top_color = top
-		_sky_proc.sky_horizon_color = top
-	# Sunset values, graded to daylight (dk) or night (k); never both at once.
-	_env.ambient_light_color = Color(0.85, 0.65, 0.8).lerp(Color(0.78, 0.82, 0.92), dk).lerp(Color(0.3, 0.36, 0.62), k)
-	_env.ambient_light_energy = lerpf(lerpf(0.7, 0.85, dk), 0.4, k) * (1.0 - 0.5 * _tunnel_k)
-	_sun.light_energy = lerpf(lerpf(1.1, 1.3, dk), 0.22, k) * dim
-	_sun.light_color = Color(1.0, 0.85, 0.7).lerp(Color(1.0, 0.98, 0.92), dk).lerp(Color(0.55, 0.65, 1.0), k)
-	_env.fog_light_color = _day_fog.lerp(Color(0.66, 0.78, 0.92), dk).lerp(Color(0.05, 0.06, 0.16), k)
+		_sky_mat.set_shader_parameter("sun_dir", TimeOfDay.sun_dir(hour))
+		_sky_mat.set_shader_parameter("moon_dir", TimeOfDay.moon_dir(hour))
+		for k in ["zenith", "horizon", "glow", "cloud_lit", "cloud_shade", "ridge_far", "ridge_near"]:
+			_sky_mat.set_shader_parameter(k, pal[k])
+		_sky_mat.set_shader_parameter("glow_strength", pal.glow_k)
+		_sky_mat.set_shader_parameter("sun_col", pal.sun)
+		_sky_mat.set_shader_parameter("ground", fog)
+		_sky_mat.set_shader_parameter("stars", 1.0 - smoothstep(-14.0, -4.0, el))
+		_sky_mat.set_shader_parameter("moon", 1.0 - smoothstep(-6.0, -1.0, el))
+	var dim := 1.0 - 0.85 * _tunnel_k
+	_env.fog_light_color = fog
+	_env.ambient_light_color = pal.amb
+	_env.ambient_light_energy = float(pal.amb_e) * (1.0 - 0.5 * _tunnel_k)
+	# The light comes from the sun while it's up, then from the moon.
+	var from: Vector3 = TimeOfDay.sun_dir(hour) if el > -4.0 else TimeOfDay.moon_dir(hour)
+	if from.y < 0.05:
+		from = Vector3(from.x, 0.05, from.z).normalized()
+	_sun.basis = Basis.looking_at(-from, Vector3.UP)
+	_sun.light_color = pal.light
+	_sun.light_energy = float(pal.light_e) * dim
+
+
+## Race progress for the time of day: stages played plus how far into this one.
+func _tod_progress() -> float:
+	if Config.cli.has("rc-tod"):
+		return float(str(Config.cli["rc-tod"]))
+	if Config.cli.has("rc-night"):
+		return 7.0
+	if Config.cli.has("rc-sunset"):
+		return 4.6
+	if _phase == "attract" or sim == null:
+		return 0.5
+	var into := 1.0 - clampf((sim.next_checkpoint - sim.s) / Sim.CHECKPOINT_EVERY, 0.0, 1.0)
+	return float(sim.checkpoints) + into
 
 
 func _exit_tree() -> void:
