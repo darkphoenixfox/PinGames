@@ -1489,6 +1489,7 @@ func _animate(delta: float) -> void:
 			gi.set_instance_shader_parameter("wheel_phase", phase_step)
 			gi.set_instance_shader_parameter("wheel_blur", clampf((sim.v - 6.0) / 20.0, 0.0, 1.0))
 			gi.set_instance_shader_parameter("lamps", _lamps)
+			gi.set_instance_shader_parameter("overhead", _overhead(sim.s))
 			gi.set_instance_shader_parameter("brake", 1.0 if braking else 0.0)
 	if _player_lights != null:
 		_player_lights.visible = _lamps > 0.0 and not (sim.spin_t > 0.0 and sim.flipping)
@@ -1548,6 +1549,7 @@ func _animate(delta: float) -> void:
 		if kind == "car" or kind == "hatch":
 			for m in node.find_children("*", "MeshInstance3D", true, false):
 				(m as MeshInstance3D).set_instance_shader_parameter("hue", t.hue)
+				(m as MeshInstance3D).set_instance_shader_parameter("overhead", _overhead(t.s))
 				(m as MeshInstance3D).set_instance_shader_parameter("lamps", maxf(_night, 1.0 if sim.track.in_tunnel(t.s) else 0.0))
 		(node.get_meta("night") as Node3D).visible = _lamps > 0.0
 		# High beams: flash-flash ... pause (D-105).
@@ -1737,6 +1739,15 @@ func _build_hud() -> void:
 	_hud.add_child(_radar_bar)
 
 
+
+
+## Tunnel lamp light falling on a car at s (D-153): peaks right under each
+## ceiling lamp (Tunnel.LIGHT_EVERY apart), fading over a few metres.
+func _overhead(s_at: float) -> float:
+	if not sim.track.in_tunnel(s_at):
+		return 0.0
+	var d := absf(fposmod(s_at + Tunnel.LIGHT_EVERY * 0.5, Tunnel.LIGHT_EVERY) - Tunnel.LIGHT_EVERY * 0.5)
+	return clampf(1.0 - d / 6.0, 0.0, 1.0)
 
 
 ## Tachometer needle 0..1: idle at 1/8, the gear's top speed near the end.

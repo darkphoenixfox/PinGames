@@ -1398,3 +1398,9 @@
 - **Side-swipe:** the player keeps 93 % of their speed and is shoved 7 m/s away. The traffic vehicle gets a sideways `shove` offset (1.6 m for a car, 0.8 m for a truck) that eases back into its lane at 2 m/s. There's a 0.4 s cooldown per vehicle. It counts as a bump (sound), not a crash.
 - **Tests:** the crash tests now approach from outside contact, as in play.
 - **Status:** Accepted
+
+### D-153 — Turbo Run: tunnel lamps light the cars passing under them
+- **Date:** 2026-11-22
+- **Problem (director):** the tunnel lights didn't seem to affect the car going under them. The lamps and their pools are flat painted polygons and light nothing.
+- **Fix:** `car.gdshader` gets an `overhead` instance uniform that adds sodium-orange emission over the car's own colours, strongest on the roof and upper body. The view sets it per car (hero, traffic) from its distance to the nearest ceiling lamp (`Tunnel.LIGHT_EVERY` grid): 1 directly underneath, fading over 6 m, 0 outside tunnels. Cars visibly brighten as they pass under each lamp.
+- **Status:** Accepted

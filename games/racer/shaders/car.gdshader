@@ -17,6 +17,8 @@ instance uniform float brake = 0.0;
 // D-143: turning wheels. The wheels are part of the body mesh, so their rims
 // get animated spoke streaks around each axle that blur into a solid disc as
 // the car speeds up. spin = 0 turns the effect off (traffic models differ).
+// D-153: tunnel lamp passing overhead, 0..1 (fakes the orange sodium light).
+instance uniform float overhead = 0.0;
 instance uniform float spin = 0.0;       // 1 = hero car
 instance uniform float wheel_phase = 0.0;
 instance uniform float wheel_blur = 0.0; // 0 still .. 1 fast
@@ -69,7 +71,9 @@ void fragment() {
 	float tail = in_box(mp, tail_min, tail_max) * clamp(lamps * 0.7 + brake, 0.0, 1.5)
 		* (tail_red_only ? redness : 1.0);
 	float head = in_box(mp, head_min, head_max) * lamps;
-	EMISSION = tail * vec3(1.0, 0.12, 0.08) * (0.6 + lum * 2.0) * 1.6
+	float top_k = clamp((mp.y - 0.3) / 0.9, 0.0, 1.0);   // the roof catches it most
+	EMISSION = ALBEDO * vec3(1.0, 0.62, 0.25) * overhead * (0.35 + 0.9 * top_k)
+		+ tail * vec3(1.0, 0.12, 0.08) * (0.6 + lum * 2.0) * 1.6
 		+ head * vec3(1.0, 0.95, 0.8) * (0.3 + lum * 1.6) * 1.4;
 	ROUGHNESS = toon ? 0.8 : 0.35;
 	METALLIC = toon ? 0.0 : 0.25;
