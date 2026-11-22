@@ -9,7 +9,23 @@ if (-not $godot) { $godot = 'C:\Users\Phoenixfox\Dev\Godot\Godot_v4.7.2-stable_w
 $root = Split-Path -Parent $PSScriptRoot
 $out = Join-Path $root 'exports\web'
 New-Item -ItemType Directory -Force $out | Out-Null
-& $godot --headless --path $root --export-release "Web" (Join-Path $out 'index.html')
+Remove-Item (Join-Path $out 'index.*') -ErrorAction SilentlyContinue
+# Godot 4.7 sometimes keeps running after a headless export: wait for the
+# output files to stop growing, then stop it.
+$p = Start-Process -FilePath $godot -NoNewWindow -PassThru -ArgumentList @(
+    '--headless', '--path', "`"$root`"", '--export-release', 'Web', "`"$(Join-Path $out 'index.html')`"")
+$pck = Join-Path $out 'index.pck'
+$last = -1; $stable = 0
+for ($i = 0; $i -lt 300 -and -not $p.HasExited; $i++) {
+    Start-Sleep -Seconds 2
+    if ((Test-Path $pck) -and (Test-Path (Join-Path $out 'index.wasm')) -and (Test-Path (Join-Path $out 'index.html'))) {
+        $len = (Get-Item $pck).Length
+        if ($len -eq $last) { $stable++ } else { $stable = 0; $last = $len }
+        if ($stable -ge 4) { break }
+    }
+}
+if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+if (-not (Test-Path $pck)) { Write-Error 'Web export failed: no index.pck'; exit 1 }
 # Pre-compressed copies: the NAS NGINX serves them with gzip_static (HeroAR DEC-0275).
 foreach ($name in @('index.wasm', 'index.pck', 'index.js')) {
     $src = Join-Path $out $name

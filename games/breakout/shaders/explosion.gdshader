@@ -3,11 +3,19 @@
 // solid burst over the bricks: white-hot core -> bright `tint` -> deep `tint`,
 // a billowing noisy edge, and a dissolve only at the end. `age` runs 0..1.
 shader_type spatial;
+// Per-object values: instance uniforms, or plain uniforms (one material per
+// object) in the Compatibility renderer, where instance uniforms don't arrive
+// in WebGL (D-175, core/util/inst_param.gd).
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+#define INST
+#else
+#define INST instance
+#endif
 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
 
 uniform vec4 tint : source_color = vec4(0.3, 0.8, 1.0, 1.0);
-instance uniform float age = 0.0;      // 0 = just exploded, 1 = gone
-instance uniform float seed = 0.0;
+INST uniform float age = 0.0;      // 0 = just exploded, 1 = gone
+INST uniform float seed = 0.0;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7)) + seed * 17.0) * 43758.5453);

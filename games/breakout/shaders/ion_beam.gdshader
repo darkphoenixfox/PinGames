@@ -2,11 +2,19 @@
 // plane (UV.x across, UV.y along). White-hot core, purple body, crackling
 // edges; `fade` (instance uniform, 1 -> 0) dims and narrows it out.
 shader_type spatial;
+// Per-object values: instance uniforms, or plain uniforms (one material per
+// object) in the Compatibility renderer, where instance uniforms don't arrive
+// in WebGL (D-175, core/util/inst_param.gd).
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+#define INST
+#else
+#define INST instance
+#endif
 render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled;
 
 uniform vec4 core_color : source_color = vec4(1.0, 0.95, 1.0, 1.0);
 uniform vec4 body_color : source_color = vec4(0.7, 0.3, 1.0, 1.0);
-instance uniform float fade = 1.0;
+INST uniform float fade = 1.0;
 
 void fragment() {
 	float x = abs(UV.x * 2.0 - 1.0);

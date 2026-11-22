@@ -6,6 +6,14 @@
 // The glow mask is derived from the texture itself: bright, saturated pixels
 // (LEDs, lit traces) pulse — the nanomachine swarm is alive.
 shader_type spatial;
+// Per-object values: instance uniforms, or plain uniforms (one material per
+// object) in the Compatibility renderer, where instance uniforms don't arrive
+// in WebGL (D-175, core/util/inst_param.gd).
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+#define INST
+#else
+#define INST instance
+#endif
 render_mode specular_schlick_ggx;
 
 uniform sampler2D circuit : source_color, filter_nearest, repeat_enable;
@@ -15,11 +23,11 @@ uniform vec2 brick_texels = vec2(64.0, 31.0);  // texels across the brick face
 uniform vec4 glow_color : source_color = vec4(0.25, 0.8, 1.0, 1.0);
 uniform float glow_strength = 1.8;
 uniform float pulse_speed = 2.6;
-instance uniform vec2 crop_offset = vec2(0.0);
-instance uniform float phase = 0.0;
-instance uniform float hit_flash = 0.0;
+INST uniform vec2 crop_offset = vec2(0.0);
+INST uniform float phase = 0.0;
+INST uniform float hit_flash = 0.0;
 // 0 normal, 1 armoured (2 hits), 2 cracked (armoured, hit once), 3 metal (D-073)
-instance uniform float mode = 0.0;
+INST uniform float mode = 0.0;
 
 varying vec3 local_pos;
 

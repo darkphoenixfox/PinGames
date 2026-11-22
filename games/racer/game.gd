@@ -11,6 +11,8 @@
 ##   NITRO = drive through a canister on the road (5 s boost, D-103)
 extends "res://core/game_module.gd"
 
+const InstParam = preload("res://core/util/inst_param.gd")
+
 const Sim = preload("res://games/racer/sim.gd")
 const Track = preload("res://games/racer/track.gd")
 const Scenery = preload("res://games/racer/scenery.gd")
@@ -570,7 +572,7 @@ func _begin_race() -> void:
 	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
 		var gi := m as MeshInstance3D
 		if gi.material_override != null:
-			gi.set_instance_shader_parameter("hue", float(Sim.CARS[_chosen_car].hue))
+			InstParam.set_param(gi, "hue", float(Sim.CARS[_chosen_car].hue))
 	# Stage 1 is always action_3 (D-106; was: each race moved on a song).
 	# Stages 1-5 play Maximum Overdrive (D-111), carried on from attract.
 	_music_i = FIRST_TRACK
@@ -885,7 +887,7 @@ func _car_instance(hue: float, model: String = CAR_MODEL, texture: String = CAR_
 	for m in node.find_children("*", "MeshInstance3D", true, false):
 		var mi := m as MeshInstance3D
 		mi.material_override = _car_mats[model]
-		mi.set_instance_shader_parameter("hue", hue)
+		InstParam.set_param(mi, "hue", hue)
 		if Toon.enabled:
 			if not _car_outlines.has(model):
 				_car_outlines[model] = Toon.outline_mesh(mi.mesh)
@@ -1535,12 +1537,12 @@ func _animate(delta: float) -> void:
 	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
 		var gi := m as MeshInstance3D
 		if gi.material_override != null:   # the body, not its outline shell
-			gi.set_instance_shader_parameter("spin", 1.0)
-			gi.set_instance_shader_parameter("wheel_phase", phase_step)
-			gi.set_instance_shader_parameter("wheel_blur", clampf((sim.v - 6.0) / 20.0, 0.0, 1.0))
-			gi.set_instance_shader_parameter("lamps", _lamps)
-			gi.set_instance_shader_parameter("overhead", _overhead(sim.s))
-			gi.set_instance_shader_parameter("brake", 1.0 if braking else 0.0)
+			InstParam.set_param(gi, "spin", 1.0)
+			InstParam.set_param(gi, "wheel_phase", phase_step)
+			InstParam.set_param(gi, "wheel_blur", clampf((sim.v - 6.0) / 20.0, 0.0, 1.0))
+			InstParam.set_param(gi, "lamps", _lamps)
+			InstParam.set_param(gi, "overhead", _overhead(sim.s))
+			InstParam.set_param(gi, "brake", 1.0 if braking else 0.0)
 	if _player_lights != null:
 		_player_lights.visible = _lamps > 0.0 and not (sim.spin_t > 0.0 and sim.flipping)
 	var smoking := sim.drifting or sliding_out or _shift_smoke_t > 0.0 or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
@@ -1598,9 +1600,9 @@ func _animate(delta: float) -> void:
 		node.basis = node.basis * Basis(Vector3.UP, _sprite_yaw(wy, cam_yaw) - h) * MODEL_TURN
 		if kind == "car" or kind == "hatch":
 			for m in node.find_children("*", "MeshInstance3D", true, false):
-				(m as MeshInstance3D).set_instance_shader_parameter("hue", t.hue)
-				(m as MeshInstance3D).set_instance_shader_parameter("overhead", _overhead(t.s))
-				(m as MeshInstance3D).set_instance_shader_parameter("lamps", maxf(_night, 1.0 if sim.track.in_tunnel(t.s) else 0.0))
+				InstParam.set_param((m as MeshInstance3D), "hue", t.hue)
+				InstParam.set_param((m as MeshInstance3D), "overhead", _overhead(t.s))
+				InstParam.set_param((m as MeshInstance3D), "lamps", maxf(_night, 1.0 if sim.track.in_tunnel(t.s) else 0.0))
 		(node.get_meta("night") as Node3D).visible = _lamps > 0.0
 		var blink_on: bool = t.get("blink", false) and fmod(_phase_t + t.id * 0.17, 0.7) < 0.35
 		for bl in node.get_meta("blinkers", []):

@@ -4,6 +4,8 @@
 ## palette/dither pass as the race. The game feeds input and reads `selected`.
 extends Control
 
+const InstParam = preload("res://core/util/inst_param.gd")
+
 const UI = preload("res://core/ui/ui.gd")
 const Sim = preload("res://games/racer/sim.gd")
 const PIXEL_POST = preload("res://games/racer/shaders/pixel_post.gdshader")
@@ -186,7 +188,7 @@ func _refresh() -> void:
 		for m in (_cars[i] as Node3D).find_children("*", "MeshInstance3D", true, false):
 			var gi := m as MeshInstance3D
 			if gi.material_override != null:
-				gi.set_instance_shader_parameter("bright", 1.0 if on else 0.55)
+				InstParam.set_param(gi, "bright", 1.0 if on else 0.55)
 		(_boxes[i] as Control).modulate.a = 1.0 if on else 0.5
 
 

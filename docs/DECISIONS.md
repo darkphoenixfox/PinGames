@@ -1573,3 +1573,14 @@
 - **Rollout:** the config was validated with `nginx -t` inside the running container through Portainer's API before `heroar-web` was restarted. The HeroHold site and `/healthz` were fine afterwards.
 - **Result:** the engine downloads as 10 MB instead of 40 MB. The 104 MB game data hardly compresses, because its textures and music are already compressed formats.
 - **Status:** Accepted
+
+### D-175 — Browser build fixes: loading screen, sound, per-object shader values, web debug keys, URL options
+- **Date:** 2026-11-22
+- **Context:** the director tested the browser build (D-173) and reported four problems: it stuttered while assets loaded, the car textures were black, there was no sound, and every hero car was red while every hatchback was blue. They also asked for the debug keys in the browser.
+- **Loading screen** (`shell/modes/game_mode.gd`): before a game's first start, everything in its folders (`games/<id>`, `assets/{models,sprites,textures,audio/music,audio/sfx}/<id>`) is loaded behind a progress bar on the TABLE, with LOADING on the DMD. The results stay cached for the session. The game then renders about 20 frames behind the bar, which compiles most of its shaders out of sight. Loading yields to draw only about every 100 ms, because a slow browser gets few frames. This applies to every layout, so cabinets get a short bar on the first start of each game too.
+- **Per-object shader values:** in WebGL, Godot's Compatibility renderer didn't deliver `instance uniform` values; they read as their defaults. Every car got hue 0, and `bright` 0 made the cars black. Lamps, brake lights, wheel spin and the breakout bricks, explosions, ion beam and wormhole were affected too. The shaders now declare these through an `INST` macro, which is `instance` normally and empty when `CURRENT_RENDERER == RENDERER_COMPATIBILITY`. Scripts set them only through `core/util/inst_param.gd` `set_param()`: desktop and Quest keep instance parameters on one shared material, and under Compatibility each object gets its own copy of the material. Never call `set_instance_shader_parameter` directly.
+- **Sound:** single-threaded web builds default to "Sample" playback, which can't play the racer's live engine sound or apply bus effects such as the tunnel reverb. Now `audio/general/default_playback_type.web = Stream` uses the normal mixer. This was checked in Chrome by measuring the page's audio output, which went from silent to music peaks of about 0.14–0.34.
+- **Debug keys:** enabled on the `web` feature as well as in debug builds.
+- **URL options:** on the web, the page's query string is added to the command-line options (`?game=racer&rc-skip-intro` gives `--game=racer --rc-skip-intro`), for direct links and test runs.
+- **Deploy script:** it waits for the export files to stop growing and then stops Godot, which sometimes doesn't exit after a headless export.
+- **Status:** Accepted

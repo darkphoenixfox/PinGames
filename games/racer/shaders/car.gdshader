@@ -3,25 +3,33 @@
 // Cel shading: the sun light falls in 3 flat bands with one hard highlight
 // (toon = false restores smooth lighting for comparison, --rc-no-toon).
 shader_type spatial;
+// Per-object values: instance uniforms, or plain uniforms (one material per
+// object) in the Compatibility renderer, where instance uniforms don't arrive
+// in WebGL (D-175, core/util/inst_param.gd).
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+#define INST
+#else
+#define INST instance
+#endif
 
 uniform sampler2D tex : source_color, filter_nearest;
 uniform bool toon = true;
-instance uniform float hue = 0.0;
-instance uniform float bright = 1.0;
+INST uniform float hue = 0.0;
+INST uniform float bright = 1.0;
 // D-120: the model's own lamps light up (no billboards). lamps = night lights
 // 0..1, brake = brake lights 0..1. Lamp areas are boxes in model space (the red
 // car: nose +Z, rear -Z, origin on the ground); only bright-ish texels glow so
 // the bodywork around the lenses stays dark.
-instance uniform float lamps = 0.0;
-instance uniform float brake = 0.0;
+INST uniform float lamps = 0.0;
+INST uniform float brake = 0.0;
 // D-143: turning wheels. The wheels are part of the body mesh, so their rims
 // get animated spoke streaks around each axle that blur into a solid disc as
 // the car speeds up. spin = 0 turns the effect off (traffic models differ).
 // D-153: tunnel lamp passing overhead, 0..1 (fakes the orange sodium light).
-instance uniform float overhead = 0.0;
-instance uniform float spin = 0.0;       // 1 = hero car
-instance uniform float wheel_phase = 0.0;
-instance uniform float wheel_blur = 0.0; // 0 still .. 1 fast
+INST uniform float overhead = 0.0;
+INST uniform float spin = 0.0;       // 1 = hero car
+INST uniform float wheel_phase = 0.0;
+INST uniform float wheel_blur = 0.0; // 0 still .. 1 fast
 uniform vec2 axle_yz = vec2(0.33, 1.2);  // axle height, |z| of front/rear axle
 uniform float wheel_r = 0.32;
 uniform vec3 tail_min = vec3(0.2, 0.7, -9.0);

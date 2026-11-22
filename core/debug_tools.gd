@@ -27,7 +27,8 @@ var _log_lines: Array[String] = []
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	enabled = OS.is_debug_build() and str(Config.cli.get("debug-tools", "on")) != "off"
+	# Debug builds, and the browser build too (director, D-175).
+	enabled = (OS.is_debug_build() or OS.has_feature("web")) and str(Config.cli.get("debug-tools", "on")) != "off"
 	if enabled:
 		CabinetInput.action_pressed.connect(func(a): _log_event("press   " + String(a)))
 		CabinetInput.action_released.connect(func(a): _log_event("release " + String(a)))

@@ -7,6 +7,8 @@
 ## back at the swarm. Lives are the ship's energy charges.
 extends "res://core/game_module.gd"
 
+const InstParam = preload("res://core/util/inst_param.gd")
+
 const Sim = preload("res://games/breakout/sim.gd")
 const Fx = preload("res://games/breakout/fx.gd")
 const UI = preload("res://core/ui/ui.gd")
@@ -379,7 +381,7 @@ func _handle_events() -> void:
 				_low_power_t = 1.2  # LOW shows only in the DMD power bar area (D-072)
 			"brick_hit":
 				var hb: Dictionary = sim.bricks[e[1]]
-				_brick_nodes[e[1]].set_instance_shader_parameter("mode", 2.0)
+				InstParam.set_param(_brick_nodes[e[1]], "mode", 2.0)
 				Audio.sfx("tb_armour")
 				_explode_brick(_brick_nodes[e[1]].position, _brick_glow(hb), 0.5)
 			"powerup_spawn":
@@ -799,15 +801,15 @@ func _build_bricks() -> void:
 		var n := _box(size, Vector3(r.get_center().x, 0, r.get_center().y), _brick_material(colour, size))
 		_randomize_crop(n)
 		# Pulse ripples diagonally across the swarm, with a little jitter.
-		n.set_instance_shader_parameter("phase", -(col * 0.55 + b.row * 0.8) + float((i * 37) % 11) * 0.08)
-		n.set_instance_shader_parameter("mode", 3.0 if b.get("metal", false) else (1.0 if b.get("armoured", false) else 0.0))
+		InstParam.set_param(n, "phase", -(col * 0.55 + b.row * 0.8) + float((i * 37) % 11) * 0.08)
+		InstParam.set_param(n, "mode", 3.0 if b.get("metal", false) else (1.0 if b.get("armoured", false) else 0.0))
 		_root.add_child(n)
 		_brick_nodes.append(n)
 
 
 ## Each brick shows a rectangle cut from a random, texel-snapped spot (D-045).
 func _randomize_crop(n: MeshInstance3D) -> void:
-	n.set_instance_shader_parameter("crop_offset",
+	InstParam.set_param(n, "crop_offset",
 		Vector2(randi() % int(CIRCUIT_TEXELS), randi() % int(CIRCUIT_TEXELS)) / CIRCUIT_TEXELS)
 
 
@@ -824,10 +826,10 @@ func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void
 	blast.material_override = bm
 	blast.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	blast.position = pos + Vector3(0, 0.25, 0)
-	blast.set_instance_shader_parameter("seed", randf() * 100.0)
+	InstParam.set_param(blast, "seed", randf() * 100.0)
 	_root.add_child(blast)
 	var tw := blast.create_tween()
-	tw.tween_method(func(a: float): blast.set_instance_shader_parameter("age", a), 0.0, 1.0, 0.55)
+	tw.tween_method(func(a: float): InstParam.set_param(blast, "age", a), 0.0, 1.0, 0.55)
 	tw.tween_callback(blast.queue_free)
 
 	# Debris (D-087): tumbling brick-coloured shards that shrink away.
@@ -1201,7 +1203,7 @@ func _fire_ion_beam(x: float) -> void:
 	m.position = Vector3(x, 0.15, Sim.FIELD.position.y + length * 0.5)
 	_root.add_child(m)
 	var tw := m.create_tween()
-	tw.tween_method(func(f: float): m.set_instance_shader_parameter("fade", f), 1.0, 0.0, 0.55)
+	tw.tween_method(func(f: float): InstParam.set_param(m, "fade", f), 1.0, 0.0, 0.55)
 	tw.tween_callback(m.queue_free)
 
 
@@ -1321,7 +1323,7 @@ func _spawn_enemy_node(id: int, pos: Vector2) -> void:
 	hole.position = Vector3(pos.x, 0.25, pos.y)
 	_root.add_child(hole)
 	var tw := hole.create_tween()
-	tw.tween_method(func(o: float): hole.set_instance_shader_parameter("open", o), 0.0, 1.0, 0.5) \
+	tw.tween_method(func(o: float): InstParam.set_param(hole, "open", o), 0.0, 1.0, 0.5) \
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	var spin := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized() * randf_range(1.2, 2.2)
 	_enemy_nodes[id] = {"root": root, "body": body, "spin": spin, "hole": hole, "colour": colour}
@@ -1333,7 +1335,7 @@ func _close_wormhole(id: int) -> void:
 	var hole: MeshInstance3D = _enemy_nodes[id].hole
 	_enemy_nodes[id].hole = null
 	var tw := hole.create_tween()
-	tw.tween_method(func(o: float): hole.set_instance_shader_parameter("open", o), 1.0, 0.0, 0.4)
+	tw.tween_method(func(o: float): InstParam.set_param(hole, "open", o), 1.0, 0.0, 0.4)
 	tw.tween_callback(hole.queue_free)
 
 

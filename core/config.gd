@@ -62,6 +62,7 @@ var _file := ConfigFile.new()
 func _init() -> void:
 	var args := OS.get_cmdline_args()
 	args.append_array(OS.get_cmdline_user_args())
+	args.append_array(_url_args())
 	cli = CliUtil.parse(args)
 	for shortcut in CLI_SHORTCUTS:
 		if cli.has(shortcut):
@@ -69,6 +70,18 @@ func _init() -> void:
 	var err := _file.load(PATH)
 	if err != OK and err != ERR_FILE_NOT_FOUND:
 		push_warning("Config: could not read %s (error %d), using defaults" % [PATH, err])
+
+
+## Browser build: the page URL's query works like command-line flags (D-175),
+## so ?game=racer&rc-skip-intro becomes --game=racer --rc-skip-intro.
+func _url_args() -> PackedStringArray:
+	var out := PackedStringArray()
+	if not OS.has_feature("web"):
+		return out
+	var q := str(JavaScriptBridge.eval("window.location.search", true))
+	for part in q.trim_prefix("?").split("&", false):
+		out.append("--" + part.uri_decode())
+	return out
 
 
 func get_value(section: String, key: String, fallback: Variant = null) -> Variant:

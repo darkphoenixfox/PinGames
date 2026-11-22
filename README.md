@@ -70,7 +70,7 @@ To open it, **hold Start + Exit for 3 seconds**, or **hold Exit for 5 seconds** 
 - **Game over:** a top-10 score asks for initials. Flippers pick the letter, Launch confirms it and Exit goes back.
 - **Coin mode** (Free play OFF): Coin adds a credit, and starting a game uses one.
 
-### Debug keys (debug builds only, D-057)
+### Debug keys (debug builds and the browser build, D-057, D-175)
 Every run through `scripts/run.ps1` or the Godot binary is a debug build. Exported release builds for cabinets ignore these keys. `--debug-tools=off` disables them.
 
 | Key | Action |
@@ -90,6 +90,14 @@ Every run through `scripts/run.ps1` or the Godot binary is a debug build. Export
 | Start | Enter | Circle |
 | Exit | Backspace | Square |
 | Coin | 5 | — |
+
+## Browser version (D-173 to D-175)
+
+- **Address:** https://web.phoenixfox.net/pingames/ (LAN: http://192.168.1.150:8086/pingames/).
+- **Layout:** one page, with the TABLE on the left and the BACKGLASS and DMD on the right.
+- **Controls:** keyboard, the same keys as the cabinet defaults. The page's first click or keypress turns the sound on (a browser rule).
+- **URL options:** the query string works like command-line options. For example, `?game=racer` opens Turbo Run directly, and `?game=breakout&tb-skip-intro` opens Tilt Breaker without its intro.
+- **Deploy:** `scripts\deploy_web.ps1` builds the Web preset and mirrors it to `K:\heroar\www\pingames`. The HeroAR stack's NGINX serves it with pre-compressed `.gz` files (HeroAR DEC-0275). No restart is needed.
 
 ## Repository layout
 ```

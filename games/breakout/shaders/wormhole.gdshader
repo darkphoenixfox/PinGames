@@ -2,11 +2,19 @@
 // tetrahedron enemy teleports through. `open` (instance uniform, 0..1) grows and
 // collapses the vortex; spiral arms rotate inward, bright violet rim.
 shader_type spatial;
+// Per-object values: instance uniforms, or plain uniforms (one material per
+// object) in the Compatibility renderer, where instance uniforms don't arrive
+// in WebGL (D-175, core/util/inst_param.gd).
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+#define INST
+#else
+#define INST instance
+#endif
 render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled;
 
 uniform vec4 rim_color : source_color = vec4(0.75, 0.35, 1.0, 1.0);
 uniform vec4 core_color : source_color = vec4(0.25, 0.6, 1.0, 1.0);
-instance uniform float open = 0.0;
+INST uniform float open = 0.0;
 
 void vertex() {
 	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
