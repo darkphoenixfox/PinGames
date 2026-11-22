@@ -1696,3 +1696,9 @@
   - **Title page:** PINGAMES in marquee ×3, then the games as their logos (no longer coloured text). PRESS START is in marquee ×2 and blinks (modulate.a, D-096); the credits are in chrome. The backglass shows PINGAMES in marquee ×5.
   - **High-score pages:** the game's logo, HIGH SCORES in marquee ×2, the leader in gold, and the rest in chrome. A game without backglass art shows its title in its own styled font.
 - **Status:** Accepted
+
+### D-187 — Easy car gets +10 s per checkpoint
+- **Date:** 2026-11-22
+- **Decision (director):** apply Claude's suggestion. The EASY car's checkpoint bonus goes from +6 s to +10 s over NORMAL (+44 s falling to +30 s). Its 55 s start and the HARD car (−4 s) are unchanged until the director has played them.
+- **Why:** `scripts/tools/racer_balance.gd` (autopilot, 8 track seeds, 8 checkpoints) put the EASY car 4.2 s per section slower than NORMAL. +6 s left only about 2 s of net help per checkpoint; +10 s gives about 6 s. HARD sits about 3.7 s per checkpoint behind NORMAL.
+- **Status:** Accepted (amends D-183)

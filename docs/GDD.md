@@ -206,7 +206,7 @@ Rules:
   - Steer *into* a corner at more than about 150 km/h to break loose. In manual mode, brake plus steer also starts a drift.
   - The car slides nose-in, keeps almost all its speed, smokes and scores drift points.
   - Letting go of the steering ends the drift and banks the points. Not drifting through a hairpin costs speed.
-- **Clock:** set by the car (D-183). EASY 55 s to start, NORMAL 45 s, HARD 40 s. A checkpoint every 2.3 km (D-101) adds time, falling 2 s per checkpoint: NORMAL from +34 s to a minimum of +20 s, EASY +6 s more (+40 to +26), HARD 4 s less (+30 to +16). TIME UP ends the game, unless the coasting car still reaches the next checkpoint: then the time is added and the race goes on (D-103).
+- **Clock:** set by the car (D-183). EASY 55 s to start, NORMAL 45 s, HARD 40 s. A checkpoint every 2.3 km (D-101) adds time, falling 2 s per checkpoint: NORMAL from +34 s to a minimum of +20 s, EASY +10 s more (+44 to +30, D-187), HARD 4 s less (+30 to +16). TIME UP ends the game, unless the coasting car still reaches the next checkpoint: then the time is added and the race goes on (D-103).
 - **Traffic:** slower cars in the lanes, more after each checkpoint. Rear-ending one at speed spins you out, a light touch is a bump, and passing close is a NEAR MISS (+5,000).
 - **Roadside objects:** palms, rocks, lamps and signs crash you if you leave the road.
 - **Score:** distance, drift points, near misses, passes and checkpoints.

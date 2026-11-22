@@ -28,7 +28,7 @@ const NITRO_SPEED := 100.0     # m/s while nitro burns (normal car; see CARS)
 const CARS := [
 	# time: the starting clock (s); bonus: added to every checkpoint's time and
 	# to its floor (D-183), so the easy car gets more time, the hard car less.
-	{"name": "RC_CAR_EASY", "hue": 0.0, "top": 72.0, "grip": 1.25, "time": 55.0, "bonus": 6.0},     # red
+	{"name": "RC_CAR_EASY", "hue": 0.0, "top": 72.0, "grip": 1.25, "time": 55.0, "bonus": 10.0},     # red
 	{"name": "RC_CAR_NORMAL", "hue": 0.16, "top": 80.0, "grip": 1.0, "time": START_TIME, "bonus": 0.0},   # yellow
 	{"name": "RC_CAR_HARD", "hue": 0.62, "top": 88.0, "grip": 0.8, "time": 40.0, "bonus": -4.0},     # blue
 ]
