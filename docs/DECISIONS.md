@@ -1741,3 +1741,18 @@
   - **Lid:** a lid closes the ring's top. It uses the same panorama shader with `cap` on, so it takes the image's top row at each angle and gets the same night grade (kept in step with the ring). From below, the ring top and the lid read as one colour.
 - **Dev:** `--rc-look-up=<deg>` tilts the race camera up, to check the sky's top.
 - **Status:** Accepted
+
+### D-191 — Turbo Run time of day: day 1–3, sunset 4–5, night 6–9
+- **Date:** 2026-11-22
+- **Decision (director):** stages 1–3 are daylight, 4–5 sunset, 6–9 night. Dawn stays from stage 10 (D-143).
+- **Daylight**, with no new art: the sky shader grades the sunset painting (`day` uniform, 0..1):
+  - a blue sky graded by height (deep at the top, pale at the horizon);
+  - white clouds: a pixel is cloud where its brightness stands out from its row's average (8 samples), which catches both the bright upper clouds and the darker lower ones, and it must be 2+ pixels wide so the stars drop out;
+  - a warm white sun with a slight glow;
+  - blue-grey mountains shaded by their brightness.
+  The lid (D-190) gets the same grade.
+- **Lighting in daylight:** whiter sun (energy 1.3), brighter bluish ambient (0.85) and light blue fog. Night grades from the sunset values, and day and night never overlap.
+- **Fades:** day → sunset over `Night.FADE` (8 s) when stage 4 starts (`Night.SUNSET_STAGE`); sunset → night when stage 6 starts (`Night.NIGHT_STAGE` 6, was 5). The attract demo is in daylight.
+- **Music:** Dreamstate now crossfades in at stage 6 with the night (`OPENING_STAGES` 5, `NIGHT_STAGES` 4); the CodeManu songs still start at stage 10.
+- **Dev:** `--rc-sunset` forces the sunset look; `--rc-night` forces night.
+- **Status:** Accepted (amends D-113, D-129)

@@ -118,11 +118,11 @@ const MUSIC_STAGES := 4
 const PASSERS := 2          # traffic engine voices (D-134)
 const PASS_RANGE := 45.0    # m: how far a car can be heard
 const SOUND_SPEED := 110.0  # m/s, exaggerated so the Doppler shift is obvious
-const OPENING_STAGES := 4   # stages played to Maximum Overdrive (D-111, D-129)
-## Night (stage 5) crossfades to "Dreamstate" by Bogart VGM, CC BY 3.0 (D-129),
-## which plays through stage 9; the CodeManu songs take over from stage 10.
+const OPENING_STAGES := 5   # stages played to Maximum Overdrive (D-111, D-129; 5 since D-191)
+## Night (stage 6, D-191) crossfades to "Dreamstate" by Bogart VGM, CC BY 3.0
+## (D-129), which plays through stage 9; the CodeManu songs take over from stage 10.
 const MUSIC_NIGHT := "res://assets/audio/music/racer/bogart_dreamstate.ogg"
-const NIGHT_STAGES := 5
+const NIGHT_STAGES := 4
 const NIGHT_XFADE := 6.0
 const MUSIC_ATTRACT := "res://assets/audio/music/racer/bogart_maximum_overdrive.ogg"
 const FIRST_TRACK := 2
@@ -268,6 +268,8 @@ var _bg_mat: ShaderMaterial
 var _sky_cap_mat: ShaderMaterial   # lid over the sky ring (D-190)
 var _anims := DmdAnims.new()
 var _night := 0.0           # 0 = day, 1 = night (D-113)
+var _day := 1.0             # D-191: 1 = clear daylight (stages 1-3), 0 = the sunset painting
+var _day_shown := -1.0
 var _night_shown := -1.0
 var _tunnel_k := 0.0        # 0 outside .. 1 inside a tunnel (D-127)
 var _tunnel_shown := -1.0
@@ -2156,8 +2158,16 @@ func _update_night(delta: float) -> void:
 	if Config.cli.has("rc-night"):
 		target = 1.0
 	elif _phase != "attract" and sim != null and sim.checkpoints >= Night.NIGHT_STAGE - 1 			and sim.checkpoints < Night.DAWN_STAGE - 1:
-		target = 1.0   # night for stages 5-9; dawn returns at stage 10 (D-143)
+		target = 1.0   # night for stages 6-9; dawn returns at stage 10 (D-143, D-191)
 	_night = move_toward(_night, target, delta / Night.FADE)
+	# Daylight for stages 1-3 (and the attract demo), the sunset painting from
+	# stage 4; dawn (stage 10+) keeps the sunset colours (D-191).
+	var day_target := 1.0
+	if Config.cli.has("rc-night") or Config.cli.has("rc-sunset"):
+		day_target = 0.0
+	elif _phase != "attract" and sim != null and sim.checkpoints >= Night.SUNSET_STAGE - 1:
+		day_target = 0.0
+	_day = move_toward(_day, day_target, delta / Night.FADE)
 	# Tunnels (D-127): lights on and daylight dimmed while inside, any stage;
 	# the effects bus gets a reverb.
 	var in_t := sim != null and sim.in_tunnel
@@ -2165,34 +2175,39 @@ func _update_night(delta: float) -> void:
 	_lamps = maxf(_night, _tunnel_k)
 	if _reverb != null:
 		_reverb.wet = 0.45 * _tunnel_k
-	if is_equal_approx(_night, _night_shown) and is_equal_approx(_tunnel_k, _tunnel_shown):
+	if is_equal_approx(_night, _night_shown) and is_equal_approx(_tunnel_k, _tunnel_shown) 			and is_equal_approx(_day, _day_shown):
 		return
 	_tunnel_shown = _tunnel_k
 	Night.set_level(_lamps)
 	get_tree().call_group(NIGHT_GROUP, "set_visible", _lamps > 0.0)
 	var dim := 1.0 - 0.85 * _tunnel_k
-	if is_equal_approx(_night, _night_shown):
-		_sun.light_energy = lerpf(1.1, 0.22, _night) * dim
-		_env.ambient_light_energy = lerpf(0.7, 0.4, _night) * (1.0 - 0.5 * _tunnel_k)
+	if is_equal_approx(_night, _night_shown) and is_equal_approx(_day, _day_shown):
+		_sun.light_energy = lerpf(lerpf(1.1, 1.3, _day), 0.22, _night) * dim
+		_env.ambient_light_energy = lerpf(lerpf(0.7, 0.85, _day), 0.4, _night) * (1.0 - 0.5 * _tunnel_k)
 		return
 	_night_shown = _night
+	_day_shown = _day
 	var k := _night
+	var dk := _day
 	Sprites.set_night(k)
 	if _sky_mat != null:
 		_sky_mat.set_shader_parameter("night", k)
+		_sky_mat.set_shader_parameter("day", dk)
 		if _sky_cap_mat != null:
 			_sky_cap_mat.set_shader_parameter("night", k)
-		# Same night grade as the backdrop shader, for the sky above it.
-		var lin := _day_top.srgb_to_linear()   # the shader works in linear colour
+			_sky_cap_mat.set_shader_parameter("day", dk)
+		# Same grades as the backdrop shader, for the sky above it.
+		var lin := _day_top.srgb_to_linear().lerp(Color(0.12, 0.33, 0.82), dk)   # the shader works in linear colour
 		var l := lin.r * 0.3 + lin.g * 0.59 + lin.b * 0.11
 		var top := lin.lerp(Color(0.06, 0.07, 0.2) + Color(0.1, 0.12, 0.3) * l, k).linear_to_srgb()
 		_sky_proc.sky_top_color = top
 		_sky_proc.sky_horizon_color = top
-	_env.ambient_light_color = Color(0.85, 0.65, 0.8).lerp(Color(0.3, 0.36, 0.62), k)
-	_env.ambient_light_energy = lerpf(0.7, 0.4, k) * (1.0 - 0.5 * _tunnel_k)
-	_sun.light_energy = lerpf(1.1, 0.22, k) * dim
-	_sun.light_color = Color(1.0, 0.85, 0.7).lerp(Color(0.55, 0.65, 1.0), k)
-	_env.fog_light_color = _day_fog.lerp(Color(0.05, 0.06, 0.16), k)
+	# Sunset values, graded to daylight (dk) or night (k); never both at once.
+	_env.ambient_light_color = Color(0.85, 0.65, 0.8).lerp(Color(0.78, 0.82, 0.92), dk).lerp(Color(0.3, 0.36, 0.62), k)
+	_env.ambient_light_energy = lerpf(lerpf(0.7, 0.85, dk), 0.4, k) * (1.0 - 0.5 * _tunnel_k)
+	_sun.light_energy = lerpf(lerpf(1.1, 1.3, dk), 0.22, k) * dim
+	_sun.light_color = Color(1.0, 0.85, 0.7).lerp(Color(1.0, 0.98, 0.92), dk).lerp(Color(0.55, 0.65, 1.0), k)
+	_env.fog_light_color = _day_fog.lerp(Color(0.66, 0.78, 0.92), dk).lerp(Color(0.05, 0.06, 0.16), k)
 
 
 func _exit_tree() -> void:

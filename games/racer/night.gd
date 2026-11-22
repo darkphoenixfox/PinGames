@@ -7,7 +7,8 @@
 ## Every light material is shared and fades in with set_level(night 0..1).
 extends RefCounted
 
-const NIGHT_STAGE := 5          # the stage where night falls
+const SUNSET_STAGE := 4         # D-191: stages 1-3 daylight, 4-5 sunset
+const NIGHT_STAGE := 6          # the stage where night falls (D-191: was 5)
 const DAWN_STAGE := 10          # the sun comes back up (D-143)
 const FADE := 8.0               # s for day -> night
 const BEAM := Color(1.0, 0.92, 0.65)
