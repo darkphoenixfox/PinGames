@@ -55,7 +55,7 @@ const SHIFT_HOLD := 0.5          # s both flippers held to shift
 const REDLINE := 0.88
 ## Perfect shift window on the tachometer (D-116): upshift from L in this rpm
 ## band, just before the redline, for a small boost.
-const PERFECT_FROM := 0.78
+const PERFECT_FROM := 0.69      # D-117: doubled (was 0.78-0.87)
 const PERFECT_TO := 0.87
 const PERFECT_KICK := 3.0         # m/s added at once
 const PERFECT_TIME := 0.8         # s of extra pull after it

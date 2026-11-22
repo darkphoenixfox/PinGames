@@ -44,7 +44,7 @@ const SPRITE_ANGLES := 32
 ## Nose turn at full steer (rad): ~1.5 sprite steps, visible on straights.
 const STEER_YAW := 0.3
 const SHIFT_NAG := 3.0      # s at the redline in L before the big SHIFT (D-116)
-const STEER_DELAY := 0.15   # s of steering before the nose turns (D-114)
+const STEER_DELAY := 0.075  # s of steering before the nose turns (D-114; halved D-117)
 ## Crash animations (D-098): stepped at ANIM_FPS; a roll-over shows FLIP_FRAMES
 ## poses per full turn and hops FLIP_HOP metres.
 const ANIM_FPS := 10.0
@@ -504,10 +504,10 @@ func _handle_events() -> void:
 				Audio.sfx("rc_horn")
 			"perfect_shift":
 				Audio.sfx("rc_perfect")
-				_center_message(tr("RC_PERFECT_SHIFT"), 1.0)
+				Audio.sfx("rc_backfire")
 				_dmd_anim("perfect", [tr("RC_PERFECT_SHIFT")])
 				_bg_flash = 0.5
-				_shift_flame_t = 0.45
+				_shake = 0.25
 			"shift":
 				Audio.sfx("rc_shift")
 				# Upshift: a short exhaust flame + backfire; downshift: tyre smoke
@@ -1183,12 +1183,19 @@ func _animate(delta: float) -> void:
 		if not falling:
 			_rev_popped = false
 	_last_rpm = sim.rpm
-	var burning := sim.boosting or _shift_flame_t > 0.0
+	# A perfect shift's boost blasts a long orange flame for its whole push (D-117).
+	var blast := sim.perfect_t > 0.0 and not sim.boosting
+	var burning := sim.boosting or blast or _shift_flame_t > 0.0
 	# Nitro burns blue; upshift and rev pops are short and yellow (D-116).
-	var pop := not sim.boosting
+	var pop := not sim.boosting and not blast
 	for m in _flame_mats:
-		(m as StandardMaterial3D).albedo_color = Color(1.0, 0.85, 0.3) if pop else Color(0.5, 0.8, 1.0)
-		(m as StandardMaterial3D).emission = Color(1.0, 0.6, 0.15) if pop else Color(0.4, 0.7, 1.0)
+		var fm := m as StandardMaterial3D
+		if blast:
+			fm.albedo_color = Color(1.0, 0.6, 0.2)
+			fm.emission = Color(1.0, 0.4, 0.1)
+		else:
+			fm.albedo_color = Color(1.0, 0.85, 0.3) if pop else Color(0.5, 0.8, 1.0)
+			fm.emission = Color(1.0, 0.6, 0.15) if pop else Color(0.4, 0.7, 1.0)
 	for fl in _flames:
 		fl.visible = burning
 		if burning:
@@ -1250,7 +1257,7 @@ func _animate(delta: float) -> void:
 	var below := atan2(-to_car.y, -to_car.z)
 	_cam.rotate_object_local(Vector3.RIGHT, deg_to_rad(CAM_CAR_DEG) - below)
 	_cam.rotate_object_local(Vector3.BACK, deg_to_rad(-sim.drift_angle * 0.12))
-	var fov := CAM_FOV + sim.v / Sim.MAX_SPEED * 6.0 + (8.0 if sim.boosting else 0.0)
+	var fov := CAM_FOV + sim.v / Sim.MAX_SPEED * 6.0 + (8.0 if sim.boosting else (5.0 if sim.perfect_t > 0.0 else 0.0))
 	_cam.fov = lerpf(_cam.fov, fov, 1.0 - exp(-delta * 4.0))
 	_mountains.position = Vector3(_cam.position.x, _cam.position.y - SKY_BELOW + _sky_h * 0.5, _cam.position.z)
 	_sun.rotation = Vector3(deg_to_rad(-25), tr_.heading(sim.s) + PI * 0.92, 0)

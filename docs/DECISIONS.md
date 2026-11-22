@@ -1108,11 +1108,20 @@
 ### D-116 — Turbo Run: perfect shift, SHIFT warning, rev flames, engine and sound pass, California plate
 - **Date:** 2026-11-22
 - **Decisions (director):**
-  - **Perfect shift:** a green band on the tachometer (TABLE dial and DMD bar) covers rpm 0.78–0.87, just below the red. Upshifting inside it gives +3 m/s, 0.8 s of extra pull (+0.6 × ACCEL) and 2,000 points, with PERFECT SHIFT! on the TABLE, a DMD animation, a sting and a backglass flash.
+  - **Perfect shift:** a green band on the tachometer (TABLE dial and DMD bar) covers rpm 0.78–0.87, just below the red (widened in D-117). Upshifting inside it gives +3 m/s, 0.8 s of extra pull (+0.6 × ACCEL) and 2,000 points, with PERFECT SHIFT! on the TABLE, a DMD animation, a sting and a backglass flash.
   - **SHIFT warning:** after 3 s at the redline in L, a big blinking SHIFT appears mid-screen in the timer's font (PinPixel 144, red).
   - **Exhaust flames:** the upshift flame is shorter (0.16 s, a third of the length) and yellow. Nitro still burns blue. Revving on the grid spits short yellow flames with a backfire while held high, and once as the revs drop.
   - **Engine:** three layers mixed by rpm and speed, 16/32-bit rather than realistic. A firing-pulse body with uneven cylinders and a sub tone; a harmonic whine that rises with the revs; filtered wind noise with speed. Revving on the grid is louder, and the rev limiter bounces.
   - **Sound effects:** the chiptune beeps are replaced with racing-style ones. Soft start-light tones; GO over a brass stab; a brass fanfare with a timpani boom for checkpoints; a falling brass phrase for time up; a Doppler pass for near misses; a mechanical clunk for gear changes; a thud and clank for bumps; boom, metal crunch and breaking glass for crashes.
   - **Number plate:** California style, drawn once into a 192 × 96 viewport texture. A cream plate, red CALIFORNIA, orange stripes and sun, bold navy TRN and an orange THE GOLDEN STATE, all as translation keys. It is oversized (0.6 × 0.3 m) so TRN reads at pixel scale.
   - **Finale:** the distance uses the score's styled font, tinted cyan.
+- **Status:** Accepted
+
+### D-117 — Turbo Run: wider perfect-shift band, exhaust blast, shorter steering delay
+- **Date:** 2026-11-22
+- **Decisions (director):**
+  - **Perfect-shift band:** twice as wide, rpm 0.69–0.87 (was 0.78–0.87).
+  - **No centre message:** PERFECT SHIFT! no longer appears in the middle of the TABLE. The DMD animation, sting, backglass flash and the tachometer band stay.
+  - **Exhaust blast:** the boost is made visible with a long orange flame for its whole 0.8 s push, plus a backfire, a small camera shake and +5° of FOV.
+  - **Steering delay:** halved, from 0.15 s to 0.075 s (D-114).
 - **Status:** Accepted
