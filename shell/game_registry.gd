@@ -6,16 +6,25 @@ const GAMES := [
 	["shmup", "res://games/shmup/game.gd"],
 	["racer", "res://games/racer/game.gd"],
 ]
+## Games left out of the picker, attract and operator menu until they have
+## something to show (D-184). --game=<id> still opens them for development.
+const HIDDEN := ["shmup"]
 
 static var _info_cache := {}
 
 
+## The games players see, in picker order.
 static func ids() -> Array:
+	return all_ids().filter(func(id): return not HIDDEN.has(id))
+
+
+## Every game in the bundle, hidden ones included.
+static func all_ids() -> Array:
 	return GAMES.map(func(g): return g[0])
 
 
 static func has(id: String) -> bool:
-	return ids().has(id)
+	return all_ids().has(id)
 
 
 static func instantiate(id: String) -> Node:

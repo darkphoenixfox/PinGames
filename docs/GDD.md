@@ -153,6 +153,8 @@ Rules:
 - **Game over (D-044):** when the last charge is lost, the explosion grows until it fills the whole screen, with a bigger, longer blast. The screen fades to black, then **GAME OVER** and the **final score** show on the TABLE, DMD and backglass. After about 4 s (or Launch/Start to skip) the game goes to high-score entry or back to the picker.
 
 ### 5.2 SKY STRIKER — vertical shmup (TATE) (M3)
+
+*Hidden from the picker, attract and operator menu until it has something to show (D-184); `--game=shmup` still opens it.*
 **Genre feel:** a WWII-to-near-future air combat scrolling shooter. TATE is its natural format.
 
 **Controls** (director, D-022)

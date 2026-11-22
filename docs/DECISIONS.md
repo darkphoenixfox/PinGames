@@ -1670,3 +1670,9 @@
 - **Where:** `Sim.start_time()` and `checkpoint_bonus()` read the chosen car. `_new_sim()` sets the clock after the car is applied, and `--rc-time` still overrides it. The car select panels gain a "START TIME 55 S" line between top speed and cornering.
 - **Tests:** start clock, checkpoint time and floor all ordered easy > normal > hard, and the normal car keeps the original numbers.
 - **Status:** Accepted
+
+### D-184 — Sky Striker hidden for now
+- **Date:** 2026-11-22
+- **Decision (director):** hide Sky Striker until there is something to show.
+- **How:** `Registry.HIDDEN` lists games that `Registry.ids()` leaves out, so they're missing from the picker, the attract loop and the operator menu. `Registry.all_ids()` and `has()` still include them, so `--game=shmup` opens it for development. Remove "shmup" from `HIDDEN` to bring it back.
+- **Status:** Accepted
