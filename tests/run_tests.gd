@@ -639,7 +639,7 @@ func test_racer_sim() -> void:
 		sim_g.manual = true
 		sim_g.s = bend
 	hg.gear = Sim.Gear.HIGH
-	for i in 30:
+	for i in 45:
 		hg.v = 44.0
 		lg.v = 44.0
 		hg.step(dt, false, false, true)
@@ -658,7 +658,7 @@ func test_racer_sim() -> void:
 		cs.manual = true
 		cs.gear = Sim.Gear.HIGH
 		cs.s = bend
-		for i in 30:
+		for i in 45:
 			cs.v = 44.0
 			cs.step(dt, false, false, true)
 		cars.append(cs)

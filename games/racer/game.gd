@@ -46,9 +46,8 @@ const MODEL_TURN := Basis(Vector3.UP, PI)
 ## Cars snap to 32 views around the camera, like a sprite set (D-092).
 const SPRITE_ANGLES := 32
 ## Nose turn at full steer (rad): ~1.5 sprite steps, visible on straights.
-const STEER_YAW := 0.3
 const SHIFT_NAG := 3.0      # s at the redline in L before the big SHIFT (D-116)
-const STEER_DELAY := 0.075  # s of steering before the nose turns (D-114; halved D-117)
+const MAX_TRAVEL_YAW := 0.45   # rad: the most the nose follows sideways travel (D-124)
 ## Crash animations (D-098): stepped at ANIM_FPS; a roll-over shows FLIP_FRAMES
 ## poses per full turn and hops FLIP_HOP metres.
 const ANIM_FPS := 10.0
@@ -232,9 +231,6 @@ var _shift_flame_t := 0.0   # upshift exhaust flame left
 var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
 var _bg_dark := 0.0     # s of crash flicker left
 var _sky_h := 0.0
-var _vis_steer := 0.0      # the nose's steering, delayed and smoothed (D-114)
-var _steer_hold := 0.0
-var _steer_sign := 0.0
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
 var _music_i := FIRST_TRACK    # current race song index
@@ -1206,16 +1202,13 @@ func _animate(delta: float) -> void:
 	var f := tr_.frame(sim.s, sim.x)
 	_car.transform = f
 	# Steering visibly turns the nose even on straights (D-092).
-	# The nose only turns once steering has been held for STEER_DELAY s, so
-	# short flipper taps don't twitch the car between sprite angles (D-114).
-	if absf(sim.steer) > 0.05 and signf(sim.steer) == _steer_sign:
-		_steer_hold += delta
-	else:
-		_steer_sign = signf(sim.steer) if absf(sim.steer) > 0.05 else 0.0
-		_steer_hold = 0.0
-	var vis_target := _steer_sign if _steer_hold >= STEER_DELAY else 0.0
-	_vis_steer = move_toward(_vis_steer, vis_target, delta * 4.0)
-	var yaw := deg_to_rad(sim.drift_angle) - _vis_steer * STEER_YAW
+	# The nose points where the car is going (D-124): the angle of its sideways
+	# speed against its forward speed, so it never skates sideways while facing
+	# straight. Short taps barely build sideways speed, so they don't twitch it.
+	var travel := 0.0
+	if not sim.drifting:
+		travel = clampf(atan2(sim.lat_v, maxf(sim.v, 6.0)), -MAX_TRAVEL_YAW, MAX_TRAVEL_YAW)
+	var yaw := deg_to_rad(sim.drift_angle) - travel
 	var crash_p := _anim_steps(sim.crash_progress(), sim.crash_anim)
 	if sim.spin_t > 0.0 and not sim.flipping:
 		# Spin-out: two full turns stepped like sprite frames, ending nose

@@ -1177,3 +1177,13 @@
 - **Date:** 2026-11-22
 - **Decision (director):** the selected car no longer bounces, and only the selected car rotates (1.2 rad/s, stepped through 32 angles). The other two hold their pose. This amends D-122.
 - **Status:** Accepted
+
+### D-124 — Turbo Run: no more "sliding on ice": sideways speed eases in, the nose follows travel
+- **Date:** 2026-11-22
+- **Problem (director):** at lower speeds and on straights the car felt like it was sliding on ice.
+- **Cause:** sideways movement had no inertia: full sideways speed the instant a flipper was pressed. Meanwhile the nose only turned a fixed, delayed amount, so the car often crab-walked across the road pointing straight ahead. This was worst at low speed, where the sideways speed is large next to the forward speed.
+- **Fix:**
+  - **Sideways speed:** the sim keeps `lat_v`, which eases towards the steering/bend target at 30 m/s² (×1.6 while drifting; set directly during crashes).
+  - **Nose angle:** the view points the nose along the actual direction of travel, atan(lat_v / v), clamped to ±0.45 rad; drifts keep their own angle. The car always faces where it goes.
+  - **Taps:** short taps build so little sideways speed that the nose stays within one sprite step. The steering-delay workaround (D-114, D-117) and `STEER_YAW` are removed.
+- **Status:** Accepted

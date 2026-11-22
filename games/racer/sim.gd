@@ -38,6 +38,7 @@ const H_SLIDE := 1.3            # D-120: H gear's extra push to the outside of b
 const L_PUSH := 0.85            # L gear's reduced push
 const L_GRIP := 1.3             # L gear's extra steering authority
 const STEER_FULL_V := 40.0      # m/s for full steering authority (D-119; was 25 with a 0.3 floor)
+const LAT_RESPONSE := 30.0      # m/s^2: how fast sideways speed builds (D-124)
 const STEER := 12.0            # lateral m/s at full steering authority
 const CENTRIFUGAL := 0.21      # lateral push = curvature * v^2 * this
 const OFFROAD_SPEED := 36.0
@@ -121,6 +122,7 @@ var autopilot := false         # attract demo + dev screenshots
 var s := START_S
 var x := 0.0
 var v := 0.0
+var lat_v := 0.0               # m/s sideways (+ = right), for the view's nose angle
 var steer := 0.0               # -1..1 smoothed steering (for the view)
 var throttle := 0.0
 var braking := false
@@ -436,7 +438,12 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 		lat += push
 	if spin_t > 0.0:
 		lat = push * 0.5
-	x = clampf(x + lat * dt, -WALL, WALL)
+	# Sideways speed eases towards its target instead of jumping (D-124), so
+	# the car steers into a lane change rather than skating across.
+	lat_v = move_toward(lat_v, lat, dt * (LAT_RESPONSE * (1.6 if drifting else 1.0)))
+	if spin_t > 0.0:
+		lat_v = lat
+	x = clampf(x + lat_v * dt, -WALL, WALL)
 	s += v * dt
 
 
