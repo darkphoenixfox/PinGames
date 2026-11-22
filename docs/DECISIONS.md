@@ -1193,3 +1193,8 @@
 - **Crash animation (director: remove the blond-passenger animation, show the car crashing):** the side-view car races in with speed lines, hits a rock with a burst, cartwheels through the air on a ballistic arc in 4 stepped poses shedding debris, lands on its roof and smokes, while CRASH! shakes and blinks (1.9 s). The portraits from D-119 are removed.
 - **Immunity (director):** when the car starts moving again after a crash, it is immune to traffic for 3 s (`CRASH_GRACE`), so an oncoming car can't hit it straight away. Roadside objects still count. The hero car blinks while immune.
 - **Status:** Accepted
+
+### D-126 — Turbo Run: 5 s of immunity after a crash
+- **Date:** 2026-11-22
+- **Decision (director):** the traffic immunity after a crash lasts 5 s (was 3 s, D-125).
+- **Status:** Accepted

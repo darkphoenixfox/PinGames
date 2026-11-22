@@ -92,7 +92,7 @@ const CAR_W := 1.95
 const SPIN_TIME := 1.3           # spin-out animation
 ## Every crash ends with the car stopped dead for CRASH_STOP s (D-101).
 const CRASH_STOP := 1.5
-const CRASH_GRACE := 3.0         # s immune to traffic once moving again (D-125)
+const CRASH_GRACE := 5.0         # s immune to traffic once moving again (D-125; 5 s D-126)
 const RECOVER_X := Track.ROAD_HALF - 1.9   # outer lane: where an off-road crash is put back
 ## Hitting a big roadside object (D-098) rolls the car over sideways instead.
 const FLIP_TIME := 1.33          # roll-over animation (D-105: 1.5x faster than 2.0)
