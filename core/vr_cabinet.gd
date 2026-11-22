@@ -7,6 +7,9 @@
 ## player stands in front of the cabinet and the controllers are the buttons:
 ##   triggers = flippers, grips = magna saves, right A = launch,
 ##   left X = start, left Y = coin, right B (hold) = exit.
+## Moving the cabinet (D-165): left stick slides it (relative to where you
+## look), right stick up/down = height, left/right = turn it; click the left
+## stick to put it straight in front of you. Saved in the config.
 ## Without one it falls back to a fixed player's-eye camera (desktop preview,
 ## also used for screenshots).
 ##
@@ -36,13 +39,24 @@ const MAP := {
 
 var xr_active := false
 var _controllers := {}
+var _cab: Node3D            # everything that moves with the cabinet (D-165)
+var _cam: Node3D
+var _height := 0.0
+var _dirty_t := -1.0        # save the placement shortly after it stops changing
 
 
 func build(table_tex: Texture2D, backglass_tex: Texture2D, dmd_tex: Texture2D) -> void:
 	_environment()
+	_cab = Node3D.new()
+	add_child(_cab)
 	_cabinet(table_tex, backglass_tex, dmd_tex)
+	var saved: Vector4 = Config.get_value("display", "vr_cabinet")
+	_height = saved.y
+	_cab.position = Vector3(saved.x, saved.y, saved.z)
+	_cab.rotation.y = deg_to_rad(saved.w)
 	xr_active = _start_xr()
 	if not xr_active:
+		_cab.transform = Transform3D.IDENTITY   # the saved placement is for the headset
 		_desktop_camera()
 
 
@@ -59,6 +73,7 @@ func _start_xr() -> bool:
 	add_child(origin)
 	var cam := XRCamera3D.new()
 	origin.add_child(cam)
+	_cam = cam
 	for hand in ["left", "right"]:
 		var c := XRController3D.new()
 		c.tracker = "%s_hand" % hand
@@ -72,7 +87,64 @@ func _start_xr() -> bool:
 	return true
 
 
+# --- moving the cabinet (D-165) --------------------------------------------------------
+const MOVE_SPEED := 0.6       # m/s
+const LIFT_SPEED := 0.25      # m/s
+const TURN_SPEED := 45.0      # deg/s
+const DEAD := 0.25
+
+
+func _process(delta: float) -> void:
+	if not xr_active:
+		return
+	var l: Vector2 = (_controllers["left"] as XRController3D).get_vector2("primary")
+	var r: Vector2 = (_controllers["right"] as XRController3D).get_vector2("primary")
+	var moved := false
+	if l.length() > DEAD:
+		# Relative to where the player looks, flattened to the floor.
+		var fwd := -_cam.global_basis.z
+		fwd.y = 0.0
+		fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
+		var right := Vector3(-fwd.z, 0.0, fwd.x)
+		_cab.position += (right * l.x + fwd * l.y) * MOVE_SPEED * delta
+		moved = true
+	if absf(r.y) > DEAD:
+		_height = clampf(_height + r.y * LIFT_SPEED * delta, -0.5, 0.5)
+		_cab.position.y = _height
+		moved = true
+	if absf(r.x) > DEAD:
+		_cab.rotation.y -= deg_to_rad(r.x * TURN_SPEED * delta)
+		moved = true
+	if moved:
+		_dirty_t = 0.6
+	elif _dirty_t > 0.0:
+		_dirty_t -= delta
+		if _dirty_t <= 0.0:
+			_save_placement()
+
+
+## Puts the cabinet straight in front of the player, facing them.
+func recenter() -> void:
+	var fwd := -_cam.global_basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
+	var front := _cam.global_position + fwd * STAND
+	_cab.rotation.y = atan2(-fwd.x, -fwd.z)
+	_cab.position = Vector3(front.x, _height, front.z)
+	_save_placement()
+
+
+func _save_placement() -> void:
+	Config.set_value("display", "vr_cabinet",
+		Vector4(_cab.position.x, _cab.position.y, _cab.position.z, rad_to_deg(_cab.rotation.y)))
+	Config.save()
+
+
 func _on_button(button: String, hand: String, pressed: bool) -> void:
+	if button == "primary_click" and hand == "left":
+		if pressed:
+			recenter()
+		return
 	var action: StringName = MAP[hand].get(button, &"")
 	if action == &"":
 		return
@@ -167,7 +239,7 @@ func _cabinet(table_tex: Texture2D, backglass_tex: Texture2D, dmd_tex: Texture2D
 	dm.set_shader_parameter("frame", dmd_tex)
 	dmd.material_override = dm
 	dmd.position = Vector3(0, bg.position.y - BG.y * 0.5 - 0.03 - DMD.y * 0.5, front_z)
-	add_child(dmd)
+	_cab.add_child(dmd)
 	# Buttons: flippers + magna saves on the sides, launch on the front.
 	var red := _mat(Color(0.85, 0.1, 0.1), 0.3)
 	var yel := _mat(Color(0.95, 0.75, 0.1), 0.3)
@@ -188,7 +260,7 @@ func _screen(tex: Texture2D, size: Vector2) -> MeshInstance3D:
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	m.material_override = mat
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(m)
+	_cab.add_child(m)
 	return m
 
 
@@ -199,7 +271,7 @@ func _box(pos: Vector3, size: Vector3, mat: Material) -> MeshInstance3D:
 	m.mesh = b
 	m.material_override = mat
 	m.position = pos
-	add_child(m)
+	_cab.add_child(m)
 	return m
 
 
@@ -213,7 +285,7 @@ func _button(pos: Vector3, rot: Vector3, mat: Material) -> void:
 	m.material_override = mat
 	m.position = pos
 	m.rotation = rot
-	add_child(m)
+	_cab.add_child(m)
 
 
 func _mat(c: Color, rough: float = 0.8) -> StandardMaterial3D:

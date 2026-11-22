@@ -1478,3 +1478,11 @@
   - **Without a runtime:** the layout falls back to a fixed player's-eye desktop camera, used for previews and screenshots.
 - **Not yet:** headset testing (none here), a real cabinet model, the operator-menu entry for the layout, nudging, standalone Quest export, and checking text legibility at arm's length.
 - **Status:** Prototype
+
+### D-165 — VR cabinet can be moved
+- **Date:** 2026-11-22
+- **Decision (director):** the VR prototype works; the cabinet position needs to be adjustable.
+- **Controls (in VR):** the left stick slides the cabinet across the floor relative to where the player looks (0.6 m/s). On the right stick, up/down changes the height (±0.5 m) and left/right turns it (45°/s). Clicking the left stick puts it straight in front of the player, facing them.
+- **Implementation:** the cabinet meshes live under their own node; the XR origin, floor and lights stay put.
+- **Saving:** the placement is saved to the config (`display.vr_cabinet` = x, height, z, yaw) 0.6 s after it stops moving and restored next time. The desktop preview ignores it.
+- **Status:** Accepted (prototype)
