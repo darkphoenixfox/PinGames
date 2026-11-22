@@ -815,6 +815,46 @@ func _randomize_crop(n: MeshInstance3D) -> void:
 
 ## Explosion (D-083, D-087): a smooth fireball billboard in the brick's colour plus
 ## tumbling brick-coloured debris shards.
+## Shader warm-up (D-178): one of each effect that is otherwise built only
+## when it happens, so its shaders compile behind the loading bar. The shell
+## frees the returned nodes when the warm-up ends.
+func warmup_nodes() -> Array[Node]:
+	var out: Array[Node] = []
+	var c := Vector3(0.0, 0.3, (Sim.FIELD.position.y + Sim.PADDLE_Y) * 0.5)
+	_explode_brick(c, Color(1.0, 0.5, 0.2))   # blast + debris; frees itself
+	var cap := Fx.PowerupCapsule.new("T", POWERUP_COLORS["T"], Sim.POWERUP_R)
+	cap.position = c + Vector3(-2.0, 0.0, 0.0)
+	out.append(cap)
+	var tet := Fx.make_tetrahedron(Sim.ENEMY_R * 1.5,
+		load("res://assets/textures/breakout/circuit_red.png"), CIRCUIT_GLOW["red"])
+	tet.position = c + Vector3(2.0, 0.0, 0.0)
+	out.append(tet)
+	var hole := Fx.make_wormhole(1.7)
+	hole.position = c + Vector3(2.0, -0.05, 0.0)
+	out.append(hole)
+	var ball := Fx.make_plasma_ball(Sim.BALL_R)
+	Fx.tint_plasma(ball, POWERUP_COLORS["B"])
+	ball.position = c + Vector3(0.0, 0.0, 1.0)
+	out.append(ball)
+	var beam := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(Sim.ION_BEAM_W * 1.8, 2.0)
+	beam.mesh = plane
+	var bmat := ShaderMaterial.new()
+	bmat.shader = ION_SHADER
+	beam.material_override = bmat
+	beam.position = c + Vector3(0.0, 0.0, -1.0)
+	out.append(beam)
+	var ghost := _make_ghost_ship()
+	ghost.visible = true
+	ghost.position = c + Vector3(0.0, 0.0, 2.0)
+	out.append(ghost)
+	for n in out:
+		_root.add_child(n)
+	InstParam.set_param(hole, "open", 1.0)
+	return out
+
+
 func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void:
 	var blast := MeshInstance3D.new()
 	var quad := QuadMesh.new()

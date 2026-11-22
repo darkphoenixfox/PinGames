@@ -13,6 +13,7 @@ const Initials = preload("res://shell/modes/initials.gd")
 const Operator = preload("res://shell/modes/operator.gd")
 const Viewer = preload("res://shell/modes/viewer.gd")
 const Dev = preload("res://shell/dev.gd")
+const FocusPause = preload("res://shell/focus_pause.gd")
 
 const COMBO_SECONDS := 3.0
 const EXIT_HOLD_SECONDS := 5.0
@@ -27,6 +28,8 @@ func _ready() -> void:
 	CabinetInput.action_pressed.connect(_on_pressed)
 	CabinetInput.action_released.connect(_on_released)
 	add_child(Dev.new())
+	if FocusPause.wanted():
+		add_child(FocusPause.new())   # browser: stop while the page has no focus (D-178)
 
 	var requested := Config.requested_game()
 	if not requested.is_empty():

@@ -1604,3 +1604,15 @@
 - **Install as an app:** the Web preset's PWA option is on. The export adds `index.manifest.json` (name PinGames, standalone, black background, icons 144/180/512), `index.service.worker.js` (offline cache of the build) and `index.offline.html`. Edge and Chrome offer "Install" only for a page with a manifest and an active service worker, both of which it now has (checked in Chrome: worker active for `/pingames/`, manifest parsed). The HeroAR NGINX block needed `.json` in its MIME list (HeroAR DEC-0276, applied with `nginx -t` + `nginx -s reload`).
 - **Icon:** a placeholder ("PIN" / "GAMES" in PinPixel on a dark neon-bordered tile), from `scripts/tools/gen_app_icon.py`, to be replaced when the director has art. It is also the project icon (`config/icon`), so the Quest APK and the page's favicon use it.
 - **Status:** Accepted
+
+### D-178 — Browser: pause on focus loss; draw everything once while loading
+- **Date:** 2026-11-22
+- **Decision (director):** stop the game when it loses focus. Also fix the noticeable pauses that remained when something appeared for the first time.
+- **Focus pause** (`shell/focus_pause.gd`, browser build only, or `--pause-on-blur`): on focus loss the tree pauses, the master bus is muted, and PAUSED shows on the TABLE and DMD. On return, "PRESS ANY BUTTON OR TAP TO CONTINUE" appears, and the next key, tap, click or pad button resumes. That press is swallowed (`CabinetInput.mute_until_release`), so it doesn't act in the game. Cabinets are excluded, because a frontend or a Windows prompt can take focus there (D-069). It doesn't stack with the debug P pause.
+- **First-time stalls:** files were already loaded by the D-175 loading screen. The remaining pauses were the first *draw* of each shader, material variant and texture, which in WebGL compiles and uploads synchronously. During the loading screen's warm-up frames, hidden behind the bar, `GameMode` now draws:
+  - every loaded model, spatial shader and texture in front of the game's camera, and every texture and canvas shader on the TABLE;
+  - one copy of every mesh/material pair in the game's tree, hidden ones included (pooled traffic, police, night lights, flashers), up to 300;
+  - whatever the game's optional `warmup_nodes()` hook returns, for effects built only when they happen. Tilt Breaker returns a brick blast with debris, a power-up capsule, an enemy with its wormhole, an extra ball, an ion beam and the ghost ship. Turbo Run returns the tunnel wall, portal and lamp.
+- **Checked:** on the desktop under the Compatibility renderer with the new `--log-spikes` (`?log-spikes`), which logs frames over 80 ms. Tilt Breaker's mid-game stall at its first brick break (126 ms) is gone, and Turbo Run's autopilot ran about 50 s with no slow frame after loading. Turbo Run's remaining slow frames came only from the debug stage-skip key, which rebuilds the track at once. The browser itself couldn't be measured this session, because Chrome throttled the background window to 1–3 fps.
+- **Dev:** `--press` gained `blur` / `focus` steps (fake focus loss and return).
+- **Status:** Accepted

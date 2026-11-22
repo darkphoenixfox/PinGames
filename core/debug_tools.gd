@@ -25,7 +25,11 @@ var _log: FileAccess
 var _log_lines: Array[String] = []
 
 
+var _log_spikes := false
+
+
 func _ready() -> void:
+	_log_spikes = Config.cli.has("log-spikes")
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	# Debug builds, and the browser build too (director, D-175).
 	enabled = (OS.is_debug_build() or OS.has_feature("web")) and str(Config.cli.get("debug-tools", "on")) != "off"
@@ -81,7 +85,11 @@ func toggle_monitor() -> void:
 	Screens.table.add_child(_monitor)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	# --log-spikes (?log-spikes on the web): log frames slower than 80 ms, to
+	# find first-time stalls (shader compiles, uploads) (D-178).
+	if _log_spikes and delta > 0.08:
+		print("Spike: %d ms at %.1f s" % [int(delta * 1000.0), Time.get_ticks_msec() / 1000.0])
 	if not is_instance_valid(_monitor):
 		return
 	var lines: PackedStringArray = ["INPUT MONITOR  focus: %s" % ("YES" if CabinetInput.has_focus else "NO")]

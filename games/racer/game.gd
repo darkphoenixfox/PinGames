@@ -869,6 +869,35 @@ func _build_world() -> void:
 	_build_cars()
 
 
+## Shader warm-up (D-178): pieces built only when they come up mid-race (the
+## tunnel's walls, portals and lamps), in front of the camera behind the
+## loading bar. Pooled cars, police, night lights and lamps already exist in
+## the tree (hidden), and the shell warms those up by itself.
+func warmup_nodes() -> Array[Node]:
+	var out: Array[Node] = []
+	if _cam == null:
+		return out
+	var holder := Node3D.new()
+	holder.position = Vector3(0.0, 0.0, -8.0)
+	var i := 0
+	for m in [Tunnel.wall_material(), Tunnel.portal_material()]:
+		var q := MeshInstance3D.new()
+		var qm := QuadMesh.new()
+		qm.size = Vector2(1.0, 1.0)
+		q.mesh = qm
+		q.material_override = m
+		q.position = Vector3(float(i) * 1.2 - 1.0, 0.0, 0.0)
+		holder.add_child(q)
+		i += 1
+	var lamp := MeshInstance3D.new()
+	lamp.mesh = Tunnel.light_mesh()
+	lamp.position = Vector3(1.5, 0.0, 0.0)
+	holder.add_child(lamp)
+	_cam.add_child(holder)
+	out.append(holder)
+	return out
+
+
 ## A car or truck model with the cel car material (+ outline). Materials and
 ## outline meshes are shared per model.
 func _car_instance(hue: float, model: String = CAR_MODEL, texture: String = CAR_TEXTURE) -> Node3D:
