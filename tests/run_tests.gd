@@ -27,6 +27,7 @@ func _initialize() -> void:
 	test_ball_physics()
 	test_breakout_sim()
 	test_racer_sim()
+	test_exported_translation()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	quit(1 if _failures > 0 else 0)
 
@@ -553,6 +554,14 @@ func _gd_files(dir: String) -> Array[String]:
 
 
 ## Turbo Run (D-089): track, auto throttle, drift, nitro, checkpoints, traffic.
+## Exported builds don't carry the CSV, only the imported translation (D-171):
+## it must load and contain the game's keys.
+func test_exported_translation() -> void:
+	var t := load("res://core/locale/strings.en.translation") as Translation
+	check(t != null and t.get_message("RC_TIME") != "" and t.get_message("GAME_RACER_TITLE") != "",
+		"the imported translation (used by exported builds) loads with the game texts")
+
+
 func test_racer_sim() -> void:
 	var Sim = load("res://games/racer/sim.gd")
 	var dt := 1.0 / 60.0

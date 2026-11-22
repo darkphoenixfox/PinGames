@@ -1537,3 +1537,10 @@
 - **Export preset "Quest"** (`export_presets.cfg`): arm64 only, XR mode OpenXR, Meta plugin enabled, package `org.pingames.vr`, debug-signed, output `exports/PinGames-quest.apk`. Source assets, tests, scripts, docs and the Windows plugin binaries are excluded from the APK.
 - **Install:** `adb install -r exports\PinGames-quest.apk` (developer mode on), or SideQuest.
 - **Status:** Prototype
+
+### D-171 — Exported builds load the imported translation
+- **Date:** 2026-11-22
+- **Bug (director):** on the Quest, texts showed as keys (RC_…), because no translations were loaded.
+- **Cause:** `core/i18n.gd` parses the raw `strings.csv` at runtime, but an export only packs the imported version (`strings.en.translation`). Godot replaces imported sources with their imports even when an include filter names them.
+- **Fix:** when no CSV is found, I18n loads the `.translation` files from `res://core/locale`. Desktop runs still read the CSV, including `user://locale` overrides. A test checks that the imported translation loads with the game texts.
+- **Status:** Accepted
