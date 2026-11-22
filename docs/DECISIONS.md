@@ -1438,3 +1438,8 @@
 - **Date:** 2026-11-22
 - **Decision (director):** the nitro pick-up notice moves from mid-TABLE to just above the speedometer and gets smaller: the styled title font at scale 1 (the centre message used scale 4). It flickers for 0.8 s on each pick-up, by alpha in a fixed spot (D-096).
 - **Status:** Accepted
+
+### D-160 — Turbo Run: SHIFT warning only the first time after the start or a crash
+- **Date:** 2026-11-22
+- **Decision (director):** the big SHIFT warning (with its shifter animation) shows only the first time the player sits at the redline in L after the race starts or after a crash. Once it has shown and the player shifts or the revs drop, it stays off until the next crash re-arms it.
+- **Status:** Accepted

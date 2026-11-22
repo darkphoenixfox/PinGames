@@ -309,6 +309,8 @@ var _gear_lever: Control
 var _shift_big: Label
 var _shift_slot: Control
 var _cops_flash := false
+var _shift_armed := true    # SHIFT hint allowed (start of race / after a crash, D-160)
+var _shift_shown := false
 var _nitro_pop: Label       # NITRO notice above the speedometer (D-159)
 var _nitro_pop_t := 0.0
 var _nag_lever: Control     # animated shifter next to SHIFT (D-151)
@@ -554,6 +556,8 @@ func _begin_race() -> void:
 	_phase = "race"
 	_phase_t = 0.0
 	_new_sim()
+	_shift_armed = true
+	_shift_shown = false
 	# The hero car in the chosen car's colour (D-122).
 	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
 		var gi := m as MeshInstance3D
@@ -705,6 +709,7 @@ func _handle_events() -> void:
 				Dmd.flash(tr("RC_ESCAPED"), 1.2, Dmd.GREEN)
 				Audio.sfx("rc_perfect")
 			"crash":
+				_shift_armed = true   # the SHIFT hint may show again (D-160)
 				_bg_dark = 0.8
 				Audio.sfx("rc_crash")
 				_shake = 0.8
@@ -1817,7 +1822,14 @@ func _update_hud(delta: float) -> void:
 	# Held at the redline in L for SHIFT_NAG s: a big blinking SHIFT in the
 	# middle of the screen, in the timer's font (D-116).
 	_redline_t = _redline_t + delta if shift_now and sim.state == Sim.State.RACE else 0.0
-	var nagging := _redline_t >= SHIFT_NAG
+	# Only the first time after the start or a crash (D-160): once shown and
+	# then resolved, it stays off until the next crash.
+	var nagging := _shift_armed and _redline_t >= SHIFT_NAG
+	if nagging:
+		_shift_shown = true
+	elif _shift_shown and _redline_t == 0.0:
+		_shift_armed = false
+		_shift_shown = false
 	_shift_big.modulate.a = 1.0 if nagging and fmod(_phase_t, 0.4) < 0.25 else 0.0
 	# Looping rise (D-158): up SHIFT_RISE px in 4 stepped frames, then back.
 	var rise := floorf(fmod(_phase_t, 0.5) / 0.5 * 4.0) / 4.0
