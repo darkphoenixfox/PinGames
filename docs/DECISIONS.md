@@ -1731,3 +1731,13 @@
   - The touch controls and the web hint are unchanged: touch is 2-button, and the keyboard's Ctrl keys are the magna saves.
 - **Tests:** in 4-button mode the throttle is automatic, the left magna brakes, the shifter flips the gear once, both flippers don't shift, and a shifter press on the grid is dropped.
 - **Status:** Accepted
+
+### D-190 — Turbo Run sky: no lighter circle at the top
+- **Date:** 2026-11-22
+- **Problem (director, with a night screenshot):** a lighter circle or arc showed at the top of the sky.
+- **Cause:** the sunset panorama is painted on an open ring 2000 m across that follows the camera. Its top rim is about 3040 m from the camera, but the camera's far plane was 2600 m, so the ring's upper part was cut off. Above that cut, the plain sky colour showed (graded for night separately), as a lighter arc when the camera tilted up on hills and crests.
+- **Fix:**
+  - **Far plane:** the camera's far plane is now 3200 m, so the whole ring is drawn.
+  - **Lid:** a lid closes the ring's top. It uses the same panorama shader with `cap` on, so it takes the image's top row at each angle and gets the same night grade (kept in step with the ring). From below, the ring top and the lid read as one colour.
+- **Dev:** `--rc-look-up=<deg>` tilts the race camera up, to check the sky's top.
+- **Status:** Accepted

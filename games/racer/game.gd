@@ -265,6 +265,7 @@ var _showroom: Control
 var _select_hint: Label
 var _chosen_car := Sim.DEFAULT_CAR
 var _bg_mat: ShaderMaterial
+var _sky_cap_mat: ShaderMaterial   # lid over the sky ring (D-190)
 var _anims := DmdAnims.new()
 var _night := 0.0           # 0 = day, 1 = night (D-113)
 var _night_shown := -1.0
@@ -833,7 +834,9 @@ func _build_world() -> void:
 	_cam.keep_aspect = Camera3D.KEEP_WIDTH
 	_cam.fov = CAM_FOV
 	_cam.near = 0.3
-	_cam.far = 2600.0
+	# Past the sky ring's top rim (~3040 m away; D-190): with 2600 the ring's
+	# upper part was cut off and the plain sky showed above it as a lighter arc.
+	_cam.far = 3200.0
 	_root.add_child(_cam)
 	_cam.current = true
 
@@ -870,6 +873,18 @@ func _build_world() -> void:
 	_mountains.material_override = mmat
 	_mountains.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_root.add_child(_mountains)
+	# Lid over the ring (D-190): the same shader, sampling the image's top row,
+	# so looking up (hills, crests) shows no lighter circle at the opening.
+	var lid := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(SKY_RADIUS * 2.2, SKY_RADIUS * 2.2)
+	lid.mesh = plane
+	_sky_cap_mat = mmat.duplicate()
+	_sky_cap_mat.set_shader_parameter("cap", true)
+	lid.material_override = _sky_cap_mat
+	lid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	lid.position = Vector3(0.0, sky_h * 0.5 - 0.5, 0.0)
+	_mountains.add_child(lid)
 
 	_road_mat = ShaderMaterial.new()
 	_road_mat.shader = ROAD_SHADER
@@ -1682,6 +1697,8 @@ func _animate(delta: float) -> void:
 	var below := atan2(-to_car.y, -to_car.z)
 	_cam.rotate_object_local(Vector3.RIGHT, deg_to_rad(CAM_CAR_DEG) - below)
 	_cam.rotate_object_local(Vector3.BACK, deg_to_rad(-sim.drift_angle * 0.12))
+	if Config.cli.has("rc-look-up"):   # dev: tilt up (degrees) to check the sky's top (D-190)
+		_cam.rotate_object_local(Vector3.RIGHT, deg_to_rad(float(str(Config.cli["rc-look-up"]))))
 	var fov := CAM_FOV + sim.v / Sim.MAX_SPEED * 6.0 + (8.0 if sim.boosting else (5.0 if sim.perfect_t > 0.0 else 0.0))
 	_cam.fov = lerpf(_cam.fov, fov, 1.0 - exp(-delta * 4.0))
 	_mountains.position = Vector3(_cam.position.x, _cam.position.y - SKY_BELOW + _sky_h * 0.5, _cam.position.z)
@@ -2163,6 +2180,8 @@ func _update_night(delta: float) -> void:
 	Sprites.set_night(k)
 	if _sky_mat != null:
 		_sky_mat.set_shader_parameter("night", k)
+		if _sky_cap_mat != null:
+			_sky_cap_mat.set_shader_parameter("night", k)
 		# Same night grade as the backdrop shader, for the sky above it.
 		var lin := _day_top.srgb_to_linear()   # the shader works in linear colour
 		var l := lin.r * 0.3 + lin.g * 0.59 + lin.b * 0.11

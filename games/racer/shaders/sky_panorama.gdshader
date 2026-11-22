@@ -9,6 +9,10 @@ render_mode unshaded, cull_disabled, fog_disabled, shadows_disabled;
 uniform sampler2D sky : source_color, filter_nearest, repeat_disable;
 uniform float height = 2356.0;     // ring height (m): keeps the image's aspect
 uniform float night = 0.0;         // D-113: 0 day .. 1 night (the sun becomes a pale moon)
+// D-190: the lid over the ring. It takes the image's top row at each angle (the
+// same colour the ring's top edge shows) and the same night grade, so the
+// ring's opening never shows as a lighter circle when the camera looks up.
+uniform bool cap = false;
 
 varying vec3 lp;
 
@@ -20,7 +24,7 @@ void fragment() {
 	float ang = atan(lp.x, lp.z);
 	float t = fract((ang - PI) / TAU + 0.25) * 2.0;
 	float u = t < 1.0 ? t : 2.0 - t;
-	float v = clamp(1.0 - (lp.y + height * 0.5) / height, 0.0, 1.0);
+	float v = cap ? 0.0 : clamp(1.0 - (lp.y + height * 0.5) / height, 0.0, 1.0);
 	vec3 c = texture(sky, vec2(u, v)).rgb;
 	float l = dot(c, vec3(0.3, 0.59, 0.11));
 	// Night: keep the clouds' shapes as deep blues; the brightest pixels (the
