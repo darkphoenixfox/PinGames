@@ -937,20 +937,39 @@ func test_racer_sim() -> void:
 	var theirs: Dictionary = yt.traffic.filter(func(t): return t.id == 2)[0] if yt.traffic.any(func(t): return t.id == 2) else {}
 	check(ours.blink and ours.x > 5.5 and ours.v < 30.0 and (theirs.is_empty() or theirs.x < -5.5),
 		"traffic pulls over to its own right-hand edge for the police, indicating")
-	# Outrunning it long enough: it gives up with a bonus.
+	# D-200: it only gives up once you've stayed far enough ahead long enough;
+	# close behind you, it never does, however long the chase.
+	var close_cop = Sim.new()
+	close_cop.setup(7)
+	close_cop.state = Sim.State.RACE
+	close_cop.freeze_time = true
+	close_cop.grace_t = 999.0
+	close_cop.v = 50.0
+	close_cop.police = {"s": close_cop.s - 30.0, "x": 5.0, "v": 50.0, "state": "chase", "t": 500.0, "side": 1.0}
+	for i in 60 * 10:
+		close_cop.traffic.clear()
+		close_cop.v = 50.0
+		close_cop.step(dt, false, false)
+	check(not close_cop.police.is_empty() and close_cop.police.state == "chase",
+		"a police car close behind never gives up, however long the chase")
 	var run = Sim.new()
 	run.setup(7)
 	run.state = Sim.State.RACE
-	run.police = {"s": run.s - 100.0, "x": 0.0, "v": 0.0, "state": "chase", "t": Sim.POLICE_GIVE_UP}
+	run.freeze_time = true
+	run.police = {"s": run.s - Sim.ESCAPE_GAP - 30.0, "x": 0.0, "v": 0.0, "state": "chase", "t": 1.0}
 	run.v = 60.0
 	run.gear = Sim.Gear.HIGH
 	var esc := false
 	var check_ok := true
-	run.step(dt, false, false)
-	for e in run.events:
-		esc = esc or e[0] == "police_escape"
-	check(esc and run.police.state == "giveup" and not run.police_lights(),
-		"outrunning the police long enough makes them give up, lights off")
+	var esc_steps := 0
+	while not esc and esc_steps < int(60 * (Sim.ESCAPE_TIME + 1.0)):
+		run.traffic.clear()
+		run.step(dt, false, false)
+		esc_steps += 1
+		for e in run.events:
+			esc = esc or e[0] == "police_escape"
+	check(esc and esc_steps >= int(60 * Sim.ESCAPE_TIME) - 1 and run.police.state == "giveup" and not run.police_lights(),
+		"staying %d m ahead for %d s loses the police, lights off" % [int(Sim.ESCAPE_GAP), int(Sim.ESCAPE_TIME)])
 	for i in 60 * 6:
 		run.traffic.clear()
 		run.step(dt, false, false)

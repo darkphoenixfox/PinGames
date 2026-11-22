@@ -132,8 +132,11 @@ const RAMMER_SLOW := 0.92       # D-198: speed the player keeps doing it
 const HIT_SLOW := 0.78          # speed kept per hit
 const HIT_BOUNCE := 9.0         # m/s sideways shove
 const POLICE_BUMP_SLOW := 0.55  # speed the police keeps after hitting traffic
-const POLICE_GIVE_UP := 22.0    # s of chase before it gives up
-const POLICE_LOST := 260.0      # m behind: lost you
+## Losing the police (D-200): stay more than ESCAPE_GAP ahead of it for
+## ESCAPE_TIME in a row. Getting closer starts the count again, however long
+## the chase has gone on.
+const ESCAPE_GAP := 120.0        # m ahead of it
+const ESCAPE_TIME := 4.0         # s in a row
 const BUST_SPEED := 22.0        # m/s: slower than this with police close = busted
 const BUST_NEAR := 12.0         # m: "close" - right on you (D-157; was 40)
 const BUST_TIME := 3.5          # s held at the roadside
@@ -486,7 +489,9 @@ func _update_police(dt: float) -> void:
 			var close := ds > -BUST_NEAR
 			if close and (spin_t > 0.0 or v < BUST_SPEED):
 				_bust()
-			elif police.t > POLICE_GIVE_UP or ds < -POLICE_LOST:
+			else:
+				police.lose_t = float(police.get("lose_t", 0.0)) + dt if ds < -ESCAPE_GAP else 0.0
+			if police.state == "chase" and float(police.get("lose_t", 0.0)) >= ESCAPE_TIME:
 				police.state = "giveup"   # D-145: falls back, lights off
 				_add_score(ESCAPE_BONUS)
 				events.append(["police_escape"])

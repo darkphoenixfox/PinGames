@@ -1870,3 +1870,11 @@
 - **Glows on the lamps:** the glows from D-198 were placed in the car node's space by estimate. `_place_tails` now moves them onto the body mesh, in the model's own space, at the centre of the lamp area the shader lights (`LAMP_BOXES`, else the shader's defaults), 4 cm behind the mesh's rear surface. This is done for the hero, traffic cars, hatchbacks and the police car. They follow the night-lights holder's visibility.
 - **Size:** 0.6× when running and 0.95× when braking, at 60 % strength, so they read as a halo, not a solid disc.
 - **Status:** Accepted (amends D-198)
+
+### D-200 — Losing the police takes distance held over time
+- **Date:** 2026-11-23
+- **Decision (director):** to lose the cop car you must be more than X away from it for Y time. It must not be possible to lose a cop who's right behind you, however long you've been running.
+- **Before:** it gave up after 22 s of chase (`POLICE_GIVE_UP`) wherever it was, or at once at 260 m behind (`POLICE_LOST`). Both are removed.
+- **Now:** while chasing, `police.lose_t` counts up while the player is more than `ESCAPE_GAP` (120 m) ahead and drops to 0 whenever it's closer. At `ESCAPE_TIME` (4 s) it gives up as before: it falls back, lights and siren go off, and the escape bonus and LOST THEM! show. The chase's length no longer matters.
+- **Tests:** a police car 30 m behind through 10 s of chase (500 s in) never gives up, and staying more than 120 m ahead loses it after 4 s, not sooner.
+- **Status:** Accepted (supersedes D-145's give-up rule)
