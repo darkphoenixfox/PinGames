@@ -1315,3 +1315,8 @@
 - **Removed:** the old model, its texture and its source are removed from the repo, so they don't ship.
 - **Note:** the new texture still carries "911" door lettering. It is used as supplied.
 - **Status:** Accepted
+
+### D-141 — "911" on the police car is the emergency number
+- **Date:** 2026-11-22
+- **Clarification (director):** the "911" lettering on the police car is the US emergency phone number, a normal police livery detail, not a car model badge. It stays. This closes the notes in D-135 and D-140.
+- **Status:** Accepted
