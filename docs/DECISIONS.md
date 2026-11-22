@@ -1421,3 +1421,8 @@
 - **Date:** 2026-11-22
 - **Decision (director):** any speed over 100 mph (as shown, D-147) at a speed camera calls the police, for every car. This replaces the "1.5 × the L-gear limit" rule from D-135. In game terms it is 52.5 m/s: just above the normal car's L-gear limit, so in H you need to slow down for cameras. Tests check 99 mph passes and 101 mph is caught.
 - **Status:** Accepted
+
+### D-157 — Turbo Run: bust only when the police is right on you
+- **Date:** 2026-11-22
+- **Decision (director):** BUSTED shouldn't happen until the police car is closer. The bust range (`BUST_NEAR`) is now 12 m, down from 40 m. Crashing or dropping below 22 m/s only busts you with the police on your bumper or alongside. Tests: 20 m back is no bust, 8 m is.
+- **Status:** Accepted

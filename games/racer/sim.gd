@@ -128,7 +128,7 @@ const POLICE_BUMP_SLOW := 0.55  # speed the police keeps after hitting traffic
 const POLICE_GIVE_UP := 22.0    # s of chase before it gives up
 const POLICE_LOST := 260.0      # m behind: lost you
 const BUST_SPEED := 22.0        # m/s: slower than this with police close = busted
-const BUST_NEAR := 40.0         # m: "close"
+const BUST_NEAR := 12.0         # m: "close" - right on you (D-157; was 40)
 const BUST_TIME := 3.5          # s held at the roadside
 const PARK_HOLD := 1.5          # s the police stands parked beside you (D-139)
 const FINE := 25000

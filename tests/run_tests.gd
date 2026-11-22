@@ -668,7 +668,15 @@ func test_racer_sim() -> void:
 	cop.step(dt, false, false)
 	check(not cop.police.is_empty() and cop.police.s < cop.s - 100.0, "speeding past a camera calls a police car from behind")
 	# Slow right down with the police close: busted, fined, held.
+	# 20 m back is not close enough to bust (D-157)...
 	cop.police.s = cop.s - 20.0
+	cop.police.v = 0.0
+	cop.v = 15.0
+	cop.traffic.clear()
+	cop.step(dt, false, false)
+	check(cop.police.state == "chase", "slowing down with the police 20 m back is no bust yet")
+	# ...right on you, it is.
+	cop.police.s = cop.s - 8.0
 	cop.v = 15.0
 	var fined := 0
 	var before: int = cop.score
