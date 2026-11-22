@@ -25,6 +25,9 @@ const CAR_SHADER = preload("res://games/racer/shaders/car.gdshader")
 const PIXEL_POST = preload("res://games/racer/shaders/pixel_post.gdshader")
 const SKY_SHADER = preload("res://games/racer/shaders/sky_panorama.gdshader")
 const LOGO := "res://assets/textures/racer/logo.png"
+const BG_DIR := "res://assets/textures/racer/"
+## Shared lit-backglass shader (D-058; generic: off art + on art + group masks).
+const BACKGLASS_SHADER = preload("res://games/breakout/shaders/backglass_lights.gdshader")
 const DMD_LOGO := "res://assets/textures/racer/dmd_logo.png"
 const SKY_TEXTURE := "res://assets/sprites/racer/sky.png"
 const SKY_RADIUS := 2000.0
@@ -145,6 +148,9 @@ var _car_mats := {}         # model path -> ShaderMaterial
 var _car_outlines := {}     # model path -> outline ArrayMesh
 var _beam_mat: StandardMaterial3D
 var _pix_vp: SubViewport
+var _bg_mat: ShaderMaterial
+var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
+var _bg_dark := 0.0     # s of crash flicker left
 var _sky_h := 0.0
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
@@ -191,7 +197,8 @@ var _shake := 0.0
 
 func get_info() -> Dictionary:
 	return {"id": "racer", "title_key": "GAME_RACER_TITLE", "color": ACCENT, "font": TITLE_FONT, "buttons_min": 3,
-		"logo": LOGO, "dmd_logo": DMD_LOGO}   # director's logo (D-108)
+		"logo": LOGO, "dmd_logo": DMD_LOGO,   # director's logo (D-108)
+		"backglass": BG_DIR + "backglass_on.png"}   # shell screens (D-088, D-109)
 
 
 func start(_players: int) -> void:
@@ -232,6 +239,7 @@ func _process(delta: float) -> void:
 	if sim == null:
 		return
 	_phase_t += delta
+	_update_backglass(delta)
 	var dt := minf(delta, 0.05)
 	if _phase == "attract":
 		sim.time_left = 99.0
@@ -369,6 +377,7 @@ func _handle_events() -> void:
 				Audio.sfx("rc_go")
 				Dmd.flash(tr("RC_GO"), 1.0, Dmd.GREEN)
 			"checkpoint":
+				_bg_flash = 1.2
 				Audio.sfx("rc_checkpoint")
 				# The song changes at stage 5, then every MUSIC_STAGES stages (D-105).
 				if int(e[1]) % MUSIC_STAGES == 0:
@@ -390,6 +399,7 @@ func _handle_events() -> void:
 					_drift_label.text = tr("RC_DRIFT_POINTS") % ScoreTable.format_score(int(e[1]))
 					_drift_label.modulate.a = 1.0
 			"nitro", "nitro_refill":
+				_bg_flash = 0.6
 				Audio.sfx("rc_nitro")
 				_center_message(tr("RC_NITRO"), 0.8)
 				Dmd.flash(tr("RC_NITRO"), 0.6, Dmd.CYAN)
@@ -400,6 +410,7 @@ func _handle_events() -> void:
 				Audio.sfx("rc_shift")
 				Dmd.flash(tr("RC_GEAR_FLASH") % _gear_text(int(e[1])), 0.5, Dmd.YELLOW)
 			"near_miss":
+				_bg_flash = 0.4
 				Audio.sfx("rc_near_miss")
 				Dmd.flash(tr("RC_NEAR_MISS"), 0.8, Dmd.YELLOW)
 			"pass":
@@ -408,6 +419,7 @@ func _handle_events() -> void:
 				Audio.sfx("rc_bump")
 				_shake = maxf(_shake, 0.25)
 			"crash":
+				_bg_dark = 0.8
 				Audio.sfx("rc_crash")
 				_shake = 0.8
 				Dmd.flash(tr("RC_CRASH"), 1.0, Dmd.RED)
@@ -1309,17 +1321,43 @@ func _draw_dmd_dash(p) -> void:
 
 
 func _build_backglass() -> void:
-	# The game's sunset sky with the logo on it (D-108), until there's backglass art.
-	var sky := TextureRect.new()
-	sky.texture = load(SKY_TEXTURE)
-	sky.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	sky.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	sky.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	sky.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_to_backglass(sky)
-	var box := UI.vstack(0)
-	box.add_child(_logo_rect(1300))
-	add_to_backglass(box)
+	# Director's backglass art with two light groups (D-109): the logo and the
+	# lights (headlights, truck lights, sparks, stars), driven by the race.
+	add_to_backglass(UI.fill(Color.BLACK))
+	var art := TextureRect.new()
+	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	art.texture = load(BG_DIR + "backglass_off.png")
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_bg_mat = ShaderMaterial.new()
+	_bg_mat.shader = BACKGLASS_SHADER
+	_bg_mat.set_shader_parameter("on_tex", load(BG_DIR + "backglass_on.png"))
+	_bg_mat.set_shader_parameter("mask_tex", load(BG_DIR + "backglass_mask.png"))
+	_bg_mat.set_shader_parameter("logo_mask_tex", load(BG_DIR + "backglass_mask_logo.png"))
+	art.material = _bg_mat
+	add_to_backglass(art)
+
+
+## Backglass lights each frame (D-109). Attract: the logo blinks slowly, the
+## lights are on. Race: both on; nitro, checkpoints and near misses flash the
+## lights; a crash knocks them out briefly. Game over: only the logo stays.
+func _update_backglass(delta: float) -> void:
+	if _bg_mat == null:
+		return
+	_bg_flash = maxf(0.0, _bg_flash - delta)
+	_bg_dark = maxf(0.0, _bg_dark - delta)
+	var lights := 1.0
+	var logo := 1.0
+	if _phase == "attract":
+		logo = 1.0 if fmod(_phase_t, 1.2) < 0.8 else 0.0
+	elif _finale_t >= 0.0 or (sim != null and sim.state == Sim.State.OVER):
+		lights = 0.0
+	if _bg_dark > 0.0:
+		lights = 0.0 if fmod(_bg_dark, 0.16) < 0.1 else 0.3
+	elif _bg_flash > 0.0:
+		lights = 1.0 if fmod(_bg_flash, 0.1) < 0.05 else 0.2
+		logo = maxf(logo, lights)
+	_bg_mat.set_shader_parameter("levels", Vector4(lights, 0.0, 0.0, logo))
 
 
 func _logo_rect(width: float) -> TextureRect:

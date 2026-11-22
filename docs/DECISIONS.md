@@ -1041,3 +1041,13 @@
   - **Turbo Run logo:** the director's `turborun_logo.png` is the picker logo and the DMD logo (79 × 32). It also appears on the attract screen and the backglass, replacing the styled text title. The backglass shows the game's sunset sky with the logo until there's real backglass art. The PROTOTYPE label is gone.
 - **Pending:** the updated `breaker_lights_off_2screen.png` has the orb-dotted i, but `breaker_lights_on_2screen.png` in the asset folder is still the old lit art without it. Pairing them would make the logo change shape when it lights, so the backglass light textures wait for a matching lit version.
 - **Status:** Accepted
+
+### D-109 — Turbo Run backglass art with lights; Tilt Breaker lit logo updated
+- **Date:** 2026-11-22
+- **Turbo Run:** the director's `turborun-backglass_{off,on}` pair replaces the sky-and-logo placeholder (D-108). `scripts/tools/prepare_racer_backglass.py` differences the pair into two light groups: the logo (top-right box, `backglass_mask_logo.png`) and lights (R channel: headlights, truck lights, sparks, stars). It reuses Tilt Breaker's lit-backglass shader.
+  - **Attract:** the logo blinks slowly and the lights stay on.
+  - **Race:** both groups are on. Checkpoints, nitro and near misses flash them, and a crash makes the lights flicker out for 0.8 s.
+  - **Game over:** only the logo stays lit.
+  - The info key `backglass` points at the lit art for the shell screens.
+- **Tilt Breaker:** the director re-saved `breaker_lights_on_2screen.png` with the orb-dotted i, matching the off art, so the 2-screen light textures are rebuilt (engines 3, shots 5, impacts 8, logo 2 regions). This resolves D-108's pending item.
+- **Status:** Accepted
