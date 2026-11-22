@@ -1,6 +1,7 @@
 ## Screens autoload: owns the TABLE and BACKGLASS content viewports and places
 ## them (plus the DMD) on OS windows according to the layout (D-006, D-013):
-##   windowed : 3 separate windows tiled on one monitor (current dev default)
+##   windowed : 3 separate windows on one monitor (dev default): TABLE centred,
+##              BACKGLASS + DMD stacked to its left (D-148)
 ##   3screen  : TABLE = main window, BACKGLASS and DMD in their own fullscreen windows
 ##   2screen  : TABLE = main window, DMD framed at the bottom centre of the BACKGLASS
 ##              (games show their *_2screen backglass art, D-080)
@@ -76,10 +77,12 @@ func _setup_windowed() -> void:
 	# TABLE: portrait 9:16 at full height.
 	var table_size := Vector2i(h * 9 / 16, h)
 	# BACKGLASS (16:9) above DMD (4:1), same width w:  w*9/16 + TITLE_BAR + w/4 = h
-	var right_w := mini(int((h - TITLE_BAR) * 16.0 / 13.0), area.size.x - table_size.x - 24)
+	# D-148: TABLE centred on the monitor, BACKGLASS + DMD stacked to its left.
+	var left_space := (area.size.x - table_size.x) / 2 - 16
+	var right_w := mini(int((h - TITLE_BAR) * 16.0 / 13.0), left_space)
 	var bg_size := Vector2i(right_w, right_w * 9 / 16)
 	var dmd_size := Vector2i(right_w, right_w / 4)
-	var x0 := area.position.x + 4
+	var x0 := area.position.x + (area.size.x - table_size.x) / 2
 	var y0 := area.position.y + TITLE_BAR
 
 	_scale_render(table_size)
@@ -90,7 +93,7 @@ func _setup_windowed() -> void:
 	root.position = Vector2i(x0, y0)
 	_add_view(root, table.get_texture(), 0, false)
 
-	var right_x := x0 + table_size.x + 12
+	var right_x := x0 - 12 - right_w   # left of the TABLE (name kept for the code below)
 	var bgw := _make_window("PinGames - BACKGLASS", Rect2i(Vector2i(right_x, y0), bg_size), false)
 	_add_view(bgw, backglass.get_texture(), 0, false)
 	if dmd_in_backglass:  # preview of the 2-screen cabinet look (D-080)

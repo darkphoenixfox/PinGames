@@ -1368,3 +1368,8 @@
 - **Police lights after a fine (director):** `police_lights()` is true only while chasing. Once you're fined, the light bar, the siren and the screen wash go off.
 - **Bust swing (director: the police still turned away):** the 90° swing on a bust used the wrong side. It now turns towards the hero car, with the same sign as the chase aim.
 - **Status:** Accepted
+
+### D-148 — Windowed layout: TABLE centred, backglass and DMD on the left
+- **Date:** 2026-11-22
+- **Decision (director):** when the game opens in the windowed (dev) layout, the TABLE window sits centred on the monitor, and the BACKGLASS (with the DMD below it, or inside it on 2-screen settings) stacks to its left, sized to fit the space there. Cabinet layouts are unchanged.
+- **Status:** Accepted
