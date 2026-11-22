@@ -1353,3 +1353,8 @@
 - **Cause:** escaping reused the post-bust "leave" step, which speeds up and overtakes, and the view always flashed the light bar.
 - **Fix:** escaping now puts the police in a new "giveup" state: it eases to half the player's speed and drops behind, and is removed 300 m back. `sim.police_lights()` is true only while chasing or busting, and it drives the light bar, the siren and the screen wash. After a bust it still drives off ahead, but dark. A test checks that it never gets ahead of the player after giving up.
 - **Status:** Accepted
+
+### D-146 — Turbo Run: drift points under the score
+- **Date:** 2026-11-22
+- **Decision (director):** the drift points readout moves from mid-TABLE to under the score, top left, centred in the score column at 36 px. It still fades by alpha, so its slot is fixed and nothing moves (D-096).
+- **Status:** Accepted

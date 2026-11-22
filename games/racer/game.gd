@@ -1604,6 +1604,11 @@ func _build_hud() -> void:
 	left.add_child(UI.label(tr("RC_SCORE"), 36, UI.CYAN))
 	_score_label = UI.label("0", 48)
 	left.add_child(_score_label)
+	# Drift points under the score (D-146); fades by alpha, so its slot stays.
+	_drift_label = UI.label("", 36, UI.YELLOW)
+	_drift_label.custom_minimum_size.y = 44
+	_drift_label.modulate.a = 0.0
+	left.add_child(_drift_label)
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(left)
 	var mid := UI.vstack(0)
@@ -1719,13 +1724,7 @@ func _build_hud() -> void:
 	_radar_bar.size = Vector2(1080, _radar_bar.custom_minimum_size.y)
 	_hud.add_child(_radar_bar)
 
-	_drift_label = UI.label("", 60, UI.YELLOW)
-	_drift_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	_drift_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_drift_label.offset_top = 300
-	_drift_label.offset_left = -500
-	_drift_label.offset_right = 500
-	_hud.add_child(_drift_label)
+
 
 
 ## Tachometer needle 0..1: idle at 1/8, the gear's top speed near the end.
