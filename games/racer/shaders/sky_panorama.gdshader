@@ -8,6 +8,7 @@ render_mode unshaded, cull_disabled, fog_disabled, shadows_disabled;
 
 uniform sampler2D sky : source_color, filter_nearest, repeat_disable;
 uniform float height = 2356.0;     // ring height (m): keeps the image's aspect
+uniform float night = 0.0;         // D-113: 0 day .. 1 night (the sun becomes a pale moon)
 
 varying vec3 lp;
 
@@ -20,5 +21,13 @@ void fragment() {
 	float t = fract((ang - PI) / TAU + 0.25) * 2.0;
 	float u = t < 1.0 ? t : 2.0 - t;
 	float v = clamp(1.0 - (lp.y + height * 0.5) / height, 0.0, 1.0);
-	ALBEDO = texture(sky, vec2(u, v)).rgb;
+	vec3 c = texture(sky, vec2(u, v)).rgb;
+	float l = dot(c, vec3(0.3, 0.59, 0.11));
+	// Night: keep the clouds' shapes as deep blues; the brightest pixels (the
+	// sun and its glow) turn into a pale moon.
+	vec3 n = vec3(0.06, 0.07, 0.2) + vec3(0.1, 0.12, 0.3) * l;
+	if (l > 0.82) {
+		n = vec3(0.85, 0.88, 1.0) * (l * 0.95);
+	}
+	ALBEDO = mix(c, n, night);
 }

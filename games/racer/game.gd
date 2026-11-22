@@ -16,6 +16,8 @@ const Track = preload("res://games/racer/track.gd")
 const Scenery = preload("res://games/racer/scenery.gd")
 const Toon = preload("res://games/racer/toon.gd")
 const Sprites = preload("res://games/racer/sprites.gd")
+const Night = preload("res://games/racer/night.gd")
+const NIGHT_GROUP := &"rc_night_lights"
 const Dial = preload("res://games/racer/dial.gd")
 const GearLever = preload("res://games/racer/gear_lever.gd")
 const UI = preload("res://core/ui/ui.gd")
@@ -176,6 +178,13 @@ var _car_outlines := {}     # model path -> outline ArrayMesh
 var _beam_mat: StandardMaterial3D
 var _pix_vp: SubViewport
 var _bg_mat: ShaderMaterial
+var _night := 0.0           # 0 = day, 1 = night (D-113)
+var _night_shown := -1.0
+var _sky_mat: ShaderMaterial
+var _sky_proc: ProceduralSkyMaterial
+var _day_top := Color.BLACK
+var _day_fog := Color.BLACK
+var _player_lights: Node3D
 var _shift_smoke_t := 0.0   # downshift tyre smoke left (D-112)
 var _shift_flame_t := 0.0   # upshift exhaust flame left
 var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
@@ -269,6 +278,7 @@ func _process(delta: float) -> void:
 		return
 	_phase_t += delta
 	_update_backglass(delta)
+	_update_night(delta)
 	var dt := minf(delta, 0.05)
 	if _phase == "attract":
 		sim.time_left = 99.0
@@ -558,6 +568,7 @@ func _build_world() -> void:
 	ring.cap_top = false
 	ring.cap_bottom = false
 	var mmat := ShaderMaterial.new()
+	_sky_mat = mmat
 	mmat.shader = SKY_SHADER
 	mmat.set_shader_parameter("sky", sky_img)
 	mmat.set_shader_parameter("height", sky_h)
@@ -566,8 +577,11 @@ func _build_world() -> void:
 	var top := _row_colour(im, 0)
 	sky_mat.sky_top_color = top
 	sky_mat.sky_horizon_color = top
+	_sky_proc = sky_mat
+	_day_top = top
 	sky_mat.sky_curve = 1.0
 	_env.fog_light_color = _row_colour(im, im.get_height() - 4)
+	_day_fog = _env.fog_light_color
 	_env.ambient_light_color = Color(0.85, 0.65, 0.8)
 	_mountains = MeshInstance3D.new()
 	_mountains.mesh = ring
@@ -610,6 +624,7 @@ func _build_cars() -> void:
 	_car = Node3D.new()
 	_root.add_child(_car)
 	_car_body = _car_instance(0.0)
+	_player_lights = Night.add_car_lights(_car_body, "car", _puff_texture())
 	_car.add_child(_car_body)
 	_build_puffs()
 	# Nitro flames.
@@ -639,6 +654,7 @@ func _build_cars() -> void:
 		for i in (TRAFFIC_POOL if kind == "car" else Sim.MAX_TRUCKS):
 			var t := _car_instance(0.0) if kind == "car" else _car_instance(0.0, TRUCK_MODEL, TRUCK_TEXTURE)
 			_add_headlights(t, kind)
+			t.set_meta("night", Night.add_car_lights(t, kind, _puff_texture()))
 			t.visible = false
 			_root.add_child(t)
 			_traffic_pool[kind].append(t)
@@ -742,6 +758,28 @@ func _add_headlights(node: Node3D, kind: String) -> void:
 
 ## Nitro canister (D-103): a glowing cyan bottle with white bands, cel
 ## outlined; it spins and bobs in stepped sprite-like frames.
+## Night light under each lamp post (D-113): pool + cone + head glow, following
+## the road's pitch so the pool lies on the road.
+func _add_lamp_lights(node: Node3D, lamps: Array) -> void:
+	var tr_ := sim.track
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = Night.lamp_mesh()
+	mm.instance_count = lamps.size()
+	for i in lamps.size():
+		var o: Dictionary = lamps[i]
+		var f := tr_.frame(o.s, o.x)
+		if o.x < 0.0:
+			f.basis = f.basis * Basis(Vector3.UP, PI)
+		mm.set_instance_transform(i, f)
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.visible = Night.level > 0.0
+	mmi.add_to_group(NIGHT_GROUP)
+	node.add_child(mmi)
+
+
 ## Which mesh draws a track object (D-107): palms, bushes and signs are pixel
 ## sprites (variants picked from the position, so they're stable); rocks and
 ## lamps stay low-poly 3D.
@@ -910,6 +948,8 @@ func _build_chunk(k: int) -> Node3D:
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
 		node.add_child(mmi)
+		if kind == "lamp":
+			_add_lamp_lights(node, list)
 	# Start line and checkpoint gates.
 	var cp := ceilf(s0 / Sim.CHECKPOINT_EVERY) * Sim.CHECKPOINT_EVERY
 	if s0 <= Sim.START_LINE and s0 + CHUNK > Sim.START_LINE:
@@ -1034,6 +1074,8 @@ func _animate(delta: float) -> void:
 	var sliding_out := sim.state == Sim.State.OVER and sim.v > 3.0
 	_shift_smoke_t = maxf(0.0, _shift_smoke_t - delta)
 	_shift_flame_t = maxf(0.0, _shift_flame_t - delta)
+	if _player_lights != null:
+		_player_lights.visible = _night > 0.0 and not (sim.spin_t > 0.0 and sim.flipping)
 	var smoking := sim.drifting or sliding_out or _shift_smoke_t > 0.0 or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
 	_update_puffs(delta, smoking)
 	var burning := sim.boosting or _shift_flame_t > 0.0
@@ -1061,6 +1103,7 @@ func _animate(delta: float) -> void:
 		if kind == "car":
 			for m in node.find_children("*", "MeshInstance3D", true, false):
 				(m as MeshInstance3D).set_instance_shader_parameter("hue", t.hue)
+		(node.get_meta("night") as Node3D).visible = _night > 0.0
 		# High beams: flash-flash ... pause (D-105).
 		var ph := fmod(_phase_t + t.id * 0.13, 0.7)
 		var beam_on: bool = t.get("flash", false) and (ph < 0.1 or (ph > 0.2 and ph < 0.3))
@@ -1373,6 +1416,39 @@ func _build_backglass() -> void:
 	_bg_mat.set_shader_parameter("logo_mask_tex", load(BG_DIR + "backglass_mask_logo.png"))
 	art.material = _bg_mat
 	add_to_backglass(art)
+
+
+## Night falls at stage 5 (D-113) over Night.FADE seconds: the backdrop,
+## light, fog and the pre-lit sprites darken to moonlit blue, and the fake
+## lights (car beams, tail lights, lamp pools) fade in. --rc-night forces it.
+func _update_night(delta: float) -> void:
+	var target := 0.0
+	if Config.cli.has("rc-night"):
+		target = 1.0
+	elif _phase != "attract" and sim != null and sim.checkpoints >= Night.NIGHT_STAGE - 1:
+		target = 1.0
+	_night = move_toward(_night, target, delta / Night.FADE)
+	if is_equal_approx(_night, _night_shown):
+		return
+	_night_shown = _night
+	var k := _night
+	Night.set_level(k)
+	Sprites.set_night(k)
+	if _sky_mat != null:
+		_sky_mat.set_shader_parameter("night", k)
+		# Same night grade as the backdrop shader, for the sky above it.
+		var lin := _day_top.srgb_to_linear()   # the shader works in linear colour
+		var l := lin.r * 0.3 + lin.g * 0.59 + lin.b * 0.11
+		var top := lin.lerp(Color(0.06, 0.07, 0.2) + Color(0.1, 0.12, 0.3) * l, k).linear_to_srgb()
+		_sky_proc.sky_top_color = top
+		_sky_proc.sky_horizon_color = top
+	_env.ambient_light_color = Color(0.85, 0.65, 0.8).lerp(Color(0.3, 0.36, 0.62), k)
+	_env.ambient_light_energy = lerpf(0.7, 0.4, k)
+	_sun.light_energy = lerpf(1.1, 0.22, k)
+	_sun.light_color = Color(1.0, 0.85, 0.7).lerp(Color(0.55, 0.65, 1.0), k)
+	_env.fog_light_color = _day_fog.lerp(Color(0.05, 0.06, 0.16), k)
+	var on := k > 0.0
+	get_tree().call_group(NIGHT_GROUP, "set_visible", on)
 
 
 ## Backglass lights each frame (D-109). Attract: the logo blinks slowly, the

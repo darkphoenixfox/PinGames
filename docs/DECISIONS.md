@@ -1072,3 +1072,15 @@
   - **Crash downshift:** every crash shifts to L by itself, so the car pulls away again properly.
   - **Sounds:** the timer, drift-points and nitro beeps are replaced with richer 16/32-bit style effects. The timer is a woodblock tock. Banking drift points plays a bell cascade with an octave-down shadow, coin shimmer, echo and reverb. Nitro is a turbo whoosh with a growl, a sub-bass boom and a shimmering tail in a big reverb.
 - **Status:** Accepted
+
+### D-113 — Turbo Run: night from stage 5, with faked car and lamp lights
+- **Date:** 2026-11-22
+- **Decision (director):** stage 5 transitions to night. Low beams come on for every car, and the lights from cars and lamp posts are simulated with transparent flat polygons.
+- **Fade:** from stage 5 the scene fades to night over 8 s and stays night. Attract mode is always day.
+  - **Backdrop:** the sky keeps the clouds' shapes in deep blues, and the sun turns into a pale moon. The plain sky above it is graded the same way, in linear colour.
+  - **Lighting:** ambient light, the sun (now moonlight) and fog turn moonlit blue. The pre-lit sprites are tinted towards (0.3, 0.34, 0.58).
+- **Lights** (`games/racer/night.gd`): additive, unshaded flat polygons with vertex-colour gradients, sharing materials whose alpha follows the night level.
+  - **Cars, player and traffic:** a 22 m low-beam strip on the road ahead, small headlight glows and red tail lights. The player's lights hide during a roll-over.
+  - **Lamp posts:** a light pool on the road under the head (pitched with the road), a faint vertical cone of light from the head, and a glow at the head. They are one MultiMesh per chunk.
+- **Dev flag:** `--rc-night` forces night from the start.
+- **Status:** Accepted
