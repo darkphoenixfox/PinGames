@@ -31,6 +31,10 @@ const CARS := [
 	{"name": "RC_CAR_HARD", "hue": 0.62, "top": 88.0, "grip": 0.8},     # blue
 ]
 const DEFAULT_CAR := 1
+## Shown speeds (D-147): the game's own speeds are arcade-fast; on screen
+## they're scaled so the fastest car's flat-out top reads 270 km/h (168 mph),
+## and shown in mph to go with the California plates.
+const MPH := 2.23694 * (270.0 / 3.6) / 88.0   # game m/s -> displayed mph
 const ACCEL := 13.0
 const BRAKE := 22.0
 const COAST_DRAG := 4.0
@@ -215,6 +219,10 @@ func lane_count() -> int:
 
 func speed_kmh() -> int:
 	return int(round(v * 3.6))
+
+
+func speed_mph() -> int:
+	return int(round(v * MPH))
 
 
 func checkpoint_bonus() -> float:
@@ -474,9 +482,10 @@ func _update_police(dt: float) -> void:
 	police.s += police.v * dt
 
 
-## Whether its light bar and siren are on (D-145): only while it's after you.
+## Whether its light bar and siren are on (D-145): only while it's chasing you.
 func police_lights() -> bool:
-	return not police.is_empty() and (police.state == "chase" or police.state == "bust")
+	# Off once you're fined (D-147), and after it gives up or drives off.
+	return not police.is_empty() and police.state == "chase"
 
 
 ## Speed control towards a spot `want_ds` metres from the player (negative =

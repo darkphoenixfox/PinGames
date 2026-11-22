@@ -1358,3 +1358,13 @@
 - **Date:** 2026-11-22
 - **Decision (director):** the drift points readout moves from mid-TABLE to under the score, top left, centred in the score column at 36 px. It still fades by alpha, so its slot is fixed and nothing moves (D-096).
 - **Status:** Accepted
+
+### D-147 — Turbo Run: mph on screen with realistic numbers; light-bar sides; police lights off once fined; bust swing towards you
+- **Date:** 2026-11-22
+- **Speeds shown (director):** the numbers were unrealistic, and with California plates they should be mph. Only the displayed numbers change; the game's real speeds stay as they were (the director confirmed this).
+  - **Scale:** `Sim.MPH` = 2.237 × (270 / 3.6) / 88 converts game m/s to displayed mph, so the fastest car's flat-out top (88 m/s) reads 168 mph / 270 km/h. The three cars read 137 / 152 / 168 mph; nitro on the fastest car reads about 206.
+  - **Where:** the speedometer (0–220 mph, labels every 40), its digital readout, the DMD dashboard, the car-select stats and the finale distance (miles). The strings say MPH and MI.
+- **Light bar (director: screen colours were on the opposite sides from the car's):** a render from behind shows the model's painted bar is blue on the left and red on the right. The flashing glows were the wrong way round. They now sit over the paint, and the screen wash is blue on the left and red on the right to match.
+- **Police lights after a fine (director):** `police_lights()` is true only while chasing. Once you're fined, the light bar, the siren and the screen wash go off.
+- **Bust swing (director: the police still turned away):** the 90° swing on a bust used the wrong side. It now turns towards the hero car, with the same sign as the chase aim.
+- **Status:** Accepted

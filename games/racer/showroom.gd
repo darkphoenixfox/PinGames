@@ -148,7 +148,7 @@ func _stats_box(i: int) -> Control:
 	var name := UI.label(tr(spec.name), 36, ROW_COLS[i])
 	name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(name)
-	var top := UI.label(tr("RC_STAT_TOP") % roundi(float(spec.top) * 3.6), 36, UI.WHITE)
+	var top := UI.label(tr("RC_STAT_TOP") % roundi(float(spec.top) * Sim.MPH), 36, UI.WHITE)
 	top.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(top)
 	var row := HBoxContainer.new()

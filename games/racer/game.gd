@@ -49,6 +49,7 @@ const MODEL_TURN := Basis(Vector3.UP, PI)
 const SPRITE_ANGLES := 32
 ## Nose turn at full steer (rad): ~1.5 sprite steps, visible on straights.
 const SHIFT_NAG := 3.0      # s at the redline in L before the big SHIFT (D-116)
+const SPEEDO_MAX := 220      # mph on the speedometer dial (D-147; nitro on the fastest car ~206)
 const MAX_TRAVEL_YAW := 0.45   # rad: the most the nose follows sideways travel (D-124)
 ## Crash animations (D-098): stepped at ANIM_FPS; a roll-over shows FLIP_FRAMES
 ## poses per full turn and hops FLIP_HOP metres.
@@ -527,7 +528,7 @@ func _draw_dmd_select(p) -> void:
 	var col: Color = CAR_COLS[i]
 	_anims._car(p, 5, 13, col)
 	p.text(tr(spec.name), 24, 1, 1, Showroom.ROW_COLS[i])
-	p.text(tr("RC_DMD_TOP") % roundi(float(spec.top) * 3.6), 24, 12, 1, Dmd.WHITE)
+	p.text(tr("RC_DMD_TOP") % roundi(float(spec.top) * Sim.MPH), 24, 12, 1, Dmd.WHITE)
 	p.text(tr("RC_DMD_CORNER"), 24, 23, 1, Dmd.DIM)
 	var x0: float = 26 + p.text_width(tr("RC_DMD_CORNER"))
 	for k in Showroom.PIPS:
@@ -581,7 +582,7 @@ func _finale(delta: float) -> void:
 		_finale_ui.add_child(UI.styled_label(tr("RC_FINAL_SCORE"), TITLE_FONT, 2))
 		_finale_ui.add_child(UI.styled_label(ScoreTable.format_score(sim.score), TITLE_FONT, 2))
 		# Distance in the score's styled font, tinted cyan (D-116).
-		var dist := UI.styled_label(tr("RC_DISTANCE") % (sim.s / 1000.0), TITLE_FONT, 2)
+		var dist := UI.styled_label(tr("RC_DISTANCE") % (sim.s / 1609.34), TITLE_FONT, 2)   # miles (D-147)
 		dist.add_theme_color_override("font_color", Color(0.55, 0.9, 1.0))
 		_finale_ui.add_child(dist)
 		add_to_table(_finale_ui)
@@ -741,7 +742,7 @@ func _build_world() -> void:
 	add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	for i in 2:
 		var g := Gradient.new()
-		var c: Color = Color(1.0, 0.1, 0.08) if i == 0 else Color(0.15, 0.3, 1.0)
+		var c: Color = Color(0.15, 0.3, 1.0) if i == 0 else Color(1.0, 0.1, 0.08)   # left blue, right red
 		g.set_color(0, c if i == 0 else Color(c, 0.0))
 		g.set_color(1, Color(c, 0.0) if i == 0 else c)
 		var gt := GradientTexture2D.new()
@@ -1144,7 +1145,9 @@ func _build_police() -> void:
 		q.material = m
 		var f := MeshInstance3D.new()
 		f.mesh = q
-		f.position = Vector3(0.35 if c.r > 0.5 else -0.35, 1.52, 0.15)
+		# Over the model's painted bar (D-147): seen from behind, red is on the
+		# right and blue on the left (model space is turned 180 degrees).
+		f.position = Vector3(-0.35 if c.r > 0.5 else 0.35, 1.52, 0.15)
 		_police.add_child(f)
 		_flashers.append(f)
 	_siren = AudioStreamPlayer.new()
@@ -1183,7 +1186,8 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	if pd.state == "bust":
 		swing_to = clampf(1.0 - absf(float(pd.v)) / 12.0, 0.0, 1.0)
 	_police_swing = move_toward(_police_swing, swing_to, delta * 2.5)
-	var side := 1.0 if float(pd.x) > sim.x else -1.0
+	# Towards the hero car: same sign convention as the chase aim (D-147).
+	var side := 1.0 if sim.x > float(pd.x) else -1.0
 	lean += roundf(_police_swing * 4.0) / 4.0 * PI * 0.5 * side
 	_police.basis = _police.basis * Basis(Vector3.UP, _sprite_yaw(h - lean, cam_yaw) - h) * MODEL_TURN
 	var ph := fmod(_phase_t, 0.5)
@@ -1194,8 +1198,9 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	(_flashers[1] as Node3D).visible = blue_on
 	# Screen wash while it's close (D-137): up to 45 % within 25 m.
 	var near := 1.0 - clampf((absf(pd.s - sim.s) - 25.0) / 100.0, 0.0, 1.0)
-	(_washes[0] as CanvasItem).modulate.a = 0.45 * near if red_on else 0.0
-	(_washes[1] as CanvasItem).modulate.a = 0.45 * near if blue_on else 0.0
+	# Same sides as the light bar seen from behind (D-147): blue left, red right.
+	(_washes[0] as CanvasItem).modulate.a = 0.45 * near if blue_on else 0.0
+	(_washes[1] as CanvasItem).modulate.a = 0.45 * near if red_on else 0.0
 	var d: float = absf(pd.s - sim.s)
 	var closing: float = (pd.v - sim.v) * (1.0 if pd.s < sim.s else -1.0)
 	_siren.pitch_scale = clampf(SOUND_SPEED / maxf(SOUND_SPEED - closing, 20.0), 0.7, 1.5)
@@ -1687,8 +1692,8 @@ func _build_hud() -> void:
 	sbox.alignment = BoxContainer.ALIGNMENT_END
 	_speedo = Dial.new()
 	var sl := []
-	for k in range(0, 361, 60):
-		sl.append([k / 360.0, str(k)])
+	for k in range(0, SPEEDO_MAX + 1, 40):   # mph (D-147)
+		sl.append([k / float(SPEEDO_MAX), str(k)])
 	_speedo.setup(170.0, 24, sl, 2.0, UI.CYAN)
 	sbox.add_child(_speedo)
 	_speed_label = UI.label("0", 60, UI.WHITE)
@@ -1765,9 +1770,9 @@ func _update_hud(delta: float) -> void:
 		Audio.sfx("rc_tick")
 	_score_label.text = ScoreTable.format_score(sim.score)
 	_stage_label.text = tr("RC_STAGE") % (sim.checkpoints + 1)
-	_speed_label.text = str(sim.speed_kmh())
+	_speed_label.text = str(sim.speed_mph())
 	UI.set_color(_speed_label, UI.CYAN if sim.boosting else UI.WHITE)
-	_speedo.set_value(sim.v * 3.6 / 360.0)
+	_speedo.set_value(sim.v * Sim.MPH / SPEEDO_MAX)
 	_tacho.set_value(_tach_value())
 	var countdown := sim.state == Sim.State.COUNTDOWN
 	_tacho.good_from = _tach_of(Sim.START_FROM if countdown else Sim.PERFECT_FROM)
@@ -1810,7 +1815,7 @@ func _draw_dmd_dash(p) -> void:
 	const SEGS := 11
 	var a_from := Dial.SWEEP_FROM
 	var a_to := Dial.SWEEP_TO
-	var speed_f := clampf(sim.v * 3.6 / 360.0, 0.0, 1.0)
+	var speed_f := clampf(sim.v * Sim.MPH / SPEEDO_MAX, 0.0, 1.0)
 	for y in range(int(HUB.y - R) - 1, 32):
 		for xx in range(0, 36):
 			var d := Vector2(xx + 0.5, y + 0.5) - HUB
@@ -1838,7 +1843,7 @@ func _draw_dmd_dash(p) -> void:
 	p.ring(HUB.x, HUB.y, 2.0, Dmd.WHITE)
 	p.dot(HUB.x, HUB.y, Color.BLACK)
 	# Digital speed + score
-	var spd := str(sim.speed_kmh())
+	var spd := str(sim.speed_mph())
 	p.text(spd, 72 - p.text_width(spd, 2), 1, 2, Dmd.CYAN if sim.boosting else Dmd.WHITE)
 	p.text(tr("RC_KMH"), 74, 8, 1, Dmd.DIM)
 	var sc := ScoreTable.format_score(sim.score)

@@ -709,6 +709,7 @@ func test_racer_sim() -> void:
 	for i in 60 * 3:
 		pb.traffic.clear()
 		pb.step(dt, false, false)
+	check(not pb.police_lights(), "after the fine the police lights and siren go off (D-147)")
 	check(pb.police.state == "bust" and absf(pb.police.s - pb.s) < 3.0,
 		"on a bust the police parks right beside the player (%.1f m)" % (pb.police.s - pb.s))
 	# ... stays parked for a while, then drives off ahead instead of vanishing (D-139).
@@ -874,7 +875,7 @@ func test_racer_sim() -> void:
 	# to H, which then reaches top speed. H is slow off the line.
 	for i in 60 * 8:
 		c.step(dt, false, false)
-	check(c.gear == Sim.Gear.LOW and absf(c.v - Sim.GEAR_L_TOP) < 2.0 and c.rpm > Sim.REDLINE,
+	check(c.gear == Sim.Gear.LOW and absf(c.v - c.l_top()) < 2.0 and c.rpm > Sim.REDLINE,
 		"low gear tops out at its rev limit (%.0f m/s, rpm %.2f)" % [c.v, c.rpm])
 	var shifted := false
 	for i in 40:
@@ -893,7 +894,9 @@ func test_racer_sim() -> void:
 		c.x = 0.0
 		c.step(dt, false, false)
 		c.traffic.clear()
-	check(c.v > 70.0, "high gear reaches top speed (%.0f m/s)" % c.v)
+	check(c.v > c.top_speed() - 3.0, "high gear reaches top speed (%.0f m/s)" % c.v)
+	check(roundi(Sim.CARS[2].top * Sim.MPH) == 168,
+		"the fastest car's top speed reads 168 mph / 270 km/h (D-147)")
 	var lo = Sim.new()
 	lo.setup(7)
 	lo.state = Sim.State.RACE
