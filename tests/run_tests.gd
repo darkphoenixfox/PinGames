@@ -28,6 +28,7 @@ func _initialize() -> void:
 	test_breakout_sim()
 	test_racer_sim()
 	test_exported_translation()
+	test_export_includes_data()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	quit(1 if _failures > 0 else 0)
 
@@ -554,6 +555,16 @@ func _gd_files(dir: String) -> Array[String]:
 
 
 ## Turbo Run (D-089): track, auto throttle, drift, nitro, checkpoints, traffic.
+## The Quest export must carry the plain data files read with FileAccess
+## (D-172): levels (.txt). JSON is a resource and ships anyway.
+func test_export_includes_data() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load("res://export_presets.cfg") != OK:
+		return
+	var inc := str(cfg.get_value("preset.0", "include_filter", ""))
+	check("*.txt" in inc, "the Quest export includes the .txt level files")
+
+
 ## Exported builds don't carry the CSV, only the imported translation (D-171):
 ## it must load and contain the game's keys.
 func test_exported_translation() -> void:

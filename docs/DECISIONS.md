@@ -1544,3 +1544,13 @@
 - **Cause:** `core/i18n.gd` parses the raw `strings.csv` at runtime, but an export only packs the imported version (`strings.en.translation`). Godot replaces imported sources with their imports even when an include filter names them.
 - **Fix:** when no CSV is found, I18n loads the `.translation` files from `res://core/locale`. Desktop runs still read the CSV, including `user://locale` overrides. A test checks that the imported translation loads with the game texts.
 - **Status:** Accepted
+
+### D-172 — Quest: level files in the export; anti-aliased VR DMD; export audit
+- **Date:** 2026-11-22
+- **Bugs (director):**
+  - **No bricks or side walls in Tilt Breaker:** its levels are plain `.txt` files read with FileAccess, and the "all resources" export skips non-resource files. The Quest preset now has `include_filter="*.txt"`. The side walls only flash as an energy shield on rebounds, so they came back with the levels.
+  - **DMD grid flicker:** the VR DMD's dots are smaller than a headset pixel at that distance and aliased into a shimmering grid. `dmd_dots_3d.gdshader` now softens each dot's edge by its on-screen size (fwidth) and fades the dot pattern into its average brightness when dots get too small to resolve.
+- **Audit:** every runtime file read was checked. Only the levels (`.txt`), the translations (D-171) and JSON (title fonts, cabinet screens; JSON is a resource and ships) read raw files.
+- **Export test:** the exported Quest package (`--export-pack`) was run on the desktop with `--main-pack`, outside the project folder. Both games run with all content, texts and levels. Only the deliberately excluded Windows XR library is missing there.
+- **Test:** the Quest preset must include `*.txt`.
+- **Status:** Accepted
