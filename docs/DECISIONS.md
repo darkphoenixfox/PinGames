@@ -1222,3 +1222,8 @@
 - **License:** the director named the author but not the license. It is assumed CC BY 3.0 like the same author's Maximum Overdrive and flagged in CREDITS.md to confirm.
 - **Attribution (director):** the attract DMD cycle now has 6 pages of 3 s: logo, hint, "MUSIC BY / BOGART VGM", high score, "BOGART VGM / FACEBOOK.COM/BOGARTVGM" (marquee), "MUSIC BY / CODEMANU". CREDITS.md links Bogart VGM to https://www.facebook.com/BogartVGM/.
 - **Status:** Accepted (license to confirm)
+
+### D-130 — Bogart VGM music is CC BY 3.0
+- **Date:** 2026-11-22
+- **Decision (director):** all Bogart VGM songs are CC BY 3.0. Dreamstate's license is confirmed, which resolves D-129's open item. Future Bogart VGM tracks the director supplies are cleared as CC BY 3.0 and need attribution, linked to https://www.facebook.com/BogartVGM/.
+- **Status:** Accepted
