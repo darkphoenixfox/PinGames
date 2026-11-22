@@ -59,7 +59,7 @@ const MAX_TRAVEL_YAW := 0.45   # rad: the most the nose follows sideways travel 
 ## poses per full turn and hops FLIP_HOP metres.
 const ANIM_FPS := 10.0
 ## Pixel renderer resolution (D-107): 1/3 of the 1080x1920 TABLE.
-const PIXEL_RES := Vector2i(360, 640)
+const PIXEL_RES := Vector2i(480, 854)   # D-194: softer pixels (was 360 x 640)
 const FLIP_FRAMES := 8.0
 const FLIP_HOP := 1.6
 ## TIME UP slide (D-105): 90 degrees in OVER_TURN_TIME s, OVER_TURN_FRAMES steps.
@@ -755,6 +755,8 @@ func _build_world() -> void:
 	var post := ShaderMaterial.new()
 	post.shader = PIXEL_POST
 	post.set_shader_parameter("low_res", Vector2(PIXEL_RES))
+	post.set_shader_parameter("levels", 32.0)   # D-194: gentler bands (default 24)
+	post.set_shader_parameter("dither", 0.45)   # D-194: lighter dither (default 0.6)
 	view.material = post
 	add_to_table(view)
 	# Police light wash (D-137): red and blue glows from the screen edges.

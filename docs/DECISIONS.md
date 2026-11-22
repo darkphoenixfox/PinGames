@@ -1793,3 +1793,12 @@
 - **Dev:** `--rc-tod=<progress>` picks a time; `--rc-sunset` and `--rc-night` still work.
 - **Tests:** day for stages 1–3, low sun in 4–5, set by the end of 5, night 6–9, sun up in 10, one sun setting ahead, the moon up at midnight, and a smooth palette.
 - **Status:** Accepted (supersedes D-107's backdrop, D-190 and D-191's grade; D-191's stage plan stands)
+
+### D-194 — Turbo Run: softer pixelation
+- **Date:** 2026-11-22
+- **Decision (director):** soften the pixelation on the cars and the road a bit.
+- **Resolution:** the race world renders at 480×854 instead of 360×640, so each game pixel is 2.25 TABLE pixels instead of 3, still upscaled nearest-neighbour.
+- **Post pass:** 32 colour levels instead of 24, and dither 0.45 instead of 0.6, for gentler shading bands.
+- **Unchanged:** the 16-bit look, the HUD, and the car-select showroom (its own 360×640 pass).
+- **Cost:** about 1.8× the pixels to render.
+- **Status:** Accepted (amends D-107)
