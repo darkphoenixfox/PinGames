@@ -1199,8 +1199,8 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	if pd.state == "bust":
 		swing_to = clampf(1.0 - absf(float(pd.v)) / 12.0, 0.0, 1.0)
 	_police_swing = move_toward(_police_swing, swing_to, delta * 2.5)
-	# Towards the hero car: same sign convention as the chase aim (D-147).
-	var side := 1.0 if sim.x > float(pd.x) else -1.0
+	# Across the lane in front (D-161): it swings the way it cut in.
+	var side: float = pd.get("swing", 1.0)
 	lean += roundf(_police_swing * 4.0) / 4.0 * PI * 0.5 * side
 	_police.basis = _police.basis * Basis(Vector3.UP, _sprite_yaw(h - lean, cam_yaw) - h) * MODEL_TURN
 	var ph := fmod(_phase_t, 0.5)

@@ -1443,3 +1443,8 @@
 - **Date:** 2026-11-22
 - **Decision (director):** the big SHIFT warning (with its shifter animation) shows only the first time the player sits at the redline in L after the race starts or after a crash. Once it has shown and the player shifts or the revs drop, it stays off until the next crash re-arms it.
 - **Status:** Accepted
+
+### D-161 — Turbo Run: on a bust the police blocks the road in front
+- **Date:** 2026-11-22
+- **Decision (director):** after a bust the police car drives round the player and stops in front, blocking the way, instead of parking alongside. It passes on one side (3.4 m out), cuts in to the player's line `BLOCK_AHEAD` (6.5 m) ahead, stops, and swings 90° across the lane in stepped frames. The swing direction is fixed at the moment of the bust (`police.swing`), so it can't flicker. The 1.5 s parked hold (D-139) now counts at that blocking spot. A test checks it ends up 6.5 m ahead in the player's lane.
+- **Status:** Accepted

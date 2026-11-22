@@ -130,6 +130,7 @@ const POLICE_LOST := 260.0      # m behind: lost you
 const BUST_SPEED := 22.0        # m/s: slower than this with police close = busted
 const BUST_NEAR := 12.0         # m: "close" - right on you (D-157; was 40)
 const BUST_TIME := 3.5          # s held at the roadside
+const BLOCK_AHEAD := 6.5        # m in front of the player where it stops across the lane (D-161)
 const PARK_HOLD := 1.5          # s the police stands parked beside you (D-139)
 const FINE := 25000
 const ESCAPE_BONUS := 10000.0
@@ -458,9 +459,13 @@ func _update_police(dt: float) -> void:
 		"bust":
 			# Hurry up beside the stopped player, swing across and park there
 			# (D-139). The player is held until it has stood parked PARK_HOLD s.
-			_police_follow(dt, 0.0, 30.0, 90.0, 18.0)
-			police.x = move_toward(police.x, x + (3.4 if x < 0.0 else -3.4), 6.0 * dt)
-			var parked := absf(ds) < 3.0 and absf(police.v) < 2.0
+			# D-161: drive round the player and stop across the lane in front,
+			# blocking the way. It passes alongside, then cuts in ahead.
+			_police_follow(dt, BLOCK_AHEAD, 30.0, 90.0, 18.0)
+			var round_side := 3.4 if x < 0.0 else -3.4
+			var tx := x + round_side if ds < BLOCK_AHEAD - 2.0 else x
+			police.x = move_toward(police.x, tx, 7.0 * dt)
+			var parked := absf(ds - BLOCK_AHEAD) < 2.0 and absf(police.v) < 2.0
 			police.park_t = float(police.get("park_t", 0.0)) + (dt if parked else 0.0)
 			if police.park_t < PARK_HOLD:
 				busted_t = maxf(busted_t, 0.05)
@@ -540,6 +545,7 @@ func _police_obstacles(dt: float) -> void:
 
 func _bust() -> void:
 	police.state = "bust"
+	police.swing = -1.0 if x < 0.0 else 1.0   # which way it turns across the lane (D-161)
 	busted_t = BUST_TIME + maxf(spin_t, 0.0)
 	_end_drift()
 	if boosting:

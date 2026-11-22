@@ -719,8 +719,9 @@ func test_racer_sim() -> void:
 		pb.traffic.clear()
 		pb.step(dt, false, false)
 	check(not pb.police_lights(), "after the fine the police lights and siren go off (D-147)")
-	check(pb.police.state == "bust" and absf(pb.police.s - pb.s) < 3.0,
-		"on a bust the police parks right beside the player (%.1f m)" % (pb.police.s - pb.s))
+	check(pb.police.state == "bust" and absf(pb.police.s - pb.s - Sim.BLOCK_AHEAD) < 2.5
+		and absf(float(pb.police.x) - pb.x) < 1.5,
+		"on a bust the police stops across the lane in front of the player (%.1f m ahead)" % (pb.police.s - pb.s))
 	# ... stays parked for a while, then drives off ahead instead of vanishing (D-139).
 	var parked_for := 0.0
 	var gone_ahead := false
