@@ -1868,6 +1868,48 @@ func _update_hud(delta: float) -> void:
 	score_changed.emit(0, sim.score)
 
 
+## DMD while the cops chase (D-162): a side view, our car on the right and the
+## police car behind at a gap that follows the real distance (up to 150 m),
+## its light bar flashing; the road dashes scroll with our speed. Distance in
+## feet top left, speed top right.
+func _draw_dmd_chase(p) -> void:
+	var pd: Dictionary = sim.police
+	var d := maxf(0.0, sim.s - float(pd.s))
+	var t := _phase_t
+	p.line(0, 29, 127, 29, Color(0.3, 0.3, 0.35))
+	var scroll := fmod(sim.s * 1.5, 16.0)
+	for i in 9:
+		var dx := 128.0 - fmod(i * 16.0 + scroll, 144.0)
+		p.line(dx, 31, dx + 6, 31, Color(0.5, 0.5, 0.55))
+	_anims._car(p, 108, 24, CAR_COLS[_chosen_car])
+	var px := 108.0 - 15.0 - clampf(d / 150.0, 0.0, 1.0) * 86.0
+	# Police car: white body, dark lower half, flashing bar.
+	for r in DmdAnims.CAR.size():
+		var row: String = DmdAnims.CAR[r]
+		for c in row.length():
+			var k := row[c]
+			if k == "0":
+				continue
+			var col := Dmd.WHITE if r < 2 or (r == 2 and c > 2) else Color(0.25, 0.25, 0.3)
+			if k == "2":
+				col = Color(0.4, 0.55, 0.7)
+			elif k == "4":
+				col = Color(0.45, 0.45, 0.5)
+			p.dot(px + c, 24 + r, col)
+	var red := fmod(t, 0.24) < 0.12
+	p.block(px + 4, 22, 2, 2, Dmd.RED if red else Color(0.2, 0.05, 0.05))
+	p.block(px + 7, 22, 2, 2, Color("3f6bff") if not red else Color(0.05, 0.05, 0.2))
+	# Speed lines behind the police car.
+	for i in 3:
+		p.line(px - 4 - i * 2, 24 + i * 2, px - 8 - i * 4 - fmod(t * 40.0, 4.0), 24 + i * 2, Color(0.35, 0.35, 0.4))
+	var ft := roundi(d * 3.281)
+	p.text(tr("RC_DMD_FT") % ft, 2, 2, 1, Dmd.RED if d < 30.0 and red else Dmd.YELLOW)
+	var spd := tr("RC_DMD_MPH") % sim.speed_mph()
+	p.text(spd, 126 - p.text_width(spd), 2, 1, Dmd.WHITE)
+	if _radar_led > 0.0:
+		p.disc(64, 4, 1.6, Dmd.RED)
+
+
 ## DMD during the countdown (D-154): REV UP! and the count on the left; a
 ## pixel tachometer on the right whose needle follows the player's revs, with
 ## the perfect-start window in green (red past it). It wobbles at idle.
@@ -1905,6 +1947,9 @@ func _draw_dmd_revup(p) -> void:
 ## and a horizontal tachometer bar along the bottom (red zone = shift up).
 func _draw_dmd_dash(p) -> void:
 	if sim == null:
+		return
+	if sim.police_lights():
+		_draw_dmd_chase(p)   # D-162
 		return
 	# Radar detector LED (D-135), top-left corner.
 	if _radar_led > 0.0:

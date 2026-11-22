@@ -1448,3 +1448,10 @@
 - **Date:** 2026-11-22
 - **Decision (director):** after a bust the police car drives round the player and stops in front, blocking the way, instead of parking alongside. It passes on one side (3.4 m out), cuts in to the player's line `BLOCK_AHEAD` (6.5 m) ahead, stops, and swings 90° across the lane in stepped frames. The swing direction is fixed at the moment of the bust (`police.swing`), so it can't flicker. The 1.5 s parked hold (D-139) now counts at that blocking spot. A test checks it ends up 6.5 m ahead in the player's lane.
 - **Status:** Accepted
+
+### D-162 — Turbo Run: the cops' distance on the DMD during a chase
+- **Date:** 2026-11-22
+- **Decision (director):** while the police chase (lights on), the DMD dashboard gives way to a side-view chase animation.
+  - **Scene:** our car (in the chosen colour) at the right; the police car behind it at a gap that maps the real distance (0–150 m) across the DMD, with its light bar flashing red/blue and speed lines; road dashes scroll with our speed.
+  - **Readouts:** the distance in feet top left, blinking red under 30 m (98 ft), and our speed in mph top right. The radar LED still shows.
+- **Status:** Accepted
