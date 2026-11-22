@@ -1639,3 +1639,12 @@
 - **Test:** the export test now checks every preset for `*.txt`, and that only the preset with the `quest` feature uses OpenXR mode.
 - **Note:** the existing Quest APK predates the `quest` tag, so rebuild it with `scripts/build_quest.ps1` before the next sideload.
 - **Status:** Accepted
+
+### D-181 — The Android APK is served from web.phoenixfox.net
+- **Date:** 2026-11-22
+- **Decision (director):** serve the flat-screen APK (D-180) through web.phoenixfox.net.
+- **Where:** https://web.phoenixfox.net/pingames-apk/PinGames-android.apk (`K:\heroar\www\pingames-apk\`). It has its own folder because `deploy_web.ps1` mirrors `www\pingames` with `/MIR` and would delete it.
+- **NGINX:** HeroAR's config had no `.apk` type, so the file went out as `application/octet-stream`. A `location ^~ /pingames-apk/` block now serves it as `application/vnd.android.package-archive` (`no-cache`), so an Android browser offers to install it (HeroAR DEC-0277). Applied with `nginx -t` and `nginx -s reload` through Portainer, with no restart.
+- **Publishing:** `scripts/build_android.ps1 -Deploy` builds and copies it there.
+- **Note:** it is debug-signed, so Android asks to allow installs from the browser ("unknown sources") the first time.
+- **Status:** Accepted
