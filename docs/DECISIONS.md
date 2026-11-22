@@ -1521,3 +1521,19 @@
 - **Date:** 2026-11-22
 - **Decision (director):** the right stick changes the player's height, not their rotation. Up/down raises or lowers the play space at 0.4 m/s, from −0.8 to +0.6 m, for example to play seated. Snap turning is removed; players turn physically. Recentring (left stick click) keeps the chosen height. This amends D-168.
 - **Status:** Accepted
+
+### D-170 — Quest build (sideload APK)
+- **Date:** 2026-11-22
+- **Decision (director):** make a Quest APK to sideload.
+- **Toolchain** (no editor; script `scripts/build_quest.ps1`):
+  - **Export templates:** Godot 4.7.2 Android export templates, extracted from the official release package (only the Android files) into `%APPDATA%\Godot\export_templates\4.7.2.stable`.
+  - **Android tools:** the existing Android SDK and JDK 17, already set in Godot's editor settings, and Godot's debug keystore.
+  - **OpenXR plugin:** the official Godot OpenXR Vendors plugin 5.2.0 (GodotVR, MIT; needs Godot ≥ 4.6) in `addons/godotopenxrvendors`, Android and Windows binaries only, in Git LFS. Its Khronos and Meta OpenXR loaders are Apache-2.0. The Meta SDK parts are under Meta's SDK licence, which is fine for sideloading but needs a check before any store release.
+  - **Build:** the plugin ships AARs, so the export uses the Gradle build. The `android/` build template is installed by the script and git-ignored.
+- **Project:**
+  - **OpenXR:** `xr/openxr/enabled.android=true`, so desktop runs never start OpenXR.
+  - **Layout:** `Config.layout()` returns `vr` on Android, and the VR layout skips desktop window setup there.
+  - **Textures:** ETC2/ASTC compression is enabled, which Android requires.
+- **Export preset "Quest"** (`export_presets.cfg`): arm64 only, XR mode OpenXR, Meta plugin enabled, package `org.pingames.vr`, debug-signed, output `exports/PinGames-quest.apk`. Source assets, tests, scripts, docs and the Windows plugin binaries are excluded from the APK.
+- **Install:** `adb install -r exports\PinGames-quest.apk` (developer mode on), or SideQuest.
+- **Status:** Prototype

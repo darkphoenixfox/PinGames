@@ -542,7 +542,10 @@ func _gd_files(dir: String) -> Array[String]:
 	for d in DirAccess.get_directories_at(dir):
 		if d.begins_with("."):
 			continue
-		out.append_array(_gd_files(dir.path_join(d)))
+		var sub := dir.path_join(d)
+		if sub == "res://android" or sub == "res://addons" or sub == "res://exports":
+			continue   # Android build template and third-party plugins (D-170)
+		out.append_array(_gd_files(sub))
 	for f in DirAccess.get_files_at(dir):
 		if f.ends_with(".gd"):
 			out.append(dir.path_join(f))

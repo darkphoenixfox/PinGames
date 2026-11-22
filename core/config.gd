@@ -95,6 +95,8 @@ func save() -> void:
 
 
 func layout() -> String:
+	if OS.has_feature("android"):
+		return "vr"   # the Quest build is the VR cabinet (D-170)
 	return str(get_value("display", "layout"))
 
 

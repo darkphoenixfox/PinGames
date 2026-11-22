@@ -117,12 +117,19 @@ func _setup_windowed() -> void:
 func _setup_vr() -> void:
 	table.size = TABLE_BASE   # full resolution: it's read up close
 	var root := get_window()
+	if OS.has_feature("android"):
+		_vr_cabinet()   # the headset owns the display (D-170)
+		return
 	root.mode = Window.MODE_WINDOWED
 	root.title = "PinGames - VR"
 	var mon := _clamp_monitor(int(Config.get_value("display", "windowed_monitor")))
 	var area := DisplayServer.screen_get_usable_rect(mon)
 	root.size = Vector2i(mini(1280, area.size.x - 40), mini(720, area.size.y - 80))
 	root.position = area.position + (area.size - root.size) / 2
+	_vr_cabinet()
+
+
+func _vr_cabinet() -> void:
 	var cab := VrCabinet.new()
 	cab.name = "VrCabinet"
 	add_child(cab)
