@@ -5,7 +5,7 @@
 shader_type spatial;
 render_mode unshaded, cull_front, shadows_disabled;
 
-uniform float width = 0.055;      // metres of push at 10 m from the camera
+uniform float width = 0.03;       // metres at 10 m: about 1 pixel of the 360-wide pixel render (D-107)
 uniform vec3 ink : source_color = vec3(0.06, 0.03, 0.1);
 
 void vertex() {

@@ -15,13 +15,18 @@ const Sim = preload("res://games/racer/sim.gd")
 const Track = preload("res://games/racer/track.gd")
 const Scenery = preload("res://games/racer/scenery.gd")
 const Toon = preload("res://games/racer/toon.gd")
+const Sprites = preload("res://games/racer/sprites.gd")
 const Dial = preload("res://games/racer/dial.gd")
 const UI = preload("res://core/ui/ui.gd")
 const Synth = preload("res://core/util/synth.gd")
 const ScoreTable = preload("res://core/util/score_table.gd")
 const ROAD_SHADER = preload("res://games/racer/shaders/road.gdshader")
 const CAR_SHADER = preload("res://games/racer/shaders/car.gdshader")
-const MOUNTAIN_SHADER = preload("res://games/racer/shaders/mountains.gdshader")
+const PIXEL_POST = preload("res://games/racer/shaders/pixel_post.gdshader")
+const SKY_SHADER = preload("res://games/racer/shaders/sky_panorama.gdshader")
+const SKY_TEXTURE := "res://assets/sprites/racer/sky.png"
+const SKY_RADIUS := 2000.0
+const SKY_BELOW := 70.0     # ring bottom below the camera: mountains sit on the horizon
 const CAR_MODEL := "res://assets/models/racer/red_car.glb"
 ## The model's nose points +Z; turn it to face down the road (-Z).
 const MODEL_TURN := Basis(Vector3.UP, PI)
@@ -32,6 +37,8 @@ const STEER_YAW := 0.3
 ## Crash animations (D-098): stepped at ANIM_FPS; a roll-over shows FLIP_FRAMES
 ## poses per full turn and hops FLIP_HOP metres.
 const ANIM_FPS := 10.0
+## Pixel renderer resolution (D-107): 1/3 of the 1080x1920 TABLE.
+const PIXEL_RES := Vector2i(360, 640)
 const FLIP_FRAMES := 8.0
 const FLIP_HOP := 1.6
 ## TIME UP slide (D-105): 90 degrees in OVER_TURN_TIME s, OVER_TURN_FRAMES steps.
@@ -135,6 +142,8 @@ var _car_body: Node3D            # model; yaws/rolls/spins
 var _car_mats := {}         # model path -> ShaderMaterial
 var _car_outlines := {}     # model path -> outline ArrayMesh
 var _beam_mat: StandardMaterial3D
+var _pix_vp: SubViewport
+var _sky_h := 0.0
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
 var _music_i := FIRST_TRACK    # current race song index
@@ -402,10 +411,38 @@ func _handle_events() -> void:
 
 
 # --- world ---------------------------------------------------------------------------
+## Average colour of one row of an image (sky backdrop edges, D-107).
+func _row_colour(im: Image, y: int) -> Color:
+	var c := Color(0, 0, 0)
+	for x in range(0, im.get_width(), 8):
+		c += im.get_pixel(x, y)
+	return c / ceilf(im.get_width() / 8.0)
+
+
 func _build_world() -> void:
 	_root = Node3D.new()
 	_root.name = "TurboRunWorld"
-	add_to_table(_root)
+	# Pixel renderer (D-107): the world renders at PIXEL_RES in its own
+	# viewport, shown full-screen with nearest upscaling + a palette/dither
+	# pass; the HUD on top stays at full resolution.
+	_pix_vp = SubViewport.new()
+	_pix_vp.size = PIXEL_RES
+	_pix_vp.own_world_3d = true
+	_pix_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_pix_vp.msaa_3d = Viewport.MSAA_DISABLED
+	add_to_table(_pix_vp)
+	_pix_vp.add_child(_root)
+	var view := TextureRect.new()
+	view.texture = _pix_vp.get_texture()
+	view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	view.stretch_mode = TextureRect.STRETCH_SCALE
+	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var post := ShaderMaterial.new()
+	post.shader = PIXEL_POST
+	post.set_shader_parameter("low_res", Vector2(PIXEL_RES))
+	view.material = post
+	add_to_table(view)
 	var env := WorldEnvironment.new()
 	_env = Environment.new()
 	var sky_mat := ProceduralSkyMaterial.new()
@@ -438,6 +475,7 @@ func _build_world() -> void:
 	_sun.rotation_degrees = Vector3(-28, 160, 0)
 	_sun.light_color = Color(1.0, 0.85, 0.7)
 	_sun.light_energy = 1.1
+	_sun.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY   # the painted sun is in the backdrop
 	_root.add_child(_sun)
 
 	_cam = Camera3D.new()
@@ -448,15 +486,30 @@ func _build_world() -> void:
 	_root.add_child(_cam)
 	_cam.current = true
 
+	# Sky backdrop (D-107): the pixel-art sunset panorama on a tall ring. Above
+	# it the sky is the image's top colour; distant ground fogs into the
+	# mountains' colour.
+	var sky_img: Texture2D = load(SKY_TEXTURE)
+	var sky_h := PI * SKY_RADIUS * sky_img.get_height() / float(sky_img.get_width())
 	var ring := CylinderMesh.new()
-	ring.top_radius = 2000.0
-	ring.bottom_radius = 2000.0
-	ring.height = 700.0
-	ring.radial_segments = 64
+	ring.top_radius = SKY_RADIUS
+	ring.bottom_radius = SKY_RADIUS
+	ring.height = sky_h
+	ring.radial_segments = 96
 	ring.cap_top = false
 	ring.cap_bottom = false
 	var mmat := ShaderMaterial.new()
-	mmat.shader = MOUNTAIN_SHADER
+	mmat.shader = SKY_SHADER
+	mmat.set_shader_parameter("sky", sky_img)
+	mmat.set_shader_parameter("height", sky_h)
+	_sky_h = sky_h
+	var im := sky_img.get_image()
+	var top := _row_colour(im, 0)
+	sky_mat.sky_top_color = top
+	sky_mat.sky_horizon_color = top
+	sky_mat.sky_curve = 1.0
+	_env.fog_light_color = _row_colour(im, im.get_height() - 4)
+	_env.ambient_light_color = Color(0.85, 0.65, 0.8)
 	_mountains = MeshInstance3D.new()
 	_mountains.mesh = ring
 	_mountains.material_override = mmat
@@ -630,6 +683,25 @@ func _add_headlights(node: Node3D, kind: String) -> void:
 
 ## Nitro canister (D-103): a glowing cyan bottle with white bands, cel
 ## outlined; it spins and bobs in stepped sprite-like frames.
+## Which mesh draws a track object (D-107): palms, bushes and signs are pixel
+## sprites (variants picked from the position, so they're stable); rocks and
+## lamps stay low-poly 3D.
+func _prop_kind(o: Dictionary) -> String:
+	var h := int(absf(o.s * 7.13 + o.x * 3.1) * 10.0)
+	match o.kind:
+		"palm":
+			return "palm_1" if h % 3 != 0 else "palm_2"
+		"bush":
+			return "bush_1" if h % 2 == 0 else "bush_2"
+		"chevron":   # curve warning: the arrow turns the way the road does.
+			# Track: dir = -1 on a left turn (curvature > 0); the sprite's arrow
+			# turns right as drawn.
+			return "sign_curve_l" if o.dir < 0.0 else "sign_curve"
+		"sign":
+			return "sign_green"
+	return o.kind
+
+
 func _build_pickup() -> Node3D:
 	var n := Node3D.new()
 	var body := CylinderMesh.new()
@@ -745,8 +817,7 @@ func _build_chunk(k: int) -> Node3D:
 	# Props, one MultiMesh per kind.
 	var by_kind := {}
 	for o in tr_.objects_between(s0, s0 + CHUNK):
-		# Chevron arrows point the way the road turns: one mesh per direction.
-		var key: String = o.kind if o.kind != "chevron" or o.dir < 0.0 else "chevron_l"
+		var key := _prop_kind(o)
 		if not by_kind.has(key):
 			by_kind[key] = []
 		by_kind[key].append(o)
@@ -754,7 +825,7 @@ func _build_chunk(k: int) -> Node3D:
 		var list: Array = by_kind[kind]
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = Scenery.mesh(kind)
+		mm.mesh = Sprites.mesh(kind) if Sprites.has(kind) else Scenery.mesh(kind)
 		mm.instance_count = list.size()
 		for i in list.size():
 			var o: Dictionary = list[i]
@@ -762,8 +833,12 @@ func _build_chunk(k: int) -> Node3D:
 			f.basis = Basis(Vector3.UP, tr_.heading(o.s))
 			var h := fmod(absf(o.s * 7.13 + o.x * 3.1), 1.0)
 			match kind:
-				"palm":
-					f.basis = f.basis * Basis(Vector3.UP, h * TAU).scaled(Vector3.ONE * (0.85 + h * 0.4))
+				"palm_1", "palm_2":
+					f.basis = Basis.from_scale(Vector3.ONE * (0.85 + h * 0.35))
+				"bush_1", "bush_2":
+					f.basis = Basis.from_scale(Vector3.ONE * (0.8 + h * 0.5))
+				"sign_curve", "sign_curve_l", "sign_green":
+					f.basis = Basis.IDENTITY
 				"rock":
 					f.basis = f.basis * Basis(Vector3.UP, h * TAU).scaled(Vector3.ONE * (0.8 + h * 0.6))
 				"lamp":
@@ -961,7 +1036,7 @@ func _animate(delta: float) -> void:
 	_cam.rotate_object_local(Vector3.BACK, deg_to_rad(-sim.drift_angle * 0.12))
 	var fov := CAM_FOV + sim.v / Sim.MAX_SPEED * 6.0 + (8.0 if sim.boosting else 0.0)
 	_cam.fov = lerpf(_cam.fov, fov, 1.0 - exp(-delta * 4.0))
-	_mountains.position = Vector3(_cam.position.x, _cam.position.y + 120.0, _cam.position.z)
+	_mountains.position = Vector3(_cam.position.x, _cam.position.y - SKY_BELOW + _sky_h * 0.5, _cam.position.z)
 	_sun.rotation = Vector3(deg_to_rad(-25), tr_.heading(sim.s) + PI * 0.92, 0)
 
 

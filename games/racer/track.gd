@@ -15,7 +15,12 @@ const START_STRAIGHT := 400.0
 const MAX_TURN := deg_to_rad(110.0)      # per curve section
 const MAX_HEADING := deg_to_rad(80.0)    # overall, from the start direction
 ## Roadside objects: [kind, collision radius]. Kinds are drawn by the view.
-const OBJ_RADIUS := {"palm": 0.6, "rock": 1.5, "chevron": 0.5, "lamp": 0.35, "gate": 0.0}
+const OBJ_RADIUS := {"palm": 0.6, "rock": 1.5, "chevron": 0.5, "lamp": 0.35, "gate": 0.0,
+	"bush": 0.0, "sign": 2.5, "gantry": 0.0}   # bushes are scenery: off-road stays as it was
+## Roadside dressing (D-107): bushes line the road densely, green direction
+## signs stand on straights, and an overhead gantry spans the road now and then.
+const SIGN_EVERY := Vector2(350.0, 650.0)
+const GANTRY_EVERY := 1400.0
 
 var seed_value := 1
 var pos := PackedVector3Array()
@@ -26,6 +31,9 @@ var objects: Array = []
 var _rng := RandomNumberGenerator.new()
 var _built_to := 0.0   # metres generated so far
 var _next_obj_s := 30.0
+var _next_sign_s := 300.0
+var _next_gantry_s := 700.0
+var _next_bush_s := 20.0
 
 
 func setup(seed_in: int = 1) -> void:
@@ -37,6 +45,9 @@ func setup(seed_in: int = 1) -> void:
 	objects.clear()
 	_built_to = 0.0
 	_next_obj_s = 30.0
+	_next_sign_s = 300.0
+	_next_gantry_s = 700.0
+	_next_bush_s = 20.0
 	_add_section(START_STRAIGHT, 0.0, 0.0)
 
 
@@ -104,6 +115,18 @@ func _add_section(len: float, c: float, dh: float) -> void:
 
 
 func _place_objects(s0: float, s1: float) -> void:
+	# Objects must stay sorted by s (objects_between binary-searches them):
+	# re-sort the stretch this section touches once it is placed.
+	var from := _lower_bound(s0 - 60.0)
+	_place_dressing(s1)
+	_place_props(s1)
+	var tail := objects.slice(from)
+	tail.sort_custom(func(a, b): return a.s < b.s)
+	for i in tail.size():
+		objects[from + i] = tail[i]
+
+
+func _place_props(s1: float) -> void:
 	while _next_obj_s < s1:
 		var s := _next_obj_s
 		var c := curvature(s)
@@ -125,6 +148,27 @@ func _place_objects(s0: float, s1: float) -> void:
 			elif r < 0.85:
 				_add_obj(s, side * (ROAD_HALF + 2.5), "lamp")
 		_next_obj_s += _rng.randf_range(22.0, 34.0)
+
+
+## Bushes, signs and gantries (D-107); _place_objects re-sorts afterwards.
+func _place_dressing(s1: float) -> void:
+	while _next_bush_s < s1:
+		var s := _next_bush_s
+		for side in [-1.0, 1.0]:
+			if _rng.randf() < 0.7:
+				_add_obj(s + _rng.randf_range(0.0, 6.0),
+					side * (ROAD_HALF + RUMBLE + _rng.randf_range(2.2, 6.5)), "bush")
+		_next_bush_s += _rng.randf_range(9.0, 16.0)
+	while _next_sign_s < s1:
+		if absf(curvature(_next_sign_s)) < 1.0 / 400.0:
+			_add_obj(_next_sign_s, ROAD_HALF + RUMBLE + 5.5, "sign")
+		_next_sign_s += _rng.randf_range(SIGN_EVERY.x, SIGN_EVERY.y)
+	while _next_gantry_s < s1:
+		if absf(curvature(_next_gantry_s)) < 1.0 / 500.0:
+			_add_obj(_next_gantry_s, 0.0, "gantry")
+			_next_gantry_s += GANTRY_EVERY
+		else:
+			_next_gantry_s += 60.0   # try a bit further on, out of the bend
 
 
 func _add_obj(s: float, x: float, kind: String, dir: float = 1.0) -> void:

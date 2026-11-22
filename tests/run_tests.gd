@@ -665,6 +665,7 @@ func test_racer_sim() -> void:
 	d.setup(7)
 	d.state = Sim.State.RACE
 	var s_curve := -1.0
+	d.track.ensure(8000.0)
 	for i in 4000:
 		if absf(d.track.curvature(i * 2.0)) > 1.0 / 110.0:
 			s_curve = i * 2.0
@@ -685,6 +686,7 @@ func test_racer_sim() -> void:
 	# Same curve without drifting: auto-brake slows the car instead.
 	var ab = Sim.new()
 	ab.setup(7)
+	ab.track.ensure(8000.0)
 	ab.state = Sim.State.RACE
 	ab.s = s_curve
 	ab.gear = Sim.Gear.HIGH

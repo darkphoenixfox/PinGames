@@ -1015,3 +1015,20 @@
   - **Stop:** only then does the 1.5 s `CRASH_STOP` start.
   - **Distance:** about 50 m from the hit to the stop, up from about 20 m.
 - **Status:** Accepted
+
+### D-107 — Turbo Run art direction: pixel renderer, painted sky, sprite palms/bushes/signs (supersedes D-091's ink outlines)
+- **Date:** 2026-11-22
+- **Target (director):** the director's pixel-art mock-up: a 16-bit sunset highway with a red sports car, traffic and trucks. The director's notes: no guardrails; add signs, super-scaler style bushes and road signs; sprite-based palms; ignore car lights; no thick outlines.
+- **Pixel renderer:** the 3D world renders in its own 360 × 640 SubViewport (1/3 of the TABLE), shown full-screen with nearest upscaling and `pixel_post.gdshader` (24 levels per channel, 4 × 4 Bayer dither, +12 % saturation). The HUD stays at full resolution on top. Ink outlines are thinned to about 1 low-res pixel (`outline.gdshader` width 0.03).
+- **Sky:** a Qwen-Image pixel-art sunset panorama (sun, clouds, stars, purple mountains) on a 2000 m ring that follows the camera (`sky_panorama.gdshader`). The image covers half the ring, is mirrored for the other half, and its sun faces the start direction. The procedural sky takes the image's top colour, and fog takes the mountains' colour. The procedural mountains shader and the light's sky sun are removed.
+- **Sprites** (`games/racer/sprites.gd`, `assets/sprites/racer/`): unshaded, alpha-scissor, nearest, Y-billboard quads in the chunk MultiMeshes.
+  - **Palms:** 2 variants, 9.5–11 m.
+  - **Bushes:** 2 variants. They line both sides densely, 70 % per side every 9–16 m, as scenery only (no collision, so leaving the road is unchanged).
+  - **Curve warning signs:** they replace the 3D chevrons, mirrored for left turns.
+  - **Green direction signs:** on straights every 350–650 m.
+  - **Overhead gantries:** spanning the road about every 1.4 km on straights, facing the road rather than billboarded.
+  - Rocks and lamps stay low-poly 3D.
+- **Track:** new object kinds `bush`, `sign` and `gantry`. The objects are re-sorted by s after each section is placed, because `objects_between` binary-searches them.
+- **Art pipeline:** `scripts/tools/comfy_qwen.py` (Qwen-Image 2.1 through the local ComfyUI API) generates the art, and `scripts/tools/prepare_racer_sprites.py` cuts out the white background, removes grey-framed holes (the gantry truss) and does a whole-factor nearest downscale with hard alpha. Originals are kept in `assets/source/racer/gen/`. Passing the director's mock-up as a reference image made Qwen redraw the whole scene, so prompts describe the style in words instead.
+- **Next:** road dressing to match the highway look (the kerbs and sand are still the race-track style), lighting tuning, speed streaks, sparks.
+- **Status:** Accepted (in progress)
