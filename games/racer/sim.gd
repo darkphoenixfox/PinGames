@@ -136,6 +136,8 @@ const ESCAPE_BONUS := 10000.0
 const FLIP_KINDS := ["palm", "rock", "lamp", "truck", "portal"]
 const SCRAPE_DRAG := 9.0        # m/s^2 lost scraping a tunnel wall (D-127)
 const NEAR_MISS_DX := 3.3
+const SIDE_SLOW := 0.93         # speed kept on a side-swipe
+const SIDE_BOUNCE := 7.0        # m/s sideways shove
 const TRUCK_LEN := 10.0
 const TRUCK_W := 2.66
 const TRUCK_SHARE := 0.25       # of spawns (D-099)
@@ -798,7 +800,9 @@ func _update_traffic(dt: float) -> void:
 		var tw: float = t.get("w", CAR_W)
 		t.s += t.v * dt
 		t.weave += dt
-		t.x = Track.LANES[t.lane] + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6)
+		# Shoved aside by a side bump (D-152): an offset that eases back to the lane.
+		t.shove = move_toward(float(t.get("shove", 0.0)), 0.0, 2.0 * dt)
+		t.x = Track.LANES[t.lane] + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6) + t.shove
 		var ds: float = t.s - s
 		t.last_ds = ds
 		# Oncoming drivers flash their high beams (and honk once) at a car
@@ -817,7 +821,22 @@ func _update_traffic(dt: float) -> void:
 		if state == State.RACE and spin_t <= 0.0 and grace_t <= 0.0 and absf(ds) < (CAR_LEN + tlen) * 0.5 				and absf(t.x - x) < (CAR_W + tw) * 0.5:
 			var rel: float = v - t.v
 			var big: bool = t.get("kind", "car") == "truck"
-			if t.v < 0.0 or (ds > 0.0 and rel > 22.0):
+			# Side contact (D-152): they already overlapped along the road on the
+			# previous frame, so the contact came from moving sideways: a
+			# side-swipe, not a crash. Both bounce apart and we lose a little.
+			var side_hit := absf(prev_ds) < (CAR_LEN + tlen) * 0.5 - 0.05
+			if side_hit and float(t.get("swipe_cd", 0.0)) <= 0.0:
+				var away := signf(x - t.x + 0.001)
+				v *= SIDE_SLOW
+				lat_v = away * SIDE_BOUNCE
+				x += away * 0.3
+				t.shove = float(t.get("shove", 0.0)) - away * (0.8 if big else 1.6)
+				t.swipe_cd = 0.4
+				_end_drift()
+				events.append(["bump", t.id])
+			elif side_hit:
+				pass
+			elif t.v < 0.0 or (ds > 0.0 and rel > 22.0):
 				# Head-on, or rear-ending at speed: a truck rolls the car over.
 				_crash("truck" if big else "car", t.x - x, t.v >= 0.0)
 				s = t.s - (CAR_LEN + tlen) * 0.5 - 0.3
@@ -828,6 +847,7 @@ func _update_traffic(dt: float) -> void:
 				if not big:
 					t.v = minf(t.v + 4.0, 52.0)
 				events.append(["bump", t.id])
+		t.swipe_cd = maxf(0.0, float(t.get("swipe_cd", 0.0)) - dt)
 		if ds < -60.0 or ds > 900.0:
 			traffic.remove_at(i)
 	if state == State.OVER:

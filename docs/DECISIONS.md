@@ -1390,3 +1390,11 @@
 - **Date:** 2026-11-22
 - **Decision (director):** the big SHIFT warning (D-116) shows an animation of the shifter next to it. A second gear-lever widget sits to the right of the word, in the same centred row, which is a fixed layout (the word blinks by alpha, D-096). While the warning is up, the lever loops: in L for 0.5 s, the knob steps up to H, holds, then snaps back.
 - **Status:** Accepted
+
+### D-152 — Turbo Run: side-swipes bump instead of crashing
+- **Date:** 2026-11-22
+- **Decision (director):** hitting other cars from the side shouldn't crash. Both cars slow a little and bump apart.
+- **Side contact:** the cars already overlapped along the road on the previous frame, so the contact came from moving sideways. Approaching nose-to-tail or head-on is still judged as before: a crash for head-ons, rear-ending at speed or a truck rolling you; otherwise a bump.
+- **Side-swipe:** the player keeps 93 % of their speed and is shoved 7 m/s away. The traffic vehicle gets a sideways `shove` offset (1.6 m for a car, 0.8 m for a truck) that eases back into its lane at 2 m/s. There's a 0.4 s cooldown per vehicle. It counts as a bump (sound), not a crash.
+- **Tests:** the crash tests now approach from outside contact, as in play.
+- **Status:** Accepted

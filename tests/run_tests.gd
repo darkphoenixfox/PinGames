@@ -1032,9 +1032,22 @@ func test_racer_sim() -> void:
 	tr.gear = Sim.Gear.HIGH
 	tr.v = 75.0
 	tr.x = 1.875
-	tr.traffic = [{"id": 1, "s": 103.0, "x": 1.875, "lane": 2, "v": 30.0, "hue": 0.3, "weave": 0.0, "last_ds": 3.0}]
+	tr.traffic = [{"id": 1, "s": 104.2, "x": 1.875, "lane": 2, "v": 30.0, "hue": 0.3, "weave": 0.0, "last_ds": 4.6}]
 	tr.step(dt, false, false)
 	check(tr.spin_t > 0.0 and tr.v <= 14.0 and not tr.flipping, "rear-ending traffic at speed spins out")
+	# Side-swipe (D-152): touching a car alongside bumps both apart, no crash.
+	var sw = Sim.new()
+	sw.setup(7)
+	sw.state = Sim.State.RACE
+	sw.gear = Sim.Gear.HIGH
+	sw.s = 100.0
+	sw.v = 50.0
+	sw.x = 0.1
+	sw.traffic = [{"id": 1, "s": 100.5, "x": 1.875, "lane": 2, "v": 40.0, "hue": 0.0, "weave": 0.0,
+		"last_ds": 0.5, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W}]
+	sw.step(dt, false, false)
+	check(sw.spin_t <= 0.0 and sw.v < 50.0 and sw.v > 44.0 and sw.lat_v < 0.0 and float(sw.traffic[0].shove) > 0.0,
+		"a side-swipe bumps both cars apart without a crash")
 	# Every crash ends stopped dead for CRASH_STOP s, then the car drives on (D-101).
 	tr.traffic.clear()
 	var stopped_for := 0.0
@@ -1078,8 +1091,8 @@ func test_racer_sim() -> void:
 	ho.s = 100.0
 	ho.v = 40.0
 	ho.x = -1.875
-	ho.traffic = [{"id": 1, "s": 104.0, "x": -1.875, "lane": 1, "v": -25.0, "hue": 0.0, "weave": 0.0,
-		"last_ds": 4.0, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W}]
+	ho.traffic = [{"id": 1, "s": 104.6, "x": -1.875, "lane": 1, "v": -25.0, "hue": 0.0, "weave": 0.0,
+		"last_ds": 5.2, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W}]
 	ho.step(dt, false, false)
 	check(ho.spin_t > 0.0 and not ho.flipping, "a head-on with an oncoming car crashes")
 	# Oncoming drivers flash their high beams at a car in their lane (D-105).
@@ -1109,8 +1122,8 @@ func test_racer_sim() -> void:
 	tk.gear = Sim.Gear.HIGH
 	tk.v = 70.0
 	tk.x = 5.0
-	tk.traffic = [{"id": 1, "s": 106.0, "x": 5.625, "lane": 3, "v": 22.0, "hue": 0.0, "weave": 0.0,
-		"last_ds": 6.0, "kind": "truck", "len": Sim.TRUCK_LEN, "w": Sim.TRUCK_W}]
+	tk.traffic = [{"id": 1, "s": 107.5, "x": 5.625, "lane": 3, "v": 22.0, "hue": 0.0, "weave": 0.0,
+		"last_ds": 7.6, "kind": "truck", "len": Sim.TRUCK_LEN, "w": Sim.TRUCK_W}]
 	tk.step(dt, false, false)
 	check(tk.flipping, "rear-ending a truck at speed rolls the car over")
 	# A big roadside object rolls the car over, away from the obstacle (D-098).
