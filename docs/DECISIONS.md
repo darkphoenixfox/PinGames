@@ -1486,3 +1486,15 @@
 - **Implementation:** the cabinet meshes live under their own node; the XR origin, floor and lights stay put.
 - **Saving:** the placement is saved to the config (`display.vr_cabinet` = x, height, z, yaw) 0.6 s after it stops moving and restored next time. The desktop preview ignores it.
 - **Status:** Accepted (prototype)
+
+### D-166 — VR: the director's cabinet model with the screens on its pink areas; an arcade room
+- **Date:** 2026-11-22
+- **Decision (director):** use the director's `pinball_cabinet.glb`, whose three screen areas are painted pink, and add a basic room.
+- **Pipeline (no hand placement):**
+  1. `scripts/tools/prepare_vr_cabinet.py` (headless Blender) bakes the transforms, puts the feet on the floor and the front edge at z = 0, scales the texture to 2048 and writes it as a PNG. The glb's embedded JPEG doesn't import, as with the car.
+  2. `scripts/tools/measure_vr_cabinet.gd` (headless Godot) measures the screens in Godot's own space. It finds the pink triangles in the imported mesh and splits them: the playfield is tilted upward-facing pink in the lower part; the backglass and DMD are front-facing pink in the head, split into height bands, with the biggest band as the backglass and the second as the DMD. For each it takes the area-weighted plane, and then the tightest-fitting rectangle at the screen's own rotation within that plane. It writes `pinball_cabinet_screens.json` and a clean texture with the pink turned to black glass.
+- **In game** (`core/vr_cabinet.gd`): the model and screens sit in a holder turned so the playfield points straight at the player and is centred. The live TABLE, BACKGLASS and DMD (dot-matrix shader) are laid on the measured rectangles. The box cabinet stays as a fallback when the model is missing.
+- **Why it took several tries:** the first passes assumed each screen rectangle was square to the world axes. The model sits about 6° turned, so the boxes never fitted. Also, Blender's cached face normals were stale after transforming, and Godot winds triangles the other way. Measuring each rectangle's own rotation in Godot space settled it. The playfield came out at 0.578 × 0.997 m, exactly the TABLE's 9:16.
+- **Room:** 5 × 5 × 2.9 m. Arcade carpet (generated pixel pattern), dark walls, pink and cyan neon strips near the ceiling with coloured fill lights, two ceiling light panels, and the two games' backglass art as wall posters. Glow is on. The cabinet stands in front of the back wall.
+- **Future models:** a separate flat mesh per screen named `playfield`, `backglass` and `dmd`, with 0–1 UVs, and the cabinet square to the axes, would make placement exact with no measuring. Pink areas keep working.
+- **Status:** Accepted (prototype)

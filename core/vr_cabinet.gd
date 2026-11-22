@@ -19,6 +19,14 @@
 extends Node3D
 
 const DMD_SHADER = preload("res://core/shaders/dmd_dots_3d.gdshader")
+## Director's cabinet (D-166) with its screen areas measured by
+## scripts/tools/prepare_vr_cabinet.py; the box placeholder is the fallback.
+const CABINET_MODEL := "res://assets/models/vr/pinball_cabinet.glb"
+const CABINET_TEXTURE := "res://assets/models/vr/pinball_cabinet_albedo_clean.png"   # pink -> black glass
+const CABINET_SCREENS := "res://assets/models/vr/pinball_cabinet_screens.json"
+## Posters on the room walls: the games' backglass art.
+const POSTERS := ["res://assets/textures/racer/backglass_on.png",
+	"res://assets/textures/breakout/backglass_on_2screen.png"]
 
 const CAB_W := 0.72               # outer width
 const CAB_L := 1.32               # depth front to back
@@ -30,6 +38,9 @@ const DMD := Vector2(0.56, 0.14)  # DMD screen
 const HEAD_DEPTH := 0.28
 const STAND := 0.42               # player stands this far from the front (m)
 const EYE := 1.66                 # desktop preview eye height
+const ROOM := Vector2(5.0, 5.0)   # room width, depth (m)
+const ROOM_H := 2.9
+const ROOM_BACK := -1.9           # back wall z (the cabinet stands in front of it)
 
 ## Controller buttons -> cabinet actions, per hand.
 const MAP := {
@@ -46,10 +57,11 @@ var _dirty_t := -1.0        # save the placement shortly after it stops changing
 
 
 func build(table_tex: Texture2D, backglass_tex: Texture2D, dmd_tex: Texture2D) -> void:
-	_environment()
+	_room()
 	_cab = Node3D.new()
 	add_child(_cab)
-	_cabinet(table_tex, backglass_tex, dmd_tex)
+	if not _model_cabinet(table_tex, backglass_tex, dmd_tex):
+		_cabinet(table_tex, backglass_tex, dmd_tex)
 	var saved: Vector4 = Config.get_value("display", "vr_cabinet")
 	_height = saved.y
 	_cab.position = Vector3(saved.x, saved.y, saved.z)
@@ -175,27 +187,172 @@ func _desktop_camera() -> void:
 
 
 # --- scene ---------------------------------------------------------------------------
-func _environment() -> void:
+## A basic arcade room (D-166): carpet, dark walls with pink and cyan neon
+## strips, ceiling light panels, and the games' backglass art as posters. The
+## cabinet stands against the back wall; the player is near the middle.
+func _room() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	e.background_mode = Environment.BG_COLOR
-	e.background_color = Color(0.03, 0.03, 0.05)
+	e.background_color = Color(0.02, 0.02, 0.03)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.6, 0.6, 0.7)
-	e.ambient_light_energy = 0.5
+	e.ambient_light_color = Color(0.55, 0.5, 0.65)
+	e.ambient_light_energy = 0.35
+	e.glow_enabled = true
+	e.glow_intensity = 0.6
+	e.glow_hdr_threshold = 0.9
 	env.environment = e
 	add_child(env)
-	var light := OmniLight3D.new()
-	light.position = Vector3(0, 2.6, 0.8)
-	light.omni_range = 6.0
-	light.light_energy = 1.2
-	add_child(light)
-	var floor_ := MeshInstance3D.new()
-	var fm := PlaneMesh.new()
-	fm.size = Vector2(8, 8)
-	floor_.mesh = fm
-	floor_.material_override = _mat(Color(0.12, 0.1, 0.12))
-	add_child(floor_)
+	var w := ROOM.x
+	var d := ROOM.y
+	var h := ROOM_H
+	var zc := ROOM_BACK + d * 0.5
+	_room_box(Vector3(0, -0.01, zc), Vector3(w, 0.02, d), _carpet())
+	var wall := _mat(Color(0.09, 0.08, 0.12), 0.9)
+	_room_box(Vector3(0, h * 0.5, ROOM_BACK - 0.05), Vector3(w, h, 0.1), wall)
+	_room_box(Vector3(0, h * 0.5, ROOM_BACK + d + 0.05), Vector3(w, h, 0.1), wall)
+	for sx in [-1.0, 1.0]:
+		_room_box(Vector3(sx * (w * 0.5 + 0.05), h * 0.5, zc), Vector3(0.1, h, d), wall)
+	_room_box(Vector3(0, h + 0.05, zc), Vector3(w, 0.1, d), _mat(Color(0.05, 0.05, 0.07)))
+	# Neon strips near the ceiling: pink back and front, cyan sides.
+	var pink := _glow(Color(1.0, 0.25, 0.7))
+	var cyan := _glow(Color(0.2, 0.85, 1.0))
+	_room_box(Vector3(0, h - 0.25, ROOM_BACK + 0.02), Vector3(w - 0.2, 0.04, 0.03), pink)
+	_room_box(Vector3(0, h - 0.25, ROOM_BACK + d - 0.02), Vector3(w - 0.2, 0.04, 0.03), pink)
+	for sx in [-1.0, 1.0]:
+		_room_box(Vector3(sx * (w * 0.5 - 0.02), h - 0.25, zc), Vector3(0.03, 0.04, d - 0.2), cyan)
+	# Ceiling light panels and their lights.
+	for z in [ROOM_BACK + 1.2, ROOM_BACK + d - 1.4]:
+		_room_box(Vector3(0, h - 0.01, z), Vector3(1.2, 0.02, 0.6), _glow(Color(1.0, 0.95, 0.85), 1.4))
+		var l := OmniLight3D.new()
+		l.position = Vector3(0, h - 0.3, z)
+		l.omni_range = 5.5
+		l.light_energy = 0.9
+		l.light_color = Color(1.0, 0.92, 0.85)
+		add_child(l)
+	# Coloured fill from the neon.
+	for c in [[Vector3(-w * 0.5 + 0.4, h - 0.4, zc), Color(0.2, 0.8, 1.0)], [Vector3(w * 0.5 - 0.4, h - 0.4, zc), Color(1.0, 0.3, 0.7)]]:
+		var nl := OmniLight3D.new()
+		nl.position = c[0]
+		nl.light_color = c[1]
+		nl.omni_range = 4.0
+		nl.light_energy = 0.4
+		add_child(nl)
+	# Posters on the side walls.
+	for i in POSTERS.size():
+		if not ResourceLoader.exists(POSTERS[i]):
+			continue
+		var sx := -1.0 if i == 0 else 1.0
+		var p := MeshInstance3D.new()
+		var q := QuadMesh.new()
+		q.size = Vector2(1.6, 0.9)
+		p.mesh = q
+		var pm := StandardMaterial3D.new()
+		pm.albedo_texture = load(POSTERS[i])
+		pm.roughness = 0.5
+		p.material_override = pm
+		p.position = Vector3(sx * (w * 0.5 - 0.01), 1.6, ROOM_BACK + 1.6)
+		p.rotation.y = -sx * PI * 0.5
+		add_child(p)
+
+
+func _room_box(pos: Vector3, size: Vector3, mat: Material) -> void:
+	var m := MeshInstance3D.new()
+	var b := BoxMesh.new()
+	b.size = size
+	m.mesh = b
+	m.material_override = mat
+	m.position = pos
+	add_child(m)
+
+
+func _glow(c: Color, energy: float = 2.5) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = c
+	m.emission_enabled = true
+	m.emission = c
+	m.emission_energy_multiplier = energy
+	return m
+
+
+## Arcade carpet: a dark tile with scattered neon dashes, nearest-filtered.
+func _carpet() -> StandardMaterial3D:
+	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.06, 0.04, 0.1))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 42
+	var cols := [Color(0.9, 0.2, 0.6), Color(0.2, 0.8, 0.95), Color(0.95, 0.8, 0.2), Color(0.4, 0.3, 0.9)]
+	for i in 40:
+		var c: Color = cols[i % cols.size()]
+		var x := rng.randi_range(0, 60)
+		var y := rng.randi_range(0, 60)
+		match i % 3:
+			0:
+				for k in 4:
+					img.set_pixel((x + k) % 64, y, c)
+			1:
+				for k in 4:
+					img.set_pixel(x, (y + k) % 64, c)
+			_:
+				img.set_pixel(x, y, c)
+				img.set_pixel((x + 1) % 64, (y + 1) % 64, c)
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = ImageTexture.create_from_image(img)
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
+	m.uv1_scale = Vector3(ROOM.x / 1.2, ROOM.y / 1.2, 1)
+	m.roughness = 1.0
+	return m
+
+
+## The director's cabinet model with the live screens laid on its pink areas.
+func _model_cabinet(table_tex: Texture2D, backglass_tex: Texture2D, dmd_tex: Texture2D) -> bool:
+	if not ResourceLoader.exists(CABINET_MODEL) or not FileAccess.file_exists(CABINET_SCREENS):
+		return false
+	var data = JSON.parse_string(FileAccess.get_file_as_string(CABINET_SCREENS))
+	if not data is Dictionary:
+		return false
+	# The model sits a few degrees turned (D-166): a holder turns it (and the
+	# screens) so the playfield points straight at the player, centred on X.
+	var holder := Node3D.new()
+	_cab.add_child(holder)
+	var pr: Array = data.playfield.right
+	holder.rotation.y = atan2(float(pr[2]), float(pr[0]))
+	var pc: Array = data.playfield.centre
+	var pf_c := holder.basis * Vector3(pc[0], pc[1], pc[2])
+	holder.position.x = -pf_c.x
+	var model: Node3D = (load(CABINET_MODEL) as PackedScene).instantiate()
+	holder.add_child(model)
+	if ResourceLoader.exists(CABINET_TEXTURE):
+		var cm := StandardMaterial3D.new()
+		cm.albedo_texture = load(CABINET_TEXTURE)
+		cm.roughness = 0.6
+		for mi in model.find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).material_override = cm
+	for key in ["playfield", "backglass", "dmd"]:
+		if not data.has(key):
+			continue
+		var r: Dictionary = data[key]
+		var size := Vector2(r.size[0], r.size[1])
+		var m: MeshInstance3D
+		if key == "dmd":
+			m = MeshInstance3D.new()
+			var q := QuadMesh.new()
+			q.size = size
+			m.mesh = q
+			var dm := ShaderMaterial.new()
+			dm.shader = DMD_SHADER
+			dm.set_shader_parameter("frame", dmd_tex)
+			m.material_override = dm
+		else:
+			m = _screen(table_tex if key == "playfield" else backglass_tex, size)
+			m.get_parent().remove_child(m)
+		holder.add_child(m)
+		var right := Vector3(r.right[0], r.right[1], r.right[2])
+		var up := Vector3(r.up[0], r.up[1], r.up[2])
+		var n := Vector3(r.normal[0], r.normal[1], r.normal[2])
+		var c := Vector3(r.centre[0], r.centre[1], r.centre[2]) + n * 0.003
+		m.transform = Transform3D(Basis(right, up, n), c)
+	return true
 
 
 func _cabinet(table_tex: Texture2D, backglass_tex: Texture2D, dmd_tex: Texture2D) -> void:
