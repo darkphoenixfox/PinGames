@@ -706,6 +706,16 @@ func test_racer_sim() -> void:
 		plain.step(dt, false, false)
 		for e in good.events:
 			launched = launched or e[0] == "perfect_start"
+	var hr = Sim.new()
+	hr.setup(7)
+	for i in 60 * 3 + 40:
+		hr.step(dt, true, false)
+	var held_x: float = hr.x
+	for i in 30:
+		hr.step(dt, false, false)
+		hr.step(dt, true, false)
+	check(absf(held_x) < 0.01 and hr.x < -0.1,
+		"a flipper held to rev at GO doesn't steer until it is released and pressed again (D-131)")
 	check(launched and good.v > plain.v + 8.0, "a perfect rev at GO launches faster (%.0f vs %.0f m/s)" % [good.v, plain.v])
 	good.freeze_time = true
 	var t_before: float = good.time_left

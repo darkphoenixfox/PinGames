@@ -146,6 +146,8 @@ var pickups: Array = []        # nitro canisters on the road: {id, s, x}
 var _next_pickup_s := 300.0      # the first canister sits on the start straight
 var car := DEFAULT_CAR           # index into CARS (D-122)
 var gear := Gear.LOW
+var _rev_lock_l := false       # flipper held through GO (revving), not steering yet (D-131)
+var _rev_lock_r := false
 var freeze_time := false       # debug cheat (F in debug builds, D-118)
 var perfect_t := 0.0           # s of perfect-shift pull left (D-116)
 var rpm := 0.0                 # 0..1 (tachometer)
@@ -212,6 +214,10 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 			if countdown <= 0.0:
 				state = State.RACE
 				events.append(["go"])
+				# Flippers held for revving don't steer once the race starts:
+				# each one is ignored until it is released (D-131).
+				_rev_lock_l = left
+				_rev_lock_r = right
 				# Perfect start (D-118): revs held in the perfect-shift band at GO
 				# launch the car with a kick and extra pull.
 				if rpm >= START_FROM and rpm < START_TO:
@@ -239,6 +245,12 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 			if v < 1.0 and over_t > 1.5:
 				done = true
 			return
+	if not left:
+		_rev_lock_l = false
+	if not right:
+		_rev_lock_r = false
+	left = left and not _rev_lock_l
+	right = right and not _rev_lock_r
 	if not freeze_time:
 		time_left -= dt
 	if time_left <= 0.0:

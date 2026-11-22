@@ -1227,3 +1227,10 @@
 - **Date:** 2026-11-22
 - **Decision (director):** all Bogart VGM songs are CC BY 3.0. Dreamstate's license is confirmed, which resolves D-129's open item. Future Bogart VGM tracks the director supplies are cleared as CC BY 3.0 and need attribution, linked to https://www.facebook.com/BogartVGM/.
 - **Status:** Accepted
+
+### D-131 — Turbo Run: a flipper held to rev doesn't steer at GO
+- **Date:** 2026-11-22
+- **Problem (director):** the car still turned hard when the flippers were pressed to hit the perfect rev start.
+- **Cause:** the flipper held for revving was still down at GO, so it became a full steering input just as the perfect launch put the car at speed.
+- **Fix:** any flipper held at the moment of GO is ignored for steering (and shifting) until it is released. Pressing it again steers normally. A test holds a flipper straight through GO and checks the car stays in its lane.
+- **Status:** Accepted
