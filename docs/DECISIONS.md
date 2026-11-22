@@ -1676,3 +1676,10 @@
 - **Decision (director):** hide Sky Striker until there is something to show.
 - **How:** `Registry.HIDDEN` lists games that `Registry.ids()` leaves out, so they're missing from the picker, the attract loop and the operator menu. `Registry.all_ids()` and `has()` still include them, so `--game=shmup` opens it for development. Remove "shmup" from `HIDDEN` to bring it back.
 - **Status:** Accepted
+
+### D-185 — Turbo Run car select: stats cards beside the cars
+- **Date:** 2026-11-22
+- **Decision (director):** improve how the three cars' stats are shown. The panels under the cars overlapped the next turntable and were plain grey boxes.
+- **Layout:** the turntables move left of centre (`CAR_X` −1.9 m). Each car gets a card on the right half of the TABLE (x 662, 384 px wide), centred on its own row, so nothing overlaps.
+- **Card:** a dark panel with a 4 px border and a soft glow in the car's colour (green EASY, yellow NORMAL, red HARD). The name sits at the top, then TOP SPEED, CORNERING and TIME, each a bar of 5 rounded segments with its value (mph, start seconds). Speed maps 72–88 m/s to 2–5 segments, time 40–55 s to 2–5, and cornering keeps its grip mapping. The chosen card is full colour; the others are darkened (modulate), not made see-through, so the sunset doesn't wash them out.
+- **Status:** Accepted

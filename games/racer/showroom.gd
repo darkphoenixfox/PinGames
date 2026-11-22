@@ -1,6 +1,6 @@
 ## TURBO RUN car select showroom (D-122): the three cars stacked down the
 ## portrait TABLE, each on a turntable, spinning in stepped sprite-like angles,
-## with its stats underneath. Rendered at the pixel resolution through the same
+## with a stats card beside it (D-185). Rendered at the pixel resolution through the same
 ## palette/dither pass as the race. The game feeds input and reads `selected`.
 extends Control
 
@@ -16,7 +16,10 @@ const SPIN := 1.2                     # rad/s, the chosen car only
 const SPRITE_ANGLES := 32
 const START_ANGLE := 0.6
 const PIPS := 5
-const PANEL_W := 600.0
+const CAR_X := -1.9                   # turntables sit left of centre (m); the cards go right (D-185)
+const CARD_X := 662.0                 # stats card left edge and width (TABLE px)
+const CARD_W := 384.0
+const PIP_W := 38.0
 const ROW_COLS := [Color("4fff7a"), Color("ffd23e"), Color("ff3b4f")]   # easy, normal, hard
 
 var selected := Sim.DEFAULT_CAR
@@ -78,7 +81,7 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 		tm.albedo_color = Color(0.22, 0.22, 0.28)
 		cyl.material = tm
 		table.mesh = cyl
-		table.position = Vector3(0, y - 0.09, 0)
+		table.position = Vector3(CAR_X, y - 0.09, 0)
 		root.add_child(table)
 		var ring := MeshInstance3D.new()
 		var rc := CylinderMesh.new()
@@ -87,11 +90,11 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 		rc.height = 0.08
 		rc.radial_segments = 32
 		ring.mesh = rc
-		ring.position = Vector3(0, y - 0.16, 0)
+		ring.position = Vector3(CAR_X, y - 0.16, 0)
 		root.add_child(ring)
 		_rings.append(ring)
 		var car: Node3D = make_car.call(float(Sim.CARS[i].hue))
-		car.position = Vector3(0, y, 0)
+		car.position = Vector3(CAR_X, y, 0)
 		root.add_child(car)
 		_cars.append(car)
 	# Orthographic, looking down from the front: every row is seen from above
@@ -116,7 +119,7 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 	post.set_shader_parameter("keep_alpha", true)
 	view.material = post
 	add_child(view)
-	# Title + stats under each car (fixed slots: nothing moves, D-096).
+	# Title + a stats card beside each car (fixed slots: nothing moves, D-096).
 	var title := UI.styled_label(tr("RC_CHOOSE_CAR"), title_font, 2)
 	title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	title.offset_top = 30
@@ -136,42 +139,76 @@ func _ring_mat(c: Color, glow: float) -> StandardMaterial3D:
 	return m
 
 
+## The car's card (D-185): name, then TOP SPEED, CORNERING and TIME as 5-pip
+## bars with their values, framed in the car's colour, level with its turntable.
 func _stats_box(i: int) -> Control:
 	var spec: Dictionary = Sim.CARS[i]
+	var col: Color = ROW_COLS[i]
 	var panel := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.04, 0.03, 0.1, 0.7)
-	sb.set_content_margin_all(8)
+	sb.bg_color = Color(0.05, 0.02, 0.12, 0.94)
+	sb.border_color = col
+	sb.set_border_width_all(4)
+	sb.set_corner_radius_all(10)
+	sb.shadow_color = Color(col, 0.35)
+	sb.shadow_size = 14
+	sb.set_content_margin_all(18)
 	panel.add_theme_stylebox_override("panel", sb)
-	panel.custom_minimum_size = Vector2(PANEL_W, 0)
-	var box := UI.vstack(0)
-	box.alignment = BoxContainer.ALIGNMENT_BEGIN
+	panel.custom_minimum_size = Vector2(CARD_W, 0)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
 	panel.add_child(box)
-	var name := UI.label(tr(spec.name), 36, ROW_COLS[i])
-	name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var name := UI.label(tr(spec.name), 60, col)
 	box.add_child(name)
-	var top := UI.label(tr("RC_STAT_TOP") % roundi(float(spec.top) * Sim.MPH), 36, UI.WHITE)
-	top.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(top)
-	var clock := UI.label(tr("RC_STAT_TIME") % roundi(float(spec.time)), 36, UI.WHITE)
-	clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(clock)
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 8)
-	var cl := UI.label(tr("RC_STAT_CORNER"), 36, UI.WHITE)
-	row.add_child(cl)
-	for k in PIPS:
-		var pip := ColorRect.new()
-		pip.custom_minimum_size = Vector2(36, 28)
-		pip.color = ROW_COLS[i] if k < corner_pips(i) else Color(0.15, 0.15, 0.22, 0.85)
-		row.add_child(pip)
-	box.add_child(row)
-	# Under the car: project its base into the TABLE.
-	var base := _cam.unproject_position(Vector3(0, float(ROW_Y[i]) - 0.2, 3.0))
-	panel.position = Vector2((1080.0 - PANEL_W) * 0.5, base.y * (1920.0 / RES.y) - 24.0)
+	box.add_child(UI.spacer(4))
+	_stat_row(box, tr("RC_STAT_SPEED"), speed_pips(i), tr("RC_STAT_MPH") % roundi(float(spec.top) * Sim.MPH), col)
+	_stat_row(box, tr("RC_STAT_CORNER"), corner_pips(i), "", col)
+	_stat_row(box, tr("RC_STAT_CLOCK"), time_pips(i), tr("RC_STAT_SECONDS") % roundi(float(spec.time)), col)
 	add_child(panel)
+	# Level with its turntable: centre the card on the car's row.
+	var mid := _cam.unproject_position(Vector3(CAR_X, float(ROW_Y[i]), 0.0))
+	var h := panel.get_combined_minimum_size().y
+	panel.position = Vector2(CARD_X, mid.y * (1920.0 / RES.y) - h * 0.5)
 	return panel
+
+
+## A stat: its name, then a bar of PIPS segments (n lit) and its value.
+func _stat_row(box: VBoxContainer, label: String, n: int, value: String, col: Color) -> void:
+	var l := UI.label(label, 36, Color(0.85, 0.82, 0.95), HORIZONTAL_ALIGNMENT_LEFT)
+	box.add_child(l)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	for k in PIPS:
+		var pip := Panel.new()
+		pip.custom_minimum_size = Vector2(PIP_W, 26)
+		pip.size_flags_vertical = Control.SIZE_SHRINK_CENTER   # same bar height on every row
+		var ps := StyleBoxFlat.new()
+		ps.set_corner_radius_all(3)
+		if k < n:
+			ps.bg_color = col
+			ps.border_color = col.lightened(0.45)
+		else:
+			ps.bg_color = Color(0.12, 0.1, 0.2, 0.9)
+			ps.border_color = Color(0.3, 0.28, 0.4)
+		ps.set_border_width_all(2)
+		pip.add_theme_stylebox_override("panel", ps)
+		row.add_child(pip)
+	if not value.is_empty():
+		row.add_child(UI.spacer(0))
+		var v := UI.label(value, 36, UI.WHITE, HORIZONTAL_ALIGNMENT_LEFT)
+		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(v)
+	box.add_child(row)
+
+
+## Top speed as 2..5 pips (the cars run 72..88 m/s).
+static func speed_pips(i: int) -> int:
+	return clampi(2 + roundi((float(Sim.CARS[i].top) - 72.0) / 16.0 * 3.0), 1, PIPS)
+
+
+## Starting clock as 2..5 pips (40..55 s).
+static func time_pips(i: int) -> int:
+	return clampi(2 + roundi((float(Sim.CARS[i].time) - 40.0) / 15.0 * 3.0), 1, PIPS)
 
 
 ## Cornering as 1..5 pips from the car's grip.
@@ -192,7 +229,8 @@ func _refresh() -> void:
 			var gi := m as MeshInstance3D
 			if gi.material_override != null:
 				InstParam.set_param(gi, "bright", 1.0 if on else 0.55)
-		(_boxes[i] as Control).modulate.a = 1.0 if on else 0.5
+		# Dimmed, not see-through (the sunset would wash it out).
+		(_boxes[i] as Control).modulate = Color.WHITE if on else Color(0.5, 0.5, 0.56)
 
 
 func _process(delta: float) -> void:

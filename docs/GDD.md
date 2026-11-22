@@ -194,7 +194,7 @@ Rules:
 
 **Prototype (D-089), playable:**
 - **Road:** real 3D, not sprite scaling. It is an endless seeded road made of sections: straights, sweepers, medium curves and hairpins, with hills and dips. 4 lanes with kerbs, sand and grass, drawn with a 16-bit texel shader. Low-poly "PS2" props: palms, rocks, lamps and chevron signs on the outside of curves. Mountains on the horizon, sunset sky.
-- **Car select (D-122):** after Start, three cars spin on turntables: red EASY (259 km/h, high grip), yellow NORMAL (288 km/h) and blue HARD (317 km/h, slides wide). Their stats (top speed, start time, cornering) show under each car and on the DMD. Flippers choose, Launch/Start confirms, and after 15 s the highlighted car is taken.
+- **Car select (D-122):** after Start, three cars spin on turntables: red EASY (259 km/h, high grip), yellow NORMAL (288 km/h) and blue HARD (317 km/h, slides wide). Their stats show on a card beside each car (top speed, cornering and time as 5-segment bars with values, D-185) and on the DMD. Flippers choose, Launch/Start confirms, and after 15 s the highlighted car is taken.
 - **Controls:**
   - Flippers steer.
   - **2+1:** throttle and braking are automatic. The car brakes by itself when a corner would throw it off and it isn't drifting.
