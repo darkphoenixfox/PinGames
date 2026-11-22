@@ -306,6 +306,7 @@ var _speedo: Control
 var _tacho: Control
 var _gear_lever: Control
 var _shift_big: Label
+var _nag_lever: Control     # animated shifter next to SHIFT (D-151)
 var _frozen_label: Label
 var _freeze_time := false   # debug cheat: clock frozen (D-118)
 var _redline_t := 0.0       # s held at the redline in L (D-116)
@@ -1705,14 +1706,22 @@ func _build_hud() -> void:
 	sbox.add_child(kmh)
 	bottom.add_child(sbox)
 
+	# SHIFT nag with a little shifter beside it, pushing L -> H (D-151).
+	var nag := HBoxContainer.new()
+	nag.alignment = BoxContainer.ALIGNMENT_CENTER
+	nag.add_theme_constant_override("separation", 24)
+	nag.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	nag.offset_left = -500
+	nag.offset_right = 500
+	nag.offset_top = -330
+	nag.offset_bottom = -110
 	_shift_big = UI.label(tr("RC_SHIFT"), 144, UI.RED)
-	_shift_big.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	_shift_big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_shift_big.offset_left = -500
-	_shift_big.offset_right = 500
-	_shift_big.offset_top = -260
 	_shift_big.modulate.a = 0.0
-	_hud.add_child(_shift_big)
+	nag.add_child(_shift_big)
+	_nag_lever = GearLever.new()
+	_nag_lever.modulate.a = 0.0
+	nag.add_child(_nag_lever)
+	_hud.add_child(nag)
 	_frozen_label = UI.label(tr("RC_DEBUG_FROZEN"), 24, UI.CYAN)
 	_frozen_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	_frozen_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1780,7 +1789,11 @@ func _update_hud(delta: float) -> void:
 	# Held at the redline in L for SHIFT_NAG s: a big blinking SHIFT in the
 	# middle of the screen, in the timer's font (D-116).
 	_redline_t = _redline_t + delta if shift_now and sim.state == Sim.State.RACE else 0.0
-	_shift_big.modulate.a = 1.0 if _redline_t >= SHIFT_NAG and fmod(_phase_t, 0.4) < 0.25 else 0.0
+	var nagging := _redline_t >= SHIFT_NAG
+	_shift_big.modulate.a = 1.0 if nagging and fmod(_phase_t, 0.4) < 0.25 else 0.0
+	_nag_lever.modulate.a = 1.0 if nagging else 0.0
+	if nagging:   # demo loop: sit in L, push up to H, hold, snap back
+		_nag_lever.set_gear(fmod(_redline_t, 1.2) > 0.5)
 	_nitro_label.modulate.a = 1.0 if sim.boosting else 0.0
 	_nitro_strip.size.x = roundf(160.0 * sim.boost_t / Sim.NITRO_TIME)
 	if sim.drifting:

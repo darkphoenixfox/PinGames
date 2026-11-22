@@ -1385,3 +1385,8 @@
   - **Message:** the police chase message reads THE COPS! instead of POLICE!.
   - **Radar lamps:** lit radar balls look like real lights. A dithered pixel glow halo spills around each lit ball (wider and stronger on each beep), and the ball burns from a white core through a light tint to the full colour, with a hot rim instead of the dark outline. Unlit balls stay dark glass. Still chunky 4 px pixels.
 - **Status:** Accepted
+
+### D-151 — Turbo Run: animated shifter beside the SHIFT warning
+- **Date:** 2026-11-22
+- **Decision (director):** the big SHIFT warning (D-116) shows an animation of the shifter next to it. A second gear-lever widget sits to the right of the word, in the same centred row, which is a fixed layout (the word blinks by alpha, D-096). While the warning is up, the lever loops: in L for 0.5 s, the knob steps up to H, holds, then snaps back.
+- **Status:** Accepted
