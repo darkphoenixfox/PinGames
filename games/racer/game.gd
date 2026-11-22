@@ -18,6 +18,10 @@ const Toon = preload("res://games/racer/toon.gd")
 const Sprites = preload("res://games/racer/sprites.gd")
 const Night = preload("res://games/racer/night.gd")
 const DmdAnims = preload("res://games/racer/dmd_anims.gd")
+const Showroom = preload("res://games/racer/showroom.gd")
+const SELECT_TIME := 15.0   # s to choose a car before the highlighted one is taken
+## Car colours on the DMD, matching Sim.CARS' hues (red, yellow, blue).
+const CAR_COLS := [Color("e8303a"), Color("ffd23e"), Color("3f8cff")]
 const NIGHT_GROUP := &"rc_night_lights"
 const Dial = preload("res://games/racer/dial.gd")
 const GearLever = preload("res://games/racer/gear_lever.gd")
@@ -206,6 +210,10 @@ var _car_mats := {}         # model path -> ShaderMaterial
 var _car_outlines := {}     # model path -> outline ArrayMesh
 var _beam_mat: StandardMaterial3D
 var _pix_vp: SubViewport
+var _world_view: TextureRect
+var _showroom: Control
+var _select_hint: Label
+var _chosen_car := Sim.DEFAULT_CAR
 var _bg_mat: ShaderMaterial
 var _anims := DmdAnims.new()
 var _night := 0.0           # 0 = day, 1 = night (D-113)
@@ -292,6 +300,8 @@ func start(_players: int) -> void:
 	_build_hud()
 	_build_backglass()
 	_build_audio_loops()
+	if Config.cli.has("rc-car"):   # dev: race with car 0 (easy) / 1 / 2 (hard), D-122
+		_chosen_car = clampi(int(str(Config.cli["rc-car"])), 0, Sim.CARS.size() - 1)
 	if Config.cli.has("rc-skip-intro"):
 		_begin_race()
 	else:
@@ -303,7 +313,18 @@ func on_action(action: StringName, pressed: bool) -> void:
 		return
 	if _phase == "attract":
 		if action == &"start" or action == &"launch":
-			_begin_race()
+			_begin_select()
+		return
+	if _phase == "select":
+		match action:
+			&"flip_l":
+				_showroom.move(-1)
+				Audio.sfx("rc_shift")
+			&"flip_r":
+				_showroom.move(1)
+				Audio.sfx("rc_shift")
+			&"launch", &"start":
+				_confirm_car()
 		return
 	if _phase == "finale":
 		if _finale_t >= FINALE_SKIP_AT and (action == &"launch" or action == &"start"):
@@ -327,6 +348,11 @@ func _process(delta: float) -> void:
 		sim.time_left = 99.0
 		sim.step(dt, false, false)
 		_attract_tick()
+	elif _phase == "select":
+		var left := ceili(SELECT_TIME - _phase_t)
+		_select_hint.text = tr("RC_SELECT_HINT") % maxi(left, 0)
+		if _phase_t >= SELECT_TIME:
+			_confirm_car()
 	elif _phase == "race":
 		var l := CabinetInput.is_down(&"flip_l")
 		var r := CabinetInput.is_down(&"flip_r")
@@ -351,6 +377,7 @@ func _new_sim() -> void:
 	_puff_list.clear()
 	sim.setup(7)
 	sim.freeze_time = _freeze_time
+	sim.car = _chosen_car
 	sim.manual = _manual_locked
 	sim.autopilot = Config.cli.has("rc-autopilot")
 	if Config.cli.has("rc-time"):  # dev: short clock to test TIME UP
@@ -404,12 +431,72 @@ func _top_score_line() -> String:
 	return "%s %s" % [row[0], ScoreTable.format_score(int(row[1]))]
 
 
+## Car select (D-122): three cars in a showroom, flippers choose, Launch/Start
+## confirms (or the timer picks the highlighted one).
+func _begin_select() -> void:
+	if is_instance_valid(_attract_ui):
+		_attract_ui.queue_free()
+	_phase = "select"
+	_phase_t = 0.0
+	Audio.sfx("start")
+	_world_view.visible = false
+	_showroom = Showroom.new()
+	add_to_table(_showroom)
+	_showroom.selected = _chosen_car
+	_showroom.build(func(hue: float) -> Node3D: return _car_instance(hue), load(SKY_TEXTURE), TITLE_FONT)
+	_select_hint = UI.label("", 36, UI.WHITE)
+	_select_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	_select_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_select_hint.offset_top = -90
+	_select_hint.offset_bottom = -40
+	_showroom.add_child(_select_hint)
+	Dmd.show_custom(_draw_dmd_select)
+
+
+func _confirm_car() -> void:
+	if _phase != "select":
+		return
+	_chosen_car = _showroom.selected
+	_showroom.queue_free()
+	_showroom = null
+	_world_view.visible = true
+	_begin_race()
+
+
+## DMD while choosing (D-122): the car in its colour, its name, top speed and
+## cornering pips, with arrows to the other choices.
+func _draw_dmd_select(p) -> void:
+	if not is_instance_valid(_showroom):
+		return
+	var i: int = _showroom.selected
+	var spec: Dictionary = Sim.CARS[i]
+	var col: Color = CAR_COLS[i]
+	_anims._car(p, 5, 13, col)
+	p.text(tr(spec.name), 24, 1, 1, Showroom.ROW_COLS[i])
+	p.text(tr("RC_DMD_TOP") % roundi(float(spec.top) * 3.6), 24, 12, 1, Dmd.WHITE)
+	p.text(tr("RC_DMD_CORNER"), 24, 23, 1, Dmd.DIM)
+	var x0: float = 26 + p.text_width(tr("RC_DMD_CORNER"))
+	for k in Showroom.PIPS:
+		p.block(x0 + k * 6, 23, 5, 5, col if k < Showroom.corner_pips(i) else Color(0.16, 0.18, 0.22))
+	if i > 0:
+		for d in 4:
+			p.line(122 - d, 4 + d, 126 + d, 4 + d, Dmd.WHITE)   # up arrow: the car above
+	if i < 2:
+		for d in 4:
+			p.line(122 - d, 28 - d, 126 + d, 28 - d, Dmd.WHITE)
+
+
 func _begin_race() -> void:
 	if is_instance_valid(_attract_ui):
 		_attract_ui.queue_free()
 	_phase = "race"
 	_phase_t = 0.0
 	_new_sim()
+	# The hero car in the chosen car's colour (D-122).
+	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
+		var gi := m as MeshInstance3D
+		if gi.material_override != null:
+			gi.set_instance_shader_parameter("hue", float(Sim.CARS[_chosen_car].hue))
 	# Stage 1 is always action_3 (D-106; was: each race moved on a song).
 	# Stages 1-5 play Maximum Overdrive (D-111), carried on from attract.
 	_music_i = FIRST_TRACK
@@ -563,6 +650,7 @@ func _build_world() -> void:
 	add_to_table(_pix_vp)
 	_pix_vp.add_child(_root)
 	var view := TextureRect.new()
+	_world_view = view
 	view.texture = _pix_vp.get_texture()
 	view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE

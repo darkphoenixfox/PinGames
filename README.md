@@ -37,7 +37,7 @@ scripts\test.ps1                                 # headless smoke tests
 | `--press=flip_r,launch,hold:start+exit:3.5` | Simulate button presses (development aid) |
 | `--mode=viewer --model=res://assets/models/<…>.glb` | Model viewer: flippers rotate, Launch toggles spin, Start changes view, Exit leaves |
 | `--tb-enemy-now`, `--tb-dmd-anim=<name>`, `--tb-show-shields`, `--tb-lights-on`, `--tb-skip-intro`, `--tb-level=N` | Tilt Breaker dev aids (skip-intro = straight into play): early enemy, loop a DMD animation, show the edge shields, hold all backglass lights on |
-| `--rc-skip-intro`, `--rc-autopilot`, `--rc-time=S`, `--rc-no-toon`, `--rc-night` | Turbo Run dev aids: straight into the countdown; the car drives itself (also used by the attract demo); start with S seconds on the clock; plain shading instead of cel (D-091); night from the start (D-113) |
+| `--rc-skip-intro`, `--rc-autopilot`, `--rc-time=S`, `--rc-no-toon`, `--rc-night`, `--rc-car=N` | Turbo Run dev aids: straight into the countdown; the car drives itself (also used by the attract demo); start with S seconds on the clock; plain shading instead of cel (D-091); night from the start (D-113); race car N (0 easy, 1 normal, 2 hard, D-122). Debug keys: F freezes the clock, S skips to stage 5 |
 | `--screenshot=<dir>` | Save PNGs of every screen and window, then quit (development aid) |
 
 ### Settings

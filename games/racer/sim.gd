@@ -21,7 +21,16 @@ const Track = preload("res://games/racer/track.gd")
 enum State { COUNTDOWN, RACE, OVER }
 
 const MAX_SPEED := 80.0        # m/s (288 km/h)
-const NITRO_SPEED := 100.0     # m/s while nitro burns
+const NITRO_SPEED := 100.0     # m/s while nitro burns (normal car; see CARS)
+## Selectable cars (D-122): top speed (m/s, H gear; L tops out at 62.5 % of it)
+## and grip (x steering authority, and the bend push is divided by it).
+## Easy = slower but sticks to the road; hard = fastest but slides wide.
+const CARS := [
+	{"name": "RC_CAR_EASY", "hue": 0.0, "top": 72.0, "grip": 1.25},     # red
+	{"name": "RC_CAR_NORMAL", "hue": 0.16, "top": 80.0, "grip": 1.0},   # yellow
+	{"name": "RC_CAR_HARD", "hue": 0.62, "top": 88.0, "grip": 0.8},     # blue
+]
+const DEFAULT_CAR := 1
 const ACCEL := 13.0
 const BRAKE := 22.0
 const COAST_DRAG := 4.0
@@ -127,6 +136,7 @@ var boost_t := 0.0             # s of nitro boost left
 var boosting := false          # boost_t > 0 this step
 var pickups: Array = []        # nitro canisters on the road: {id, s, x}
 var _next_pickup_s := 300.0      # the first canister sits on the start straight
+var car := DEFAULT_CAR           # index into CARS (D-122)
 var gear := Gear.LOW
 var freeze_time := false       # debug cheat (F in debug builds, D-118)
 var perfect_t := 0.0           # s of perfect-shift pull left (D-116)
@@ -286,12 +296,29 @@ func _autoshift() -> void:
 		return
 	if gear == Gear.LOW and rpm >= REDLINE:
 		shift(Gear.HIGH)
-	elif gear == Gear.HIGH and v < GEAR_L_TOP * 0.45:
+	elif gear == Gear.HIGH and v < l_top() * 0.45:
 		shift(Gear.LOW)
 
 
 func gear_top() -> float:
-	return GEAR_L_TOP if gear == Gear.LOW else MAX_SPEED
+	return l_top() if gear == Gear.LOW else top_speed()
+
+
+## This car's top speed in H, in L, and with nitro (D-122).
+func top_speed() -> float:
+	return float(CARS[car].top)
+
+
+func l_top() -> float:
+	return top_speed() * GEAR_L_TOP / MAX_SPEED
+
+
+func nitro_speed() -> float:
+	return top_speed() + NITRO_SPEED - MAX_SPEED
+
+
+func grip() -> float:
+	return float(CARS[car].grip)
 
 
 ## Engine pull at the current speed, as a multiple of ACCEL (before drag).
@@ -354,12 +381,12 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	var push := c * v * v * CENTRIFUGAL           # to the outside: +x on a left curve
 	# Gears change the handling (D-120): H slides wide in bends, L grips, so
 	# downshifting is how you hold the inside line.
-	push *= H_SLIDE if gear == Gear.HIGH else L_PUSH
+	push *= (H_SLIDE if gear == Gear.HIGH else L_PUSH) / grip()
 	# Sideways speed grows with forward speed (D-119): slow cars barely move
 	# across the road; full authority from STEER_FULL_V.
-	var authority := clampf(v / STEER_FULL_V, 0.06, 1.0) * STEER * (L_GRIP if gear == Gear.LOW else 1.0)
+	var authority := clampf(v / STEER_FULL_V, 0.06, 1.0) * STEER * (L_GRIP if gear == Gear.LOW else 1.0) * grip()
 	_update_drift(dt, want, c, brake)
-	var vmax := NITRO_SPEED if boosting else gear_top()
+	var vmax := nitro_speed() if boosting else gear_top()
 	rpm = clampf(v / gear_top(), 0.0, 1.0)
 	var pull := gear_pull()
 	# Throttle and brakes
@@ -388,7 +415,7 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 		if spin_t <= 0.0 and state == State.RACE:
 			accel += ACCEL * PERFECT_PULL
 	if boosting and spin_t <= 0.0:
-		accel = maxf(accel, ACCEL * 1.8 * (1.0 - v / NITRO_SPEED))
+		accel = maxf(accel, ACCEL * 1.8 * (1.0 - v / nitro_speed()))
 	if drifting:
 		accel -= DRIFT_DRAG
 	if v > vmax and not (state == State.OVER or spin_t > 0.0):

@@ -9,6 +9,7 @@ uniform vec2 low_res = vec2(360.0, 640.0);
 uniform float levels = 24.0;
 uniform float dither = 0.6;          // 0 = plain posterise, 1 = full dither
 uniform float saturation = 1.12;
+uniform bool keep_alpha = false;     // D-122: let a backdrop show through (showroom)
 
 float bayer4(vec2 p) {
 	int x = int(mod(p.x, 4.0));
@@ -21,10 +22,11 @@ float bayer4(vec2 p) {
 
 void fragment() {
 	vec2 px = floor(UV * low_res);
-	vec3 c = texture(TEXTURE, (px + 0.5) / low_res).rgb;
+	vec4 src = texture(TEXTURE, (px + 0.5) / low_res);
+	vec3 c = src.rgb;
 	float g = dot(c, vec3(0.299, 0.587, 0.114));
 	c = mix(vec3(g), c, saturation);
 	c += bayer4(px) * dither / levels;
 	c = floor(c * levels + 0.5) / levels;
-	COLOR = vec4(clamp(c, 0.0, 1.0), 1.0);
+	COLOR = vec4(clamp(c, 0.0, 1.0), keep_alpha ? step(0.5, src.a) : 1.0);
 }

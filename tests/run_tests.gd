@@ -647,6 +647,24 @@ func test_racer_sim() -> void:
 	var cb: float = hg.track.curvature(bend)
 	check(bend > 0.0 and hg.x * signf(cb) > lg.x * signf(cb) + 0.5,
 		"high gear slides wider in a bend than low (%.1f vs %.1f m)" % [hg.x * signf(cb), lg.x * signf(cb)])
+	# Car choice (D-122): the hard car is faster but slides wider than the easy one.
+	var cars := []
+	for ci in 3:
+		var cs = Sim.new()
+		cs.setup(7)
+		cs.track.ensure(8000.0)
+		cs.car = ci
+		cs.state = Sim.State.RACE
+		cs.manual = true
+		cs.gear = Sim.Gear.HIGH
+		cs.s = bend
+		for i in 30:
+			cs.v = 44.0
+			cs.step(dt, false, false, true)
+		cars.append(cs)
+	check(cars[0].top_speed() < cars[1].top_speed() and cars[1].top_speed() < cars[2].top_speed()
+		and cars[0].x * signf(cb) < cars[2].x * signf(cb) - 0.5,
+		"easy car is slower but grips; hard car is fastest but slides wide")
 	# Perfect start (D-118): revs in the perfect band at GO launch the car.
 	var good = Sim.new()
 	good.setup(7)

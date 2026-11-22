@@ -1156,3 +1156,19 @@
   - **Perfect shift/start:** a rising brass stab with a turbo whoosh.
   - None of them has a tonal chiptune lead any more.
 - **Status:** Accepted
+
+### D-122 — Turbo Run: car select showroom with easy / normal / hard cars
+- **Date:** 2026-11-22
+- **Decision (director):** when the game starts, three cars (red, yellow, blue) rotate in a showcase and the player chooses one. Top speed and cornering make them easy, normal and hard, following the director's order. Their stats show under the cars and on the DMD.
+- **Cars** (`Sim.CARS`): `top` is the H-gear top speed (L tops out at 62.5 % of it, nitro adds 20 m/s). `grip` multiplies steering authority and divides the bend push.
+  - **Red EASY:** 72 m/s (259 km/h), grip 1.25.
+  - **Yellow NORMAL:** 80 m/s (288 km/h), grip 1.0. This is the default and keeps the earlier tuning.
+  - **Blue HARD:** 88 m/s (317 km/h), grip 0.8.
+  - All three are the same model, recoloured with the car shader's hue.
+- **Showroom** (`games/racer/showroom.gd`): a new select phase between attract and the race. The cars are stacked down the portrait TABLE on turntables, through an orthographic camera looking down from the front, rendered at the pixel resolution with the palette/dither pass (keep-alpha mode over the sunset sky backdrop). They spin in 32 stepped angles. The chosen car spins faster, bobs, and has a glowing yellow ring; the others are dimmed.
+  - **Stats:** under each car on a dark panel: difficulty name in green/yellow/red, TOP SPEED in km/h, and CORNERING as 1–5 pips from grip.
+  - **Controls:** flippers move the selection, Launch/Start confirms, and 15 s auto-confirms. A hint with the countdown sits at the bottom.
+  - **DMD:** the car in its colour, its name, TOP km/h and GRIP pips, with arrows to the other choices.
+- **In the race:** the hero car takes the chosen colour.
+- **Dev flag:** `--rc-car=N` picks the car directly (e.g. with `--rc-skip-intro`).
+- **Status:** Accepted (tuning pending playtest)
