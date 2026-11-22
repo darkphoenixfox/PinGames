@@ -1005,3 +1005,13 @@
   - **Music:** the race song stays the same through stages 1–4, changes at stage 5, then every 4 stages (`MUSIC_STAGES`). Each race still starts on the next song (D-095).
   - **Rolling crash:** 1.5× faster (`FLIP_TIME` is now 1.33 s, was 2.0). The car keeps tumbling down the road: speed is capped at 30 m/s and drops evenly to 0 by the end of the roll (about 20 m). A head-on with oncoming traffic stops the car on the spot instead, so it doesn't tumble through the other vehicle.
 - **Status:** Accepted
+
+### D-106 — Turbo Run: stage 1 always plays action_3; rolled car slides to a stop
+- **Date:** 2026-11-22
+- **Music (director):** stage 1 had gone back to the song the director doesn't like, because each new race moved on one song (D-093), so by the third race it was action_1 again. Now every race starts on action_3 (`FIRST_TRACK`), and songs change only at stage 5, 9, … (D-105). This supersedes D-093's "next song each race".
+- **Rolled-car slide (director: "stops like a dead stone"):** a roll-over now goes roll → slide → stop.
+  - **Roll:** the car rolls at up to 30 m/s, slowing at only 6 m/s².
+  - **Slide:** it lands on its side and keeps sliding, smoking, at 11 m/s² until it stops (`sim.crash_slide`).
+  - **Stop:** only then does the 1.5 s `CRASH_STOP` start.
+  - **Distance:** about 50 m from the hit to the stop, up from about 20 m.
+- **Status:** Accepted

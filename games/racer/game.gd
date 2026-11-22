@@ -137,7 +137,7 @@ var _car_outlines := {}     # model path -> outline ArrayMesh
 var _beam_mat: StandardMaterial3D
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
-var _music_i := FIRST_TRACK - 1    # race track index; _begin_race steps it
+var _music_i := FIRST_TRACK    # current race song index
 var _traffic_pool := {"car": [], "truck": []}   # pools of Node3D per kind
 ## Tyre smoke / dust (D-100): our own pooled billboard puffs in one MultiMesh.
 ## CPUParticles3D drew a stray pure-black puff at the emitter when toggled.
@@ -307,8 +307,9 @@ func _begin_race() -> void:
 	_phase = "race"
 	_phase_t = 0.0
 	_new_sim()
-	_music_i += 1
-	Audio.play_music(MUSIC_TRACKS[_music_i % MUSIC_TRACKS.size()])
+	# Stage 1 is always action_3 (D-106; was: each race moved on a song).
+	_music_i = FIRST_TRACK
+	Audio.play_music(MUSIC_TRACKS[_music_i])
 	Audio.sfx("start")
 	_hud.visible = true
 	_show_mode()

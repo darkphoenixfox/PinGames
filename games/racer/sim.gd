@@ -68,9 +68,11 @@ const SPIN_TIME := 1.3           # spin-out animation
 const CRASH_STOP := 1.5
 ## Hitting a big roadside object (D-098) rolls the car over sideways instead.
 const FLIP_TIME := 1.33          # roll-over animation (D-105: 1.5x faster than 2.0)
-## A roll-over keeps tumbling down the road (D-105): it starts at up to
-## FLIP_SPEED and slows evenly to 0 by the end of the animation (~20 m).
+## A roll-over keeps tumbling down the road (D-105), then lands on its side and
+## keeps sliding until friction stops it (D-106), and only then the CRASH_STOP.
 const FLIP_SPEED := 30.0
+const FLIP_ROLL_DECEL := 6.0     # m/s^2 while rolling
+const FLIP_SLIDE_DECEL := 11.0   # m/s^2 sliding on its side after the roll
 const FLIP_KINDS := ["palm", "rock", "lamp", "truck"]
 const NEAR_MISS_DX := 3.3
 const TRUCK_LEN := 10.0
@@ -115,7 +117,7 @@ var _shift_lock := false       # shifted: release both before shifting again
 var spin_t := 0.0              # crash timer (spin-out or flip)
 var flipping := false          # this crash is a roll-over (big obstacle)
 var crash_anim := 0.0          # animation length of the current crash (s)
-var _flip_decel := 0.0         # m/s^2 while a roll-over tumbles on
+var crash_slide := false       # a rolled car sliding to a stop (D-106)
 var flip_dir := 1.0            # +1 rolls to the right, -1 to the left
 var time_left := START_TIME
 var next_checkpoint := CHECKPOINT_EVERY
@@ -295,7 +297,12 @@ func _update_pickups() -> void:
 func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	var want := (1.0 if right else 0.0) - (1.0 if left else 0.0)
 	if spin_t > 0.0:
-		spin_t -= dt
+		# After the roll, the car slides on until it stops; the stop timer
+		# only runs once it has (D-106).
+		crash_slide = flipping and spin_t <= CRASH_STOP and v > 0.5
+		if not crash_slide:
+			spin_t = maxf(spin_t - dt, 0.0)
+			crash_slide = flipping and spin_t > 0.0 and spin_t <= CRASH_STOP and v > 0.5
 		want = 0.0
 		if stalled():
 			v = 0.0
@@ -313,7 +320,7 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	if state == State.OVER or spin_t > 0.0:
 		throttle = 0.0
 		braking = false
-		accel = -(COAST_OVER if state == State.OVER else (_flip_decel if flipping else COAST_DRAG * 3.0))
+		accel = -(COAST_OVER if state == State.OVER else ((FLIP_SLIDE_DECEL if crash_slide else FLIP_ROLL_DECEL) if flipping else COAST_DRAG * 3.0))
 	elif manual:
 		throttle = 1.0 if gas else 0.0
 		braking = brake
@@ -402,7 +409,7 @@ func crash_progress() -> float:
 
 ## Stopped dead at the end of a crash.
 func stalled() -> bool:
-	return spin_t > 0.0 and spin_t <= CRASH_STOP
+	return spin_t > 0.0 and spin_t <= CRASH_STOP and not crash_slide
 
 
 ## `slide` = false for head-on hits: the car stops there instead of tumbling on.
@@ -414,7 +421,7 @@ func _crash(kind: String, side: float = 0.0, slide: bool = true) -> void:
 	crash_anim = FLIP_TIME if flipping else SPIN_TIME
 	spin_t = crash_anim + CRASH_STOP
 	v = minf(v, (FLIP_SPEED if slide else 6.0) if flipping else 14.0)
-	_flip_decel = v / FLIP_TIME if flipping else 0.0
+	crash_slide = false
 	if boosting:
 		boosting = false
 		boost_t = 0.0

@@ -830,7 +830,17 @@ func test_racer_sim() -> void:
 	for i in int(Sim.FLIP_TIME * 60.0) + 2:
 		fl.traffic.clear()
 		fl.step(dt, false, false)
-	check(fl.s - s_hit > 12.0 and fl.v < 2.0, "the car keeps advancing as it rolls over (%.0f m)" % (fl.s - s_hit))
+	check(fl.s - s_hit > 25.0 and fl.v > 10.0, "the car keeps advancing as it rolls over (%.0f m)" % (fl.s - s_hit))
+	# ... then slides on its side, slowing down, before the stop (D-106).
+	var slid := false
+	var n_steps := 0
+	while not fl.stalled() and n_steps < 600:
+		fl.traffic.clear()
+		fl.step(dt, false, false)
+		slid = slid or fl.crash_slide
+		n_steps += 1
+	check(slid and fl.s - s_hit > 40.0 and fl.v == 0.0 and fl.stalled(),
+		"after the roll the car slides to a stop (%.0f m in all), then stays stopped" % (fl.s - s_hit))
 	fl.spin_t = 0.0
 	fl.flipping = false
 	fl._crash("chevron", 1.0)
