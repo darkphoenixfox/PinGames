@@ -247,7 +247,11 @@ func _process(delta: float) -> void:
 
 func _on_draw() -> void:
 	if _anim.is_valid():
+		var t0 := Time.get_ticks_usec()
 		_anim.call(_painter, _anim_t)
+		var us := Time.get_ticks_usec() - t0
+		if us > 8000:
+			DebugTools.mark("slow DMD frame %d ms" % (us / 1000))
 		return
 	var list := _elements
 	if not _overlay.is_empty():

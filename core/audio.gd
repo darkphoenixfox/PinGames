@@ -85,6 +85,15 @@ func register_sfx(sound_name: String, stream: AudioStream) -> void:
 ## Plays a sound effect. Returns its player, so a long sound can be cut short
 ## with stop_sfx() (e.g. a charge-up that is released early).
 func sfx(sound_name: String) -> AudioStreamPlayer:
+	var t0 := Time.get_ticks_usec()
+	var p := _sfx(sound_name)
+	var us := Time.get_ticks_usec() - t0
+	if us > 8000:
+		DebugTools.mark("slow sfx '%s' %d ms" % [sound_name, us / 1000])
+	return p
+
+
+func _sfx(sound_name: String) -> AudioStreamPlayer:
 	var stream: AudioStream = _sounds.get(sound_name)
 	if stream == null:
 		push_warning("Audio: unknown sfx '%s'" % sound_name)

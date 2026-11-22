@@ -28,6 +28,13 @@ var _log_lines: Array[String] = []
 var _log_spikes := false
 
 
+## With --log-spikes: logs a game event, so a slow frame can be matched to
+## what happened just before it (D-179).
+func mark(what: String) -> void:
+	if _log_spikes:
+		print("Event: %s at %.2f s" % [what, Time.get_ticks_msec() / 1000.0])
+
+
 func _ready() -> void:
 	_log_spikes = Config.cli.has("log-spikes")
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -89,7 +96,12 @@ func _process(delta: float) -> void:
 	# --log-spikes (?log-spikes on the web): log frames slower than 80 ms, to
 	# find first-time stalls (shader compiles, uploads) (D-178).
 	if _log_spikes and delta > 0.08:
-		print("Spike: %d ms at %.1f s" % [int(delta * 1000.0), Time.get_ticks_msec() / 1000.0])
+		# Script time of the previous frame: low = the time went to rendering
+		# (shader compiles, texture uploads), high = to game code.
+		print("Spike: %d ms at %.2f s (script %d ms, physics %d ms)" % [int(delta * 1000.0),
+			Time.get_ticks_msec() / 1000.0,
+			int(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0),
+			int(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0)])
 	if not is_instance_valid(_monitor):
 		return
 	var lines: PackedStringArray = ["INPUT MONITOR  focus: %s" % ("YES" if CabinetInput.has_focus else "NO")]

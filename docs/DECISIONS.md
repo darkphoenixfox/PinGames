@@ -1616,3 +1616,16 @@
 - **Checked:** on the desktop under the Compatibility renderer with the new `--log-spikes` (`?log-spikes`), which logs frames over 80 ms. Tilt Breaker's mid-game stall at its first brick break (126 ms) is gone, and Turbo Run's autopilot ran about 50 s with no slow frame after loading. Turbo Run's remaining slow frames came only from the debug stage-skip key, which rebuilds the track at once. The browser itself couldn't be measured this session, because Chrome throttled the background window to 1–3 fps.
 - **Dev:** `--press` gained `blur` / `focus` steps (fake focus loss and return).
 - **Status:** Accepted
+
+### D-179 — Browser stalls traced to shader compiles; warm-up fixed
+- **Date:** 2026-11-22
+- **Context:** Tilt Breaker still stuttered in the browser when a level loaded, when the ball was lost and when the first portal appeared. A Chrome performance trace (headless Edge) showed every stall was WebGL compiling and linking shader programs.
+- **Three causes, three fixes** (in `shell/modes/game_mode.gd`):
+  1. **The warm-up missed the 3D worlds.** Games add them to the TABLE and BACKGLASS viewports (`add_to_table`), not under the game node, so the warm-up found no camera and no effects. It now searches the game node plus everything in its `_owned` list.
+  2. **Godot frees a standard material's generated shader along with the last material that uses it.** So an effect that makes a fresh material each time (the ball-loss fireball) recompiled every time. From the warm-up until the game ends, one material per feature set (switches, modes, filled texture slots) is kept, static per game, so a second play keeps them too.
+  3. **Lit materials compile a variant per combination of light types touching them.** The warm-up now cycles four phases (no extra light, point light, point + spot, spot) over 24 frames.
+- **Also:** particles, multimeshes, labels and sprites are warmed as running copies of the real nodes, not as plain meshes. Tilt Breaker's `warmup_nodes()` adds the ball trail (built on the fly, so empty otherwise) and the ball-loss fireball.
+- **Result:** in headless Edge, a scripted Tilt Breaker run (serves, lost balls, a portal, a level clear, the outro, the next level) has no frame over 80 ms after the loading screen. Before, there were stalls at every one of those moments. Only a few single compiles remain, each under 80 ms.
+- **Tools kept:** `scripts/web_spikes.sh "<query>" [seconds]` builds, serves and runs the web build in headless Edge and prints slow frames next to game events (`DebugTools.mark`). `?log-shaders` logs every WebGL shader compiled, with its `#define` lines and material uniforms (a small page script in the Web preset's head include). `?no-focus-pause` turns off the focus pause for headless runs. Slow sound starts and DMD frames are logged too.
+- **Stopped here (director):** the web build isn't the main platform. Turbo Run benefits from the same general fixes but wasn't measured this way.
+- **Status:** Accepted

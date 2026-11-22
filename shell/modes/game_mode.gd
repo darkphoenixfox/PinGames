@@ -9,10 +9,18 @@
 extends "res://shell/modes/mode.gd"
 
 const ASSET_EXT := ["png", "jpg", "webp", "glb", "ogg", "wav", "mp3", "gdshader", "tres", "res", "ttf"]
-const WARMUP_FRAMES := 20
+const WARMUP_FRAMES := 24   # 4 light phases x 6 frames (D-179)
 
 ## Loaded resources per game, kept so later load() calls hit the cache.
 static var _cache := {}
+## One standard material per feature set, kept while the game runs (D-179).
+## Godot frees a standard material's generated shader with the last material
+## using it, so an effect that makes a fresh material each time (an explosion,
+## a fireball) would compile its shader again every time, a stall in WebGL.
+## Holding one material per set of features keeps every such shader compiled.
+## Static and per game, so a second play (no loading screen) still has them.
+static var _keep := {}     # game id -> {feature key -> Material}
+static var _key_of := {}   # material instance id -> feature key (computed once)
 
 var game_id := ""
 var module: Node
@@ -38,9 +46,22 @@ func enter() -> void:
 	Audio.sfx("start")
 	module.start(1)
 	print("Shell: started game '%s'" % game_id)
+	get_tree().node_added.connect(_on_node_added)
+	for r in _game_roots():
+		_keep_node(r)
 	if is_instance_valid(_overlay):
 		var warm := _warmup_nodes()
+		# Each material compiles a variant per set of light types touching it:
+		# none, point, point + spot, spot (the scene's sun stays on throughout).
+		var omni: Light3D = null
+		var spot: Light3D = null
+		for n in warm:
+			if n is OmniLight3D: omni = n
+			elif n is SpotLight3D: spot = n
 		for i in WARMUP_FRAMES:
+			var phase := i * 4 / WARMUP_FRAMES
+			if omni: omni.visible = phase == 1 or phase == 2
+			if spot: spot.visible = phase == 2 or phase == 3
 			await get_tree().process_frame
 			if not is_inside_tree():
 				return
@@ -58,10 +79,10 @@ func enter() -> void:
 func _warmup_nodes() -> Array[Node]:
 	var out: Array[Node] = []
 	var cam: Camera3D = null
-	for c in module.find_children("*", "Camera3D", true, false):
-		if (c as Camera3D).current:
-			cam = c
-			break
+	for r in _game_roots():
+		for c in r.find_children("*", "Camera3D", true, false):
+			if (c as Camera3D).current and cam == null:
+				cam = c
 	var holder3d := Node3D.new()
 	var holder2d := Control.new()
 	holder2d.modulate.a = 0.02          # drawn, but invisible even if peeked at
@@ -100,7 +121,30 @@ func _warmup_nodes() -> Array[Node]:
 	# (pooled cars, night lights, flashers): one copy each (D-178).
 	if cam != null:
 		var seen := {}
-		for g in module.find_children("*", "GeometryInstance3D", true, false):
+		var geoms: Array = []
+		for r in _game_roots():
+			geoms.append_array(r.find_children("*", "GeometryInstance3D", true, false))
+		for g in geoms:
+			# Particles, multimeshes, labels and sprites draw with their own shader
+			# variants (instanced, billboarded, font): copy the node itself, running.
+			if not (g is MeshInstance3D):
+				var key2 := "%s:%s" % [g.get_class(), str(_mesh_materials(g))]
+				if seen.has(key2) or seen.size() >= 300:
+					continue
+				seen[key2] = true
+				var dup := g.duplicate(0) as GeometryInstance3D
+				for ch in dup.get_children():
+					dup.remove_child(ch)
+					ch.free()
+				dup.visible = true
+				if dup is CPUParticles3D:
+					(dup as CPUParticles3D).one_shot = false
+					(dup as CPUParticles3D).emitting = true
+				dup.transform = Transform3D(Basis().scaled(Vector3.ONE * 0.2),
+					Vector3(float(i % 9) * 0.5 - 2.0, float(i / 9 % 6) * 0.5 - 1.2, -1.0))
+				holder3d.add_child(dup)
+				i += 1
+				continue
 			for pair in _mesh_materials(g):
 				var key := "%d:%d" % [pair[0].get_instance_id(), pair[1].get_instance_id() if pair[1] != null else 0]
 				if seen.has(key) or seen.size() >= 300:
@@ -122,6 +166,23 @@ func _warmup_nodes() -> Array[Node]:
 		holder3d.position = Vector3(0, 0, -6)   # in front of the camera
 		cam.add_child(holder3d)
 		out.append(holder3d)
+	# Lit materials need a shader variant per light type, compiled the first
+	# time such a light touches them (engine glows, capsule key lights, police
+	# flashers). A dim point light and spotlight that reach everything the
+	# camera sees compile those variants now, for the warm-up copies and the
+	# game's own scene.
+	if cam != null:
+		var omni := OmniLight3D.new()
+		omni.omni_range = 4096.0
+		omni.light_energy = 0.05
+		cam.add_child(omni)
+		out.append(omni)
+		var spot := SpotLight3D.new()
+		spot.spot_range = 4096.0
+		spot.spot_angle = 89.0
+		spot.light_energy = 0.05
+		cam.add_child(spot)
+		out.append(spot)
 	else:
 		holder3d.free()
 	# Under the loading overlay (which is on top of the TABLE).
@@ -129,6 +190,72 @@ func _warmup_nodes() -> Array[Node]:
 	Screens.table.move_child(holder2d, _overlay.get_index())
 	out.append(holder2d)
 	return out
+
+
+func _exit_tree() -> void:
+	if get_tree().node_added.is_connected(_on_node_added):
+		get_tree().node_added.disconnect(_on_node_added)
+
+
+func _on_node_added(n: Node) -> void:
+	if not (n is GeometryInstance3D):
+		return
+	for r in _game_roots():
+		if r.is_ancestor_of(n):
+			_keep_node(n)
+			return
+
+
+## The game's node and everything it added to the screens (its 3D worlds live
+## under the TABLE / BACKGLASS viewports, not under the game node).
+func _game_roots() -> Array[Node]:
+	var out: Array[Node] = []
+	if not is_instance_valid(module):
+		return out
+	out.append(module)
+	for n in module.get("_owned"):
+		if is_instance_valid(n):
+			out.append(n)
+	return out
+
+
+## Keeps the standard materials a node (and its children) draws with, one per
+## feature set.
+func _keep_node(root: Node) -> void:
+	var nodes: Array = [root]
+	nodes.append_array(root.find_children("*", "GeometryInstance3D", true, false))
+	for g in nodes:
+		if not (g is GeometryInstance3D):
+			continue
+		var mats: Array = [g.material_override, g.material_overlay]
+		for pair in _mesh_materials(g):
+			mats.append(pair[1])
+		var kept: Dictionary = _keep.get_or_add(game_id, {})
+		for m in mats:
+			while m is BaseMaterial3D:
+				var id: int = m.get_instance_id()
+				if not _key_of.has(id):
+					_key_of[id] = _feature_key(m)
+				if not kept.has(_key_of[id]):
+					kept[_key_of[id]] = m
+				m = (m as Material).next_pass
+
+
+## What decides a standard material's generated shader: its switches and
+## modes, and which texture slots are filled (colours and numbers don't).
+static func _feature_key(m: BaseMaterial3D) -> String:
+	var parts := PackedStringArray()
+	for p in m.get_property_list():
+		if not (p.usage & PROPERTY_USAGE_STORAGE):
+			continue
+		var v: Variant = m.get(p.name)
+		match typeof(v):
+			TYPE_BOOL, TYPE_INT:
+				parts.append("%s=%s" % [p.name, v])
+			TYPE_OBJECT:
+				if p.name != "next_pass":
+					parts.append("%s=%s" % [p.name, v != null])
+	return ",".join(parts)
 
 
 ## [mesh, material or null] pairs a geometry node draws with.

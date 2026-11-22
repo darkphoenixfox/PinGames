@@ -335,6 +335,8 @@ func _process(delta: float) -> void:
 # --- events ------------------------------------------------------------------------
 func _handle_events() -> void:
 	for e in sim.events:
+		if e[0] != "paddle" and e[0] != "wall":
+			DebugTools.mark(str(e[0]))
 		match e[0]:
 			"paddle":
 				Audio.sfx("tb_shield")
@@ -852,6 +854,16 @@ func warmup_nodes() -> Array[Node]:
 	for n in out:
 		_root.add_child(n)
 	InstParam.set_param(hole, "open", 1.0)
+	# The ball's trail is built while it flies (an empty mesh draws nothing):
+	# a few points so its material is drawn now.
+	var trail := Fx.Trail.new()
+	for k in 4:
+		trail.update(c + Vector3(float(k) * 0.3, 0.0, 0.5))
+	_root.add_child(trail)
+	out.append(trail)
+	# The fireball a lost charge makes on the planet (additive billboard + a
+	# gradient texture); it frees itself.
+	_planet._spawn_fireball(c + Vector3(0.0, 0.0, -2.0), 1.0, 0.1, 0.2)
 	return out
 
 
@@ -1130,6 +1142,7 @@ func _outro() -> void:
 	var k := clampf((t - OUTRO_LIFT_AT) / OUTRO_LIFT_TIME, 0.0, 1.0)
 	if k > 0.0 and not _outro_lifted:
 		_outro_lifted = true
+		DebugTools.mark("outro_lift")
 		Audio.sfx("tb_ship_arrive")
 		Dmd.play(Callable(_dmd_anims, "ship_boost"), DmdAnims.DURATIONS["ship_boost"])  # D-076
 	var e := k * k
@@ -1142,6 +1155,7 @@ func _outro() -> void:
 	_paddle.rotation = Vector3(-0.5 * k, 0.0, 0.0)
 	_set_belly_thrust(1.5 if k > 0.0 and k < 1.0 else 0.0)
 	if t >= OUTRO_FADE_AT and _outro_black == null:
+		DebugTools.mark("outro_fade")
 		_outro_black = UI.fill(Color(0, 0, 0, 0))
 		add_to_table(_outro_black)
 		_outro_black.create_tween().tween_property(_outro_black, "color:a", 1.0, OUTRO_FADE_TIME)
@@ -1150,6 +1164,7 @@ func _outro() -> void:
 
 
 func _load_next_level() -> void:
+	DebugTools.mark("next_level")
 	sim.next_level()
 	_build_bricks()
 	for n in _brick_nodes:

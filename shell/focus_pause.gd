@@ -17,6 +17,8 @@ var _overlay: Control
 
 
 static func wanted() -> bool:
+	if Config.cli.has("no-focus-pause"):   # test runs in a headless browser (never focused)
+		return false
 	return OS.has_feature("web") or Config.cli.has("pause-on-blur")
 
 
