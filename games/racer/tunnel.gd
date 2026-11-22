@@ -8,7 +8,7 @@ extends RefCounted
 const Track = preload("res://games/racer/track.gd")
 
 const PANEL := 8.0              # m of wall per texture tile
-const LIGHT_EVERY := 12.0       # m between ceiling lights
+const LIGHT_EVERY := 24.0       # m between ceiling lights (halved count, D-133)
 const PORTAL_W := 42.0          # portal face half width
 const PORTAL_H := 18.0
 const SODIUM := Color(1.0, 0.62, 0.25)
