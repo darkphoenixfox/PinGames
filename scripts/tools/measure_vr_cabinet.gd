@@ -25,6 +25,7 @@ func _init() -> void:
 	var w := img.get_width()
 	var h := img.get_height()
 	var aabb := mi.mesh.get_aabb()
+	_verts = vs
 	var tris: Array = []   # [centre, normal, area, a, b, c]
 	for t in range(0, idx.size(), 3):
 		var a := vs[idx[t]]
@@ -38,6 +39,8 @@ func _init() -> void:
 		if cr.length() < 1e-9:
 			continue
 		tris.append([(a + b + c) / 3.0, cr.normalized(), cr.length() * 0.5, a, b, c])
+		for k in 3:
+			_pink[idx[t + k]] = true
 	print("pink tris ", tris.size())
 	var top_y := aabb.position.y + aabb.size.y
 	var back_z := aabb.position.z
@@ -95,6 +98,10 @@ func _extents(pts: Array, a: float) -> Array:
 	return [rs[cut], rs[rs.size() - 1 - cut], us[cut], us[us.size() - 1 - cut]]
 
 
+var _verts: PackedVector3Array
+var _pink := {}   # vertex indices that belong to pink (screen) triangles
+
+
 func _area(list: Array) -> float:
 	var s := 0.0
 	for t in list:
@@ -148,6 +155,50 @@ func _region(list: Array, up_hint: Vector3) -> Dictionary:
 	var r1: float = e[1]
 	var u0: float = e[2]
 	var u1: float = e[3]
-	var c := right * (r0 + r1) * 0.5 + up * (u0 + u1) * 0.5 + n * plane
+	# Visible opening (D-167): the pink runs under the bezel lips. Cabinet
+	# geometry standing above the screen surface near an edge pushes that edge
+	# inwards, so the game can fit the picture inside what's actually visible.
+	var i0 := r0
+	var i1 := r1
+	var j0 := u0
+	var j1 := u1
+	var band_r := (r1 - r0) * 0.15
+	var band_u := (u1 - u0) * 0.15
+	for vi in _verts.size():
+		if _pink.has(vi):
+			continue   # the pink itself curves up a little at its edges
+		var vv: Vector3 = _verts[vi]
+		var dn := vv.dot(n) - plane
+		if dn < 0.002 or dn > 0.05:   # bezel lips, not the head overhanging the back
+			continue
+		var pr := vv.dot(right)
+		var pu := vv.dot(up)
+		if pr < r0 or pr > r1 or pu < u0 or pu > u1:
+			continue
+		# A point limits a side only away from the corners, so a rail running the
+		# full length of one side doesn't also cut the ends (and vice versa).
+		var mid_u := pu > u0 + band_u and pu < u1 - band_u
+		var mid_r := pr > r0 + band_r and pr < r1 - band_r
+		if mid_u and pr < r0 + band_r:
+			i0 = maxf(i0, pr)
+		elif mid_u and pr > r1 - band_r:
+			i1 = minf(i1, pr)
+		if mid_r and pu < u0 + band_u:
+			j0 = maxf(j0, pu)
+		elif mid_r and pu > u1 - band_u:
+			j1 = minf(j1, pu)
+	# Lay the screen just above the highest point of its pink area (D-167): the
+	# pink rises ~1 cm at its edges, which poked through a screen laid on the
+	# average plane and hid the picture's edges.
+	var tops: Array = []
+	for t in list:
+		for k in [3, 4, 5]:
+			tops.append((t[k] as Vector3).dot(n))
+	tops.sort()
+	var top_d: float = tops[tops.size() - 1 - maxi(1, tops.size() / 500)]
+	var lift := minf(top_d - plane, 0.025)   # capped: deep stray faces would float it off
+	var c := right * (i0 + i1) * 0.5 + up * (j0 + j1) * 0.5 + n * (plane + lift + 0.002)
+	print("  raised ", snappedf(lift * 1000.0, 0.1), " mm above the plane")
+	print("  opening ", [i1 - i0, j1 - j0], " of ", [r1 - r0, u1 - u0], " insets L R B T ", [i0 - r0, r1 - i1, j0 - u0, u1 - j1])
 	return {"centre": [c.x, c.y, c.z], "right": [right.x, right.y, right.z], "up": [up.x, up.y, up.z],
-		"normal": [n.x, n.y, n.z], "size": [r1 - r0, u1 - u0]}
+		"normal": [n.x, n.y, n.z], "size": [i1 - i0, j1 - j0]}

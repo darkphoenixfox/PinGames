@@ -1498,3 +1498,21 @@
 - **Room:** 5 × 5 × 2.9 m. Arcade carpet (generated pixel pattern), dark walls, pink and cyan neon strips near the ceiling with coloured fill lights, two ceiling light panels, and the two games' backglass art as wall posters. Glow is on. The cabinet stands in front of the back wall.
 - **Future models:** a separate flat mesh per screen named `playfield`, `backglass` and `dmd`, with 0–1 UVs, and the cabinet square to the axes, would make placement exact with no measuring. Pink areas keep working.
 - **Status:** Accepted (prototype)
+
+### D-167 — VR: screens fitted to the visible openings, not cut
+- **Date:** 2026-11-22
+- **Problem (director):** the playfield and DMD rendered too big, and the UI was cut at the edges.
+- **Cause:** the screens were laid on the pink area's average plane, but the pink surface rises about 1–2 cm at its edges. Those raised edges, now black glass, poked through the screen and hid the picture's border.
+- **Fix** (`measure_vr_cabinet.gd`):
+  - **Lift:** each screen is lifted just above the highest point of its pink area, capped at 25 mm, because the backglass band also contains some deeper faces.
+  - **Opening:** the visible opening is measured from non-pink geometry standing up to 5 cm above the screen near each edge. Corners are ignored, so a rail along one side can't cut the ends.
+  - **Aspect:** the game fits each picture into its opening at its own aspect ratio (TABLE 9:16, backglass 16:9, DMD 4:1), so nothing is cut and any difference shows as black.
+- **Status:** Accepted
+
+### D-168 — VR: the cabinet stays put, the player moves (supersedes D-165)
+- **Date:** 2026-11-22
+- **Decision (director):** the sticks move the player around the room, not the cabinet, which stands fixed in the middle of the room.
+- **Room:** `ROOM_BACK` moves to −3.2, so the 5 × 5 m room is centred on the cabinet.
+- **Controls:** the left stick walks relative to where the player looks (1.4 m/s, kept 0.3 m inside the walls). The right stick snap-turns 45° per push, about the player's head. Clicking the left stick returns the player to the front of the cabinet, facing it.
+- **Config:** the saved cabinet placement (`display.vr_cabinet`) is removed.
+- **Status:** Accepted (prototype)

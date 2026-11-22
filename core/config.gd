@@ -11,8 +11,6 @@ const DEFAULTS := {
 	"display": {
 		# windowed | 2screen | 3screen | vr   (D-006, D-013, D-164)
 		"layout": "windowed",
-		# VR cabinet placement (D-165): x, y (height offset), z in metres, yaw in degrees.
-		"vr_cabinet": Vector4(0, 0, 0, 0),
 		"windowed_monitor": 0,
 		"table_monitor": 0,
 		"backglass_monitor": 1,

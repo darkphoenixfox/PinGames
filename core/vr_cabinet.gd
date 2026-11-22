@@ -7,9 +7,9 @@
 ## player stands in front of the cabinet and the controllers are the buttons:
 ##   triggers = flippers, grips = magna saves, right A = launch,
 ##   left X = start, left Y = coin, right B (hold) = exit.
-## Moving the cabinet (D-165): left stick slides it (relative to where you
-## look), right stick up/down = height, left/right = turn it; click the left
-## stick to put it straight in front of you. Saved in the config.
+## Moving around (D-168): the cabinet stands fixed in the middle of the room;
+## left stick walks, right stick snap-turns, click the left stick to return to
+## the front of the cabinet.
 ## Without one it falls back to a fixed player's-eye camera (desktop preview,
 ## also used for screenshots).
 ##
@@ -23,6 +23,8 @@ const DMD_SHADER = preload("res://core/shaders/dmd_dots_3d.gdshader")
 ## scripts/tools/prepare_vr_cabinet.py; the box placeholder is the fallback.
 const CABINET_MODEL := "res://assets/models/vr/pinball_cabinet.glb"
 const CABINET_TEXTURE := "res://assets/models/vr/pinball_cabinet_albedo_clean.png"   # pink -> black glass
+## Width / height of each screen's picture.
+const ASPECTS := {"playfield": 1080.0 / 1920.0, "backglass": 1920.0 / 1080.0, "dmd": 4.0}
 const CABINET_SCREENS := "res://assets/models/vr/pinball_cabinet_screens.json"
 ## Posters on the room walls: the games' backglass art.
 const POSTERS := ["res://assets/textures/racer/backglass_on.png",
@@ -40,7 +42,7 @@ const STAND := 0.42               # player stands this far from the front (m)
 const EYE := 1.66                 # desktop preview eye height
 const ROOM := Vector2(5.0, 5.0)   # room width, depth (m)
 const ROOM_H := 2.9
-const ROOM_BACK := -1.9           # back wall z (the cabinet stands in front of it)
+const ROOM_BACK := -3.2           # back wall z: the cabinet (z 0 .. -1.4) stands mid-room (D-168)
 
 ## Controller buttons -> cabinet actions, per hand.
 const MAP := {
@@ -50,10 +52,10 @@ const MAP := {
 
 var xr_active := false
 var _controllers := {}
-var _cab: Node3D            # everything that moves with the cabinet (D-165)
+var _cab: Node3D            # the cabinet (fixed in the middle of the room, D-168)
 var _cam: Node3D
-var _height := 0.0
-var _dirty_t := -1.0        # save the placement shortly after it stops changing
+var _origin: XROrigin3D
+var _turn_ready := true     # snap turn: one step per push of the stick
 
 
 func build(table_tex: Texture2D, backglass_tex: Texture2D, dmd_tex: Texture2D) -> void:
@@ -62,13 +64,8 @@ func build(table_tex: Texture2D, backglass_tex: Texture2D, dmd_tex: Texture2D) -
 	add_child(_cab)
 	if not _model_cabinet(table_tex, backglass_tex, dmd_tex):
 		_cabinet(table_tex, backglass_tex, dmd_tex)
-	var saved: Vector4 = Config.get_value("display", "vr_cabinet")
-	_height = saved.y
-	_cab.position = Vector3(saved.x, saved.y, saved.z)
-	_cab.rotation.y = deg_to_rad(saved.w)
 	xr_active = _start_xr()
 	if not xr_active:
-		_cab.transform = Transform3D.IDENTITY   # the saved placement is for the headset
 		_desktop_camera()
 
 
@@ -83,6 +80,7 @@ func _start_xr() -> bool:
 	var origin := XROrigin3D.new()
 	origin.position = Vector3(0, 0, STAND)
 	add_child(origin)
+	_origin = origin
 	var cam := XRCamera3D.new()
 	origin.add_child(cam)
 	_cam = cam
@@ -99,10 +97,12 @@ func _start_xr() -> bool:
 	return true
 
 
-# --- moving the cabinet (D-165) --------------------------------------------------------
-const MOVE_SPEED := 0.6       # m/s
-const LIFT_SPEED := 0.25      # m/s
-const TURN_SPEED := 45.0      # deg/s
+# --- moving around the room (D-168) --------------------------------------------------
+## The cabinet stays put in the middle of the room; the sticks move the player.
+## Left stick walks (relative to where you look), right stick snap-turns 45
+## degrees, clicking the left stick returns you to the spot in front of it.
+const WALK_SPEED := 1.4       # m/s
+const SNAP_TURN := 45.0       # degrees per push
 const DEAD := 0.25
 
 
@@ -111,45 +111,39 @@ func _process(delta: float) -> void:
 		return
 	var l: Vector2 = (_controllers["left"] as XRController3D).get_vector2("primary")
 	var r: Vector2 = (_controllers["right"] as XRController3D).get_vector2("primary")
-	var moved := false
 	if l.length() > DEAD:
-		# Relative to where the player looks, flattened to the floor.
 		var fwd := -_cam.global_basis.z
 		fwd.y = 0.0
 		fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
 		var right := Vector3(-fwd.z, 0.0, fwd.x)
-		_cab.position += (right * l.x + fwd * l.y) * MOVE_SPEED * delta
-		moved = true
-	if absf(r.y) > DEAD:
-		_height = clampf(_height + r.y * LIFT_SPEED * delta, -0.5, 0.5)
-		_cab.position.y = _height
-		moved = true
-	if absf(r.x) > DEAD:
-		_cab.rotation.y -= deg_to_rad(r.x * TURN_SPEED * delta)
-		moved = true
-	if moved:
-		_dirty_t = 0.6
-	elif _dirty_t > 0.0:
-		_dirty_t -= delta
-		if _dirty_t <= 0.0:
-			_save_placement()
+		var p := _origin.position + (right * l.x + fwd * l.y) * WALK_SPEED * delta
+		# Stay inside the walls.
+		var half := ROOM * 0.5 - Vector2(0.3, 0.3)
+		var zc := ROOM_BACK + ROOM.y * 0.5
+		p.x = clampf(p.x, -half.x, half.x)
+		p.z = clampf(p.z, zc - half.y, zc + half.y)
+		_origin.position = p
+	if absf(r.x) > 0.6 and _turn_ready:
+		_turn_ready = false
+		_turn_around_head(-signf(r.x) * deg_to_rad(SNAP_TURN))
+	elif absf(r.x) < 0.3:
+		_turn_ready = true
 
 
-## Puts the cabinet straight in front of the player, facing them.
+## Turns the play space about the player's head, so they don't slide sideways.
+func _turn_around_head(angle: float) -> void:
+	var head := _cam.global_position
+	var t := _origin.global_transform
+	t.origin -= head
+	t = Transform3D(Basis(Vector3.UP, angle), Vector3.ZERO) * t
+	t.origin += head
+	_origin.global_transform = t
+
+
+## Back to the spot in front of the cabinet, facing it.
 func recenter() -> void:
-	var fwd := -_cam.global_basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
-	var front := _cam.global_position + fwd * STAND
-	_cab.rotation.y = atan2(-fwd.x, -fwd.z)
-	_cab.position = Vector3(front.x, _height, front.z)
-	_save_placement()
-
-
-func _save_placement() -> void:
-	Config.set_value("display", "vr_cabinet",
-		Vector4(_cab.position.x, _cab.position.y, _cab.position.z, rad_to_deg(_cab.rotation.y)))
-	Config.save()
+	_origin.transform = Transform3D(Basis.IDENTITY, Vector3(0, 0, STAND))
+	XRServer.center_on_hmd(XRServer.RESET_BUT_KEEP_TILT, true)
 
 
 func _on_button(button: String, hand: String, pressed: bool) -> void:
@@ -304,6 +298,12 @@ func _carpet() -> StandardMaterial3D:
 	return m
 
 
+func _fit(box: Vector2, aspect: float) -> Vector2:
+	if box.x / box.y > aspect:
+		return Vector2(box.y * aspect, box.y)
+	return Vector2(box.x, box.x / aspect)
+
+
 ## The director's cabinet model with the live screens laid on its pink areas.
 func _model_cabinet(table_tex: Texture2D, backglass_tex: Texture2D, dmd_tex: Texture2D) -> bool:
 	if not ResourceLoader.exists(CABINET_MODEL) or not FileAccess.file_exists(CABINET_SCREENS):
@@ -332,7 +332,9 @@ func _model_cabinet(table_tex: Texture2D, backglass_tex: Texture2D, dmd_tex: Tex
 		if not data.has(key):
 			continue
 		var r: Dictionary = data[key]
-		var size := Vector2(r.size[0], r.size[1])
+		# Fit the picture inside the visible opening at its own aspect (D-167):
+		# nothing cut, black bars where the shapes differ.
+		var size := _fit(Vector2(r.size[0], r.size[1]), ASPECTS[key])
 		var m: MeshInstance3D
 		if key == "dmd":
 			m = MeshInstance3D.new()
@@ -350,7 +352,7 @@ func _model_cabinet(table_tex: Texture2D, backglass_tex: Texture2D, dmd_tex: Tex
 		var right := Vector3(r.right[0], r.right[1], r.right[2])
 		var up := Vector3(r.up[0], r.up[1], r.up[2])
 		var n := Vector3(r.normal[0], r.normal[1], r.normal[2])
-		var c := Vector3(r.centre[0], r.centre[1], r.centre[2]) + n * 0.003
+		var c := Vector3(r.centre[0], r.centre[1], r.centre[2])   # already lifted clear (D-167)
 		m.transform = Transform3D(Basis(right, up, n), c)
 	return true
 
