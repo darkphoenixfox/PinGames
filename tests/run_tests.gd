@@ -757,6 +757,24 @@ func test_racer_sim() -> void:
 	nz.v = nz.nitro_speed()
 	nz._police_follow(10.0, 0.0, 100.0, 1000.0)
 	check(float(nz.police.v) < nz.nitro_speed() - 5.0, "the police can't keep up with nitro")
+	# Traffic yields to the police (D-163): pulls to its right-hand edge, slows, indicates.
+	var yt = Sim.new()
+	yt.setup(7)
+	yt.state = Sim.State.RACE
+	yt.grace_t = 99.0
+	yt.police = {"s": yt.s - 50.0, "x": 0.0, "v": 0.0, "state": "chase", "t": 0.0}
+	yt.traffic = [{"id": 1, "s": yt.s + 100.0, "x": 1.875, "lane": 2, "v": 40.0, "hue": 0.0, "weave": 0.0,
+		"last_ds": 100.0, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W},
+		{"id": 2, "s": yt.s + 150.0, "x": -1.875, "lane": 1, "v": -30.0, "hue": 0.0, "weave": 0.0,
+		"last_ds": 150.0, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W}]
+	for i in 60 * 3:
+		yt.police.s = yt.s - 50.0
+		yt.police.t = 0.0
+		yt.step(dt, false, false)
+	var ours: Dictionary = yt.traffic[0]
+	var theirs: Dictionary = yt.traffic.filter(func(t): return t.id == 2)[0] if yt.traffic.any(func(t): return t.id == 2) else {}
+	check(ours.blink and ours.x > 5.5 and ours.v < 30.0 and (theirs.is_empty() or theirs.x < -5.5),
+		"traffic pulls over to its own right-hand edge for the police, indicating")
 	# Outrunning it long enough: it gives up with a bonus.
 	var run = Sim.new()
 	run.setup(7)

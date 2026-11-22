@@ -1455,3 +1455,12 @@
   - **Scene:** our car (in the chosen colour) at the right; the police car behind it at a gap that maps the real distance (0–150 m) across the DMD, with its light bar flashing red/blue and speed lines; road dashes scroll with our speed.
   - **Readouts:** the distance in feet top left, blinking red under 30 m (98 ft), and our speed in mph top right. The radar LED still shows.
 - **Status:** Accepted
+
+### D-163 — Turbo Run: traffic pulls over for the police, indicating
+- **Date:** 2026-11-22
+- **Decision (director):** when the police is coming, other traffic moves to the sides with its blinkers on.
+- **Who:** while the police chases with its lights on, any vehicle from 40 m behind it to 350 m ahead of it yields. That covers both directions.
+- **How:** each vehicle eases to its own right-hand edge, so our-way traffic goes to the right kerb and oncoming traffic to theirs (the left side as we see it). It stops weaving and slows to 60 % of its cruise speed. When the police has passed or the chase ends, it pulls back into its lane and speeds up again.
+- **Blinkers:** amber pixel glows at the vehicle's own right front and rear corners, set per model (`BLINKERS`), flash at about 1.4 Hz while yielding.
+- **Test:** a car and an oncoming car both reach their edges, slow down and indicate.
+- **Status:** Accepted

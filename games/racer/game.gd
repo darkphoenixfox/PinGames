@@ -83,6 +83,13 @@ const TRUCK2_MODEL := "res://assets/models/racer/truck2.glb"
 const HATCH_MODEL := "res://assets/models/racer/hatchback.glb"
 const HATCH_TEXTURE := "res://assets/models/racer/hatchback_albedo.png"
 const HATCH_POOL := 8
+## Indicator spots per model, on its own right side (D-163).
+const BLINKERS := {
+	"car": [Vector3(-0.85, 0.65, -2.15), Vector3(-0.8, 0.6, 2.15)],
+	"hatch": [Vector3(-0.8, 0.85, -1.95), Vector3(-0.78, 0.65, 1.95)],
+	"truck": [Vector3(-1.3, 0.9, -4.95), Vector3(-1.2, 1.1, 4.95)],
+	"truck2": [Vector3(-1.4, 0.9, -4.95), Vector3(-1.3, 1.1, 4.95)],
+}
 ## Lamp areas per model for car.gdshader (model space, |x|; D-144). The red
 ## car uses the shader defaults.
 const LAMP_BOXES := {
@@ -309,6 +316,7 @@ var _gear_lever: Control
 var _shift_big: Label
 var _shift_slot: Control
 var _cops_flash := false
+var _blink_mesh: QuadMesh
 var _shift_armed := true    # SHIFT hint allowed (start of race / after a crash, D-160)
 var _shift_shown := false
 var _nitro_pop: Label       # NITRO notice above the speedometer (D-159)
@@ -931,6 +939,7 @@ func _build_cars() -> void:
 				_: t = _car_instance(0.0, TRUCK2_MODEL, TRUCK2_TEXTURE)
 			var light_kind := "truck" if kind.begins_with("truck") else "car"
 			_add_headlights(t, light_kind)
+			_add_blinkers(t, kind)
 			t.set_meta("night", Night.add_car_lights(t, light_kind, _puff_texture()))
 			t.visible = false
 			_root.add_child(t)
@@ -1235,6 +1244,36 @@ func _update_radar(delta: float) -> void:
 			Audio.sfx("rc_radar")
 	if is_instance_valid(_radar_bar):
 		_radar_bar.set_state(sim.radar if sim.state == Sim.State.RACE else 0.0, _radar_led > 0.0)
+
+
+## Right-hand indicators (D-163): amber glows at the vehicle's own right front
+## and rear corners (model space: front +Z, the model's right is -X), flashed
+## while it pulls over for the police.
+func _add_blinkers(node: Node3D, kind: String) -> void:
+	if _blink_mesh == null:
+		var q := QuadMesh.new()
+		q.size = Vector2(0.55, 0.55)
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		m.albedo_texture = _puff_texture()
+		m.albedo_color = Color(1.0, 0.6, 0.05)
+		q.material = m
+		_blink_mesh = q
+	var spots: Array = BLINKERS.get(kind, BLINKERS["car"])
+	var list := []
+	for sp in spots:
+		var b := MeshInstance3D.new()
+		b.mesh = _blink_mesh
+		b.position = sp
+		b.visible = false
+		b.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.add_child(b)
+		list.append(b)
+	node.set_meta("blinkers", list)
 
 
 ## Nitro pick-up (D-103, D-115): the 16-bit nitrous tank sprite (blue bottle
@@ -1563,6 +1602,9 @@ func _animate(delta: float) -> void:
 				(m as MeshInstance3D).set_instance_shader_parameter("overhead", _overhead(t.s))
 				(m as MeshInstance3D).set_instance_shader_parameter("lamps", maxf(_night, 1.0 if sim.track.in_tunnel(t.s) else 0.0))
 		(node.get_meta("night") as Node3D).visible = _lamps > 0.0
+		var blink_on: bool = t.get("blink", false) and fmod(_phase_t + t.id * 0.17, 0.7) < 0.35
+		for bl in node.get_meta("blinkers", []):
+			(bl as Node3D).visible = blink_on
 		# High beams: flash-flash ... pause (D-105).
 		var ph := fmod(_phase_t + t.id * 0.13, 0.7)
 		var beam_on: bool = t.get("flash", false) and (ph < 0.1 or (ph > 0.2 and ph < 0.3))

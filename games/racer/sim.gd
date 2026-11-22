@@ -137,6 +137,8 @@ const ESCAPE_BONUS := 10000.0
 const FLIP_KINDS := ["palm", "rock", "lamp", "truck", "portal"]
 const SCRAPE_DRAG := 9.0        # m/s^2 lost scraping a tunnel wall (D-127)
 const NEAR_MISS_DX := 3.3
+const YIELD_AHEAD := 350.0      # m ahead of the police where traffic pulls over (D-163)
+const YIELD_SLOW := 0.6         # speed traffic slows to while yielding
 const SIDE_SLOW := 0.93         # speed kept on a side-swipe
 const SIDE_BOUNCE := 7.0        # m/s sideways shove
 const TRUCK_LEN := 10.0
@@ -808,7 +810,18 @@ func _update_traffic(dt: float) -> void:
 		t.weave += dt
 		# Shoved aside by a side bump (D-152): an offset that eases back to the lane.
 		t.shove = move_toward(float(t.get("shove", 0.0)), 0.0, 2.0 * dt)
-		t.x = Track.LANES[t.lane] + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6) + t.shove
+		# Yielding to the police (D-163): near its lights, traffic pulls over
+		# to its own right-hand edge, slows and indicates; then rejoins.
+		var lane_x: float = Track.LANES[t.lane]
+		var yielding: bool = police_lights() and t.s > float(police.s) - 40.0 and t.s < float(police.s) + YIELD_AHEAD
+		t.blink = yielding
+		var tw2: float = t.get("w", CAR_W)
+		var edge := signf(lane_x) * (Track.ROAD_HALF - tw2 * 0.5 - 0.2)
+		t.pull = move_toward(float(t.get("pull", 0.0)), (edge - lane_x) if yielding else 0.0, 2.2 * dt)
+		if not t.has("v0"):
+			t.v0 = t.v
+		t.v = move_toward(t.v, float(t.v0) * (YIELD_SLOW if yielding else 1.0), 6.0 * dt)
+		t.x = lane_x + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6) * (0.0 if yielding else 1.0) + t.shove + t.pull
 		var ds: float = t.s - s
 		t.last_ds = ds
 		# Oncoming drivers flash their high beams (and honk once) at a car
