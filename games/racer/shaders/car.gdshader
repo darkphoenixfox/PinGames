@@ -14,10 +14,20 @@ instance uniform float bright = 1.0;
 // the bodywork around the lenses stays dark.
 instance uniform float lamps = 0.0;
 instance uniform float brake = 0.0;
+// D-143: turning wheels. The wheels are part of the body mesh, so their rims
+// get animated spoke streaks around each axle that blur into a solid disc as
+// the car speeds up. spin = 0 turns the effect off (traffic models differ).
+instance uniform float spin = 0.0;       // 1 = hero car
+instance uniform float wheel_phase = 0.0;
+instance uniform float wheel_blur = 0.0; // 0 still .. 1 fast
+uniform vec2 axle_yz = vec2(0.33, 1.2);  // axle height, |z| of front/rear axle
+uniform float wheel_r = 0.32;
 uniform vec3 tail_min = vec3(0.2, 0.7, -9.0);
 uniform vec3 tail_max = vec3(0.7, 0.9, -1.95);
 uniform vec3 head_min = vec3(0.45, 0.55, 1.85);
 uniform vec3 head_max = vec3(0.82, 0.8, 9.0);
+// D-144: per model. Non-red cars light only the red texels in the tail box.
+uniform bool tail_red_only = false;
 
 varying vec3 mp;
 
@@ -40,7 +50,24 @@ void fragment() {
 	vec3 c = texture(tex, UV).rgb;
 	ALBEDO = hue_rotate(c, hue * 6.2831853) * bright;
 	float lum = dot(c, vec3(0.3, 0.59, 0.11));
-	float tail = in_box(mp, tail_min, tail_max) * clamp(lamps * 0.7 + brake, 0.0, 1.5);
+	if (spin > 0.5 && abs(mp.x) > 0.7) {
+		vec2 d = vec2(mp.z - sign(mp.z) * axle_yz.y, mp.y - axle_yz.x);
+		float r = length(d);
+		bool not_paint = c.r < c.g * 1.6 + 0.05;   // rims + tyre, not red bodywork
+		if (r < wheel_r && not_paint) {
+			float a = atan(d.y, d.x);
+			float rim = 1.0 - smoothstep(wheel_r * 0.62, wheel_r * 0.78, r);
+			float spokes = step(0.0, sin(a * 5.0 + wheel_phase));
+			vec3 dark = vec3(0.12);
+			vec3 streak = mix(dark, vec3(0.75), spokes);
+			vec3 disc = vec3(0.42);
+			vec3 w = mix(streak, disc, wheel_blur);
+			ALBEDO = mix(ALBEDO, w, rim * 0.85);
+		}
+	}
+	float redness = (c.r > 0.3 && c.r > c.g * 1.8 && c.r > c.b * 1.8) ? 1.0 : 0.0;
+	float tail = in_box(mp, tail_min, tail_max) * clamp(lamps * 0.7 + brake, 0.0, 1.5)
+		* (tail_red_only ? redness : 1.0);
 	float head = in_box(mp, head_min, head_max) * lamps;
 	EMISSION = tail * vec3(1.0, 0.12, 0.08) * (0.6 + lum * 2.0) * 1.6
 		+ head * vec3(1.0, 0.95, 0.8) * (0.3 + lum * 1.6) * 1.4;

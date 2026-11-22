@@ -1331,3 +1331,18 @@
   - **Checkpoints:** CHECKPOINT no longer shows mid-TABLE; the gate, DMD animation and sound remain. JUST MADE IT! still shows when a checkpoint saves the race.
   - **Showroom:** all three cars start at the same rotation angle.
 - **Status:** Accepted
+
+### D-143 — Turbo Run: turning wheels, dawn at stage 10, pixel radar balls, steep hills
+- **Date:** 2026-11-22
+- **Decisions (director):**
+  - **Wheels:** the car's wheels are part of its single mesh and can't rotate, so `car.gdshader` fakes it on the hero car (`spin` instance uniform). Around each axle (model z = ±1.2 m, 0.33 m up, radius 0.32 m, outer faces only, non-red texels), the rims get 5 spoke streaks driven by `wheel_phase` (road speed ÷ wheel radius, stepped). They blend into a smooth grey disc as speed rises (`wheel_blur`, from 6 to 26 m/s). From the chase camera this shows mostly in turns and drifts.
+  - **Dawn:** night covers stages 5–9; from stage 10 the scene fades back to the dawn/sunset look (`Night.DAWN_STAGE`). The CodeManu songs also start at stage 10 (D-129).
+  - **Radar balls:** a 16-bit look. They are drawn in chunky 4 px pixels with a dark outline, three shade bands and a highlight; lit balls brighten on each beep.
+  - **Steep hills:** 17 % of sections (after the start) are short steep climbs or drops, at a 14–22 % average grade (about 30 % at the steepest point). Normal hills stay at ±10 %. Tunnels aren't laid on sections steeper than 6 % (tested).
+- **Status:** Accepted
+
+### D-144 — Turbo Run: hatchbacks light their own lamps
+- **Date:** 2026-11-22
+- **Bug (director):** hatchbacks didn't light up in the dark. The car shader's lamp boxes were measured on the red car, and the hatchback's lamps sit elsewhere.
+- **Fix:** lamp boxes are now per model (`LAMP_BOXES`, applied to each model's shared material). The hatchback uses a tail box with `tail_red_only`: its body is blue, so only the red lens texels glow. Its headlight box is set from its own lights. The red car keeps the shader defaults.
+- **Status:** Accepted

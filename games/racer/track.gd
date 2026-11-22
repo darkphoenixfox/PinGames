@@ -12,12 +12,15 @@ const ROAD_HALF := 7.5         # 4 lanes of 3.75 m
 const LANES := [-5.625, -1.875, 1.875, 5.625]
 const RUMBLE := 1.2            # red/white kerb outside the road edge
 const START_STRAIGHT := 400.0
+const STEEP_CHANCE := 0.17      # sections that are steep hills (D-143)
+const STEEP_GRADE := 0.22
 const TUNNEL_MIN := 220.0
 const TUNNEL_MAX := 520.0
 const TUNNEL_GAP := 1200.0       # m between tunnels
 const TUNNEL_FIRST := 900.0      # no tunnel before this
 const TUNNEL_CHANCE := 0.35      # of eligible sections
 const TUNNEL_MAX_CURV := 1.0 / 260.0
+const TUNNEL_MAX_GRADE := 0.06   # no tunnel through a steep hill (D-143)
 const TUNNEL_HALF := ROAD_HALF + 0.3   # wall distance from the centre line (road edge)
 const TUNNEL_HEIGHT := 6.5
 const MAX_TURN := deg_to_rad(110.0)      # per curve section
@@ -110,7 +113,13 @@ func _random_section() -> void:
 		if absf(y + c * len * 0.7) > MAX_HEADING:
 			len = maxf(60.0, (MAX_HEADING - absf(y)) / (absf(c) * 0.7))
 	var dh := 0.0
-	if _rng.randf() < 0.7:
+	var hill := _rng.randf()
+	if hill < STEEP_CHANCE and _built_to > START_STRAIGHT + 300.0:
+		# Steep climb or drop (D-143): up to STEEP_GRADE average over a
+		# shorter section, so it reads as a proper hill.
+		len = minf(len, 260.0)
+		dh = (1.0 if _rng.randf() < 0.5 else -1.0) * len * _rng.randf_range(0.14, STEEP_GRADE)
+	elif hill < 0.7:
 		dh = _rng.randf_range(-1.0, 1.0) * len * 0.1
 	_add_section(len, c, dh)
 
@@ -135,7 +144,8 @@ func _add_section(len: float, c: float, dh: float) -> void:
 		curv.append(ck)
 	var s0 := _built_to
 	_built_to = (pos.size() - 1) * SAMPLE
-	_maybe_tunnel(s0, _built_to, c)
+	if absf(dh) <= (_built_to - s0) * TUNNEL_MAX_GRADE:
+		_maybe_tunnel(s0, _built_to, c)
 	_place_objects(s0, _built_to)
 
 

@@ -8,6 +8,7 @@
 extends RefCounted
 
 const NIGHT_STAGE := 5          # the stage where night falls
+const DAWN_STAGE := 10          # the sun comes back up (D-143)
 const FADE := 8.0               # s for day -> night
 const BEAM := Color(1.0, 0.92, 0.65)
 const LAMP := Color(1.0, 0.8, 0.45)

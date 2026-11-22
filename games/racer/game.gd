@@ -80,6 +80,15 @@ const TRUCK2_MODEL := "res://assets/models/racer/truck2.glb"
 const HATCH_MODEL := "res://assets/models/racer/hatchback.glb"
 const HATCH_TEXTURE := "res://assets/models/racer/hatchback_albedo.png"
 const HATCH_POOL := 8
+## Lamp areas per model for car.gdshader (model space, |x|; D-144). The red
+## car uses the shader defaults.
+const LAMP_BOXES := {
+	"res://assets/models/racer/hatchback.glb": {
+		"tail_min": Vector3(0.0, 0.35, -9.0), "tail_max": Vector3(0.95, 1.3, -1.6),
+		"tail_red_only": true,
+		"head_min": Vector3(0.35, 0.45, 1.6), "head_max": Vector3(0.85, 0.82, 9.0),
+	},
+}
 ## Director's police car (D-135).
 const POLICE_MODEL := "res://assets/models/racer/police2.glb"   # D-140: not modelled on a real car
 const POLICE_TEXTURE := "res://assets/models/racer/police2_albedo.png"
@@ -263,6 +272,7 @@ var _shift_flame_t := 0.0   # upshift exhaust flame left
 var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
 var _bg_dark := 0.0     # s of crash flicker left
 var _sky_h := 0.0
+var _wheel_phase := 0.0
 var _travel := 0.0         # eased nose angle from sideways travel (D-128)
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
@@ -845,6 +855,10 @@ func _car_instance(hue: float, model: String = CAR_MODEL, texture: String = CAR_
 		mat.shader = CAR_SHADER
 		mat.set_shader_parameter("tex", load(texture))
 		mat.set_shader_parameter("toon", Toon.enabled)
+		if LAMP_BOXES.has(model):   # where this model's lamps are (D-144)
+			var lb: Dictionary = LAMP_BOXES[model]
+			for k in lb:
+				mat.set_shader_parameter(k, lb[k])
 		_car_mats[model] = mat
 	for m in node.find_children("*", "MeshInstance3D", true, false):
 		var mi := m as MeshInstance3D
@@ -1455,9 +1469,16 @@ func _animate(delta: float) -> void:
 	_car_body.visible = sim.grace_t <= 0.0 or fmod(_phase_t, 0.16) < 0.1
 	# Hero car's own lamps (D-120): night lights, and brake lights when braking.
 	var braking := sim.braking or sim.auto_braking or (sim.state == Sim.State.OVER and sim.v > 1.0)
+	# Turning wheels (D-143): the phase follows the road speed (radius 0.32 m),
+	# stepped at ANIM_FPS like sprite frames; fast = a blurred disc.
+	_wheel_phase = fmod(_wheel_phase + sim.v / 0.32 * delta, TAU * 100.0)
+	var phase_step := floorf(_wheel_phase * 3.0) / 3.0
 	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
 		var gi := m as MeshInstance3D
 		if gi.material_override != null:   # the body, not its outline shell
+			gi.set_instance_shader_parameter("spin", 1.0)
+			gi.set_instance_shader_parameter("wheel_phase", phase_step)
+			gi.set_instance_shader_parameter("wheel_blur", clampf((sim.v - 6.0) / 20.0, 0.0, 1.0))
 			gi.set_instance_shader_parameter("lamps", _lamps)
 			gi.set_instance_shader_parameter("brake", 1.0 if braking else 0.0)
 	if _player_lights != null:
@@ -1880,8 +1901,8 @@ func _update_night(delta: float) -> void:
 	var target := 0.0
 	if Config.cli.has("rc-night"):
 		target = 1.0
-	elif _phase != "attract" and sim != null and sim.checkpoints >= Night.NIGHT_STAGE - 1:
-		target = 1.0
+	elif _phase != "attract" and sim != null and sim.checkpoints >= Night.NIGHT_STAGE - 1 			and sim.checkpoints < Night.DAWN_STAGE - 1:
+		target = 1.0   # night for stages 5-9; dawn returns at stage 10 (D-143)
 	_night = move_toward(_night, target, delta / Night.FADE)
 	# Tunnels (D-127): lights on and daylight dimmed while inside, any stage;
 	# the effects bus gets a reverb.

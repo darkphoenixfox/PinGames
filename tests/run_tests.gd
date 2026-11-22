@@ -567,6 +567,18 @@ func test_racer_sim() -> void:
 		if absf(a.track.curvature(i * 2.5)) > 1.0 / 120.0:
 			curves += 1
 	check(hills > 5.0 and curves > 0, "racer track has hills (%.1f m) and sharp curves" % hills)
+	var steep := 0.0
+	a.track.ensure(20000.0)
+	for i in 8000:
+		steep = maxf(steep, absf(a.track.slope(i * 2.5)))
+	check(steep > 0.18, "the road has some steep climbs and drops (max grade %.0f %%)" % (steep * 100.0))
+	var steep_tunnel := false
+	for tv in a.track.tunnels:
+		var ss: float = tv.x
+		while ss < tv.y:
+			steep_tunnel = steep_tunnel or absf(a.track.slope(ss)) > 0.12
+			ss += 5.0
+	check(not steep_tunnel, "tunnels don't go through steep hills")
 	# The road never doubles back: heading stays within the limit and no stretch
 	# passes near an earlier one (hillsides would cross the track, D-094).
 	for seed_i in [1, 7, 42]:
