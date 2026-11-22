@@ -1062,3 +1062,13 @@
 - **Date:** 2026-11-22
 - **Decision (director):** stages 1–5 play "Maximum Overdrive" (Bogart VGM, D-104), carried on seamlessly from attract mode. Stage 6 switches to the CodeManu action songs, starting on action_3, and they change every 4 stages after that (stages 10, 14, …). This supersedes the stage-1 song in D-106 and the stage-5 switch in D-105.
 - **Status:** Accepted
+
+### D-112 — Turbo Run: shift effects, revving on the grid, crash downshift, new sounds
+- **Date:** 2026-11-22
+- **Decisions (director):**
+  - **Downshift:** puffs of tyre smoke from the rear wheels for 0.5 s, plus a short tyre chirp. No chirp during a crash.
+  - **Upshift:** a short exhaust flame from both pipes (0.25 s, half the nitro flame's length, base kept on the pipe) and a backfire crackle.
+  - **Revving on the grid:** during the countdown, holding a flipper revs the engine. rpm rises at 2.2/s and falls at 1.4/s; the tachometer and engine sound follow, and the rev limiter bounces the pitch at the top. The car doesn't move.
+  - **Crash downshift:** every crash shifts to L by itself, so the car pulls away again properly.
+  - **Sounds:** the timer, drift-points and nitro beeps are replaced with richer 16/32-bit style effects. The timer is a woodblock tock. Banking drift points plays a bell cascade with an octave-down shadow, coin shimmer, echo and reverb. Nitro is a turbo whoosh with a growl, a sub-bass boom and a shimmering tail in a big reverb.
+- **Status:** Accepted

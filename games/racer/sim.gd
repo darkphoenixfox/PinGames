@@ -53,6 +53,8 @@ const GEAR_H_PULL_MIN := 0.3     # x ACCEL at 0 rpm in H (lugging) ...
 const GEAR_H_PULL_MAX := 1.05    # ... rising to this at 60 % rpm
 const SHIFT_HOLD := 0.5          # s both flippers held to shift
 const REDLINE := 0.88
+const REV_UP := 2.2               # rpm/s while revving on the grid (D-112)
+const REV_DOWN := 1.4
 ## After the clock runs out the car coasts (D-103): reaching a checkpoint
 ## before it stops extends the time and the race goes on.
 const COAST_OVER := 7.0          # m/s^2 decel while coasting out
@@ -160,6 +162,10 @@ func step(dt: float, left: bool, right: bool, gas: bool = false, brake: bool = f
 	track.ensure(s + 1500.0)
 	match state:
 		State.COUNTDOWN:
+			# Flippers rev the engine on the grid (D-112).
+			var rev := left or right
+			rpm = move_toward(rpm, 1.0 if rev else 0.0, dt * (REV_UP if rev else REV_DOWN))
+			throttle = 1.0 if rev else 0.0
 			var before := ceili(countdown)
 			countdown -= dt
 			if ceili(countdown) < before and countdown > 0.0:
@@ -422,6 +428,7 @@ func _crash(kind: String, side: float = 0.0, slide: bool = true) -> void:
 	spin_t = crash_anim + CRASH_STOP
 	v = minf(v, (FLIP_SPEED if slide else 6.0) if flipping else 14.0)
 	crash_slide = false
+	shift(Gear.LOW)   # a crash drops to low gear by itself (D-112)
 	if boosting:
 		boosting = false
 		boost_t = 0.0

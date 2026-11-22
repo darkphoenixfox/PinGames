@@ -115,19 +115,44 @@ const SOUNDS := {
 		[{"f": [5200.0, 1800.0], "t": 0.35, "w": "noise", "v": 0.15}]], "reverb": [0.8, 0.3]},
 	"rc_bump": {"voices": [[{"f": [160.0, 50.0], "t": 0.2, "w": "sine", "v": 0.6}],
 		[{"f": [2400.0, 600.0], "t": 0.12, "w": "lfsr", "v": 0.25}]]},
+	# Turbo: a rising whoosh, a growling saw and a sub-bass boom with a
+	# shimmering tail, in a big reverb (D-112).
 	"rc_nitro": {"voices": [
-		[{"f": [200.0, 3000.0], "t": 0.5, "w": "noise", "v": 0.35, "lp": 0.3, "env": "lin"}],
-		[{"f": [70.0, 40.0], "t": 0.7, "w": "sine", "v": 0.55}],
-		[{"f": [440.0, 1320.0], "t": 0.4, "w": "saw", "v": 0.12, "lp": 0.5}]], "reverb": [0.7, 0.25]},
+		[{"f": [300.0, 7000.0], "t": 0.45, "w": "noise", "v": 0.4, "lp": 0.25, "a": 0.02, "env": "lin"}],
+		[{"f": [55.0, 110.0], "t": 0.8, "w": "saw", "v": 0.3, "lp": 0.55, "vib": [28.0, 0.6], "env": "lin"}],
+		[{"f": [95.0, 42.0], "t": 0.6, "w": "sine", "v": 0.55}],
+		[{"f": [330.0, 1320.0], "t": 0.28, "w": "square", "v": 0.1, "lp": 0.35, "env": "hold"},
+		 {"f": [1320.0, 1320.0], "t": 0.35, "w": "square", "v": 0.08, "lp": 0.35, "vib": [12.0, 0.4]}]],
+		"reverb": [1.0, 0.3]},
+	# Upshift backfire: a crackle and a thump.
+	"rc_backfire": {"voices": [[{"f": [1800.0, 300.0], "t": 0.12, "w": "lfsr", "v": 0.4, "lp": 0.3}],
+		[{"f": [110.0, 50.0], "t": 0.15, "w": "sine", "v": 0.5}]], "reverb": [0.3, 0.2]},
+	# Downshift: a short tyre chirp.
+	"rc_chirp": {"voices": [[{"f": [1400.0, 900.0], "t": 0.18, "w": "triangle", "v": 0.18, "vib": [30.0, 0.8]}],
+		[{"f": [5000.0, 3000.0], "t": 0.16, "w": "noise", "v": 0.12, "lp": 0.4}]]},
 	"rc_horn": {"voices": [[{"f": [392.0, 392.0], "t": 0.18, "w": "square", "v": 0.14, "env": "hold", "lp": 0.5}],
 		[{"f": [494.0, 494.0], "t": 0.18, "w": "square", "v": 0.14, "env": "hold", "lp": 0.5}]], "echo": [0.26, 0.5, 1.5]},
 	"rc_shift": {"voices": [[{"f": [180.0, 90.0], "t": 0.12, "w": "square", "v": 0.25},
 		{"f": [900.0, 900.0], "t": 0.04, "w": "noise", "v": 0.2}]]},
 	"rc_near_miss": {"voices": [[{"f": [3000.0, 500.0], "t": 0.35, "w": "noise", "v": 0.3, "lp": 0.5}],
 		[{"f": [900.0, 500.0], "t": 0.3, "w": "saw", "v": 0.1, "lp": 0.6}]]},
-	"rc_drift_bank": {"voices": [[{"f": [1047.0, 1047.0], "t": 0.06, "w": "pulse25", "v": 0.2, "env": "hold"},
-		{"f": [1568.0, 1568.0], "t": 0.2, "w": "pulse25", "v": 0.2}]]},
-	"rc_tick": {"voices": [[{"f": [1200.0, 1200.0], "t": 0.08, "w": "square", "v": 0.18, "env": "hold"}]]},
+	# Drift points banked: a bright bell cascade with an octave-down shadow and a
+	# coin shimmer, echoed (D-112).
+	"rc_drift_bank": {"voices": [
+		[{"f": [1319.0, 1319.0], "t": 0.05, "w": "triangle", "v": 0.3, "env": "hold"},
+		 {"f": [1661.0, 1661.0], "t": 0.05, "w": "triangle", "v": 0.3, "env": "hold"},
+		 {"f": [1976.0, 1976.0], "t": 0.05, "w": "triangle", "v": 0.3, "env": "hold"},
+		 {"f": [2637.0, 2637.0], "t": 0.35, "w": "triangle", "v": 0.3, "vib": [6.0, 0.15]}],
+		[{"f": [659.0, 659.0], "t": 0.05, "w": "sine", "v": 0.25, "env": "hold"},
+		 {"f": [831.0, 831.0], "t": 0.05, "w": "sine", "v": 0.25, "env": "hold"},
+		 {"f": [988.0, 988.0], "t": 0.05, "w": "sine", "v": 0.25, "env": "hold"},
+		 {"f": [1319.0, 1319.0], "t": 0.4, "w": "sine", "v": 0.25}],
+		[{"f": [9000.0, 9000.0], "t": 0.15, "w": "noise", "v": 0.07, "lp": 0.1, "gap": 0.0}]],
+		"echo": [0.07, 0.3, 0.35], "reverb": [0.9, 0.25]},
+	# Low-time clock: a woodblock "tock" with a soft body (D-112).
+	"rc_tick": {"voices": [[{"f": [1900.0, 1600.0], "t": 0.05, "w": "triangle", "v": 0.35}],
+		[{"f": [950.0, 900.0], "t": 0.09, "w": "sine", "v": 0.25}],
+		[{"f": [7000.0, 7000.0], "t": 0.012, "w": "noise", "v": 0.18, "lp": 0.2}]], "reverb": [0.35, 0.18]},
 	"rc_time_up": {"voices": [[{"f": [660.0, 660.0], "t": 0.3, "w": "pulse25", "v": 0.25, "env": "hold"},
 		{"f": [494.0, 494.0], "t": 0.3, "w": "pulse25", "v": 0.25, "env": "hold"},
 		{"f": [330.0, 330.0], "t": 0.8, "w": "pulse25", "v": 0.25, "vib": [5.0, 0.3]}]], "echo": [0.12, 0.3, 0.5]},
@@ -151,6 +176,8 @@ var _car_outlines := {}     # model path -> outline ArrayMesh
 var _beam_mat: StandardMaterial3D
 var _pix_vp: SubViewport
 var _bg_mat: ShaderMaterial
+var _shift_smoke_t := 0.0   # downshift tyre smoke left (D-112)
+var _shift_flame_t := 0.0   # upshift exhaust flame left
 var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
 var _bg_dark := 0.0     # s of crash flicker left
 var _sky_h := 0.0
@@ -416,6 +443,15 @@ func _handle_events() -> void:
 				Audio.sfx("rc_horn")
 			"shift":
 				Audio.sfx("rc_shift")
+				# Upshift: a short exhaust flame + backfire; downshift: tyre smoke
+				# + a chirp (D-112).
+				if int(e[1]) == Sim.Gear.HIGH:
+					_shift_flame_t = 0.25
+					Audio.sfx("rc_backfire")
+				else:
+					_shift_smoke_t = 0.5
+					if sim.spin_t <= 0.0:
+						Audio.sfx("rc_chirp")
 				Dmd.flash(tr("RC_GEAR_FLASH") % _gear_text(int(e[1])), 0.5, Dmd.YELLOW)
 			"near_miss":
 				_bg_flash = 0.4
@@ -996,13 +1032,18 @@ func _animate(delta: float) -> void:
 	var rb := Basis(Vector3.UP, yaw) * Basis(Vector3.FORWARD, roll)
 	_car_body.transform = Transform3D(rb * MODEL_TURN, Vector3(0, lift, 0) + pivot - rb * pivot)
 	var sliding_out := sim.state == Sim.State.OVER and sim.v > 3.0
-	var smoking := sim.drifting or sliding_out or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
+	_shift_smoke_t = maxf(0.0, _shift_smoke_t - delta)
+	_shift_flame_t = maxf(0.0, _shift_flame_t - delta)
+	var smoking := sim.drifting or sliding_out or _shift_smoke_t > 0.0 or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
 	_update_puffs(delta, smoking)
-	var burning := sim.boosting
+	var burning := sim.boosting or _shift_flame_t > 0.0
 	for fl in _flames:
 		fl.visible = burning
 		if burning:
-			fl.scale = Vector3(1.0, 0.8 + randf() * 0.7, 1.0)
+			var short := 0.5 if not sim.boosting else 1.0   # upshift pop is short
+			var sy := (0.8 + randf() * 0.7) * short
+			fl.scale = Vector3(1.0, sy, 1.0)
+			fl.position.z = -2.2 - 0.5 * sy   # keep the cone's base on the pipe
 	# Traffic
 	var used := {"car": 0, "truck": 0}
 	for t in sim.traffic:
@@ -1415,6 +1456,8 @@ func _update_audio() -> void:
 		return
 	var rpm := sim.rpm
 	_engine.pitch_scale = 0.6 + rpm * 1.9 + (0.25 if sim.boosting else 0.0)
+	if sim.state == Sim.State.COUNTDOWN and rpm > 0.97 and fmod(_phase_t * 18.0, 1.0) < 0.5:
+		_engine.pitch_scale -= 0.2   # rev limiter bouncing (D-112)
 	_engine.volume_db = -14.0 + sim.throttle * 4.0 + rpm * 2.0
 	var squeal := sim.drifting or (sim.state == Sim.State.OVER and sim.v > 3.0) 		or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
 	_skid.volume_db = lerpf(_skid.volume_db, -10.0 if squeal else -60.0, 0.2)
