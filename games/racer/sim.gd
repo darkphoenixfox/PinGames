@@ -306,8 +306,11 @@ func step(dt: float, left: bool, right: bool, _gas: bool = false, brake: bool = 
 			shift_request = false   # the shifter does nothing on the grid
 			# Flippers rev the engine on the grid (D-112).
 			var rev := left or right
-			rpm = move_toward(rpm, 1.0 if rev else 0.0, dt * (REV_UP if rev else REV_DOWN))
-			throttle = 1.0 if rev else 0.0
+			# D-258: a gamepad's accelerator revs too, in proportion (so the
+			# needle can be held in the start window with the trigger).
+			var want := 1.0 if rev else maxf(gas_axis, 0.0)
+			rpm = move_toward(rpm, want, dt * (REV_UP if want > rpm else REV_DOWN))
+			throttle = want
 			var before := ceili(countdown)
 			countdown -= dt
 			if ceili(countdown) < before and countdown > 0.0:

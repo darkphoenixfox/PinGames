@@ -2575,3 +2575,10 @@
   - Held, it opens the operator menu, as EXIT does.
 - **START action:** no pad button now. Cross plays from the menu, so nothing needs it.
 - **Status:** Accepted
+
+### D-258 — R2 revs the engine on the grid
+- **Date:** 2026-11-23
+- **Bug (director):** R2 didn't rev the car at the start (the D-pad did). With all the buttons available, the accelerator should rev.
+- **Fix:** in the countdown, the accelerator (`gas_axis`, R2 once pressed, D-252) revs the engine in proportion: the revs rise to the trigger's position and fall when it's let off. So the needle can be held in the perfect-start window with the trigger (D-118). The flippers or D-pad still rev fully, as before.
+- **Test:** 60 % R2 holds the needle near 0.6 on the grid.
+- **Status:** Accepted

@@ -808,6 +808,13 @@ func test_racer_hd_assets() -> void:
 			an.step(1.0 / 60.0, false, false)
 		xs.append(an.x)
 	check(xs[0] > 0.05 and xs[1] > xs[0] * 1.3, "half stick steers less than full stick (%.2f vs %.2f m)" % [xs[0], xs[1]])
+	# D-258: the accelerator revs on the grid.
+	var rg = SimA.new()
+	rg.setup(4)
+	rg.gas_axis = 0.6
+	for i in 60:
+		rg.step(1.0 / 60.0, false, false)
+	check(rg.state == SimA.State.COUNTDOWN and rg.rpm > 0.5 and rg.rpm < 0.65, "R2 revs on the grid in proportion (rpm %.2f)" % rg.rpm)
 	# D-219: random weather spells: at least WEATHER_MIN long, suited to the
 	# area, different per seed, the same for the same seed.
 	var spell_ok := true
