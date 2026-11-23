@@ -2738,3 +2738,11 @@
   - **Seam:** dark where the frame meets the screen.
 - **Thickness:** the frame is 2.6 % of the window height (was 1.8 %), so the bevel reads.
 - **Status:** Accepted
+
+### D-277 — After game over, back to the game's PRESS START
+- **Date:** 2026-11-23
+- **Decision (director):** on game over, don't go back to the game selection; go back to PRESS START in the game.
+- **Change:** `Shell.return_to_game(id)`: after GAME OVER, or after the high-score initials, the shell restarts that game's mode, which opens on its own attract / PRESS START screen. Its assets are already loaded, so there's no loading screen.
+- **Credits:** a game's START plays straight away, so the next game's credit is taken here. With no credit left (not free play), it goes to the picker, which shows INSERT COIN.
+- **Unchanged:** EXIT during a game still leaves to the picker.
+- **Status:** Accepted

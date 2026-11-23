@@ -125,4 +125,4 @@ func _finish() -> void:
 		Dmd.show_text(tr("DMD_RANK") % (rank + 1), initials, Dmd.YELLOW, Dmd.WHITE)
 	get_tree().create_timer(DONE_SECONDS).timeout.connect(func():
 		if is_inside_tree():
-			shell.goto_picker())
+			shell.return_to_game(game_id))   # D-277: back to the game's PRESS START

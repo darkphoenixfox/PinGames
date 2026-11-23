@@ -149,4 +149,16 @@ func game_finished(id: String, best_score: int) -> void:
 		switch_to(Initials.new(id, best_score))
 	else:
 		Dmd.flash(tr("DMD_GAME_OVER"), 2.0, Dmd.RED)
+		return_to_game(id)
+
+
+## D-277: after a game (and its initials), back to that game's own PRESS START
+## screen, not the game picker. Its START plays straight away, so the next
+## game's credit is taken here; with none left, the picker (INSERT COIN).
+func return_to_game(id: String) -> void:
+	CabinetInput.mute_until_release()
+	if not Credits.can_start():
 		goto_picker()
+		return
+	Credits.try_start()
+	switch_to(GameMode.new(id))
