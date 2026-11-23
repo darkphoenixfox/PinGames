@@ -263,6 +263,11 @@ signal table_shape_changed
 var table_flex := false
 ## D-262: a flexible game that wants the DMD above it, not over it (landscape).
 var dmd_above := false
+## D-265: landscape with side panels (Tilt Breaker): the game over the whole
+## window (its playfield as tall as possible), the DMD in a box on the left and
+## the BACKGLASS in a box on the right.
+var side_panels := false
+var _single_bgv: Control
 
 
 func set_flexible(on: bool) -> void:
@@ -275,6 +280,12 @@ func set_flexible(on: bool) -> void:
 
 
 ## D-262: the DMD above the game area instead of over it (Tilt Breaker).
+func want_side_panels(on: bool) -> void:
+	side_panels = on
+	if current_layout == "single" and is_instance_valid(_single_page):
+		_place_single(Vector2(get_window().size))
+
+
 func want_dmd_above(on: bool) -> void:
 	dmd_above = on
 	if current_layout == "single" and is_instance_valid(_single_page):
@@ -289,7 +300,7 @@ func want_portrait_table(on: bool) -> void:
 
 ## D-255: how much of the TABLE's top the DMD covers (base px), 0 if it doesn't.
 func dmd_cover() -> float:
-	if current_layout != "single" or not table_flex or dmd_above:
+	if current_layout != "single" or not table_flex or dmd_above or side_panels:
 		return 0.0
 	var b := Vector2(table_base())
 	if b.y >= b.x:
@@ -361,6 +372,11 @@ func _single_layout() -> void:
 	t.texture = table.get_texture()
 	_single_page.add_child(t)
 	_single_table = t
+	var bgv := ScreenView.new()   # D-265: the BACKGLASS, shown with side panels
+	bgv.texture = backglass.get_texture()
+	bgv.visible = false
+	_single_page.add_child(bgv)
+	_single_bgv = bgv
 	var d := _web_dmd()
 	d.name = "Dmd"
 	_single_page.add_child(d)
@@ -423,7 +439,22 @@ func _place_single(win: Vector2) -> void:
 		var dh := dw / ratio
 		d.position = Vector2((win.x - dw) * 0.5, 0)
 		d.size = Vector2(dw, dh)
-		if table_flex and not dmd_above:   # the game fills the window, the DMD over its top (D-254)
+		if is_instance_valid(_single_bgv):
+			_single_bgv.visible = false
+		if table_flex and side_panels:
+			# D-265: the game over the whole window; the DMD in a box on the
+			# left (4:1), the BACKGLASS in a box on the right (16:9).
+			t.position = Vector2.ZERO
+			t.size = win
+			var lw := win.x * 0.26
+			d.position = Vector2(win.x * 0.037, win.y * 0.27)
+			d.size = Vector2(lw, lw / ratio)
+			if is_instance_valid(_single_bgv):
+				var bw := win.x * 0.245
+				_single_bgv.position = Vector2(win.x * 0.74, win.y * 0.31)
+				_single_bgv.size = Vector2(bw, bw * 9.0 / 16.0)
+				_single_bgv.visible = true
+		elif table_flex and not dmd_above:   # the game fills the window, the DMD over its top (D-254)
 			t.position = Vector2.ZERO
 			t.size = win
 		else:

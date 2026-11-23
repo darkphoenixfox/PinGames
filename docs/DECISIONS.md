@@ -2634,3 +2634,13 @@
 - **Unchanged:** cabinet layouts keep both flippers as the only way to charge.
 - **Test:** the charge button charges the shot.
 - **Status:** Accepted
+
+### D-265 — Tilt Breaker landscape: DMD in a left box, backglass in a right box
+- **Date:** 2026-11-23
+- **Decision (director, marked-up screenshot):** place the DMD in the box on the left, which lets the play area be zoomed bigger, and put the backglass in the box on the right. Supersedes D-262's DMD-on-top for Tilt Breaker.
+- **Screens:** `want_side_panels(on)`. In single-screen landscape the TABLE covers the whole window, so Tilt Breaker's camera, which keeps the playfield's height, draws it as tall as the window.
+  - **DMD:** at 3.7 % / 27 % of the window, 26 % of its width (4:1).
+  - **BACKGLASS:** the game's backglass art and effects, shown at 74 % / 31 %, 24.5 % of the width (16:9).
+  - **Turbo Run:** keeps the DMD over its top centre (D-254/255).
+  - **Portrait:** unchanged.
+- **Status:** Accepted
