@@ -250,8 +250,9 @@ func _process(delta: float) -> void:
 	_t += delta
 	# Only the chosen car turns (stepped like a sprite set); the others hold
 	# their pose (D-123).
-	var step := TAU / SPRITE_ANGLES
+	# D-208: 8-BIT steps through SPRITE_ANGLES poses, 16-BIT twice as many, HD turns smoothly.
+	var step := TAU / (SPRITE_ANGLES * (1 if nes else 2))
 	_angles[selected] += delta * SPIN
 	for i in 3:
-		var a := roundf(float(_angles[i]) / step) * step
+		var a: float = float(_angles[i]) if hd else roundf(float(_angles[i]) / step) * step
 		(_cars[i] as Node3D).rotation = Vector3(0, a, 0)

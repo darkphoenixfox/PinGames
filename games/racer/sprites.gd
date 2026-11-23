@@ -18,7 +18,7 @@ const KINDS := {
 	"sign_curve_l": ["sign_curve", 3.6, true, true, 134],    # mirrored: turns left
 	"sign_green": ["sign_green", 5.5, true, false, 113],
 	"gantry": ["gantry", 12.9, false, false, 151],
-	"nitro": ["nitro", 2.6, true, false, 126],               # pick-up (D-115)
+	"nitro": ["nitro", 2.6, true, false, 80],                # pick-up (D-115; D-208: as chunky as the other sprites)
 	"speedtrap": ["speedtrap", 8.0, true, false, 126],       # speed camera (D-135; oversized like the palms, D-137)
 	# Beach stage (D-204): small buildings on the right, a lifeguard tower on the sand.
 	"house_1": ["house_1", 5.5, true, false, 132],

@@ -1946,3 +1946,17 @@
 - **Palette:** 12 hues every 30° starting at blue, in 4 brightness rows (HSL lightness 0.30 / 0.50 / 0.72 / 0.88), plus 6 greys from black to white. We generated it ourselves in the style of the 8-bit consoles' palettes; it is not a copy of one.
 - **Showroom:** in 8-BIT it uses the same palette, at 0.75 of its resolution.
 - **Status:** Accepted
+
+### D-208 — Turbo Run: animation steps per graphics mode; nitro texels
+- **Date:** 2026-11-23
+- **Decision (director):** 16-BIT doubles the number of frames and positions for the car's turning and other animations. HD is completely smooth. Check whether the nitro pickups are pixelated.
+- **Steps:** `_anim_mult` is 1 in 8-BIT (the D-092/D-098 counts), 2 in 16-BIT, and 0 in HD (no stepping). It scales:
+  - the sprite-style car angles: 32 views, or 64 in 16-BIT;
+  - the crash animation frame rate: 10 fps, or 20;
+  - the roll-over poses: 8 per turn, or 16;
+  - the TIME UP slide: 6 steps, or 12;
+  - the wheel spin and the nitro bob;
+  - the showroom turntable: 32 or 64 angles.
+- **HD:** all of the above are smooth.
+- **Nitro:** it was pixelated in 8-BIT and 16-BIT, but at 126 texels for 2.6 m (48/m), much finer than the other sprites (25–37/m), so it looked sharp beside them. It is now 80 texels (31/m).
+- **Status:** Accepted

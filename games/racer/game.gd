@@ -332,6 +332,9 @@ var _beam_mat: StandardMaterial3D
 var _pix_vp: SubViewport
 var _gfx_hd := false             # D-195: HD graphics (native resolution, high-res art)
 var _gfx_mode := "retro"         # D-207: one of GFX_OPTIONS
+## D-208: animation steps per mode: 8-BIT the base frame counts, 16-BIT twice
+## as many, HD 0 = smooth (no stepping at all).
+var _anim_mult := 2.0
 var _retro_post: ShaderMaterial  # the 16-bit palette/dither pass, kept for switching back
 var _hd_flipped := {}            # materials HD switched from nearest to smooth filtering
 var _gfx_ui: Control
@@ -644,6 +647,7 @@ func _start_gfx() -> String:
 ## fixed palette.
 func _apply_gfx(mode: String) -> void:
 	_gfx_mode = mode
+	_anim_mult = {"nes": 1.0, "retro": 2.0}.get(mode, 0.0)
 	var on := mode == "hd"
 	_gfx_hd = on
 	var low := NES_RES if mode == "nes" else PIXEL_RES
@@ -1795,8 +1799,18 @@ func _build_gate(parent: Node3D, s: float, text: String) -> void:
 ## Animation progress t (0..1 over `seconds`) held on ANIM_FPS steps, so crash
 ## animations play like a few sprite frames instead of smooth motion (D-098).
 func _anim_steps(t: float, seconds: float) -> float:
-	var n := maxf(1.0, seconds * ANIM_FPS)
+	if _anim_mult <= 0.0:
+		return clampf(t, 0.0, 1.0)
+	var n := maxf(1.0, seconds * ANIM_FPS * _anim_mult)
 	return floorf(clampf(t, 0.0, 1.0) * n) / n
+
+
+## Rounds x (in units of whole steps of 1/frames) to the mode's frames (D-208).
+func _frame_steps(x: float, frames: float) -> float:
+	if _anim_mult <= 0.0:
+		return x
+	var n := frames * _anim_mult
+	return roundf(x * n) / n
 
 
 ## Horizontal yaw of the chase camera's view (same convention as Track: 0 = -Z).
@@ -1809,7 +1823,9 @@ func _camera_yaw() -> float:
 ## Simulated sprite car (D-092): the 3D model only ever shows one of
 ## SPRITE_ANGLES views relative to the camera, like a pre-rendered sprite set.
 func _sprite_yaw(world_yaw: float, cam_yaw: float) -> float:
-	var step := TAU / SPRITE_ANGLES
+	if _anim_mult <= 0.0:
+		return world_yaw   # HD: smooth (D-208)
+	var step := TAU / (SPRITE_ANGLES * _anim_mult)
 	return cam_yaw + roundf((world_yaw - cam_yaw) / step) * step
 
 
@@ -1853,7 +1869,7 @@ func _animate(delta: float) -> void:
 		_over_turn = move_toward(_over_turn, 0.0, delta / OVER_TURN_TIME)
 		if _over_turn == 0.0:
 			_over_dir = 0.0
-	yaw += roundf(_over_turn * OVER_TURN_FRAMES) / OVER_TURN_FRAMES * PI * 0.5 * _over_dir
+	yaw += _frame_steps(_over_turn, OVER_TURN_FRAMES) * PI * 0.5 * _over_dir
 	var cam_yaw := _camera_yaw()
 	yaw = _sprite_yaw(tr_.heading(sim.s) + yaw, cam_yaw) - tr_.heading(sim.s)
 	var bounce := 0.0
@@ -1870,7 +1886,7 @@ func _animate(delta: float) -> void:
 		var q := clampf((crash_p - FLIP_TURN_END) / (FLIP_ROLL_END - FLIP_TURN_END), 0.0, 1.0)
 		# Two rolls and a higher hop at 100+ mph (D-206).
 		var turns := float(sim.flip_turns)
-		roll = roundf(q * FLIP_FRAMES * turns) / FLIP_FRAMES * TAU * sim.flip_dir
+		roll = _frame_steps(q * turns, FLIP_FRAMES) * TAU * sim.flip_dir
 		lift += 4.0 * FLIP_HOP * (1.0 + 0.6 * (turns - 1.0)) * q * (1.0 - q)
 	var pivot := Vector3(0, 0.65, 0)             # roll around the body's middle
 	var rb := Basis(Vector3.UP, yaw) * Basis(Vector3.FORWARD, roll)
@@ -1885,7 +1901,7 @@ func _animate(delta: float) -> void:
 	# Turning wheels (D-143): the phase follows the road speed (radius 0.32 m),
 	# stepped at ANIM_FPS like sprite frames; fast = a blurred disc.
 	_wheel_phase = fmod(_wheel_phase + sim.v / 0.32 * delta, TAU * 100.0)
-	var phase_step := floorf(_wheel_phase * 3.0) / 3.0
+	var phase_step := _wheel_phase if _anim_mult <= 0.0 else floorf(_wheel_phase * 3.0 * _anim_mult) / (3.0 * _anim_mult)
 	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
 		var gi := m as MeshInstance3D
 		if gi.material_override != null:   # the body, not its outline shell
@@ -1980,7 +1996,7 @@ func _animate(delta: float) -> void:
 		if i < sim.pickups.size():
 			var pd: Dictionary = sim.pickups[i]
 			pk.visible = true
-			var st := floorf(_phase_t * ANIM_FPS) / ANIM_FPS
+			var st := _phase_t if _anim_mult <= 0.0 else floorf(_phase_t * ANIM_FPS * _anim_mult) / (ANIM_FPS * _anim_mult)
 			pk.transform = Transform3D(Basis.IDENTITY, tr_.point(pd.s, pd.x, 0.35 + 0.3 * absf(sin(st * 4.0))))
 		else:
 			pk.visible = false
