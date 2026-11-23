@@ -53,6 +53,9 @@ const SPRITE_ANGLES := 32
 const SHIFT_RISE := 36.0    # px the SHIFT word rises each loop (D-158)
 const SHIFT_NAG := 3.0      # s at the redline in L before the big SHIFT (D-116)
 const REV_HAND := "res://assets/textures/racer/rev_hand.png"   # D-197
+const REV_HAND_GAP := 44.0     # px from the tacho's band to the fingertip at rest (D-209)
+const REV_POKES := 3.0         # pokes at the band, then still (D-209)
+const REV_POKE_RATE := 9.0     # rad/s
 const DIAL_R := 150.0        # tachometer and speedometer radius (D-149)
 const SPEEDO_MAX := 220      # mph on the speedometer dial (D-147; nitro on the fastest car ~206)
 const MAX_TRAVEL_YAW := 0.45   # rad: the most the nose follows sideways travel (D-124)
@@ -2386,17 +2389,21 @@ func _update_rev_hint(countdown: bool) -> void:
 		_rev_hand.size = Vector2(_rev_hand.texture.get_size()) * 2.0
 		_rev_hint.add_child(_rev_hand)
 		var lab := UI.styled_label(tr("RC_REV_HINT"), TITLE_FONT, 2)
-		lab.position = Vector2(30, -110)
+		lab.position = Vector2(10, -104)
 		_rev_hint.add_child(lab)
 		_hud.add_child(_rev_hint)
 	var show := countdown and _phase == "race"
 	_rev_hint.modulate.a = 1.0 if show else 0.0
 	if not show:
 		return
-	# The fingertip (the hand's left edge, middle) at the green band, plus a bob.
+	# The fingertip (the hand's left edge, middle) a little outside the green
+	# band; it pokes towards it 3 times, then holds still (D-209).
 	var band := (_tach_of(Sim.START_FROM) + _tach_of(Sim.START_TO)) * 0.5
 	var target: Vector2 = _tacho.global_position - _hud.global_position + _tacho.arc_point(band)
-	var bob := 10.0 + 10.0 * sin(_phase_t * 9.0)
+	var poke := 0.0
+	if _phase_t < REV_POKES * TAU / REV_POKE_RATE:
+		poke = 0.5 - 0.5 * cos(_phase_t * REV_POKE_RATE)   # 0 out, 1 in
+	var bob := REV_HAND_GAP - 18.0 * poke
 	_rev_hint.position = target + Vector2(bob, -_rev_hand.size.y * 0.5)
 
 

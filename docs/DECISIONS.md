@@ -1960,3 +1960,11 @@
 - **HD:** all of the above are smooth.
 - **Nitro:** it was pixelated in 8-BIT and 16-BIT, but at 126 texels for 2.6 m (48/m), much finer than the other sprites (25–37/m), so it looked sharp beside them. It is now 80 texels (31/m).
 - **Status:** Accepted
+
+### D-209 — Turbo Run REV! hint: smaller hand, further out, 3 pokes
+- **Date:** 2026-11-23
+- **Decision (director):** make the REV! hand smaller, move it a bit further outside the tacho, and only blink 3 times.
+- **Size:** the hand is redrawn at 79×47 px (`gen_rev_hand.py` `PIX` 7, was 5; 111×66), still shown at 2×. That is about 70 % of the old size, with even pixels.
+- **Place:** at rest the fingertip is `REV_HAND_GAP` 44 px outside the green start band (was 10–20 px).
+- **Motion:** it pokes towards the band `REV_POKES` 3 times (about 2 s), then holds still until GO. Before, it bobbed for the whole countdown. The hint itself stays on screen until GO.
+- **Status:** Accepted

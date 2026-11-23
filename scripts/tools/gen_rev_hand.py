@@ -19,7 +19,7 @@ OUTLINE = (10, 4, 22)
 SHADE = (110, 30, 140)
 
 W, H = 640, 400      # drawing size (pointing right, mirrored at the end)
-PIX = 5              # one output pixel per PIX drawing pixels
+PIX = 7              # one output pixel per PIX drawing pixels (D-209: 7, was 5: a smaller hand)
 
 
 def gradient(t):
