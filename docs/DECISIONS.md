@@ -1968,3 +1968,17 @@
 - **Place:** at rest the fingertip is `REV_HAND_GAP` 44 px outside the green start band (was 10–20 px).
 - **Motion:** it pokes towards the band `REV_POKES` 3 times (about 2 s), then holds still until GO. Before, it bobbed for the whole countdown. The hint itself stays on screen until GO.
 - **Status:** Accepted
+
+### D-210 — Turbo Run: supercar is the hard car; the medium car is green
+- **Date:** 2026-11-23
+- **Decision (director):** the new `supercar.glb` is the hard car, and the medium car is green.
+- **Model:** run through `prepare_racer_car.py` at 4.5 m with the full 36k-tri mesh. Its texture atlas is in thousands of tiny pieces, and at the usual 256 px it turned to mush, so it gets a 1024 px albedo for 8-BIT and 16-BIT (still nearest-sampled; the screen pass does the pixelation). HD uses the 8K original downscaled to 4096 (`supercar_albedo_hd.jpg`).
+- **Per-model settings** (from orthographic renders):
+  - 4 exhaust flames, two each side at x ±0.52 / ±0.64, 0.27 m up;
+  - plate at 0.43 m;
+  - tail lamps |x| 0.45–0.85, y 0.66–0.9; head lamps |x| 0.45–0.75, y 0.52–0.7;
+  - night spot keys `supercar`.
+  - `MODEL_TEXTURES` and `MODEL_LIGHTS` replace the hot-hatch special cases in `_build_body` and the showroom.
+- **Colours:** car hues rotate each model's own paint. Easy is 0 (the hot hatch's red). Normal is 0.36 (the red car turned green). Hard is 0 (the supercar's own yellow; was 0.08 orange on the red car, D-202).
+- **Traffic:** the supercar is not added to traffic (not asked).
+- **Status:** Accepted

@@ -668,7 +668,7 @@ func test_racer_hd_assets() -> void:
 	for lo in Game.HD_TEXTURES:
 		if not ResourceLoader.exists(Game.HD_TEXTURES[lo]):
 			miss_tex.append(Game.HD_TEXTURES[lo])
-	check(miss_tex.is_empty() and Game.HD_TEXTURES.size() == 6, "HD car textures exist for all six models")
+	check(miss_tex.is_empty() and Game.HD_TEXTURES.size() == 7, "HD car textures exist for all seven models")
 
 
 func test_racer_time_of_day() -> void:

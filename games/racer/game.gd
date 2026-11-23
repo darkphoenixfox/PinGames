@@ -94,18 +94,29 @@ const HATCH_POOL := 8
 const HOTHATCH_MODEL := "res://assets/models/racer/hothatch.glb"
 const HOTHATCH_TEXTURE := "res://assets/models/racer/hothatch_albedo.png"
 const HOTHATCH_POOL := 6
+## Director's supercar (D-210): the hard car. Its texture atlas is in tiny
+## pieces, so RETRO samples a 1024 px albedo (256 px turned it to mush).
+const SUPERCAR_MODEL := "res://assets/models/racer/supercar.glb"
+const SUPERCAR_TEXTURE := "res://assets/models/racer/supercar_albedo.png"
 ## The player's model per car (Sim.CARS order: easy, normal, hard).
-const CAR_MODELS := [HOTHATCH_MODEL, CAR_MODEL, CAR_MODEL]
+const CAR_MODELS := [HOTHATCH_MODEL, CAR_MODEL, SUPERCAR_MODEL]
+## Each player model's albedo, and its key in TAIL_AT / NIGHT light spots.
+const MODEL_TEXTURES := {CAR_MODEL: CAR_TEXTURE, HOTHATCH_MODEL: HOTHATCH_TEXTURE, SUPERCAR_MODEL: SUPERCAR_TEXTURE}
+const MODEL_LIGHTS := {CAR_MODEL: "car", HOTHATCH_MODEL: "hothatch", SUPERCAR_MODEL: "supercar"}
 ## Exhaust tips per model (model space, rear is -Z): where the nitro and
 ## backfire flames come out. The hot hatch has two pipes together on its left.
 const EXHAUSTS := {
 	CAR_MODEL: [Vector3(-0.57, 0.28, -2.2), Vector3(0.57, 0.28, -2.2)],
 	HOTHATCH_MODEL: [Vector3(0.42, 0.26, -2.05), Vector3(0.53, 0.26, -2.05)],
+	# Twin pipes on each side (D-210).
+	SUPERCAR_MODEL: [Vector3(-0.64, 0.27, -2.2), Vector3(-0.52, 0.27, -2.2),
+		Vector3(0.52, 0.27, -2.2), Vector3(0.64, 0.27, -2.2)],
 }
 ## Number plate centre per model (D-127 for the red car).
 const PLATES := {
 	CAR_MODEL: Vector3(0.0, PLATE_Y, PLATE_Z),
 	HOTHATCH_MODEL: Vector3(0.0, 0.43, -2.06),
+	SUPERCAR_MODEL: Vector3(0.0, 0.43, -2.21),
 }
 ## Puts a car's night tail glows on its lamps (D-198): onto the body mesh, in
 ## the model's own space, at the centre of the lamp area the car shader lights
@@ -143,6 +154,7 @@ const TAIL_AT := {
 	"car": Vector3(0.62, 0.72, -2.2),
 	"hatch": Vector3(0.62, 0.85, -2.0),
 	"hothatch": Vector3(0.7, 0.8, -2.05),
+	"supercar": Vector3(0.65, 0.78, -2.2),
 	"police": Vector3(0.62, 0.75, -2.35),
 }
 ## Indicator spots per model, on its own right side (D-163).
@@ -150,12 +162,18 @@ const BLINKERS := {
 	"car": [Vector3(-0.85, 0.65, -2.15), Vector3(-0.8, 0.6, 2.15)],
 	"hatch": [Vector3(-0.8, 0.85, -1.95), Vector3(-0.78, 0.65, 1.95)],
 	"hothatch": [Vector3(-0.8, 0.88, -2.0), Vector3(-0.8, 0.5, 2.0)],
+	"supercar": [Vector3(-0.75, 0.78, -2.2), Vector3(-0.6, 0.62, 2.2)],
 	"truck": [Vector3(-1.3, 0.9, -4.95), Vector3(-1.2, 1.1, 4.95)],
 	"truck2": [Vector3(-1.4, 0.9, -4.95), Vector3(-1.3, 1.1, 4.95)],
 }
 ## Lamp areas per model for car.gdshader (model space, |x|; D-144). The red
 ## car uses the shader defaults.
 const LAMP_BOXES := {
+	"res://assets/models/racer/supercar.glb": {   # D-210, from its renders
+		"tail_min": Vector3(0.45, 0.66, -9.0), "tail_max": Vector3(0.85, 0.9, -1.95),
+		"tail_red_only": true,
+		"head_min": Vector3(0.45, 0.52, 1.9), "head_max": Vector3(0.75, 0.7, 9.0),
+	},
 	# Measured from orthographic renders of the model (D-205).
 	"res://assets/models/racer/hothatch.glb": {
 		"tail_min": Vector3(0.55, 0.68, -9.0), "tail_max": Vector3(0.86, 0.92, -1.88),
@@ -180,6 +198,7 @@ const HD_TEXTURES := {
 	HATCH_TEXTURE: "res://assets/models/racer/hatchback_hatchback_albedo.jpg",
 	POLICE_TEXTURE: "res://assets/models/racer/police2_albedo_hd.png",
 	HOTHATCH_TEXTURE: "res://assets/models/racer/hothatch_hothatch_albedo.jpg",
+	SUPERCAR_TEXTURE: "res://assets/models/racer/supercar_albedo_hd.jpg",   # 4096 px (D-210)
 }
 ## D-207: 8-BIT ("nes"), 16-BIT (id "retro", kept for saved settings) and HD.
 const GFX_OPTIONS := ["nes", "retro", "hd"]
@@ -787,7 +806,7 @@ func _begin_select() -> void:
 	_showroom.selected = _chosen_car
 	_showroom.build(func(hue: float, i: int) -> Node3D:
 		var m: String = CAR_MODELS[i]
-		return _car_instance(hue, m, HOTHATCH_TEXTURE if m == HOTHATCH_MODEL else CAR_TEXTURE), load(SKY_TEXTURE), TITLE_FONT)
+		return _car_instance(hue, m, MODEL_TEXTURES[m]), load(SKY_TEXTURE), TITLE_FONT)
 	_select_hint = UI.label("", 36, UI.WHITE)
 	_select_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	_select_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1177,9 +1196,8 @@ func _build_body(model: String) -> void:
 	_flames.clear()
 	_flame_mats.clear()
 	_body_model = model
-	var tex: String = HOTHATCH_TEXTURE if model == HOTHATCH_MODEL else CAR_TEXTURE
-	_car_body = _car_instance(0.0, model, tex)
-	_player_lights = Night.add_car_lights(_car_body, "car", _puff_texture(), TAIL_AT["hothatch" if model == HOTHATCH_MODEL else "car"])
+	_car_body = _car_instance(0.0, model, MODEL_TEXTURES[model])
+	_player_lights = Night.add_car_lights(_car_body, "car", _puff_texture(), TAIL_AT[MODEL_LIGHTS[model]])
 	_place_tails(_car_body, _player_lights, model)
 	_add_plate(_car_body, PLATES.get(model, PLATES[CAR_MODEL]))
 	_car.add_child(_car_body)
