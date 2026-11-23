@@ -221,6 +221,7 @@ var _charge_level_shown := 0
 var _charge_sound: AudioStreamPlayer  # the rising charge sfx (cut on release)
 var _charge_sound_name := ""
 var _launch := false
+var _charge_btn := false   # D-264
 var _dash := 0
 var _dash_glow := 0.0
 var _fire_flash := 0.0
@@ -289,6 +290,10 @@ func start(_players: int) -> void:
 
 
 func on_action(action: StringName, pressed: bool) -> void:
+	# D-264: on a single screen, LAUNCH (a pad's Cross) held is the charge shot,
+	# like both flippers; only a press made while the ball is in play counts.
+	if action == &"launch":
+		_charge_btn = pressed and Screens.current_layout == "single" and sim != null and sim.state == Sim.State.PLAY
 	if not pressed:
 		return
 	if _phase == "attract":
@@ -347,6 +352,7 @@ func _process(delta: float) -> void:
 	if Config.cli.has("tb-dmd-anim") and not Dmd.is_animating():  # dev: loop one DMD animation
 		_dmd_anim(str(Config.cli["tb-dmd-anim"]))
 	sim.paddle_axis = CabinetInput.steer_axis()   # D-252
+	sim.charge_held = _charge_btn and CabinetInput.is_down(&"launch")   # D-264
 	sim.step(minf(delta, 0.05), CabinetInput.is_down(&"flip_l"), CabinetInput.is_down(&"flip_r"), _launch, _dash)
 	_launch = false
 	_dash = 0
@@ -1566,7 +1572,7 @@ func _animate_blasts(_delta: float) -> void:
 	# (small blue, medium yellow, full-size red).
 	var reached := int(floor(sim.blast_charge + 0.0001))
 	var charging := sim.blast_charge > 0.0 or (sim.state == Sim.State.PLAY and CabinetInput.is_down(&"flip_l") \
-		and CabinetInput.is_down(&"flip_r"))
+		and CabinetInput.is_down(&"flip_r")) or (sim.state == Sim.State.PLAY and sim.charge_held)
 	charging = charging and reached < mini(sim.affordable_level(), Sim.BLAST_MAX_LEVEL)
 	if _charge_particles.emitting != charging:
 		if charging:

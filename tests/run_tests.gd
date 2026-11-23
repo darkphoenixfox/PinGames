@@ -292,6 +292,15 @@ func test_breakout_difficulty(Sim) -> void:
 	var one = Sim.new()
 	one.setup(1, "hard")
 	check(one.balls_left == 1, "hard never goes below one life")
+	# D-264: a held charge button charges the shot like both flippers.
+	var cb = Sim.new()
+	cb.setup(3)
+	cb.step(1.0 / 60.0, false, false, true, 0)   # serve
+	cb.power = 1.0
+	cb.charge_held = true
+	for i in 20:
+		cb.step(1.0 / 60.0, false, false, false, 0)
+	check(cb.state == Sim.State.PLAY and cb.blast_charge > 0.0, "the charge button charges the shot (%.2f)" % cb.blast_charge)
 	n.set_difficulty("hard", 3)
 	check(n.balls_left == 2 and n.balls_total == 2 and n.ball_speed == 10.0 and n.level == 1, "picking later keeps the level")
 

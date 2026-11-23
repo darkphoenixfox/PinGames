@@ -2623,3 +2623,14 @@
 - **Change:** `shield.gdshader` gains `idle`, a resting glow with the same band, edge and hex texture as a hit. The field's left, right and top edge shields use `EDGE_IDLE` 0.05; hits still flash them fully, then they fade back to the glow. The ship's own shield keeps `idle` 0, so it's unchanged. The glow shows in every layout.
 - **Supersedes:** D-049's fully invisible barriers.
 - **Status:** Accepted
+
+### D-264 — Tilt Breaker: Cross charges the shot on a gamepad
+- **Date:** 2026-11-23
+- **Decision (director):** map X (Cross) on the gamepad to the charge shot.
+- **Change:** on a single screen, LAUNCH (the pad's Cross, or Space) held during play is the charge shot, exactly like holding both flippers (`Sim.charge_held`).
+  - It charges level by level, fires on release and auto-fires at maximum (D-074/D-075).
+  - Only a press made while the ball is in play counts, so the press that serves the ball doesn't start charging.
+  - The charging particles show for it too.
+- **Unchanged:** cabinet layouts keep both flippers as the only way to charge.
+- **Test:** the charge button charges the shot.
+- **Status:** Accepted

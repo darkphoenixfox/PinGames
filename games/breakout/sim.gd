@@ -283,7 +283,7 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 	if state == State.OVER or state == State.LEVEL_CLEAR:
 		return
 	_time += dt
-	_update_power_and_blast(dt, left and right)
+	_update_power_and_blast(dt, (left and right) or charge_held)
 	_move_paddle(dt, left, right, dash)
 	_update_enemies(dt)
 	if state == State.OVER:
@@ -539,6 +539,8 @@ func _damage_brick(i: int) -> bool:
 	return false
 
 
+## D-264: a charge button held (a pad's Cross on a single screen), as both flippers.
+var charge_held := false
 ## D-252: analog stick (0 = use the flippers).
 var paddle_axis := 0.0
 
