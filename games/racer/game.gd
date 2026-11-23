@@ -1004,8 +1004,10 @@ func _finale(delta: float) -> void:
 		_finale_ui = UI.vstack(40)
 		var dim := UI.fill(Color(0, 0, 0, 0.55))
 		add_to_table(dim)
-		_finale_ui.add_child(UI.styled_label(tr("DMD_GAME_OVER"), TITLE_FONT, 3))
+		_finale_ui.add_child(UI.styled_label(tr("RC_FINISH") if sim.finished else tr("DMD_GAME_OVER"), TITLE_FONT, 3))
 		_finale_ui.add_child(UI.spacer(30))
+		if sim.finished:   # D-221
+			_finale_ui.add_child(UI.styled_label(tr("RC_TIME_BONUS") % ScoreTable.format_score(sim.time_bonus), TITLE_FONT, 2))
 		_finale_ui.add_child(UI.styled_label(tr("RC_FINAL_SCORE"), TITLE_FONT, 2))
 		_finale_ui.add_child(UI.styled_label(ScoreTable.format_score(sim.score), TITLE_FONT, 2))
 		# Distance in the score's styled font, tinted cyan (D-116).
@@ -1013,7 +1015,7 @@ func _finale(delta: float) -> void:
 		dist.add_theme_color_override("font_color", Color(0.55, 0.9, 1.0))
 		_finale_ui.add_child(dist)
 		add_to_table(_finale_ui)
-		Dmd.show_text(tr("DMD_GAME_OVER"), ScoreTable.format_score(sim.score), Dmd.RED, Dmd.YELLOW)
+		Dmd.show_text(tr("RC_FINISH") if sim.finished else tr("DMD_GAME_OVER"), ScoreTable.format_score(sim.score), Dmd.YELLOW if sim.finished else Dmd.RED, Dmd.YELLOW)
 	if _finale_t >= FINALE_END_AT:
 		_finale_t = -100.0
 		set_process(false)
@@ -1054,6 +1056,11 @@ func _handle_events() -> void:
 				if saved:
 					_center_message(tr("RC_JUST_MADE_IT"), 1.6)
 				_dmd_anim("checkpoint", [tr("RC_CHECKPOINT"), tr("RC_EXTENDED") % int(e[2])])
+			"finish":
+				Audio.sfx("fanfare")
+				_center_message(tr("RC_FINISH"), 4.0)
+				Dmd.flash(tr("RC_FINISH"), 4.0, Dmd.YELLOW)
+				_bg_flash = 0.6
 			"time_up":
 				Audio.sfx("rc_time_up")
 				_center_message(tr("RC_TIME_UP"), 3.0)
@@ -1805,6 +1812,32 @@ func _build_pickup() -> Node3D:
 	return n
 
 
+## Black and white squares for the finish gate and line (D-221).
+func _chequer_texture() -> Texture2D:
+	var img := Image.create(8, 8, false, Image.FORMAT_RGB8)
+	for y in 8:
+		for x in 8:
+			img.set_pixel(x, y, Color.WHITE if (x / 2 + y / 2) % 2 == 0 else Color(0.05, 0.05, 0.05))
+	return ImageTexture.create_from_image(img)
+
+
+## A chequered stripe across the road at the finish (D-221).
+func _finish_line(parent: Node3D, s: float) -> void:
+	var f := sim.track.frame(s, 0.0, 0.03)
+	var mi := MeshInstance3D.new()
+	var q := PlaneMesh.new()
+	q.size = Vector2(Track.ROAD_HALF * 2.0, 2.0)
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = _chequer_texture()
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	m.uv1_scale = Vector3(Track.ROAD_HALF, 1.0, 1.0)
+	q.material = m
+	mi.mesh = q
+	mi.transform = f
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+
+
 ## Round pixel puff (16 px, hard steps) for tyre smoke and dust.
 func _puff_texture() -> Texture2D:
 	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
@@ -1944,12 +1977,14 @@ func _build_chunk(k: int) -> Node3D:
 	var cp := ceilf(s0 / Sim.CHECKPOINT_EVERY) * Sim.CHECKPOINT_EVERY
 	if s0 <= Sim.START_LINE and s0 + CHUNK > Sim.START_LINE:
 		_build_gate(node, Sim.START_LINE, tr("RC_START"))
-	if cp >= Sim.CHECKPOINT_EVERY and cp < s0 + CHUNK:
-		_build_gate(node, cp, tr("RC_CHECKPOINT"))
+	if cp >= Sim.CHECKPOINT_EVERY and cp < s0 + CHUNK and cp <= Sim.FINISH_STAGE * Sim.CHECKPOINT_EVERY:
+		# The last one is the finish line (D-221).
+		var fin := is_equal_approx(cp, Sim.FINISH_STAGE * Sim.CHECKPOINT_EVERY)
+		_build_gate(node, cp, tr("RC_FINISH") if fin else tr("RC_CHECKPOINT"), fin)
 	return node
 
 
-func _build_gate(parent: Node3D, s: float, text: String) -> void:
+func _build_gate(parent: Node3D, s: float, text: String, finish := false) -> void:
 	var f := sim.track.frame(s)
 	f.basis = Basis(Vector3.UP, sim.track.heading(s))
 	var gate := Node3D.new()
@@ -1973,6 +2008,13 @@ func _build_gate(parent: Node3D, s: float, text: String) -> void:
 	bm.albedo_color = Color(0.9, 0.1, 0.2)
 	bm.emission_enabled = true
 	bm.emission = Color(0.5, 0.05, 0.1)
+	if finish:   # chequered beam (D-221)
+		bm.albedo_texture = _chequer_texture()
+		bm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		bm.uv1_scale = Vector3(3.0, 2.0, 1.0)
+		bm.albedo_color = Color.WHITE
+		bm.emission = Color(0.25, 0.25, 0.25)
+		_finish_line(parent, s)
 	bb.material = bm
 	beam.mesh = bb
 	beam.position = Vector3(0, 8.0, 0)
@@ -2060,7 +2102,7 @@ func _animate(delta: float) -> void:
 		yaw += turn * PI * 0.5 * sim.flip_dir
 	# TIME UP (D-105): the car swings 90 degrees and slides to a stop sideways,
 	# nose towards the inside of the bend. Turns back if a checkpoint saves it.
-	if sim.state == Sim.State.OVER:
+	if sim.state == Sim.State.OVER and not sim.finished:
 		if _over_dir == 0.0:
 			var c := sim.track.curvature(sim.s)
 			_over_dir = signf(c) if absf(c) > 1e-4 else (-1.0 if sim.x > 0.0 else 1.0)
@@ -2451,7 +2493,7 @@ func _update_hud(delta: float) -> void:
 		_last_tick = ceili(sim.time_left)
 		Audio.sfx("rc_tick")
 	_score_label.text = ScoreTable.format_score(sim.score)
-	_stage_label.text = tr("RC_STAGE") % (sim.checkpoints + 1)
+	_stage_label.text = tr("RC_FINISH") if sim.finished else tr("RC_STAGE") % (sim.checkpoints + 1)
 	_speed_label.text = str(sim.speed_mph())
 	UI.set_color(_speed_label, UI.CYAN if sim.boosting else UI.WHITE)
 	_speedo.set_value(sim.v * Sim.MPH / SPEEDO_MAX)

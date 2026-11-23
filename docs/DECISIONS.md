@@ -2131,3 +2131,20 @@
   - right: toggle space, START 1, LAUNCH 1.3, MAGNA/SHIFT 1.3, RIGHT 3.
   - LAUNCH and the right magna swapped places, so the magnas sit level directly above the flippers.
 - **Status:** Accepted
+
+### D-221 — Turbo Run: finish line at the end of stage 10
+- **Date:** 2026-11-23
+- **Decision (director):** the end of level 10 is the finish line.
+- **Sim:**
+  - **Crossing:** the 10th checkpoint (`FINISH_STAGE`) calls `_finish()` instead of a checkpoint. No time is added.
+  - **Bonuses:** `FINISH_BONUS` 100,000, plus `TIME_BONUS_PER_S` 2,000 for every second left (`time_bonus`).
+  - **After the line:** `finished` is set and the car coasts out (State OVER). A later gate can't restart the race, and `done` follows once it stops.
+  - It also works if the line is reached on momentum after TIME UP.
+- **View:**
+  - **Gate:** the last gate reads FINISH! with a chequered beam, and a chequered stripe crosses the road. There are no gates after it.
+  - **Event `finish`:** a fanfare, a FINISH! centre message and DMD flash, and a screen flash. The HUD stage label reads FINISH!.
+  - **No slide:** the TIME UP sideways slide (D-105) is skipped when finished.
+  - **Results screen:** titled FINISH! (yellow on the DMD) instead of GAME OVER, with a TIME BONUS line.
+- **After the line:** the track goes on behind it (back into the city), only as run-off.
+- **Test:** crossing the end of stage 10 finishes the race with both bonuses and ends it.
+- **Status:** Accepted

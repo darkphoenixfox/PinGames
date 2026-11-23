@@ -97,6 +97,12 @@ const COAST_OVER := 7.0          # m/s^2 decel while coasting out
 ## Race clock
 const START_TIME := 45.0
 const CHECKPOINT_EVERY := 2300.0   # D-101 (was 1800)
+## The finish line (D-221): the end of stage FINISH_STAGE. Crossing it ends the
+## race: no more time, a finish bonus plus a bonus for every second left, and
+## the car coasts to a stop.
+const FINISH_STAGE := 10
+const FINISH_BONUS := 100000
+const TIME_BONUS_PER_S := 2000
 const CHECKPOINT_BONUS := 34.0   # minus 2 s per checkpoint passed, never below 20
 ## Traffic
 const CAR_LEN := 4.4
@@ -216,6 +222,8 @@ var _trap_passed := -1.0       # s of the last camera judged
 var in_tunnel := false         # D-127
 var _scrape_t := 0.0
 var grace_t := 0.0             # s of traffic immunity left after a crash (D-125)
+var finished := false          # crossed the finish line (D-221)
+var time_bonus := 0            # points for the seconds left at the finish
 var spin_t := 0.0              # crash timer (spin-out or flip)
 var flipping := false          # this crash is a roll-over (big obstacle)
 var crash_anim := 0.0          # animation length of the current crash (s)
@@ -312,7 +320,7 @@ func step(dt: float, left: bool, right: bool, _gas: bool = false, brake: bool = 
 			_drive(dt, left, right, false, false)
 			_update_traffic(dt)
 			_collide_objects()
-			if s >= next_checkpoint and not done:
+			if s >= next_checkpoint and not done and not finished:
 				state = State.RACE
 				over_t = 0.0
 				_pass_checkpoint(true)
@@ -366,11 +374,29 @@ func step(dt: float, left: bool, right: bool, _gas: bool = false, brake: bool = 
 ## `saved` = reached on momentum after the clock had run out (D-103).
 func _pass_checkpoint(saved: bool) -> void:
 	checkpoints += 1
+	if checkpoints >= FINISH_STAGE:
+		_finish()
+		return
 	var bonus := checkpoint_bonus()
 	time_left += bonus
 	next_checkpoint += CHECKPOINT_EVERY
 	_add_score(20000.0)
 	events.append(["checkpoint", checkpoints, bonus, saved])
+
+
+## Across the finish line (D-221): the bonuses, then coasting out to a stop.
+func _finish() -> void:
+	finished = true
+	_end_drift()
+	time_bonus = int(ceilf(time_left)) * TIME_BONUS_PER_S
+	_add_score(FINISH_BONUS + time_bonus)
+	state = State.OVER
+	over_t = 0.0
+	if boosting:
+		boosting = false
+		boost_t = 0.0
+		events.append(["nitro_end"])
+	events.append(["finish", time_bonus])
 
 
 func _add_score(p: float) -> void:

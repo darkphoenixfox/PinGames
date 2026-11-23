@@ -709,6 +709,30 @@ func test_racer_hd_assets() -> void:
 		if o.kind == "building":
 			nb += 1
 	check(nb > 10 and not cs.track.junctions.is_empty(), "the city has buildings (%d) and junctions (%d)" % [nb, cs.track.junctions.size()])
+	# D-221: the end of stage 10 is the finish line.
+	var fs = SimA.new()
+	fs.setup(4)
+	fs.state = SimA.State.RACE
+	fs.checkpoints = SimA.FINISH_STAGE - 1
+	fs.next_checkpoint = SimA.FINISH_STAGE * SimA.CHECKPOINT_EVERY
+	fs.s = fs.next_checkpoint - 5.0
+	fs.track.ensure(fs.s + 800.0)
+	fs.traffic.clear()
+	fs.v = 40.0
+	fs.time_left = 12.0
+	var score0: int = fs.score
+	var fin_ev := false
+	for i in 900:
+		fs.traffic.clear()
+		fs.step(1.0 / 60.0, false, false)
+		for e in fs.events:
+			if e[0] == "finish":
+				fin_ev = true
+		if fs.done:
+			break
+	check(fs.finished and fin_ev and fs.done and fs.time_bonus == 12 * SimA.TIME_BONUS_PER_S
+		and fs.score - score0 >= SimA.FINISH_BONUS + fs.time_bonus,
+		"crossing the end of stage %d finishes the race with the bonuses" % SimA.FINISH_STAGE)
 	# D-219: random weather spells: at least WEATHER_MIN long, suited to the
 	# area, different per seed, the same for the same seed.
 	var spell_ok := true
