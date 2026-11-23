@@ -2544,3 +2544,24 @@
 - **Car select (landscape):** the showroom renders landscape. The three turntables sit side by side, each stats card under its car, and the title below the DMD. It's in the 16:9 UI area.
 - **DMD (landscape):** a quarter of a 16:9 width, half its D-251 size. Portrait keeps it across the full width, as specified.
 - **Status:** Accepted
+
+### D-256 — Single screen: gamepad mapping
+- **Date:** 2026-11-23
+- **Decision (director):** for the one-screen PC landscape version, connect the gamepad properly:
+  - D-pad and left stick move in menus and car select, X (Cross) accepts, Circle goes back;
+  - in the race the left stick steers, R2 accelerates, L1 brakes. The request also put gear shifts on R2, which clashes with the accelerator; taken as **R1 shifts**.
+- **Mapping:** with the layout `single`, `CabinetInput.SINGLE_PAD` replaces the pad bindings (keyboard keys stay):
+
+  | Action | Pad input |
+  |---|---|
+  | flip_l / flip_r (menu moves; steering as buttons) | D-pad left/right (13/14) and left stick X (axis 0 −/+, past 0.5) |
+  | launch (accept) | Cross (0) |
+  | exit (back, quit confirm) | Circle (1) |
+  | start | Start/Options (6) |
+  | magna_l (brake; colour on car select) | L1 (9) |
+  | magna_r (gear shift; colour on car select) | R1 (10) |
+  | (nothing) | R2: no longer magna_r; it's the analog accelerator (D-252) |
+
+- **Race:** the stick's analog steering (D-252) overrides the flipper actions it also drives. Using L1, R1 or R2 switches to the 4-button controls (own brake and shifter, D-189).
+- **Cabinet layouts:** unchanged (D-019).
+- **Status:** Accepted

@@ -30,6 +30,22 @@ const DEFAULT_BINDINGS := {
 	"exit": ["key:Backspace", "joy:2"],         # Square
 }
 
+## D-256: the single-screen version's gamepad (director): D-pad and left stick
+## move in menus (the flipper actions; in the race the stick steers analog,
+## D-252), Cross accepts, Circle goes back, Start is START; L1 brakes and R1
+## shifts (the magna actions); R2 is the analog accelerator (read directly).
+## Replaces the pad bindings (keys stay) when the layout is "single".
+const SINGLE_PAD := {
+	"flip_l": ["joy:13", "axis:0-"],
+	"flip_r": ["joy:14", "axis:0+"],
+	"magna_l": ["joy:9"],
+	"magna_r": ["joy:10"],
+	"launch": ["joy:0"],
+	"start": ["joy:6"],
+	"coin": [],
+	"exit": ["joy:1"],
+}
+
 ## Emitted on focus loss/gain (D-069), e.g. for the input monitor.
 signal focus_changed(has_focus: bool)
 
@@ -50,7 +66,11 @@ func apply_bindings() -> void:
 			InputMap.action_erase_events(action)
 		else:
 			InputMap.add_action(action, 0.5)
-		for b in get_bindings(action):
+		var binds := get_bindings(action)
+		if Config.layout() == "single":   # D-256
+			binds = binds.filter(func(b): return Bindings.kind(str(b)) == "key")
+			binds.append_array(SINGLE_PAD.get(String(action), []))
+		for b in binds:
 			var ev := Bindings.to_event(str(b))
 			if ev == null:
 				push_warning("CabinetInput: bad binding '%s' for %s" % [b, action])
