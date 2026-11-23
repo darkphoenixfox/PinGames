@@ -246,6 +246,15 @@ Rules:
 5. Should nudge or an analog plunger be used at all (they aren't guaranteed)?
 
 ## 8. Asset pipeline
+
+**2 players (D-288, D-289).** Available only on a single landscape screen with a keyboard or gamepads (D-284). After PRESS START, players choose 1 PLAYER or 2 PLAYERS. Each player then picks a car (P1 first, then P2) after the graphics and stage screens.
+- **Screen:** split side by side. Each half has its own camera and HUD, with POSITION (1ST/2ND) where the clock was. Each player sees the other's car, and the cars bump each other.
+- **Race:** no time limit. The first to the end of stage 10 wins; the race ends when both have stopped, or 8 s after the winner crosses. There's no high-score entry.
+- **Shared:** traffic, which reacts to both cars.
+- **Per player:** police chases, nitro canisters, weather and time of day (each half shows its own stage's sky, sun and fog).
+- **DMD:** both players' speed and stage, and a strip showing where each car is along the whole race.
+- **Controls:** P1 uses the arrows, Space and Ctrl, or their own pad. P2 uses A/D (steer), W (launch) and Q/E (brake / shift), or their own pad.
+
 ### 3D models (D-020)
 - **Source:** Meshy. Export **.glb** with PBR textures, and use Meshy's remesh or reduced polycount.
 - **Location:** `assets/models/<breakout|shmup|racer|shared>/<snake_case_name>.glb`. Commit it, and Git LFS handles the file.

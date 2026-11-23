@@ -2913,3 +2913,24 @@
   - Crossing the line again does nothing.
 - **1P:** unchanged. All the existing tests pass, plus new tests for the grid, separate steering, no clock, the side-swipe, the winner and the race's end.
 - **Status:** Accepted (part 1; the split-screen view follows)
+
+### D-289 — Turbo Run 2P, part 2: split screen
+- **Date:** 2026-11-23
+- **Decision:** the screen side of D-288.
+- **The choice:** when `CabinetInput.two_player_possible()`, PRESS START opens 1 PLAYER / 2 PLAYERS, then graphics, start stage and car select as before. In 2P, car select runs twice ("PLAYER n: CHOOSE YOUR CAR"; P2 may use their own controls). The two cars are never painted identically: the same car and colour gets the next paint.
+- **Two views, one race:**
+  - The module (player 1's view) splits the TABLE into two halves with a black line. It moves its own nodes into the left half and adds a second copy of the game script as a child (player 2's view, `_role = 1`) in the right half.
+  - Each view is the full 1P view: its own 3D world (the game already renders into its own viewport), camera, chunks, weather, sky, sun, fog, HUD and engine sounds. It draws the shared simulation from its own player's car (`sim._use(_role)` each frame).
+  - `add_to_table`, `_table_base` and `_table_px` give each view its half. Each half has a portrait-like shape, so it uses the portrait HUD layout.
+- **Stepping:** player 1's view steps the race with both players' controls (`_read_input` per view: flippers, stick, triggers, brake), then each view shows its own player's events plus the shared ones. P2's magna buttons go to P2's view (manual brake/shift).
+- **The other car:** drawn in each view with its model and colour, drift yaw, side-impact sway, crash spin or slew, turning wheels and night lights.
+- **Owned by player 1's view only:** the DMD (other DMD calls go to a quiet stand-in), music (it follows player 1's stage), the backglass, the tunnel reverb, and the shared lamp/sprite night levels and city lights (shared materials, so they follow player 1's time of day).
+- **HUD:** POSITION (1ST/2ND) replaces TIME.
+- **DMD:** "P1 speed / stage" on the left and "P2 speed / stage" on the right, plus a strip with stage ticks and both cars' places in the race (P1 yellow, P2 cyan).
+- **The finish:**
+  - The finisher's half shows "WINNER!" or "2ND". The other half shows "PLAYER n WINS", and so does the DMD.
+  - The finale shows each half's place, player and distance, without scores.
+  - Then back to PRESS START with no high-score entry (`finished([])`). Leaving the game turns 2P input off.
+- **Dev:** `--rc-2p` (`--rc-car2=N`) starts straight in 2P. `--rc-autopilot` drives both cars.
+- **1P:** unchanged.
+- **Status:** Accepted

@@ -377,6 +377,66 @@ const SOUNDS := {
 }
 
 var sim: Sim
+## D-289: 2-player split screen. Player 1's view (the module) owns the menus,
+## the DMD, backglass, music and the shared lamp levels; player 2's view is a
+## second copy of this script, a child of the first, drawing the same shared
+## simulation from player 2's car into the right half of the TABLE.
+var _role := 0              # whose car this view follows
+var _two := false           # a 2-player game
+var _main := true           # owns the DMD, backglass, music, reverb, shared lamp levels
+var _p2: Node = null        # player 2's view (on player 1's)
+var _host: Control = null   # 2P: this view's half of the TABLE
+var _dmd: Object            # Dmd, or a quiet stand-in in 2P (the DMD shows both players)
+var _players_sel := 0       # 0 = 1 player, 1 = 2 players
+var _players_ui: Control
+var _players_rows: Array = []
+var _select_p2 := false     # 2P car select: player 2's turn
+var _p2_car := Sim.DEFAULT_CAR
+var _hues := [-1.0, -1.0]   # each player's car colour (2P)
+var _rival: Node3D = null   # the other player's car
+var _rival_wheel := 0.0
+var _time_caption: Label    # TIME, or POSITION in 2P
+
+
+## Stands in for the DMD in 2P views: every call does nothing.
+class QuietDmd extends RefCounted:
+	func show_text(_a = null, _b = null, _c = null, _d = null) -> void:
+		pass
+
+	func show_image(_a = null) -> void:
+		pass
+
+	func show_custom(_a = null) -> void:
+		pass
+
+	func flash(_a = null, _b = null, _c = null) -> void:
+		pass
+
+	func play(_a = null, _b = null) -> void:
+		pass
+
+
+func _music(path: String) -> void:
+	if _main:
+		Audio.play_music(path)
+
+
+func _crossfade(path: String, t: float, skip: float = 0.0) -> void:
+	if _main:
+		Audio.crossfade_music(path, t, skip)
+
+
+## 2P: this view's nodes go into its half of the TABLE.
+func add_to_table(node: Node) -> Node:
+	if _host != null:
+		return _own(_host, node)
+	return super.add_to_table(node)
+
+
+## The TABLE's pixels this view covers (2P: half of them).
+func _table_px() -> Vector2:
+	var px := Vector2(Screens.table.size)
+	return Vector2(px.x * 0.5, px.y) if _host != null else px
 var _phase := "attract"          # attract, race, finale
 var _phase_t := 0.0
 var _manual_locked := false      # operator.cabinet_buttons = 4
@@ -554,6 +614,7 @@ func get_info() -> Dictionary:
 
 
 func start(_players: int) -> void:
+	_dmd = Dmd
 	# D-254: in the single-screen layout the TABLE takes the screen's shape.
 	if not Screens.table_shape_changed.is_connected(_on_table_shape):
 		Screens.table_shape_changed.connect(_on_table_shape)
@@ -588,6 +649,13 @@ func start(_players: int) -> void:
 		_set_reverb(false)
 	if Config.cli.has("rc-car"):   # dev: race with car 0 (easy) / 1 / 2 (hard), D-122
 		_chosen_car = clampi(int(str(Config.cli["rc-car"])), 0, Sim.CARS.size() - 1)
+	if Config.cli.has("rc-2p"):   # dev: a 2-player race (D-289); --rc-car2=N is player 2's car
+		_two = true
+		CabinetInput.set_two_player(true)
+		_p2_car = clampi(int(str(Config.cli.get("rc-car2", "2"))), 0, Sim.CARS.size() - 1)
+		_hues = [_car_hue(_chosen_car), _car_hue(_p2_car)]
+		if _p2_car == _chosen_car:
+			_hues[1] = fposmod(_hues[0] + float(PAINTS[1]), 1.0)
 	if Config.cli.has("rc-skip-intro"):
 		_begin_race()
 	else:
@@ -595,11 +663,35 @@ func start(_players: int) -> void:
 
 
 func on_action(action: StringName, pressed: bool) -> void:
+	var p2_act := String(action).begins_with("p2_")
+	if p2_act:   # D-289: player 2's buttons
+		var base := StringName(String(action).substr(3))
+		if _phase == "race" and is_instance_valid(_p2):
+			_p2.on_action(base, pressed)
+			return
+		if _phase == "select" and _select_p2:
+			action = base   # player 2 picks their own car
+		else:
+			return
+	if _two and sim != null:
+		sim._use(_role)
 	if not pressed:
 		return
 	if _phase == "attract":
 		if action == &"start" or action == &"launch":
-			_begin_gfx()
+			if CabinetInput.two_player_possible():
+				_begin_players()   # D-289: 1 PLAYER / 2 PLAYERS first
+			else:
+				_begin_gfx()
+		return
+	if _phase == "players":
+		match action:
+			&"flip_l", &"flip_r", &"magna_l", &"magna_r":
+				_players_sel = 1 - _players_sel
+				Audio.sfx("rc_shift")
+				_refresh_players()
+			&"launch", &"start":
+				_confirm_players()
 		return
 	if _phase == "stage":
 		match action:
@@ -643,7 +735,7 @@ func on_action(action: StringName, pressed: bool) -> void:
 		sim.manual = true
 		_seen_magna = true
 		_show_mode()
-		Dmd.flash(tr("RC_MANUAL"), 1.2, Dmd.CYAN)
+		_dmd.flash(tr("RC_MANUAL"), 1.2, Dmd.CYAN)
 	if action == &"magna_r" and _phase == "race":
 		sim.shift_request = true
 
@@ -651,8 +743,11 @@ func on_action(action: StringName, pressed: bool) -> void:
 func _process(delta: float) -> void:
 	if sim == null:
 		return
+	if _two:
+		sim._use(_role)   # D-289: this view's car is the live one
 	_phase_t += delta
-	_update_backglass(delta)
+	if _main:
+		_update_backglass(delta)
 	_update_night(delta)
 	var dt := minf(delta, 0.05)
 	if _phase == "attract":
@@ -665,6 +760,9 @@ func _process(delta: float) -> void:
 		_stage_hint.text = tr("RC_GFX_HINT") % maxi(ceili(SELECT_TIME - _phase_t), 0)
 		if _phase_t >= SELECT_TIME:
 			_confirm_stage()
+	elif _phase == "players":
+		sim.time_left = 99.0
+		sim.step(dt, false, false)
 	elif _phase == "gfx":
 		sim.time_left = 99.0
 		sim.step(dt, false, false)   # the attract demo keeps driving behind the menu
@@ -677,31 +775,58 @@ func _process(delta: float) -> void:
 		if _phase_t >= SELECT_TIME:
 			_confirm_car()
 	elif _phase == "race":
-		var l := CabinetInput.is_down(&"flip_l")
-		var r := CabinetInput.is_down(&"flip_r")
-		# Gamepad (D-252): stick steers, L2 brakes, R2 accelerates once used.
-		sim.steer_axis = CabinetInput.steer_axis()
-		var l2 := CabinetInput.trigger(false)
-		var r2 := CabinetInput.trigger(true)
-		if r2 > 0.0:
-			_used_gas = true
-		if (l2 > 0.3 or _used_gas) and not sim.manual:
-			sim.manual = true   # triggers mean a pad: brake and shifter controls (D-189)
-			_seen_magna = true
-		sim.gas_axis = r2 if _used_gas else -1.0
-		_pad_brake = l2 > 0.3
-		sim.step(dt, l, r, false, CabinetInput.is_down(&"magna_l") or _pad_brake)
-		_handle_events()
-		_update_hud(delta)
-		if sim.done and _finale_t < 0.0:
-			_begin_finale()
+		if _two:
+			# D-289: player 1's view steps the shared race with both players'
+			# controls; each view then shows its own player's events.
+			if _role == 0:
+				var a := _read_input()
+				var b: Array = _p2._read_input() if is_instance_valid(_p2) else [false, false, false]
+				sim.step_two(dt, [a, b])
+				sim._use(_role)
+			_handle_events()
+			_update_hud(delta)
+			if _role == 0 and sim.race_over and _finale_t < 0.0:
+				_begin_finale()
+				if is_instance_valid(_p2):
+					_p2._begin_finale()
+		else:
+			var inp := _read_input()
+			sim.step(dt, inp[0], inp[1], false, inp[2])
+			_handle_events()
+			_update_hud(delta)
+			if sim.done and _finale_t < 0.0:
+				_begin_finale()
 		_watch_quality(delta)
 	elif _phase == "finale":
-		sim.step(dt, false, false)
+		if not _two:
+			sim.step(dt, false, false)
+		elif _role == 0:
+			sim.step_two(dt, [[false, false, false], [false, false, false]])
+			sim._use(_role)
 		_finale(delta)
 	_update_chunks()
 	_animate(delta)
 	_update_audio()
+
+
+## This view's player's controls as [left, right, brake]; also sets their
+## stick, accelerator and (once a pad's triggers are used) the manual layout.
+func _read_input() -> Array:
+	var pl := _role if _two else -1
+	var l := CabinetInput.is_down(CabinetInput.for_player(&"flip_l", _role))
+	var r := CabinetInput.is_down(CabinetInput.for_player(&"flip_r", _role))
+	# Gamepad (D-252): stick steers, L2 brakes, R2 accelerates once used.
+	var l2 := CabinetInput.trigger(false, pl)
+	var r2 := CabinetInput.trigger(true, pl)
+	if r2 > 0.0:
+		_used_gas = true
+	if (l2 > 0.3 or _used_gas) and not bool(sim.player_get(_role, "manual")):
+		sim.player_set(_role, "manual", true)   # triggers mean a pad: brake and shifter controls (D-189)
+		_seen_magna = true
+	sim.player_set(_role, "steer_axis", CabinetInput.steer_axis(pl))
+	sim.player_set(_role, "gas_axis", r2 if _used_gas else -1.0)
+	_pad_brake = l2 > 0.3
+	return [l, r, CabinetInput.is_down(CabinetInput.for_player(&"magna_l", _role)) or _pad_brake]
 
 
 # --- phases --------------------------------------------------------------------------
@@ -711,22 +836,27 @@ func _new_sim() -> void:
 	_over_turn = 0.0
 	_over_dir = 0.0
 	_puff_list.clear()
-	sim.setup(7)
+	if _two:   # D-289: both cars on the grid, no clock
+		sim.setup_two(7, [_chosen_car, _p2_car])
+	else:
+		sim.setup(7)
 	# D-219: each race gets its own weather (--rc-wseed=N repeats one).
 	sim.track.weather_seed = int(str(Config.cli["rc-wseed"])) if Config.cli.has("rc-wseed") else randi()
-	sim.freeze_time = _freeze_time
-	sim.car = _chosen_car
-	sim.time_left = sim.start_time()   # the car sets the clock (D-183)
+	if not _two:
+		sim.freeze_time = _freeze_time
+		sim.car = _chosen_car
+		sim.time_left = sim.start_time()   # the car sets the clock (D-183)
 	sim.manual = (_manual_locked or _seen_magna) and not _touch_play()   # once detected, the next races keep it (D-189)
+	if _two:
+		sim.player_set(1, "manual", _manual_locked)
 	sim.autopilot = Config.cli.has("rc-autopilot")
+	if _two:
+		sim.player_set(1, "autopilot", Config.cli.has("rc-autopilot"))
 	var n := _start_stage
 	if Config.cli.has("rc-stage"):  # dev: start at the beginning of stage N (D-204)
 		n = maxi(1, int(str(Config.cli["rc-stage"])))
 	if n > 1:   # the start-stage screen (D-216) or the dev flag
-		sim.checkpoints = n - 1
-		sim.s = (n - 1) * Sim.CHECKPOINT_EVERY + 150.0
-		sim.next_checkpoint = n * Sim.CHECKPOINT_EVERY
-		sim.track.ensure(sim.s + 1500.0)
+		sim.start_at_stage(n)
 	if Config.cli.has("rc-time"):  # dev: short clock to test TIME UP
 		sim.time_left = float(str(Config.cli["rc-time"]))
 	for k in _chunks.keys():
@@ -807,7 +937,7 @@ func _enter_attract() -> void:
 	sim.autopilot = true
 	sim.state = Sim.State.RACE
 	sim.v = 60.0
-	Audio.play_music(MUSIC_ATTRACT)
+	_music(MUSIC_ATTRACT)
 	_hud.visible = false
 	_attract_ui = UI.vstack(60)
 	_attract_ui.add_child(UI.spacer(200))
@@ -824,7 +954,7 @@ func _enter_attract() -> void:
 	_attract_ui.add_child(hint)
 	_attract_ui.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_add_ui(_attract_ui)
-	Dmd.show_image(load(DMD_LOGO))
+	_dmd.show_image(load(DMD_LOGO))
 
 
 func _attract_tick() -> void:
@@ -835,12 +965,12 @@ func _attract_tick() -> void:
 	var step := int(_phase_t / 3.0) % 5
 	if step != int((_phase_t - get_process_delta_time()) / 3.0) % 5 or _phase_t < 0.05:
 		match step:
-			0: Dmd.show_image(load(DMD_LOGO))
-			1: Dmd.show_text(tr("RC_SHIFT_HINT_4") if _four_buttons() else tr("RC_SHIFT_HINT"),
+			0: _dmd.show_image(load(DMD_LOGO))
+			1: _dmd.show_text(tr("RC_SHIFT_HINT_4") if _four_buttons() else tr("RC_SHIFT_HINT"),
 				tr("RC_NITRO_HINT"), Dmd.CYAN, Dmd.WHITE)
-			2: Dmd.show_text(tr("RC_CREDIT_MUSIC"), tr("RC_CREDIT_BOGART"), Dmd.DIM, Dmd.YELLOW)
-			3: Dmd.show_text(tr("ATTRACT_HIGH_SCORES"), _top_score_line(), Dmd.YELLOW, Dmd.WHITE)
-			4: Dmd.show_text(tr("RC_CREDIT_BOGART"), tr("RC_CREDIT_BOGART_URL"), Dmd.YELLOW, Dmd.WHITE)
+			2: _dmd.show_text(tr("RC_CREDIT_MUSIC"), tr("RC_CREDIT_BOGART"), Dmd.DIM, Dmd.YELLOW)
+			3: _dmd.show_text(tr("ATTRACT_HIGH_SCORES"), _top_score_line(), Dmd.YELLOW, Dmd.WHITE)
+			4: _dmd.show_text(tr("RC_CREDIT_BOGART"), tr("RC_CREDIT_BOGART_URL"), Dmd.YELLOW, Dmd.WHITE)
 
 
 func _top_score_line() -> String:
@@ -876,7 +1006,7 @@ func _apply_gfx(mode: String) -> void:
 	_retro_post.set_shader_parameter("low_res", Vector2(low))
 	_retro_post.set_shader_parameter("nes", mode == "nes")
 	var q: Array = QUALITY_STEPS[_quality if _auto_quality() else 0]
-	_pix_vp.size = Vector2i((Vector2(Screens.table.size) * float(q[1])).round()) if on else low
+	_pix_vp.size = Vector2i((_table_px() * float(q[1])).round()) if on else low
 	_pix_vp.msaa_3d = (q[0] as Viewport.MSAA) if on else Viewport.MSAA_DISABLED
 	_world_view.material = null if on else _retro_post
 	_world_view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if on else CanvasItem.TEXTURE_FILTER_NEAREST
@@ -978,7 +1108,7 @@ func _refresh_gfx() -> void:
 		name_l.add_theme_color_override("font_color", ACCENT if on else UI.WHITE)
 		(_gfx_rows[i][1] as Control).modulate.a = 1.0 if on else 0.45
 	var cur: String = GFX_OPTIONS[_gfx_index]
-	Dmd.show_text(tr("RC_GFX_TITLE"), tr(GFX_NAMES[cur]), Dmd.CYAN, Dmd.YELLOW)
+	_dmd.show_text(tr("RC_GFX_TITLE"), tr(GFX_NAMES[cur]), Dmd.CYAN, Dmd.YELLOW)
 
 
 func _confirm_gfx() -> void:
@@ -1035,7 +1165,7 @@ func _move_stage(d: int) -> void:
 func _refresh_stage() -> void:
 	_stage_num.text = "< %s >" % (tr("RC_STAGE") % _start_stage)
 	_stage_area.text = tr(AREA_NAMES[Track.stage_area(_start_stage)])
-	Dmd.show_text(tr("RC_STAGE_TITLE"), tr("RC_STAGE") % _start_stage, Dmd.CYAN, Dmd.YELLOW)
+	_dmd.show_text(tr("RC_STAGE_TITLE"), tr("RC_STAGE") % _start_stage, Dmd.CYAN, Dmd.YELLOW)
 
 
 func _confirm_stage() -> void:
@@ -1059,7 +1189,14 @@ func _begin_select() -> void:
 	_showroom.landscape = _landscape()   # D-255: the cars side by side
 	_showroom.nes = _gfx_mode == "nes"
 	_add_ui(_showroom)
-	_showroom.selected = _chosen_car
+	_showroom.selected = _p2_car if _select_p2 else _chosen_car
+	if _two:   # D-289: whose choice it is
+		var who := UI.label(tr("RC_CHOOSE_P") % (2 if _select_p2 else 1), 48, UI.YELLOW if not _select_p2 else UI.CYAN)
+		who.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)   # (the DMD covers the top)
+		who.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		who.offset_top = -170
+		who.offset_bottom = -100
+		_showroom.add_child.call_deferred(who)
 	_showroom.build(func(_hue: float, i: int) -> Node3D:
 		var m: String = CAR_MODELS[i]
 		return _car_instance(_car_hue(i), m, MODEL_TEXTURES[m]), load(SKY_TEXTURE), TITLE_FONT)   # D-236
@@ -1069,13 +1206,28 @@ func _begin_select() -> void:
 	_select_hint.offset_top = -90
 	_select_hint.offset_bottom = -40
 	_showroom.add_child(_select_hint)
-	Dmd.show_custom(_draw_dmd_select)
+	_dmd.show_custom(_draw_dmd_select)
 
 
 func _confirm_car() -> void:
 	if _phase != "select":
 		return
-	_chosen_car = _showroom.selected
+	if _two and not _select_p2:   # D-289: then player 2 picks theirs
+		_chosen_car = _showroom.selected
+		_hues[0] = _car_hue(_chosen_car)
+		_showroom.queue_free()
+		_showroom = null
+		_select_p2 = true
+		_begin_select()
+		return
+	if _select_p2:
+		_p2_car = _showroom.selected
+		_hues[1] = _car_hue(_p2_car)
+		if _p2_car == _chosen_car and is_equal_approx(_hues[1], _hues[0]):
+			_hues[1] = fposmod(_hues[0] + float(PAINTS[1]), 1.0)   # never two identical cars
+		_select_p2 = false
+	else:
+		_chosen_car = _showroom.selected
 	_showroom.queue_free()
 	_set_ui_res.call_deferred()   # D-254: back to the HUD's layout
 	_showroom = null
@@ -1116,23 +1268,32 @@ func _begin_race() -> void:
 	_phase = "race"
 	_phase_t = 0.0
 	_new_sim()
+	if _two:
+		_go_split()
 	_shift_armed = true
 	_shift_shown = false
-	# The hero car in the chosen car's colour (D-122).
-	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
-		var gi := m as MeshInstance3D
-		if gi.material_override != null:
-			InstParam.set_param(gi, "hue", _car_hue(_chosen_car))
+	_paint_hero()
 	# The start stage's song (D-226): stage 1 carries on attract's from where it
 	# is; a later start stage (testing) plays its own from the top.
-	Audio.play_music(_stage_music(sim.checkpoints + 1))
+	_music(_stage_music(sim.checkpoints + 1))
 	Audio.sfx("start")
 	_hud.visible = true
 	_show_mode()
 	_center_message("3", 1.0)
 	Audio.sfx("rc_count")
-	Dmd.show_custom(_draw_dmd_revup)   # REV UP! with a live tacho (D-154)
+	_dmd.show_custom(_draw_dmd_revup)   # REV UP! with a live tacho (D-154)
 	_last_tick = -1
+	if _two:
+		Dmd.show_custom(_draw_dmd_two)
+
+
+## The hero car in the chosen car's colour (D-122; 2P: each player's, D-289).
+func _paint_hero() -> void:
+	var hue: float = _hues[_role] if _two else _car_hue(_chosen_car)
+	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
+		var gi := m as MeshInstance3D
+		if gi.material_override != null:
+			InstParam.set_param(gi, "hue", hue)
 
 
 func _begin_finale() -> void:
@@ -1149,38 +1310,264 @@ func _finale(delta: float) -> void:
 		_finale_ui = UI.vstack(40)
 		var dim := UI.fill(Color(0, 0, 0, 0.55))
 		_add_ui(dim)
-		_finale_ui.add_child(UI.styled_label(tr("RC_FINISH") if sim.finished else tr("DMD_GAME_OVER"), TITLE_FONT, 3))
+		if _two:   # D-289: each half shows its player's place
+			var won: bool = sim.winner == _role
+			_finale_ui.add_child(UI.styled_label(tr("RC_WINNER") if won else tr("RC_SECOND"), TITLE_FONT, 3))
+			_finale_ui.add_child(UI.styled_label(tr("RC_PLAYER_N") % (_role + 1), TITLE_FONT, 2))
+			if _main:
+				Dmd.show_text(tr("RC_P_WINS") % (maxi(sim.winner, 0) + 1), "", Dmd.YELLOW, Dmd.WHITE)
+		else:
+			_finale_ui.add_child(UI.styled_label(tr("RC_FINISH") if sim.finished else tr("DMD_GAME_OVER"), TITLE_FONT, 3))
 		_finale_ui.add_child(UI.spacer(30))
-		if sim.finished:   # D-221
+		if sim.finished and not _two:   # D-221
 			_finale_ui.add_child(UI.styled_label(tr("RC_TIME_BONUS") % ScoreTable.format_score(sim.time_bonus), TITLE_FONT, 2))
-		_finale_ui.add_child(UI.styled_label(tr("RC_FINAL_SCORE"), TITLE_FONT, 2))
-		_finale_ui.add_child(UI.styled_label(ScoreTable.format_score(sim.score), TITLE_FONT, 2))
+		if not _two:   # (2P: a race, not a score, D-289)
+			_finale_ui.add_child(UI.styled_label(tr("RC_FINAL_SCORE"), TITLE_FONT, 2))
+			_finale_ui.add_child(UI.styled_label(ScoreTable.format_score(sim.score), TITLE_FONT, 2))
 		# Distance in the score's styled font, tinted cyan (D-116).
 		var dist := UI.styled_label(tr("RC_DISTANCE") % (sim.s / 1609.34), TITLE_FONT, 2)   # miles (D-147)
 		dist.add_theme_color_override("font_color", Color(0.55, 0.9, 1.0))
 		_finale_ui.add_child(dist)
 		_add_ui(_finale_ui)
-		Dmd.show_text(tr("RC_FINISH") if sim.finished else tr("DMD_GAME_OVER"), ScoreTable.format_score(sim.score), Dmd.YELLOW if sim.finished else Dmd.RED, Dmd.YELLOW)
+		_dmd.show_text(tr("RC_FINISH") if sim.finished else tr("DMD_GAME_OVER"), ScoreTable.format_score(sim.score), Dmd.YELLOW if sim.finished else Dmd.RED, Dmd.YELLOW)
 	if _finale_t >= FINALE_END_AT:
 		_finale_t = -100.0
 		set_process(false)
-		finished.emit([sim.score])
+		if _two:
+			if _main:
+				finished.emit([])   # D-289: no high score for a 2-player race
+		else:
+			finished.emit([sim.score])
+
+
+# --- 2 players (D-289) ----------------------------------------------------------------------
+func _begin_players() -> void:
+	if is_instance_valid(_attract_ui):
+		_attract_ui.queue_free()
+	_phase = "players"
+	_phase_t = 0.0
+	Audio.sfx("start")
+	_players_ui = Control.new()
+	_players_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_players_ui.add_child(UI.fill(Color(0, 0, 0, 0.35)))
+	var col := UI.vstack(60)
+	_players_rows.clear()
+	for k in ["RC_ONE_PLAYER", "RC_TWO_PLAYERS"]:
+		var l := UI.label(tr(k), 96, UI.WHITE)
+		col.add_child(l)
+		_players_rows.append(l)
+	_players_ui.add_child(col)
+	_add_ui(_players_ui)
+	_refresh_players()
+
+
+func _refresh_players() -> void:
+	for i in _players_rows.size():
+		var l: Label = _players_rows[i]
+		var on := i == _players_sel
+		var t := tr(["RC_ONE_PLAYER", "RC_TWO_PLAYERS"][i])
+		l.text = ("> %s <" % t) if on else t
+		l.add_theme_color_override("font_color", ACCENT if on else UI.WHITE)
+		l.modulate.a = 1.0 if on else 0.45
+	_dmd.show_text(tr(["RC_ONE_PLAYER", "RC_TWO_PLAYERS"][_players_sel]), "", Dmd.CYAN, Dmd.YELLOW)
+
+
+func _confirm_players() -> void:
+	if is_instance_valid(_players_ui):
+		_players_ui.queue_free()
+	if _players_sel == 1:
+		_two = true
+		CabinetInput.set_two_player(true)
+	_begin_gfx()
+
+
+## Splits the TABLE in two halves (once): this view moves into the left one,
+## player 2's view is built in the right one, both following the shared race.
+func _go_split() -> void:
+	_dmd = QuietDmd.new()
+	if _host == null:
+		var split := Control.new()
+		split.name = "SplitScreen"
+		split.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		super.add_to_table(split)
+		split.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var halves := []
+		for i in 2:
+			var h := Control.new()
+			h.clip_contents = true
+			h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			split.add_child(h)
+			h.anchor_left = 0.5 * i
+			h.anchor_right = 0.5 * (i + 1)
+			h.anchor_top = 0.0
+			h.anchor_bottom = 1.0
+			h.offset_left = 0.0
+			h.offset_right = 0.0
+			h.offset_top = 0.0
+			h.offset_bottom = 0.0
+			halves.append(h)
+		var line := ColorRect.new()
+		line.color = Color.BLACK
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		split.add_child(line)
+		line.anchor_left = 0.5
+		line.anchor_right = 0.5
+		line.anchor_bottom = 1.0
+		line.offset_left = -3.0
+		line.offset_right = 3.0
+		_host = halves[0]
+		for n in _owned:
+			if is_instance_valid(n) and n != split and n.get_parent() == Screens.table:
+				n.reparent(_host, false)
+		_on_table_shape()
+		_p2 = get_script().new()
+		_p2._role = 1
+		_p2._two = true
+		_p2._main = false
+		_p2._host = halves[1]
+		_p2.name = "Player2View"
+		add_child(_p2)
+	_p2._start_p2(self)
+	_build_rival(_p2_car, _hues[1])
+	if is_instance_valid(_time_caption):
+		_time_caption.text = tr("RC_POSITION")
+
+
+## Player 2's view (D-289): built like the module's own, then straight into
+## the race that player 1's view has just set up.
+func _start_p2(p1: Node) -> void:
+	_dmd = QuietDmd.new()
+	sim = p1.sim
+	_chosen_car = p1._p2_car
+	_hues = p1._hues.duplicate()
+	if _root == null:
+		if not Screens.table_shape_changed.is_connected(_on_table_shape):
+			Screens.table_shape_changed.connect(_on_table_shape)
+		Toon.enabled = not Config.cli.has("rc-no-toon")
+		_build_world()
+		_apply_gfx(p1._gfx_mode)
+		get_tree().node_added.connect(_on_world_node_added)
+		_build_hud()
+		_build_audio_loops()
+		_on_table_shape.call_deferred()
+	_build_body(CAR_MODELS[_chosen_car])
+	_phase = "race"
+	_phase_t = 0.0
+	_finale_t = -1.0
+	for k in _chunks.keys():
+		_chunks[k].queue_free()
+	_chunks.clear()
+	_cam_ready = false
+	_used_gas = false
+	_over_turn = 0.0
+	_over_dir = 0.0
+	_shift_armed = true
+	_shift_shown = false
+	_paint_hero()
+	_hud.visible = true
+	_show_mode()
+	_center_message("3", 1.0)
+	_last_tick = -1
+	_build_rival(p1._chosen_car, _hues[0])
+
+
+## The other player's car (D-289): the model and colour they chose.
+func _build_rival(car_i: int, hue: float) -> void:
+	if is_instance_valid(_rival):
+		_rival.queue_free()
+	var m: String = CAR_MODELS[car_i]
+	_rival = _car_instance(hue, m, MODEL_TEXTURES[m])
+	_add_headlights(_rival, "car")
+	_rival.set_meta("night", Night.add_car_lights(_rival, "car", _puff_texture(), TAIL_AT[MODEL_LIGHTS[m]]))
+	_place_tails(_rival, _rival.get_meta("night"), m)
+	_root.add_child(_rival)
+
+
+## Draws the other player's car where the shared race has it: yawed by its
+## drift and side-impact sway, spinning or slewed across on a crash.
+func _animate_rival(delta: float, cam_yaw: float) -> void:
+	if not _two or not is_instance_valid(_rival):
+		return
+	var o := 1 - _role
+	var tr_ := sim.track
+	var rs: float = sim.player_get(o, "s")
+	var rx: float = sim.player_get(o, "x")
+	_rival.visible = absf(rs - sim.s) < VIEW_AHEAD
+	if not _rival.visible:
+		return
+	_rival.transform = tr_.frame(rs, rx)
+	var yaw := deg_to_rad(float(sim.player_get(o, "drift_angle"))) + float(sim.player_get(o, "sway"))
+	var spin: float = sim.player_get(o, "spin_t")
+	var anim: float = sim.player_get(o, "crash_anim")
+	if spin > 0.0 and anim > 0.0:
+		var cp := clampf(1.0 - (spin - Sim.CRASH_STOP) / anim, 0.0, 1.0)
+		if sim.player_get(o, "flipping"):
+			yaw += clampf(cp / FLIP_TURN_END, 0.0, 1.0) * PI * 0.5 * float(sim.player_get(o, "flip_dir"))
+		else:
+			yaw += _anim_steps(cp, anim) * TAU * 2.0
+	var h := tr_.heading(rs)
+	_rival.basis = _rival.basis * Basis(Vector3.UP, _sprite_yaw(h + yaw, cam_yaw) - h) * MODEL_TURN
+	var rv: float = sim.player_get(o, "v")
+	_rival_wheel = fmod(_rival_wheel + minf(rv / 0.32, WHEEL_MAX) * delta, TAU * 100.0)
+	for m in _rival.find_children("*", "MeshInstance3D", true, false):
+		var gi := m as MeshInstance3D
+		if gi.material_override != null:
+			InstParam.set_param(gi, "spin", 1.0)
+			InstParam.set_param(gi, "wheel_phase", _rival_wheel)
+			InstParam.set_param(gi, "wheel_blur", clampf((rv - 6.0) / 20.0, 0.0, 1.0))
+			InstParam.set_param(gi, "lamps", _lamps)
+			InstParam.set_param(gi, "overhead", _overhead(rs))
+	(_rival.get_meta("night") as Node3D).visible = _lamps > 0.0
+
+
+## The DMD in a 2-player race (D-289): each player's stage and speed, and a
+## strip with both cars along the whole race (P1 yellow, P2 cyan).
+func _draw_dmd_two(p) -> void:
+	if sim == null or not sim.two_player:
+		return
+	var cols := [Dmd.YELLOW, Dmd.CYAN]
+	for i in 2:
+		var x0 := 2 + i * 64
+		var tag := tr("RC_DMD_P") % (i + 1)
+		p.text(tag, x0, 2, 1, cols[i])
+		var spd := str(roundi(float(sim.player_get(i, "v")) * Sim.MPH))
+		p.text(spd, x0 + 60 - p.text_width(spd), 2, 1, Dmd.WHITE)
+		var st: String = tr("RC_FINISH") if sim.player_get(i, "finished") else tr("RC_STAGE") % (int(sim.player_get(i, "checkpoints")) + 1)
+		p.text(st, x0, 12, 1, Dmd.DIM)
+	var total := float(Sim.FINISH_STAGE) * Sim.CHECKPOINT_EVERY
+	p.line(2, 27, 125, 27, Color(0.2, 0.22, 0.26))
+	for k in range(1, Sim.FINISH_STAGE):
+		var gx := 2.0 + 123.0 * k / Sim.FINISH_STAGE
+		p.line(gx, 26, gx, 28, Color(0.3, 0.32, 0.36))
+	for i in 2:
+		var fx := 2.0 + 123.0 * clampf(float(sim.player_get(i, "s")) / total, 0.0, 1.0)
+		p.block(roundi(fx) - 1, 24 + i * 4 - 1, 3, 3, cols[i])
 
 
 # --- events --------------------------------------------------------------------------
 func _handle_events() -> void:
-	for e in sim.events:
+	for k in sim.events.size():
+		var e: Array = sim.events[k]
+		if _two:   # D-289: this view's player's events, and the shared ones
+			var who := int(sim.event_player[k]) if k < sim.event_player.size() else -1
+			if who != _role and who != -1:
+				continue
 		match e[0]:
+			"winner":
+				if int(e[1]) != _role:
+					_center_message(tr("RC_P_WINS") % (int(e[1]) + 1), 3.0)
+				if _main:
+					Dmd.flash(tr("RC_P_WINS") % (int(e[1]) + 1), 3.0, Dmd.YELLOW)
 			"count":
 				_center_message(str(e[1]), 1.0)
 				Audio.sfx("rc_count")
-				Dmd.show_custom(_draw_dmd_revup)
+				_dmd.show_custom(_draw_dmd_revup)
 			"go":
 				if Config.cli.has("rc-police") and sim.police.is_empty():   # dev: a chase straight away (D-246)
 					sim.call_police()
 				_center_message(tr("RC_GO"), 1.0)
 				Audio.sfx("rc_go")
-				Dmd.flash(tr("RC_GO"), 1.0, Dmd.GREEN)
+				_dmd.flash(tr("RC_GO"), 1.0, Dmd.GREEN)
 			"checkpoint":
 				_bg_flash = 1.2
 				Audio.sfx("rc_checkpoint")
@@ -1188,7 +1575,7 @@ func _handle_events() -> void:
 				# a little way into it.
 				var stage := int(e[1]) + 1
 				if _stage_music(stage) != Audio.current_music():
-					Audio.crossfade_music(_stage_music(stage), MUSIC_XFADE, MUSIC_SKIP[MUSIC_RACE.find(_stage_music(stage))])
+					_crossfade(_stage_music(stage), MUSIC_XFADE, MUSIC_SKIP[MUSIC_RACE.find(_stage_music(stage))])
 				# Reached on momentum after TIME UP: the race goes on (D-103).
 				var saved: bool = e.size() > 3 and e[3]
 				# No CHECKPOINT notice mid-TABLE (D-142): the gate, DMD and sound
@@ -1198,13 +1585,16 @@ func _handle_events() -> void:
 				_dmd_anim("checkpoint", [tr("RC_CHECKPOINT"), tr("RC_EXTENDED") % int(e[2])])
 			"finish":
 				Audio.sfx("fanfare")
-				_center_message(tr("RC_FINISH"), 4.0)
-				Dmd.flash(tr("RC_FINISH"), 4.0, Dmd.YELLOW)
+				if _two:   # D-289: first or second across the line
+					_center_message(tr("RC_WINNER") if sim.winner == _role else tr("RC_SECOND"), 4.0)
+				else:
+					_center_message(tr("RC_FINISH"), 4.0)
+				_dmd.flash(tr("RC_FINISH"), 4.0, Dmd.YELLOW)
 				_bg_flash = 0.6
 			"time_up":
 				Audio.sfx("rc_time_up")
 				_center_message(tr("RC_TIME_UP"), 3.0)
-				Dmd.flash(tr("RC_TIME_UP"), 3.0, Dmd.RED)
+				_dmd.flash(tr("RC_TIME_UP"), 3.0, Dmd.RED)
 			"drift_start":
 				pass
 			"drift_end":
@@ -1258,7 +1648,7 @@ func _handle_events() -> void:
 			"police_spawn":
 				_center_message(tr("RC_POLICE"), 1.4)
 				_cops_flash = true   # red/blue flashing text (D-158)
-				Dmd.flash(tr("RC_POLICE"), 1.4, Dmd.RED)
+				_dmd.flash(tr("RC_POLICE"), 1.4, Dmd.RED)
 			"police_ram":
 				Audio.sfx("rc_bump")
 				_shake = 0.45
@@ -1267,14 +1657,14 @@ func _handle_events() -> void:
 				Audio.sfx("rc_bump")
 				_shake = 0.3
 			"police_hits_reset":   # its rams start counting again (D-198)
-				Dmd.flash(tr("RC_RAMS_RESET"), 1.0, Dmd.GREEN)
+				_dmd.flash(tr("RC_RAMS_RESET"), 1.0, Dmd.GREEN)
 			"busted":
 				_center_message(tr("RC_BUSTED"), 2.5)
 				_dmd_anim("fine", [tr("RC_BUSTED"), tr("RC_FINE"), "-" + ScoreTable.format_score(int(e[1]))])
 				Audio.sfx("rc_time_up")
 			"police_escape":
 				_center_message(tr("RC_ESCAPED"), 1.4)
-				Dmd.flash(tr("RC_ESCAPED"), 1.2, Dmd.GREEN)
+				_dmd.flash(tr("RC_ESCAPED"), 1.2, Dmd.GREEN)
 				Audio.sfx("rc_perfect")
 			"crash":
 				_shift_armed = true   # the SHIFT hint may show again (D-160)
@@ -1288,7 +1678,8 @@ func _handle_events() -> void:
 ## D-254: the TABLE's shape (base size): 1080x1920 normally, or the screen's
 ## own shape in the single-screen layout.
 func _table_base() -> Vector2i:
-	return Screens.table_base()
+	var b := Screens.table_base()
+	return Vector2i(b.x / 2, b.y) if _host != null else b   # D-289: half each
 
 
 func _landscape() -> bool:
@@ -1439,7 +1830,7 @@ func _set_ui_res() -> void:
 	else:
 		# Full resolution: the TABLE's own pixels for the area the UI covers.
 		var tb := Vector2(_table_base())
-		var px := Vector2(Screens.table.size) / tb
+		var px := _table_px() / tb
 		res = Vector2i(roundi(base.x * px.x), roundi(base.y * px.y))
 	_ui_vp.size = res
 	_ui_vp.snap_2d_transforms_to_pixel = low
@@ -2471,7 +2862,8 @@ func _sprite_yaw(world_yaw: float, cam_yaw: float) -> float:
 
 func _animate(delta: float) -> void:
 	var tr_ := sim.track
-	City.update(Night.level, _gfx_hd, _phase_t)   # D-216
+	if _main:
+		City.update(Night.level, _gfx_hd, _phase_t)   # D-216
 	# Player car on the road frame, yawed by drift/steer, spinning on a crash.
 	var f := tr_.frame(sim.s, sim.x)
 	_car.transform = f
@@ -2656,6 +3048,7 @@ func _animate(delta: float) -> void:
 	for kind in _traffic_pool:
 		for i in range(used[kind], _traffic_pool[kind].size()):
 			(_traffic_pool[kind][i] as Node3D).visible = false
+	_animate_rival(delta, cam_yaw)
 	_animate_police(delta, cam_yaw)
 	_update_radar(delta)
 	# Nitro tanks bob on stepped frames (D-103, D-115).
@@ -2720,7 +3113,8 @@ func _build_hud() -> void:
 	_hud_left = left
 	var mid := UI.vstack(0)
 	mid.alignment = BoxContainer.ALIGNMENT_BEGIN
-	mid.add_child(UI.label(tr("RC_TIME"), 36, UI.YELLOW))
+	_time_caption = UI.label(tr("RC_POSITION" if _two else "RC_TIME"), 36, UI.YELLOW)
+	mid.add_child(_time_caption)
 	_time_label = UI.label("45", 144, UI.YELLOW)
 	mid.add_child(_time_label)
 	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2918,8 +3312,12 @@ func _center_message(text: String, seconds: float) -> void:
 
 
 func _update_hud(delta: float) -> void:
-	_time_label.text = str(ceili(sim.time_left))
-	var low := sim.time_left < 10.0
+	if _two:   # D-289: no clock; the race position instead
+		_time_label.text = tr("RC_FIRST") if _leading() else tr("RC_SECOND")
+		UI.set_color(_time_label, UI.YELLOW if _leading() else UI.WHITE)
+	else:
+		_time_label.text = str(ceili(sim.time_left))
+	var low := sim.time_left < 10.0 and not _two
 	UI.set_color(_time_label, UI.RED if low and fmod(sim.time_left, 0.5) < 0.25 else UI.YELLOW)
 	if low and sim.state == Sim.State.RACE and ceili(sim.time_left) != _last_tick:
 		_last_tick = ceili(sim.time_left)
@@ -2985,8 +3383,16 @@ func _update_hud(delta: float) -> void:
 	_dmd_t -= delta
 	if _dmd_t <= 0.0 and sim.state != Sim.State.COUNTDOWN:
 		_dmd_t = 0.12
-		Dmd.show_custom(_draw_dmd_dash)
-	score_changed.emit(0, sim.score)
+		_dmd.show_custom(_draw_dmd_dash)
+	if not _two:
+		score_changed.emit(0, sim.score)
+
+
+## 2P: this view's player is ahead (or won).
+func _leading() -> bool:
+	if sim.winner >= 0:
+		return sim.winner == _role
+	return float(sim.player_get(_role, "s")) >= float(sim.player_get(1 - _role, "s"))
 
 
 ## DMD while the cops chase (D-162): a side view, our car on the right and the
@@ -3203,7 +3609,7 @@ func _update_night(delta: float) -> void:
 	if _reverb != null:
 		_reverb.wet = 0.45 * _tunnel_k
 		_set_reverb(_tunnel_k > 0.0)
-	if absf(_lamps - _lamps_shown) > 0.002:
+	if _main and absf(_lamps - _lamps_shown) > 0.002:   # (shared materials: player 1's view, D-289)
 		_lamps_shown = _lamps
 		Night.set_level(_lamps)
 		get_tree().call_group(NIGHT_GROUP, "set_visible", _lamps > 0.0)
@@ -3314,6 +3720,8 @@ func _radar_beep() -> void:
 
 
 func _exit_tree() -> void:
+	if _two and _main:
+		CabinetInput.set_two_player(false)   # D-289: player 2's keys go back to 1P
 	get_tree().call_group("touch_controls", "set_labels", {})   # D-219
 	if Screens.table_shape_changed.is_connected(_on_table_shape):
 		Screens.table_shape_changed.disconnect(_on_table_shape)
@@ -3336,7 +3744,7 @@ func _on_debug_action(action: StringName) -> void:
 			sim.police = {"s": sim.s - Sim.POLICE_BEHIND, "x": sim.x, "v": sim.v, "state": "chase", "t": 0.0}
 			_center_message(tr("RC_POLICE"), 1.4)
 			_cops_flash = true   # red/blue flashing text (D-158)
-			Dmd.flash(tr("RC_POLICE"), 1.4, Dmd.RED)
+			_dmd.flash(tr("RC_POLICE"), 1.4, Dmd.RED)
 		return
 	if action == &"skip_stage":
 		_debug_skip_to_night()
@@ -3357,12 +3765,12 @@ func _debug_skip_to_night() -> void:
 	sim.checkpoints = Night.NIGHT_STAGE - 1
 	sim.next_checkpoint = sim.s + Sim.CHECKPOINT_EVERY
 	sim.time_left = maxf(sim.time_left, 60.0)
-	Dmd.flash(tr("RC_STAGE") % (sim.checkpoints + 1), 1.0, Dmd.CYAN)
+	_dmd.flash(tr("RC_STAGE") % (sim.checkpoints + 1), 1.0, Dmd.CYAN)
 
 
 ## Plays one of the DMD event animations (D-115) with its translated texts.
 func _dmd_anim(name: String, args: Array) -> void:
-	Dmd.play(Callable(_anims, name).bindv(args), DmdAnims.DURATIONS[name])
+	_dmd.play(Callable(_anims, name).bindv(args), DmdAnims.DURATIONS[name])
 
 
 ## Backglass lights each frame (D-109). Attract: the logo blinks slowly, the
