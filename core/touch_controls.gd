@@ -8,6 +8,9 @@
 ## Multi-touch: each finger is tracked on its own, so both flippers can be held
 ## together (gear shift), and a finger sliding off a button releases it.
 ## A small HIDE / SHOW BUTTONS toggle floats in the top-right corner (`toggle`).
+## D-219: the magna saves get a button each (left column: magna_l, right:
+## magna_r). A game can rename them for what they do there (set_labels via
+## the "touch_controls" group): the racer's BRAKE and SHIFT.
 ## --touch shows the controls on any device (mouse clicks work then, for testing).
 extends Node
 
@@ -16,10 +19,12 @@ const UI = preload("res://core/ui/ui.gd")
 ## Top to bottom: [action, label key, stretch ratio]
 const LEFT_COLUMN := [
 	[&"exit", "TOUCH_EXIT", 1.0],
+	[&"magna_l", "TOUCH_MAGNA_L", 1.3],
 	[&"flip_l", "TOUCH_LEFT", 3.0],
 ]
 const RIGHT_COLUMN := [
 	[&"start", "TOUCH_START", 1.0],
+	[&"magna_r", "TOUCH_MAGNA_R", 1.3],
 	[&"launch", "TOUCH_LAUNCH", 1.3],
 	[&"flip_r", "TOUCH_RIGHT", 3.0],
 ]
@@ -27,6 +32,7 @@ const COLORS := {
 	&"flip_l": Color(0.2, 0.55, 1.0), &"flip_r": Color(0.2, 0.55, 1.0),
 	&"launch": Color(1.0, 0.35, 0.2), &"start": Color(0.25, 0.85, 0.35),
 	&"exit": Color(0.6, 0.6, 0.66),
+	&"magna_l": Color(0.85, 0.25, 0.6), &"magna_r": Color(0.95, 0.75, 0.15),
 }
 const MOUSE := -100   # pointer id used for mouse clicks
 
@@ -49,6 +55,7 @@ static func wanted() -> bool:
 
 
 func _init() -> void:
+	add_to_group("touch_controls")
 	for col in [left, right]:
 		col.add_theme_constant_override("separation", 6)
 		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -101,6 +108,14 @@ func _make_toggle() -> void:
 		set_shown(not left.visible)
 		Config.set_value("display", "touch_controls", left.visible)
 		Config.save())
+
+
+## Renames buttons for the current game ({action: text}); {} restores the
+## default labels (D-219).
+func set_labels(labels: Dictionary) -> void:
+	for b in LEFT_COLUMN + RIGHT_COLUMN:
+		var panel: Panel = _buttons[b[0]]
+		(panel.get_child(0) as Label).text = str(labels.get(b[0], tr(b[1])))
 
 
 func set_shown(on: bool) -> void:

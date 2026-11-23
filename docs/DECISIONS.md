@@ -2104,3 +2104,21 @@
 - **Collisions:** the trees keep their normal radius, so leaving the road in the forest means hitting the tree line.
 - **Unchanged:** the snowy mountain keeps its scattered spruces.
 - **Status:** Accepted
+
+### D-219 — Turbo Run: random weather spells; BRAKE and SHIFT touch buttons
+- **Date:** 2026-11-23
+- **Decision (director):** weather should start at a random place with a random kind, then last a minimum duration. Add shifter and brake buttons for Android.
+- **Weather** (supersedes D-217's fixed schedule; the looks are unchanged):
+  - **Spells:** `Track.spells`, generated on demand from `weather_seed`. The first starts 500–3,500 m in. Each lasts `WEATHER_MIN` 1,400 m (about 35 s at speed) to 3,000 m, with clear gaps of 1,200–3,500 m between. They fade in and out over 300 m inside the spell.
+  - **Kind:** picked at random from `AREA_WEATHER` for the area at the spell's middle:
+    - beach, fields, city, forest: rain or fog;
+    - desert: haze;
+    - snow: snow or fog.
+  - **Fit:** the weight is scaled by how much of the area at s suits the kind, so snow stops as the mountain ends.
+  - **Per race:** the game sets a random `weather_seed` for every race. `--rc-wseed=N` repeats one; `--rc-weather` still forces a kind.
+  - **Test:** spells are at least `WEATHER_MIN` long, suit their area, are clear before they start, and differ between seeds.
+- **Touch buttons** (`core/touch_controls.gd`, web and Android):
+  - The magna saves get a button each: magna_l in the left column above LEFT, magna_r in the right column above LAUNCH.
+  - Their default label is MAGNA. A game renames them through the `touch_controls` group (`set_labels`): the racer shows BRAKE and SHIFT, and restores the defaults when it exits.
+  - Pressing either one switches the racer into its 4-button mode on the spot (D-189).
+- **Status:** Accepted

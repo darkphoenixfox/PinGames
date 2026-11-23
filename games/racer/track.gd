@@ -91,6 +91,7 @@ func setup(seed_in: int = 1) -> void:
 	_next_gantry_s = 700.0
 	_next_bush_s = 20.0
 	junctions.clear()
+	spells.clear()
 	_next_junction_s = -1.0
 	_next_bld = [0.0, 0.0]
 	_add_section(START_STRAIGHT, 0.0, 0.0)
@@ -542,34 +543,65 @@ func areas(s: float) -> Dictionary:
 	return {cur: 1.0 - t, nxt: t}
 
 
-## Weather (D-217): clear on stages 1-3, then over each 8-stage round of the
-## areas: city clear then rain, desert clear then a dust haze, forest fog then
-## rain, snow falling on both mountain stages.
-const WEATHER_CYCLE := ["clear", "rain", "clear", "haze", "fog", "rain", "snow", "snow"]
-const WEATHER_IN := 300.0    # m it takes to set in at a stage's start
-const WEATHER_OUT := 200.0   # m it clears before the stage ends (if the next differs)
+## Weather (D-217, D-219): random spells. Each race (weather_seed) gets its
+## own: the first starts somewhere in WEATHER_FIRST m, each lasts at least
+## WEATHER_MIN m (up to WEATHER_MAX), with clear gaps of WEATHER_GAP between.
+## The kind is picked at random from those that suit the area at the spell's
+## middle (no snow in the desert), and a spell fades where the road leaves the
+## areas it suits (snow stops as the mountain ends).
+const WEATHER_FIRST := Vector2(500.0, 3500.0)
+const WEATHER_MIN := 1400.0
+const WEATHER_MAX := 3000.0
+const WEATHER_GAP := Vector2(1200.0, 3500.0)
+const WEATHER_FADE := 300.0   # m to set in and to clear, inside the spell
+const AREA_WEATHER := {"beach": ["rain", "fog"], "fields": ["rain", "fog"], "city": ["rain", "fog"],
+	"desert": ["haze"], "forest": ["rain", "fog"], "snow": ["snow", "fog"]}
+
+var weather_seed := 1:
+	set(v):
+		weather_seed = v
+		spells.clear()
+## Weather spells: {a, b, kind}, in order (generated on demand).
+var spells: Array = []
+var _wrng := RandomNumberGenerator.new()
 
 
-static func stage_weather(k: int) -> String:
-	if k <= 3:
-		return "clear"
-	return WEATHER_CYCLE[(k - 3) % WEATHER_CYCLE.size()]
+func _ensure_spells(s: float) -> void:
+	if spells.is_empty():
+		_wrng.seed = weather_seed * 7919 + 13
+		var a0 := _wrng.randf_range(WEATHER_FIRST.x, WEATHER_FIRST.y)
+		spells.append(_new_spell(a0))
+	while float(spells[-1].b) < s:
+		spells.append(_new_spell(float(spells[-1].b) + _wrng.randf_range(WEATHER_GAP.x, WEATHER_GAP.y)))
+
+
+func _new_spell(a: float) -> Dictionary:
+	var b := a + _wrng.randf_range(WEATHER_MIN, WEATHER_MAX)
+	var kinds: Array = AREA_WEATHER.get(area_at((a + b) * 0.5), ["rain"])
+	return {"a": a, "b": b, "kind": kinds[_wrng.randi() % kinds.size()]}
 
 
 ## Weather weights at s: {kind: 0..1}, empty when clear.
 func weather(s: float) -> Dictionary:
 	if avoid_every <= 0.0:
 		return {}
-	var k := stage_at(s)
-	var cur := stage_weather(k)
-	if cur == "clear":
-		return {}
-	var a := (k - 1) * avoid_every
-	var b := k * avoid_every
-	var w_in := 1.0 if stage_weather(k - 1) == cur else clampf((s - a) / WEATHER_IN, 0.0, 1.0)
-	var w_out := 1.0 if stage_weather(k + 1) == cur else clampf((b - s) / WEATHER_OUT, 0.0, 1.0)
-	var w := minf(w_in, w_out)
-	return {cur: w * w * (3.0 - 2.0 * w)}
+	_ensure_spells(s)
+	for sp in spells:
+		if s < float(sp.a):
+			break
+		if s > float(sp.b):
+			continue
+		var w := minf(clampf((s - float(sp.a)) / WEATHER_FADE, 0.0, 1.0), clampf((float(sp.b) - s) / WEATHER_FADE, 0.0, 1.0))
+		w = w * w * (3.0 - 2.0 * w)
+		# Only where the area suits it.
+		var fit := 0.0
+		var ar := areas(s)
+		for k in ar:
+			if sp.kind in AREA_WEATHER.get(k, []):
+				fit += float(ar[k])
+		w *= fit
+		return {} if w <= 0.0 else {sp.kind: w}
+	return {}
 
 
 func area_w(s: float, name: String) -> float:

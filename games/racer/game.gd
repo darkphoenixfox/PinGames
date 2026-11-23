@@ -510,6 +510,8 @@ func get_info() -> Dictionary:
 
 
 func start(_players: int) -> void:
+	# Touch buttons (D-219): the magna saves are the brake and the shifter here.
+	get_tree().call_group("touch_controls", "set_labels", {&"magna_l": tr("TOUCH_BRAKE"), &"magna_r": tr("TOUCH_SHIFT")})
 	for s in SOUNDS:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
 	_manual_locked = str(Config.get_value("operator", "cabinet_buttons")) == "4"
@@ -641,6 +643,8 @@ func _new_sim() -> void:
 	_over_dir = 0.0
 	_puff_list.clear()
 	sim.setup(7)
+	# D-219: each race gets its own weather (--rc-wseed=N repeats one).
+	sim.track.weather_seed = int(str(Config.cli["rc-wseed"])) if Config.cli.has("rc-wseed") else randi()
 	sim.freeze_time = _freeze_time
 	sim.car = _chosen_car
 	sim.time_left = sim.start_time()   # the car sets the clock (D-183)
@@ -2843,6 +2847,7 @@ func _radar_beep() -> void:
 
 
 func _exit_tree() -> void:
+	get_tree().call_group("touch_controls", "set_labels", {})   # D-219
 	# Take the tunnel reverb off the shared effects bus (D-127).
 	var bus := AudioServer.get_bus_index("SFX")
 	if _reverb != null and bus >= 0:
