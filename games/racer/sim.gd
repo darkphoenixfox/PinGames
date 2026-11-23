@@ -109,6 +109,10 @@ const SOFT_CRASH_SLOW := 0.45   # speed kept
 ## line with the car, brake and wait STOP_GAP m behind it until it's going again.
 const WAIT_BEHIND := 140.0
 const WAIT_GAP := 5.0
+## Oncoming traffic avoiding a crashed or stopped car (D-271).
+const DODGE_AHEAD := 170.0   # m ahead it starts to react
+const DODGE_CLEAR := 0.7     # m of clearance it keeps
+const DODGE_RATE := 4.5      # m/s it moves across
 const FINISH_DECEL := 30.0   # m/s^2: the drift-brake after the line (D-222; D-231: doubled, half the slide)
 const FINISH_BONUS := 100000
 const TIME_BONUS_PER_S := 2000
@@ -1006,7 +1010,29 @@ func _update_traffic(dt: float) -> void:
 		else:
 			t.waiting = false
 			t.v = move_toward(t.v, float(t.v0) * (YIELD_SLOW if yielding else 1.0), 6.0 * dt)
-		t.x = lane_x + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6) * (0.0 if yielding else 1.0) + t.shove + t.pull
+		# D-271: oncoming traffic heading at us while we're crashed or stopped
+		# swerves round us (keeping clear by a margin), slowing as it passes;
+		# if there's no room either side, it stops short of us.
+		var dodge_to := 0.0
+		var ahead: float = t.s - s
+		if (spin_t > 0.0 or v < 4.0) and float(t.v0) < 0.0 and ahead > -2.0 and ahead < DODGE_AHEAD:
+			var need := (CAR_W + tw) * 0.5 + DODGE_CLEAR
+			var dx := lane_x - x
+			if absf(dx) < need:
+				var lim := Track.ROAD_HALF + Track.RUMBLE - tw * 0.5
+				var dir := signf(dx) if absf(dx) > 0.01 else -1.0
+				var want_x := x + dir * need
+				if absf(want_x) > lim:
+					want_x = x - dir * need
+				if absf(want_x) <= lim:
+					dodge_to = want_x - lane_x
+					t.v = move_toward(t.v, float(t.v0) * 0.6, 10.0 * dt)
+				else:
+					var room := ahead - (CAR_LEN + tlen) * 0.5 - WAIT_GAP
+					t.v = move_toward(t.v, -clampf(room * 0.9, 0.0, absf(float(t.v0))), 18.0 * dt)
+					t.waiting = true
+		t.dodge = move_toward(float(t.get("dodge", 0.0)), dodge_to, DODGE_RATE * dt)
+		t.x = lane_x + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6) * (0.0 if yielding else 1.0) 			+ t.shove + t.pull + float(t.dodge)
 		var ds: float = t.s - s
 		t.last_ds = ds
 		# Oncoming drivers flash their high beams (and honk once) at a car

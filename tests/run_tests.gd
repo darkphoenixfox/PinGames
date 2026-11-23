@@ -824,6 +824,26 @@ func test_racer_hd_assets() -> void:
 	for i in 60:
 		rg.step(1.0 / 60.0, false, false)
 	check(rg.state == SimA.State.COUNTDOWN and rg.rpm > 0.5 and rg.rpm < 0.65, "R2 revs on the grid in proportion (rpm %.2f)" % rg.rpm)
+	# D-271: oncoming traffic never drives through a crashed car.
+	var od = SimA.new()
+	od.setup(4)
+	od.state = SimA.State.RACE
+	od.s = 1000.0
+	od.track.ensure(2000.0)
+	od.traffic.clear()
+	od.x = TrackA.LANES[1]
+	od.v = 0.0
+	od.traffic.append({"id": 960, "s": od.s + 150.0, "x": TrackA.LANES[1], "lane": 1, "v": -30.0, "v0": -30.0, "hue": 0.0,
+		"weave": 0.0, "last_ds": 150.0, "kind": "car", "len": SimA.CAR_LEN, "w": SimA.CAR_W})
+	var hit := false
+	for i in 600:
+		od.spin_t = 1.0
+		od.v = 0.0
+		od._update_traffic(1.0 / 60.0)
+		for t in od.traffic:
+			if absf(float(t.s) - od.s) < SimA.CAR_LEN and absf(float(t.x) - od.x) < SimA.CAR_W:
+				hit = true
+	check(not hit, "oncoming traffic avoids a crashed car instead of driving through it")
 	# D-219: random weather spells: at least WEATHER_MIN long, suited to the
 	# area, different per seed, the same for the same seed.
 	var spell_ok := true

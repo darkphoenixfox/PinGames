@@ -2689,3 +2689,11 @@
 - **Touch overlay:** it was built in D-251 (translucent buttons along the bottom, over the game: EXIT/BRAKE/LEFT and START/LAUNCH/SHIFT/RIGHT, a HIDE toggle). It's hidden while a gamepad is connected, which is why it never showed in test runs here. `--touch` now forces it on even with a pad connected.
 - **APKs:** Android and Quest builds are ad hoc, only when asked.
 - **Status:** Accepted
+
+### D-271 — Oncoming traffic avoids a crashed or stopped car
+- **Date:** 2026-11-23
+- **Bug (director):** after a crash, with the hero stopped, oncoming cars drove through it. They should stop or avoid it.
+- **Cause:** collisions are off while the car is crashed or immune (D-125), and oncoming traffic held its lane.
+- **Fix:** while the hero is crashed (`spin_t`) or below 4 m/s, an oncoming car up to `DODGE_AHEAD` 170 m ahead whose lane overlaps it swerves round. It moves across (`t.dodge`, at `DODGE_RATE` 4.5 m/s) to the side it's already on, keeping `DODGE_CLEAR` 0.7 m clearance and using the kerb if needed (else the other side), and slows to 60 %. If neither side has room, it brakes to a stop `WAIT_GAP` 5 m short. Once the hero is moving again, it eases back into its lane. Same-direction traffic already waits behind (D-223).
+- **Test:** an oncoming car never overlaps a car crashed in its lane.
+- **Status:** Accepted
