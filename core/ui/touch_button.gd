@@ -6,8 +6,10 @@ extends Control
 
 const SHADER := preload("res://core/ui/touch_button.gdshader")
 const GROW := 0.3          # room round the disc for its shadow and glow
-const ICON_Y := -0.16      # the icon's centre, in button radii from the middle
-const ICON_R := 0.4        # the icon's half size, in button radii
+## The icon's centre (in button radii from the middle) and half size (in
+## radii): above a label by default; a button with no label centres it.
+var icon_y := -0.16
+var icon_r := 0.4
 
 var color := Color.WHITE
 ## left | right | launch | start | exit | magna | brake | shift
@@ -68,9 +70,10 @@ func _draw() -> void:
 		return
 	# A soft dark copy first (a shadow), then the icon in white.
 	for pass_i in 2:
-		var c := Color(0, 0, 0, 0.35) if pass_i == 0 else Color(1, 1, 1, lerpf(0.92, 1.0, _press))
-		var o := size * 0.5 + Vector2(0, r * (ICON_Y + (0.045 if pass_i == 0 else 0.0)))
-		_draw_icon(o, r * ICON_R, c)
+		# D-281: the icon is quiet at rest and full white while held.
+		var c := Color(0, 0, 0, lerpf(0.18, 0.35, _press)) if pass_i == 0 else Color(1, 1, 1, lerpf(0.62, 1.0, _press))
+		var o := size * 0.5 + Vector2(0, r * (icon_y + (0.045 if pass_i == 0 else 0.0)))
+		_draw_icon(o, r * icon_r, c)
 
 
 func _poly(o: Vector2, s: float, pts: Array, c: Color) -> void:

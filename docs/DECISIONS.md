@@ -2777,3 +2777,24 @@
 - **Unchanged:** the side-column style of the old `web` page layout, and the HIDE toggle.
 - **Checked:** landscape (Turbo Run) and portrait (Tilt Breaker) previews, the latter under the Compatibility renderer the browser uses. Not checked on a real phone.
 - **Status:** Accepted
+
+### D-280 — Turbo Run car select keeps its shape on any screen
+- **Date:** 2026-11-23
+- **Bug (director, phone screenshot):** in the Android browser, in portrait, the car select was stretched sideways: flattened turntables and cars, and the third stats card cut off.
+- **Cause:** the showroom is laid out for exactly 1080×1920 (or 1920×1080 in landscape), but in the single layout the portrait TABLE is whatever is left under the DMD (about 1080×1264 on that phone). The 3D view was stretched to fill it, and the cards kept their 1920-high positions.
+- **Fix** (`games/racer/showroom.gd`): the 3D view, title and cards sit in a holder of the layout's own size, scaled to fit the screen and centred; the sky backdrop still fills the whole area behind it.
+- **Dev:** `--single-size=WxH` opens the single-screen preview at any size (it is still limited to the monitor's usable area).
+- **Known, not changed:** in a nearly square landscape area the UI layer's 16:9 box leaves black bands above and below the car select.
+- **Checked:** portrait 450×676 and landscape 1280×720 previews. Not checked on the phone.
+- **Status:** Accepted
+
+### D-281 — Touch overlay: quieter, no START / LAUNCH buttons, EXIT at the top
+- **Date:** 2026-11-23
+- **Decision (director):** make the touch buttons more transparent and less intrusive. The LAUNCH and START buttons are redundant on a touchscreen. The EXIT button can go at the top of the screen.
+- **Tap the game:** in the overlay (single layout: web and Android), a touch anywhere on the game that isn't a button is LAUNCH, held for as long as the finger stays (Tilt Breaker's charge shot, D-264). Every screen that takes START also takes LAUNCH (picker, attract screens, menus, initials, the quit dialog), so START needs no button. This replaces the overlay's use of the TABLE halves as flipper pads (D-176); LEFT and RIGHT are the flippers.
+- **Buttons left:** MAGNA (BRAKE / SHIFT in Turbo Run) above LEFT and RIGHT at the bottom corners.
+- **EXIT:** a small button (62 % of the others' size, the cross only) in the top left corner, opposite the HIDE toggle.
+- **Quieter at rest** (amends D-279): the glass is 22 % opaque (was 55 %), the rim 50 %, the shadow and glow much lighter, icons and labels at about 60 %. A held button still fills with colour and lights up fully.
+- **Unchanged:** the side-column style of the old `web` page layout keeps all its buttons and the flipper pads.
+- **Checked:** landscape (Turbo Run) and portrait (the menu and Tilt Breaker) previews; a tap on the menu starts the game. Not checked on a real phone.
+- **Status:** Accepted

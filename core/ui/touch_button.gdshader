@@ -7,7 +7,7 @@ shader_type canvas_item;
 uniform vec4 tint : source_color = vec4(0.2, 0.55, 1.0, 1.0);
 uniform float press = 0.0;   // 0 at rest .. 1 held
 uniform float grow = 0.3;
-uniform float see_through = 0.45;   // how much of the game shows through at rest
+uniform float see_through = 0.78;   // how much of the game shows through at rest (D-281)
 
 vec4 over(vec4 under, vec4 top) {
 	float a = top.a + under.a * (1.0 - top.a);
@@ -23,10 +23,10 @@ void fragment() {
 
 	// Drop shadow, below the button; it tucks in when the button is pressed.
 	float sd = length(p - vec2(0.0, 0.12 * (1.0 - press)));
-	vec4 col = vec4(0.0, 0.0, 0.0, (1.0 - smoothstep(0.82, 1.32, sd)) * 0.5);
+	vec4 col = vec4(0.0, 0.0, 0.0, (1.0 - smoothstep(0.82, 1.32, sd)) * mix(0.2, 0.45, press));
 
 	// Glow in the button's colour, round the rim.
-	float glow = exp(-abs(d - 1.0) * 6.5) * (0.22 + 0.78 * press);
+	float glow = exp(-abs(d - 1.0) * 6.5) * (0.08 + 0.92 * press);
 	col = over(col, vec4(mix(tint.rgb, vec3(1.0), 0.25 * press), glow * 0.85));
 
 	// Glass body: lighter at the top, deep at the bottom; fills with colour when held.
@@ -46,13 +46,13 @@ void fragment() {
 
 	// Gloss: a soft highlight across the upper half of the glass.
 	vec2 g = (p - vec2(0.0, -0.42)) / vec2(0.78, 0.4);
-	float gloss = (1.0 - smoothstep(0.55, 1.0, length(g))) * 0.26 * (1.0 - press * 0.5);
+	float gloss = (1.0 - smoothstep(0.55, 1.0, length(g))) * mix(0.12, 0.16, press);
 	// A faint bounce light at the bottom.
 	vec2 b = (p - vec2(0.0, 0.62)) / vec2(0.6, 0.22);
 	gloss += (1.0 - smoothstep(0.3, 1.0, length(b))) * 0.1;
 	base = mix(base, vec3(1.0), gloss);
 
 	vec3 c = mix(base, rim_c, rim);
-	float a = mix(max(base_a, gloss), 0.97, rim) * body;
+	float a = mix(max(base_a, gloss), mix(0.5, 0.97, press), rim) * body;
 	COLOR = over(col, vec4(c, a));
 }

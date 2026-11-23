@@ -60,6 +60,26 @@ var overlay := false:
 		for act in _buttons:
 			(_faces[act] as Control).visible = v
 			_style(act, false)
+		# D-281: over the game, START and LAUNCH have no button (a touch on the
+		# game itself is LAUNCH, which does everything START does), and EXIT
+		# floats small at the top left (`exit_button`, placed by Screens).
+		for act in OVERLAY_HIDDEN:
+			(_buttons[act] as Control).visible = not v
+		_left_blank.visible = not v
+		var ex := _buttons[&"exit"] as Control
+		if v and ex.get_parent() == left:
+			left.remove_child(ex)
+			exit_button = ex
+			# Too small for a readable label: the cross alone, centred.
+			(_labels[&"exit"] as Label).visible = false
+			_faces[&"exit"].icon_y = 0.0
+			_faces[&"exit"].icon_r = 0.42
+## D-281: the overlay's EXIT button, for Screens to add to the page (null in
+## the side-column layout, where EXIT stays in the left column).
+var exit_button: Control
+var _left_blank: Control
+const OVERLAY_HIDDEN := [&"start", &"launch"]
+const EXIT_SIZE := 0.62   # the floating EXIT's diameter, as a share of the others'
 var _buttons := {}        # action -> Panel
 var _labels := {}         # action -> Label
 var _faces := {}          # action -> Face (the overlay's look, D-279)
@@ -82,7 +102,11 @@ func _init() -> void:
 		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	left.add_child(_left_space)
 	for b in LEFT_COLUMN:
-		left.add_child(_make_button(b) if b[0] != &"" else _make_blank(b))
+		if b[0] != &"":
+			left.add_child(_make_button(b))
+		else:
+			_left_blank = _make_blank(b)
+			left.add_child(_left_blank)
 	right.add_child(_toggle_space)   # the corner toggle sits over this
 	for b in RIGHT_COLUMN:
 		right.add_child(_make_button(b))
@@ -197,6 +221,11 @@ func _fit_round(win: Vector2) -> void:
 	var sep := roundf(maxf(10.0, minf(win.x, win.y) * 0.022))
 	var d := floorf(minf((bar_h - edge - sep * 3.0) / 4.0, minf(win.x, win.y) * 0.17))
 	d = maxf(d, 44.0)
+	if is_instance_valid(exit_button):   # D-281: small, in the top left corner
+		var de := roundf(d * EXIT_SIZE)
+		exit_button.custom_minimum_size = Vector2.ZERO
+		exit_button.position = Vector2(edge, edge) * 0.6
+		exit_button.size = Vector2(de, de)
 	_toggle_space.custom_minimum_size.y = 0
 	_left_space.custom_minimum_size.y = 0
 	for col in [left, right]:
@@ -230,12 +259,13 @@ func _fit_round(win: Vector2) -> void:
 			var l := _labels[act] as Label
 			l.add_theme_font_override("font", f)
 			l.add_theme_font_size_override("font_size", size)
+			var bd := d * (EXIT_SIZE if _buttons[act] == exit_button else 1.0)
 			# Small buttons: scale the label down so it still fits.
-			var k := minf(1.0, d * LABEL_W / (36.0 * bit))
+			var k := minf(1.0, bd * LABEL_W / (36.0 * bit))
 			# In the lower part of the button, under the icon.
 			l.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-			l.size = Vector2(d, d * 0.3)
-			l.position = Vector2(0.0, d * 0.56)
+			l.size = Vector2(bd, bd * 0.3)
+			l.position = Vector2(0.0, bd * 0.56)
 			l.pivot_offset = l.size * 0.5
 			l.scale = Vector2(k, k)
 			_style(act, false)
@@ -249,7 +279,7 @@ func _style(action: StringName, down: bool) -> void:
 	if overlay:   # D-279: the face draws the button; the panel only takes touches
 		(_buttons[action] as Panel).add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 		_faces[action].set_down(down)
-		(_labels[action] as Label).modulate = Color(1, 1, 1, 1.0 if down else 0.92)
+		(_labels[action] as Label).modulate = Color(1, 1, 1, 1.0 if down else 0.6)   # D-281: quieter at rest
 		return
 	var c: Color = COLORS[action]
 	var sb := StyleBoxFlat.new()
@@ -278,15 +308,21 @@ func _input(event: InputEvent) -> void:
 ## A finger is now at pos (far away = lifted): release what it held, press what it's on.
 func _finger(index: int, pos: Vector2) -> void:
 	var now: StringName = &""
+	var on_button := false
 	if not toggle.get_global_rect().has_point(pos):
 		for action in _buttons:
-			if (_buttons[action] as Control).get_global_rect().has_point(pos):
+			var bc := _buttons[action] as Control
+			if bc.is_visible_in_tree() and bc.get_global_rect().has_point(pos):
 				now = action
+				on_button = true
 				break
 		if now == &"" and is_instance_valid(table_view):
 			var r := table_view.get_global_rect()
 			if r.has_point(pos):
-				now = &"flip_l" if pos.x < r.get_center().x else &"flip_r"
+				if overlay:   # D-281: a touch on the game is LAUNCH (and so START)
+					now = &"launch"
+				else:
+					now = &"flip_l" if pos.x < r.get_center().x else &"flip_r"
 	var before: StringName = _fingers.get(index, &"")
 	if now == before:
 		return
@@ -300,7 +336,7 @@ func _finger(index: int, pos: Vector2) -> void:
 		Input.action_press(now)
 		_down_frame[now] = Engine.get_process_frames()
 		_style(now, true)
-		if index != MOUSE and _buttons.has(now):
+		if index != MOUSE and on_button:
 			Input.vibrate_handheld(12)   # D-279: a tick under the finger
 	get_viewport().set_input_as_handled()
 
@@ -335,6 +371,6 @@ func _release_all() -> void:
 
 func _exit_tree() -> void:
 	_release_all()
-	for n in [left, right, toggle]:
+	for n in [left, right, toggle, exit_button]:
 		if is_instance_valid(n) and n.get_parent() == null:
 			n.free()
