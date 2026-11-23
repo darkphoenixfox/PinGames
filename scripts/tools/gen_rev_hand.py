@@ -19,7 +19,7 @@ OUTLINE = (10, 4, 22)
 SHADE = (110, 30, 140)
 
 W, H = 640, 400      # drawing size (pointing right, mirrored at the end)
-PIX = 7              # one output pixel per PIX drawing pixels (D-209: 7, was 5: a smaller hand)
+PIX = 9.33           # one output pixel per PIX drawing pixels (D-230: 25 % smaller again; D-209: 7, was 5)
 
 
 def gradient(t):
@@ -64,7 +64,7 @@ def main():
     d.line([(300, 215), (590, 215)], fill=OUTLINE + (255,), width=8)
     d.line([(118, 140), (118, 330)], fill=OUTLINE + (255,), width=8)      # cuff seam
     img = img.crop(img.getbbox())
-    small = img.resize((img.width // PIX, img.height // PIX), Image.NEAREST)
+    small = img.resize((int(img.width / PIX), int(img.height / PIX)), Image.NEAREST)
     small = small.transpose(Image.FLIP_LEFT_RIGHT)   # point left
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     small.save(OUT, optimize=True)

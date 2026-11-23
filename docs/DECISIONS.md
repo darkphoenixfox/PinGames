@@ -2253,3 +2253,14 @@
   - houses: a wooden chalet, a white alpine house, a pastel town house;
   - crowds: five cheering in colourful jackets, four fans with a chequered flag, a family with a child on a parent's shoulders.
 - **Status:** Accepted
+
+### D-230 — Turbo Run: REV! hand 25 % smaller; police lights stay on until the fine
+- **Date:** 2026-11-23
+- **Decisions (director):** make the REV! hand 25 % smaller. The police car should keep its lights on all the way until you're fined, then turn them off before it moves away.
+- **Hand:** redrawn at 59×35 px (`gen_rev_hand.py` `PIX` 9.33, fractional now; was 79×47) and still shown at 2×, so exactly 75 % of D-209's size. The REV! label moves down to stay with it.
+- **Police:**
+  - The fine (`Sim._fine`, event `busted`) now comes once the police car has parked beside you (`PARK_HOLD`), not as the bust starts. The bust's start is the new event `bust_start`.
+  - `police_lights()` is on while chasing and through the bust until the fine, then off.
+  - The car sits dark for `LIGHTS_OFF_WAIT` 1 s, and the player is held until it starts to leave.
+- **Test:** the lights stay on until the fine and go off before the car leaves.
+- **Status:** Accepted

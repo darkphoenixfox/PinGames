@@ -969,13 +969,20 @@ func test_racer_sim() -> void:
 	cop.v = 15.0
 	var fined := 0
 	var before: int = cop.score
-	for i in 5:
+	var lit_till_fine := true
+	for i in 900:
 		cop.traffic.clear()
+		var lit_before: bool = cop.police_lights()
 		cop.step(dt, false, false)
 		for e in cop.events:
 			if e[0] == "busted":
 				fined = int(e[1])
+				lit_till_fine = lit_till_fine and lit_before and not cop.police_lights()
+		if fined > 0:
+			break
+		lit_till_fine = lit_till_fine and (i < 3 or cop.police_lights())
 	check(fined == Sim.FINE and cop.score < before - Sim.FINE + 2000 and cop.busted_t > 0.0, "slowing down with the police close is a bust and a fine")
+	check(lit_till_fine and cop.police.state == "bust", "the police lights stay on until the fine, then go off before it leaves (D-230)")
 	for i in int((Sim.BUST_TIME + 1.0) * 60.0):
 		cop.traffic.clear()
 		cop.step(dt, false, false)

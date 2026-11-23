@@ -2651,7 +2651,7 @@ func _update_rev_hint(countdown: bool) -> void:
 		_rev_hand.size = Vector2(_rev_hand.texture.get_size()) * 2.0
 		_rev_hint.add_child(_rev_hand)
 		var lab := UI.styled_label(tr("RC_REV_HINT"), TITLE_FONT, 2)
-		lab.position = Vector2(10, -104)
+		lab.position = Vector2(4, -94)
 		_rev_hint.add_child(lab)
 		_hud.add_child(_rev_hint)
 	var show := countdown and _phase == "race"

@@ -165,6 +165,7 @@ const ESCAPE_TIME := 4.0         # s in a row
 const BUST_SPEED := 22.0        # m/s: slower than this with police close = busted
 const BUST_NEAR := 12.0         # m: "close" - right on you (D-157; was 40)
 const BUST_TIME := 3.5          # s held at the roadside
+const LIGHTS_OFF_WAIT := 1.0    # s it sits with its lights off after the fine, before it leaves (D-230)
 const BLOCK_AHEAD := 6.5        # m in front of the player where it stops across the lane (D-161)
 const PARK_HOLD := 1.5          # s the police stands parked beside you (D-139)
 const FINE := 25000
@@ -566,7 +567,12 @@ func _update_police(dt: float) -> void:
 			police.park_t = float(police.get("park_t", 0.0)) + (dt if parked else 0.0)
 			if police.park_t < PARK_HOLD:
 				busted_t = maxf(busted_t, 0.05)
-			elif busted_t <= 0.0 and spin_t <= 0.0:
+			elif not police.get("fined", false):
+				# D-230: the fine comes once it's parked; then the lights go off,
+				# and it sits dark a moment before it drives away.
+				_fine()
+				busted_t = maxf(busted_t, LIGHTS_OFF_WAIT)
+			elif busted_t <= 0.0 and spin_t <= 0.0 and police.park_t >= PARK_HOLD + LIGHTS_OFF_WAIT:
 				police.state = "leave"
 		"giveup":
 			_check_hit_police(ds, dt)
@@ -590,8 +596,9 @@ func _update_police(dt: float) -> void:
 
 ## Whether its light bar and siren are on (D-145): only while it's chasing you.
 func police_lights() -> bool:
-	# Off once you're fined (D-147), and after it gives up or drives off.
-	return not police.is_empty() and police.state == "chase"
+	# On while chasing and through the bust, off once you're fined (D-147,
+	# D-230), and after it gives up or drives off.
+	return not police.is_empty() and (police.state == "chase" or (police.state == "bust" and not police.get("fined", false)))
 
 
 ## Speed control towards a spot `want_ds` metres from the player (negative =
@@ -672,6 +679,12 @@ func _bust() -> void:
 		boosting = false
 		boost_t = 0.0
 		events.append(["nitro_end"])
+	events.append(["bust_start"])
+
+
+## The fine (D-230: once the police car has parked, not as the bust starts).
+func _fine() -> void:
+	police.fined = true
 	var fine := mini(FINE, score)
 	_score_f -= fine
 	score = int(_score_f)
