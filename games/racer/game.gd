@@ -61,6 +61,7 @@ const MAX_TRAVEL_YAW := 0.45   # rad: the most the nose follows sideways travel 
 const ANIM_FPS := 10.0
 ## Pixel renderer resolution (D-107): 1/3 of the 1080x1920 TABLE.
 const PIXEL_RES := Vector2i(480, 854)   # D-194: softer pixels (was 360 x 640)
+const NES_RES := Vector2i(270, 480)     # D-207: 8-BIT, chunkier pixels
 const FLIP_FRAMES := 8.0
 const FLIP_HOP := 1.6
 ## TIME UP slide (D-105): 90 degrees in OVER_TURN_TIME s, OVER_TURN_FRAMES steps.
@@ -177,9 +178,10 @@ const HD_TEXTURES := {
 	POLICE_TEXTURE: "res://assets/models/racer/police2_albedo_hd.png",
 	HOTHATCH_TEXTURE: "res://assets/models/racer/hothatch_hothatch_albedo.jpg",
 }
-const GFX_OPTIONS := ["retro", "hd"]
-const GFX_NAMES := {"retro": "RC_GFX_RETRO", "hd": "RC_GFX_HD"}
-const GFX_DESC := {"retro": "RC_GFX_RETRO_DESC", "hd": "RC_GFX_HD_DESC"}
+## D-207: 8-BIT ("nes"), 16-BIT (id "retro", kept for saved settings) and HD.
+const GFX_OPTIONS := ["nes", "retro", "hd"]
+const GFX_NAMES := {"nes": "RC_GFX_NES", "retro": "RC_GFX_RETRO", "hd": "RC_GFX_HD"}
+const GFX_DESC := {"nes": "RC_GFX_NES_DESC", "retro": "RC_GFX_RETRO_DESC", "hd": "RC_GFX_HD_DESC"}
 
 const ACCENT := Color("ffd23e")
 const TITLE_FONT := "sunset"
@@ -329,6 +331,7 @@ var _car_outlines := {}     # model path -> outline ArrayMesh
 var _beam_mat: StandardMaterial3D
 var _pix_vp: SubViewport
 var _gfx_hd := false             # D-195: HD graphics (native resolution, high-res art)
+var _gfx_mode := "retro"         # D-207: one of GFX_OPTIONS
 var _retro_post: ShaderMaterial  # the 16-bit palette/dither pass, kept for switching back
 var _hd_flipped := {}            # materials HD switched from nearest to smooth filtering
 var _gfx_ui: Control
@@ -480,9 +483,9 @@ func on_action(action: StringName, pressed: bool) -> void:
 	if _phase == "gfx":
 		match action:
 			&"flip_l", &"magna_l":
-				_move_gfx(0)
+				_move_gfx(maxi(_gfx_index - 1, 0))
 			&"flip_r", &"magna_r":
-				_move_gfx(1)
+				_move_gfx(mini(_gfx_index + 1, GFX_OPTIONS.size() - 1))
 			&"launch", &"start":
 				_confirm_gfx()
 		return
@@ -627,19 +630,26 @@ func _top_score_line() -> String:
 ## Car select (D-122): three cars in a showroom, flippers choose, Launch/Start
 ## confirms (or the timer picks the highlighted one).
 # --- graphics: HD / RETRO (D-195) ------------------------------------------------------
-## --rc-gfx=hd|retro (dev), else the last choice, else RETRO.
-func _start_gfx() -> bool:
+## --rc-gfx=nes|retro|hd (dev), else the last choice, else 16-BIT.
+func _start_gfx() -> String:
 	var g := str(Config.cli.get("rc-gfx", Config.get_value("racer", "graphics", "retro")))
-	return g == "hd"
+	return g if g in GFX_OPTIONS else "retro"
 
 
 ## RETRO: the world at PIXEL_RES through the 16-bit palette/dither pass (D-107,
 ## D-194). HD: the world at the TABLE's own resolution with 4x MSAA, no pixel
 ## pass, the high-res sprite cut-outs and car textures, smooth filtering, and
 ## the road without its 25 cm texels.
-func _apply_gfx(on: bool) -> void:
+## 8-BIT (D-207): as RETRO at NES_RES, with the post pass snapping to its
+## fixed palette.
+func _apply_gfx(mode: String) -> void:
+	_gfx_mode = mode
+	var on := mode == "hd"
 	_gfx_hd = on
-	_pix_vp.size = Vector2i(Screens.table.size) if on else PIXEL_RES
+	var low := NES_RES if mode == "nes" else PIXEL_RES
+	_retro_post.set_shader_parameter("low_res", Vector2(low))
+	_retro_post.set_shader_parameter("nes", mode == "nes")
+	_pix_vp.size = Vector2i(Screens.table.size) if on else low
 	_pix_vp.msaa_3d = Viewport.MSAA_4X if on else Viewport.MSAA_DISABLED
 	_world_view.material = null if on else _retro_post
 	_world_view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if on else CanvasItem.TEXTURE_FILTER_NEAREST
@@ -698,7 +708,7 @@ func _begin_gfx() -> void:
 	_phase = "gfx"
 	_phase_t = 0.0
 	Audio.sfx("start")
-	_gfx_index = 1 if _gfx_hd else 0
+	_gfx_index = maxi(GFX_OPTIONS.find(_gfx_mode), 0)
 	_gfx_ui = Control.new()
 	_gfx_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_gfx_ui.add_child(UI.fill(Color(0, 0, 0, 0.35)))
@@ -720,14 +730,14 @@ func _begin_gfx() -> void:
 	_refresh_gfx()
 
 
-## Flippers pick RETRO (left) or HD (right), shown live on the road behind.
+## Flippers step through 8-BIT / 16-BIT / HD, shown live on the road behind.
 func _move_gfx(i: int) -> void:
 	_phase_t = 0.0
 	if i == _gfx_index:
 		return
 	_gfx_index = i
 	Audio.sfx("rc_shift")
-	_apply_gfx(GFX_OPTIONS[i] == "hd")
+	_apply_gfx(GFX_OPTIONS[i])
 	_refresh_gfx()
 
 
@@ -765,6 +775,7 @@ func _begin_select() -> void:
 	_world_view.visible = false
 	_showroom = Showroom.new()
 	_showroom.hd = _gfx_hd
+	_showroom.nes = _gfx_mode == "nes"
 	add_to_table(_showroom)
 	_showroom.selected = _chosen_car
 	_showroom.build(func(hue: float, i: int) -> Node3D:

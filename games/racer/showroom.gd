@@ -25,6 +25,7 @@ const ROW_COLS := [Color("4fff7a"), Color("ffd23e"), Color("ff3b4f")]   # easy, 
 
 var selected := Sim.DEFAULT_CAR
 var hd := false        # set before build() (D-195)
+var nes := false       # 8-BIT palette (D-207), set before build()
 var _res := RES
 var _vp: SubViewport
 var _cam: Camera3D
@@ -126,6 +127,9 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 		post.shader = PIXEL_POST
 		post.set_shader_parameter("low_res", Vector2(RES))
 		post.set_shader_parameter("keep_alpha", true)
+		post.set_shader_parameter("nes", nes)
+		if nes:
+			post.set_shader_parameter("low_res", Vector2(RES) * 0.75)
 		view.material = post
 	add_child(view)
 	# Title + a stats card beside each car (fixed slots: nothing moves, D-096).

@@ -1937,3 +1937,12 @@
   - Below 100 mph it is the one roll of D-098.
 - **Colour:** the easy car's hue is 0.0, so the hot hatch keeps its own red paint. This supersedes D-202's blue. The normal car is red too: the two are told apart by their model.
 - **Status:** Accepted
+
+### D-207 — Turbo Run graphics: 8-BIT mode; RETRO renamed 16-BIT
+- **Date:** 2026-11-23
+- **Decision (director):** rename the RETRO option to 16-BIT, and add an 8-BIT option that renders the game in the NES style: a limited colour palette on top of the pixel shader.
+- **Options:** 8-BIT, 16-BIT, HD, in that order. The flippers step left and right through them, the road behind switches live, and Launch confirms. The 16-BIT id stays `retro`, so saved settings carry over; 8-BIT is `nes`. Dev: `--rc-gfx=nes|retro|hd`.
+- **8-BIT:** the world renders at `NES_RES` 270×480 (16-BIT is 480×854). `pixel_post.gdshader` with `nes` on dithers each pixel (4×4 Bayer, ±0.045) and snaps it to the nearest of 54 fixed colours, using weighted RGB distance (2, 4, 3).
+- **Palette:** 12 hues every 30° starting at blue, in 4 brightness rows (HSL lightness 0.30 / 0.50 / 0.72 / 0.88), plus 6 greys from black to white. We generated it ourselves in the style of the 8-bit consoles' palettes; it is not a copy of one.
+- **Showroom:** in 8-BIT it uses the same palette, at 0.75 of its resolution.
+- **Status:** Accepted
