@@ -696,7 +696,7 @@ func _build_starfield() -> void:
 ## Shield strips along the invisible boundaries, same effect as the ship's shield.
 ## D-263: the field's edge shields always glow faintly, so the play area reads
 ## on a wide screen (D-262).
-const EDGE_IDLE := 0.05
+const EDGE_IDLE := 0.10   # D-269: 10 % (was 5 %, D-263)
 const PLAY_MARGIN := 0.9   # units beyond the field the panels keep clear of (D-267)
 
 

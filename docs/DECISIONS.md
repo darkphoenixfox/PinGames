@@ -2673,3 +2673,9 @@
 - **Distribution:** `PinGames-tester-2026-11-23.zip` on a GitHub release of the (private) repo, so testers need repo access.
 - **Note:** the runtime is the editor binary, so the title bar says (DEBUG). A proper release build would need the export templates.
 - **Status:** Accepted
+
+### D-269 — Tilt Breaker: the edge shields' resting glow at 10 %
+- **Date:** 2026-11-23
+- **Decision (director):** make the barriers 10 % visible instead of 5 % (D-263), and include it in the tester build (D-268).
+- **Change:** `EDGE_IDLE` 0.05 → 0.10.
+- **Status:** Accepted
