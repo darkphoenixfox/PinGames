@@ -456,6 +456,8 @@ var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
 var _bg_dark := 0.0     # s of crash flicker left
 var _wheel_phase := 0.0
 var _police_wheel := 0.0       # D-246
+var _used_gas := false          # D-252: R2 has been pressed this race
+var _pad_brake := false
 const WHEEL_MAX := 25.0   # rad/s the wheels are seen to turn at most (~4 turns a second, D-249)
 var _travel := 0.0         # eased nose angle from sideways travel (D-128)
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
@@ -647,7 +649,18 @@ func _process(delta: float) -> void:
 	elif _phase == "race":
 		var l := CabinetInput.is_down(&"flip_l")
 		var r := CabinetInput.is_down(&"flip_r")
-		sim.step(dt, l, r, false, CabinetInput.is_down(&"magna_l"))
+		# Gamepad (D-252): stick steers, L2 brakes, R2 accelerates once used.
+		sim.steer_axis = CabinetInput.steer_axis()
+		var l2 := CabinetInput.trigger(false)
+		var r2 := CabinetInput.trigger(true)
+		if r2 > 0.0:
+			_used_gas = true
+		if (l2 > 0.3 or _used_gas) and not sim.manual:
+			sim.manual = true   # triggers mean a pad: brake and shifter controls (D-189)
+			_seen_magna = true
+		sim.gas_axis = r2 if _used_gas else -1.0
+		_pad_brake = l2 > 0.3
+		sim.step(dt, l, r, false, CabinetInput.is_down(&"magna_l") or _pad_brake)
 		_handle_events()
 		_update_hud(delta)
 		if sim.done and _finale_t < 0.0:
@@ -663,6 +676,7 @@ func _process(delta: float) -> void:
 # --- phases --------------------------------------------------------------------------
 func _new_sim() -> void:
 	sim = Sim.new()
+	_used_gas = false   # D-252
 	_over_turn = 0.0
 	_over_dir = 0.0
 	_puff_list.clear()

@@ -206,6 +206,10 @@ var v := 0.0
 var lat_v := 0.0               # m/s sideways (+ = right), for the view's nose angle
 var steer := 0.0               # -1..1 smoothed steering (for the view)
 var throttle := 0.0
+## Analog gamepad (D-252): stick steering (0 = use the flippers), and the
+## accelerator once R2 has been used (< 0 = automatic throttle as before).
+var steer_axis := 0.0
+var gas_axis := -1.0
 var braking := false
 var auto_braking := false
 var offroad := false
@@ -749,6 +753,8 @@ func _update_pickups() -> void:
 func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	sway = move_toward(sway, 0.0, SWAY_BACK * dt)   # D-239
 	var want := (1.0 if right else 0.0) - (1.0 if left else 0.0)
+	if steer_axis != 0.0:
+		want = clampf(steer_axis, -1.0, 1.0)   # proportional (D-252)
 	if busted_t > 0.0:
 		busted_t -= dt
 		want = 0.0
@@ -792,9 +798,13 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 		accel = -((FINISH_DECEL if finished else COAST_OVER) if state == State.OVER else ((FLIP_SLIDE_DECEL if crash_slide else FLIP_ROLL_DECEL) if flipping else COAST_DRAG * 3.0))
 	elif manual:
 		# 4 buttons (D-189): automatic throttle, the player's own brake (no auto-brake).
-		throttle = 0.0 if brake else 1.0
+		# D-252: a gamepad's R2 is the accelerator (proportional) once used.
+		var g := 1.0 if gas_axis < 0.0 else gas_axis
+		throttle = 0.0 if brake else g
 		braking = brake
-		accel = -BRAKE if brake else ACCEL * pull * (1.0 - pow(minf(v / vmax, 1.2), 2.0))
+		accel = -BRAKE if brake else ACCEL * pull * g * (1.0 - pow(minf(v / vmax, 1.2), 2.0))
+		if not brake and g < 0.05:
+			accel = -COAST_DRAG
 	else:
 		throttle = 1.0
 		braking = false

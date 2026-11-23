@@ -2485,3 +2485,17 @@
   - **Touch:** the touch buttons are a translucent bar along the bottom of the screen over the game (`TouchControls.overlay`). They're hidden while a gamepad is connected, and the layout rebuilds when one is plugged in or out.
   - **Web:** the browser build keeps its `web` layout (D-173).
 - **Status:** Accepted (slice 1 of 4)
+
+### D-252 — Single-screen version, slice 3: analog gamepad
+- **Date:** 2026-11-23
+- **Decision (director):** gamepad analog controls. Racer: the stick steers, the triggers are gas and brake.
+- **Input:** `CabinetInput.steer_axis()` reads the left stick's X from any connected pad (deadzone 0.18, rescaled). `trigger(left/right)` reads L2 and R2 (0..1).
+- **Turbo Run:**
+  - **Steering:** the stick steers proportionally (`Sim.steer_axis`; the flippers still work when the stick is centred).
+  - **Brake:** L2 brakes.
+  - **Accelerator:** once R2 is used in a race, it's a proportional accelerator (`gas_axis`; released, the car coasts). Until then the throttle stays automatic as before.
+  - **Controls mode:** using a trigger switches to the 4-button controls (own brake and shifter, D-189), like a magna press.
+- **Tilt Breaker:** the paddle follows the stick's tilt proportionally (`Sim.paddle_axis`).
+- **Unchanged:** all buttons (L1/R1 flippers, Cross, Circle, Square) stay as mapped (D-019).
+- **Test:** half stick steers less than full stick.
+- **Status:** Accepted (slice 3 of 4)

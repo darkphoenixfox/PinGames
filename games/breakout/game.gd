@@ -340,6 +340,7 @@ func _process(delta: float) -> void:
 		return
 	if Config.cli.has("tb-dmd-anim") and not Dmd.is_animating():  # dev: loop one DMD animation
 		_dmd_anim(str(Config.cli["tb-dmd-anim"]))
+	sim.paddle_axis = CabinetInput.steer_axis()   # D-252
 	sim.step(minf(delta, 0.05), CabinetInput.is_down(&"flip_l"), CabinetInput.is_down(&"flip_r"), _launch, _dash)
 	_launch = false
 	_dash = 0

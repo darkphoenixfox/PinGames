@@ -100,6 +100,30 @@ func held_time(action: StringName) -> float:
 	return (Time.get_ticks_msec() - int(_down_since[action])) / 1000.0
 
 
+## Analog gamepad input (D-252), from any connected pad. Left stick X with a
+## deadzone (-1 left .. 1 right, rescaled past the deadzone); triggers 0..1.
+const STICK_DEAD := 0.18
+const TRIGGER_DEAD := 0.06
+
+
+func steer_axis() -> float:
+	var best := 0.0
+	for dev in Input.get_connected_joypads():
+		var v := Input.get_joy_axis(dev, JOY_AXIS_LEFT_X)
+		if absf(v) > absf(best):
+			best = v
+	if absf(best) < STICK_DEAD:
+		return 0.0
+	return signf(best) * (absf(best) - STICK_DEAD) / (1.0 - STICK_DEAD)
+
+
+func trigger(right: bool) -> float:
+	var best := 0.0
+	for dev in Input.get_connected_joypads():
+		best = maxf(best, Input.get_joy_axis(dev, JOY_AXIS_TRIGGER_RIGHT if right else JOY_AXIS_TRIGGER_LEFT))
+	return 0.0 if best < TRIGGER_DEAD else best
+
+
 func is_down(action: StringName) -> bool:
 	return Input.is_action_pressed(action)
 

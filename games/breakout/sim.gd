@@ -539,6 +539,10 @@ func _damage_brick(i: int) -> bool:
 	return false
 
 
+## D-252: analog stick (0 = use the flippers).
+var paddle_axis := 0.0
+
+
 func _move_paddle(dt: float, left: bool, right: bool, dash: int) -> void:
 	_dash_cd = maxf(0.0, _dash_cd - dt)
 	if dash != 0 and _dash_cd <= 0.0:
@@ -551,7 +555,10 @@ func _move_paddle(dt: float, left: bool, right: bool, dash: int) -> void:
 		paddle_vx = _dash_dir * DASH_SPEED
 	else:
 		var boost := LIGHTSPEED_MULT if powerup == "L" else 1.0
-		var target := (float(right) - float(left)) * PADDLE_MAX_SPEED * boost
+		var dir := float(right) - float(left)
+		if paddle_axis != 0.0:
+			dir = clampf(paddle_axis, -1.0, 1.0)   # D-252: the stick, proportional
+		var target := dir * PADDLE_MAX_SPEED * boost
 		if target == 0.0:
 			paddle_vx = move_toward(paddle_vx, 0.0, PADDLE_DECEL * dt)
 		else:

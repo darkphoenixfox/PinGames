@@ -792,6 +792,22 @@ func test_racer_hd_assets() -> void:
 	var tsw: float = float(sws.traffic[0].get("sway", 0.0)) if not sws.traffic.is_empty() else 0.0
 	# We're on its right (+x): our nose swings right (negative), its nose left (positive).
 	check(sws.sway < -0.1 and tsw > 0.1, "a side swipe turns both cars away from each other (%.2f, %.2f)" % [sws.sway, tsw])
+	# D-252: the analog stick steers proportionally.
+	var xs: Array = []
+	for amt in [0.5, 1.0]:
+		var an = SimA.new()
+		an.setup(4)
+		an.state = SimA.State.RACE
+		an.s = 600.0
+		an.track.ensure(1500.0)
+		an.v = 30.0
+		an.gear = SimA.Gear.HIGH
+		for i in 30:
+			an.traffic.clear()
+			an.steer_axis = amt
+			an.step(1.0 / 60.0, false, false)
+		xs.append(an.x)
+	check(xs[0] > 0.05 and xs[1] > xs[0] * 1.3, "half stick steers less than full stick (%.2f vs %.2f m)" % [xs[0], xs[1]])
 	# D-219: random weather spells: at least WEATHER_MIN long, suited to the
 	# area, different per seed, the same for the same seed.
 	var spell_ok := true
