@@ -2322,3 +2322,14 @@
   - The hint reads FLIPPERS: CHOOSE  MAGNA: COLOUR  LAUNCH: GO.
   - As anywhere, pressing a magna turns on the 4-button controls (D-189).
 - **Status:** Accepted
+
+### D-237 — Desktop crash at 2× render scale: Mirillis Action, not D-236
+- **Date:** 2026-11-23
+- **Report (director):** Turbo Run crashed on desktop on the loading screen or at car select, and it seemed to start with D-236 (car colours).
+- **Findings:**
+  - A native segfault with no script error (the logs stop after "started game 'racer'").
+  - Reproduced only at render scale 2× (the director's "auto" on a large monitor), which dev runs force to 1×.
+  - D-236 was reverted for testing (`ab5ce6b`), then re-added (`ae16447`).
+- **Cause:** the director identified Mirillis Action (screen capture, injects into Vulkan apps) running at the time. After re-adding D-236, repeated 2× runs to car select completed.
+- **Note:** dev test runs use the Dummy audio driver and render scale 1.0. Run a check with `PINGAMES_DEV_SOUND=1` and `--display.render_scale=2.0` when a desktop-only problem is reported.
+- **Status:** Accepted
