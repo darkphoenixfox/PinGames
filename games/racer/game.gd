@@ -1522,7 +1522,7 @@ func _build_world() -> void:
 	_road_mat.next_pass = _puddle_mat
 	_weather = Weather.new()
 	_root.add_child(_weather)
-	_weather.build(_loop_wav(func(_t: float) -> float: return 0.0, 1.0, 0.45))
+	_weather.build(_loop_wav("rain", func(_t: float) -> float: return 0.0, 1.0, 0.45))
 
 	_build_cars()
 
@@ -1965,7 +1965,7 @@ func _build_police() -> void:
 		_siren_pools.append(pool)
 	_siren = AudioStreamPlayer.new()
 	_siren.bus = "SFX"
-	_siren.stream = _loop_wav(func(t: float) -> float:
+	_siren.stream = _loop_wav("siren", func(t: float) -> float:
 		var f := 700.0 if fmod(t, 1.0) < 0.5 else 960.0
 		var ph := fmod(t * f, 1.0)
 		return ((1.0 if ph < 0.5 else -1.0) * 0.25 + sin(TAU * f * t) * 0.2), 1.0, 0.0)
@@ -3336,7 +3336,7 @@ func _build_audio_loops() -> void:
 	# Body: a firing-pulse train (80 Hz) with uneven cylinders and a sub tone.
 	_engine = AudioStreamPlayer.new()
 	_engine.bus = "SFX"
-	_engine.stream = _loop_wav(func(t: float) -> float:
+	_engine.stream = _loop_wav("engine", func(t: float) -> float:
 		var fire := t * 80.0
 		var ph := fmod(fire, 1.0)
 		var amp: float = [1.0, 0.82, 0.94, 0.78][int(fire) % 4]
@@ -3347,7 +3347,7 @@ func _build_audio_loops() -> void:
 	# Whine: soft harmonics of 160 Hz, rising with the revs.
 	_engine_hi = AudioStreamPlayer.new()
 	_engine_hi.bus = "SFX"
-	_engine_hi.stream = _loop_wav(func(t: float) -> float:
+	_engine_hi.stream = _loop_wav("engine_hi", func(t: float) -> float:
 		var v := 0.0
 		for n in range(1, 7):
 			v += sin(TAU * 160.0 * n * t) / n * (1.0 if n % 2 == 1 else -0.6)
@@ -3357,13 +3357,13 @@ func _build_audio_loops() -> void:
 	# Wind: filtered noise that grows with speed.
 	_wind = AudioStreamPlayer.new()
 	_wind.bus = "SFX"
-	_wind.stream = _loop_wav(func(_t: float) -> float: return 0.0, 1.0, 0.7)
+	_wind.stream = _loop_wav("wind", func(_t: float) -> float: return 0.0, 1.0, 0.7)
 	_wind.volume_db = -60.0
 	add_child(_wind)
 	_engine_hi.play()
 	_wind.play()
 	# Passing traffic (D-134): a buzzy engine loop per nearby vehicle.
-	var buzz := _loop_wav(func(t: float) -> float:
+	var buzz := _loop_wav("buzz", func(t: float) -> float:
 		var ph := fmod(t * 110.0, 1.0)
 		# D-192: brighter (upper harmonics) so it cuts through the hero's engine.
 		return (ph * 2.0 - 1.0) * 0.3 + sin(TAU * 220.0 * t) * 0.18 + sin(TAU * 55.0 * t) * 0.2 			+ sin(TAU * 440.0 * t) * 0.12 + sin(TAU * 660.0 * t) * 0.07, 0.4, 0.06)
@@ -3377,7 +3377,7 @@ func _build_audio_loops() -> void:
 		_passers.append(pl)
 	_skid = AudioStreamPlayer.new()
 	_skid.bus = "SFX"
-	_skid.stream = _loop_wav(func(t: float) -> float:
+	_skid.stream = _loop_wav("skid", func(t: float) -> float:
 		return sin(TAU * 950.0 * t + sin(TAU * 25.0 * t) * 2.0) * 0.25, 0.4, 0.5)
 	_skid.volume_db = -80.0
 	add_child(_skid)
@@ -3528,7 +3528,14 @@ func _update_passers() -> void:
 			_pass_duck = PASS_DUCK_DB * clampf(1.0 - d / PASS_DUCK_RANGE, 0.0, 1.0)
 
 
-func _loop_wav(gen: Callable, seconds: float, noise: float) -> AudioStreamWAV:
+static var _loop_cache := {}   # name -> stream, kept for the session
+
+
+## `key` names the loop: it's generated once per session (sample by sample in
+## script, slow on a phone) and reused when the game starts again (D-277).
+func _loop_wav(key: String, gen: Callable, seconds: float, noise: float) -> AudioStreamWAV:
+	if _loop_cache.has(key):
+		return _loop_cache[key]
 	var rate := 32000
 	var n := int(seconds * rate)
 	var data := PackedByteArray()
@@ -3546,6 +3553,7 @@ func _loop_wav(gen: Callable, seconds: float, noise: float) -> AudioStreamWAV:
 	wav.data = data
 	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	wav.loop_end = n
+	_loop_cache[key] = wav
 	return wav
 
 

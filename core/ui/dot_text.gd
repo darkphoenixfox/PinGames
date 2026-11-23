@@ -161,6 +161,17 @@ static func _draw_glyph(img: Image, rows: PackedInt32Array, x0: int, y0: int, b:
 		return
 	var d := float(b) / sub                    # dot pitch in target pixels
 	for pass_i in 2:                           # rim first, then the dots
+		var rad := d * (0.64 if pass_i == 0 else 0.45)
+		if low:
+			rad = d * (0.6 if pass_i == 0 else 0.42)
+		# Every dot of a pass is the same disc at the same sub-pixel offset
+		# (the pitch is a whole number of pixels), so it is drawn once and
+		# stamped: drawing each dot pixel by pixel in script took most of a
+		# second per font size on a desktop, far longer on a phone.
+		var k := int(ceil(rad)) + 2
+		var frac := fposmod(0.5 * d, 1.0)
+		var stamp := _stamp(k, frac, rad, RIM if pass_i == 0 else Color.WHITE, not low)
+		var whole := Rect2i(0, 0, stamp.get_width(), stamp.get_height())
 		for r in gh:
 			for c in gw:
 				if not on.call(c, r):
@@ -169,10 +180,20 @@ static func _draw_glyph(img: Image, rows: PackedInt32Array, x0: int, y0: int, b:
 					for sx in sub:
 						var cx := x0 + c * b + (sx + 0.5) * d
 						var cy := y0 + r * b + (sy + 0.5) * d
-						var rad := d * (0.64 if pass_i == 0 else 0.45)
-						if low:
-							rad = d * (0.6 if pass_i == 0 else 0.42)
-						_disc(img, cx, cy, rad, RIM if pass_i == 0 else Color.WHITE, not low)
+						img.blend_rect(stamp, whole, Vector2i(int(floor(cx)) - k, int(floor(cy)) - k))
+
+
+static var _stamps := {}
+
+
+## One dot on its own small image, its centre at (k + frac, k + frac).
+static func _stamp(k: int, frac: float, rad: float, col: Color, smooth: bool) -> Image:
+	var key := "%d:%.3f:%.4f:%s:%s" % [k, frac, rad, col.to_html(), smooth]
+	if not _stamps.has(key):
+		var im := Image.create(k * 2 + 2, k * 2 + 2, false, Image.FORMAT_RGBA8)
+		_disc(im, k + frac, k + frac, rad, col, smooth)
+		_stamps[key] = im
+	return _stamps[key]
 
 
 ## A filled disc, anti-aliased by 4x4 supersampling (or hard-edged).

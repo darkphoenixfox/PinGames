@@ -60,6 +60,7 @@ func _ready() -> void:
 
 
 func switch_to(new_mode: Node) -> void:
+	var first := mode == null
 	if mode != null:
 		if mode.has_method("selected_index"):
 			_picker_index = mode.selected_index()
@@ -68,6 +69,36 @@ func switch_to(new_mode: Node) -> void:
 	mode.shell = self
 	add_child(mode)
 	mode.enter()
+	if not first:
+		_fade_in()
+
+
+## D-278: every change of screen (menu, game, initials, operator) comes up
+## from black instead of popping in: a black cover over the TABLE and the
+## BACKGLASS fades away. The new screen is already live under it, so input and
+## timing are unchanged, and its first frames (the slowest) are out of sight.
+const FADE_IN := 0.3
+var _covers: Array[ColorRect] = []
+
+
+func _fade_in() -> void:
+	for c in _covers:
+		if is_instance_valid(c):
+			c.queue_free()
+	_covers.clear()
+	if Screens.is_headless():
+		return
+	for vp in [Screens.table, Screens.backglass]:
+		var c := ColorRect.new()
+		c.color = Color.BLACK
+		c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		c.z_index = 200   # over a mode's own overlays (loading 100, quit box 120)
+		vp.add_child(c)
+		_covers.append(c)
+		var tw := c.create_tween()
+		tw.tween_property(c, "modulate:a", 0.0, FADE_IN)
+		tw.tween_callback(c.queue_free)
 
 
 func _on_pressed(action: StringName) -> void:

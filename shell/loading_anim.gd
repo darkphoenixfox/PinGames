@@ -22,6 +22,8 @@ func _init(p_game_id: String, p_accent: Color) -> void:
 	accent = p_accent
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED   # the tiled dot grid (D-278)
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 
 
 func _process(delta: float) -> void:
@@ -125,13 +127,34 @@ func _draw_racer() -> void:
 	var panel := Rect2(540.0 - 64.0 * pitch, 1040.0, 128.0 * pitch, 32.0 * pitch)
 	draw_rect(panel.grow(10.0), Color(0.12, 0.1, 0.1))
 	draw_rect(panel, Color(0.03, 0.02, 0.02))
-	for yy in 32:   # unlit dots
-		for xx in 128:
-			draw_circle(panel.position + Vector2(xx + 0.5, yy + 0.5) * pitch, pitch * 0.32, Color(0.09, 0.06, 0.05))
+	# D-278: the 4,096 unlit dots are one tiled picture of a dot, and each lit
+	# dot a tinted picture, not circles redrawn every frame: those took about
+	# 50 ms a frame on a desktop, which slowed the loading itself.
+	var dot := _dot_texture()
+	draw_texture_rect_region(dot, panel, Rect2(0, 0, 128 * DOT_PX, 32 * DOT_PX), Color(0.09, 0.06, 0.05))
+	var lit := Vector2(pitch, pitch) * (0.42 / DOT_FILL)
 	racer_scene(func(x: int, y: int, c: Color) -> void:
 		if x >= 0 and x < 128 and y >= 0 and y < 32:
-			draw_circle(panel.position + Vector2(x + 0.5, y + 0.5) * pitch, pitch * 0.42, c), _t)
+			draw_texture_rect(dot, Rect2(panel.position + Vector2(x + 0.5, y + 0.5) * pitch - lit * 0.5, lit), false, c), _t)
 	_draw_track_bar(1360.0)
+
+
+const DOT_PX := 16        # the dot picture: one grid cell
+const DOT_FILL := 0.32    # the dot's radius as a share of the cell
+static var _dot_tex: ImageTexture
+
+
+## A white dot in the middle of one transparent grid cell, soft-edged.
+static func _dot_texture() -> ImageTexture:
+	if _dot_tex == null:
+		var img := Image.create(DOT_PX, DOT_PX, false, Image.FORMAT_RGBA8)
+		var rad := DOT_PX * DOT_FILL
+		for y in DOT_PX:
+			for x in DOT_PX:
+				var d := Vector2(x + 0.5 - DOT_PX * 0.5, y + 0.5 - DOT_PX * 0.5).length()
+				img.set_pixel(x, y, Color(1, 1, 1, clampf(rad + 0.5 - d, 0.0, 1.0)))
+		_dot_tex = ImageTexture.create_from_image(img)
+	return _dot_tex
 
 
 ## The first loading scene (D-238): a car on a scrolling road. Kept for reference.

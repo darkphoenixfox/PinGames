@@ -103,6 +103,17 @@ func test_score_table() -> void:
 func test_synth() -> void:
 	var s := Synth.make([[440.0, 440.0, 0.1], [880.0, 220.0, 0.05, "noise"]])
 	check(s.data.size() == (int(0.1 * Synth.RATE) + int(0.05 * Synth.RATE)) * 2, "synth length")
+	# D-278: sounds made on worker threads are the ones make() then returns.
+	var spec := [[330.0, 660.0, 0.08, "square"]]
+	var job: Variant = Synth.begin_many([spec, spec])
+	if job != null:
+		check((job["todo"] as Array).size() == 1, "synth batch skips duplicates")
+		Synth.finish_many(job)
+		check(Synth.many_done(job), "synth batch done")
+	var made := Synth.make(spec)
+	check(made.data.size() == int(0.08 * Synth.RATE) * 2, "synth batch length")
+	check(Synth.make(spec) == made, "synth cached")
+	check(Synth.begin_many([spec]) == null, "synth batch: nothing left to make")
 
 
 func test_dot_font() -> void:

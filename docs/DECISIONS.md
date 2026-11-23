@@ -2588,7 +2588,7 @@
 - **Bug (director):** after a game loaded, two cars appeared in the air for a second. Delay showing the game by 2 seconds before changing from the loading screen.
 - **Cause:** the shader warm-up (D-178) draws copies of the game's objects (cars included) behind the loading screen. The screen and the copies were freed in the same frame, so their last frame could show.
 - **Fix:** the copies are freed first, then the loading screen stays `REVEAL_DELAY` 2 s more (with its animation, D-238) before the game shows. Game input waits until it's gone; EXIT still leaves.
-- **Status:** Accepted
+- **Status:** Superseded by D-278 (the 2 s; the copies still go first)
 
 ### D-260 — Single screen gamepad: Circle is BACK; Start asks before quitting
 - **Date:** 2026-11-23
@@ -2745,4 +2745,24 @@
 - **Change:** `Shell.return_to_game(id)`: after GAME OVER, or after the high-score initials, the shell restarts that game's mode, which opens on its own attract / PRESS START screen. Its assets are already loaded, so there's no loading screen.
 - **Credits:** a game's START plays straight away, so the next game's credit is taken here. With no credit left (not free play), it goes to the picker, which shows INSERT COIN.
 - **Unchanged:** EXIT during a game still leaves to the picker.
+- **Status:** Accepted
+
+### D-278 — Optimisation pass: loading, stutter, Android, transitions
+- **Date:** 2026-11-23
+- **Decision (director):** optimise the game without sacrificing graphics quality: loading times, stutter from loading while in-game, Android performance, and smooth transitions between menus and game. During the work: the look is retro, so the model textures don't need their fidelity; cars and scenery are flat or cel-shaded (sprites excepted).
+- **Measured first** (desktop, windowed dev run, HD): opening Turbo Run took about 11.7 s (4.9 s loading files, 2.6 s building the game, 2.2 s warm-up, 2 s hold) and Tilt Breaker 4.4 s. Every return to PRESS START (D-277) rebuilt the game with no loading screen, a freeze of about 2.5 s in Turbo Run.
+- **Causes and fixes:**
+  - **Dot-matrix UI fonts** (`core/ui/dot_text.gd`, D-232): each text size was drawn dot by dot, pixel by pixel, in script the first time it was used: up to 0.7 s per size (2.7 s at 2× render scale). This was most of the HUD's build time and a hitch in every menu the first time. Each dot is now drawn once and stamped (`Image.blend_rect`): 50–100× faster. The atlases match the old ones to within 2/255 per channel.
+  - **HD car textures:** all textures were imported lossless, including the 8192 px hot hatch albedo and four 4096 px ones (about 500–650 MB of video memory by their sizes, 0.9 s to load for the hot hatch alone). The seven `HD_TEXTURES` are now limited to 2048 px and GPU-compressed at high quality (BPTC on desktop, ASTC on mobile), with mipmaps. Side-by-side HD screenshots of the cars show no visible difference. The 8K texture's import went from 55 MB to 5.6 MB. Pixel-art (16-BIT/8-BIT) textures and all sprites stay lossless, since block compression would show on them.
+  - **Loading on worker threads** (`GameMode._preload`): every file is requested with `ResourceLoader.load_threaded_request` at once and polled each frame. The browser build has no threads and keeps the old loop.
+  - **Synthesized sounds:** a game's `SOUNDS` table (0.7 s of script synthesis in Turbo Run's start) is made on worker threads during the loading screen (`Synth.begin_many` / `finish_many`). Turbo Run's looping sounds (engine, wind, skid, siren, rain) and its cars' outline meshes are kept for the session, so a restart doesn't rebuild them.
+  - **Loading animation:** Turbo Run's dot panel redrew 4,096 circles a frame (about 50 ms), which slowed everything running behind it, the warm-up included. It's now one tiled dot picture plus tinted dots.
+  - **Reveal** (supersedes the 2 s of D-259): the warm-up copies are hidden and freed, the loading screen stays 8 frames (at least 0.25 s), then fades out over 0.35 s. Captured frames show no copies from the first frame after they're hidden. If floating cars ever show again, raise `REVEAL_FRAMES`.
+- **Transitions:** every change of shell mode (menu, game, initials, operator) fades up from black over 0.3 s on the TABLE and BACKGLASS (`Shell._fade_in`). The new screen is live under the cover, so input and timing don't change.
+- **Android / single screen:** the BACKGLASS viewport isn't rendered while the single layout doesn't show it (only Tilt Breaker's landscape side panels do). The texture and font changes above matter most there: far less memory, and no multi-second script stalls.
+- **Web preset:** `vram_texture_compression/for_mobile=true`, so phones get the ASTC/ETC2 versions of the compressed car textures instead of decompressing BPTC at load.
+- **Result** (same desktop runs): Turbo Run opens in about 2.4 s and Tilt Breaker in 1.8 s. A restart after game over takes 84 ms (Turbo Run) and 7 ms (Tilt Breaker). A 70 s race holds 60 fps with no frame over 80 ms; uncapped it runs at 350–500 fps.
+- **Not measured:** no Android device was attached, so the Android gains are inferred from the desktop numbers and memory sizes. Run with `--log-perf` there to check.
+- **Tools:** `--log-perf` (`?log-perf`) prints the frame rate, worst frame, draw calls, primitives and video memory every 2 s. `scripts/tools/measure_load.gd <game>` times each file a loading screen loads. The shell log now gives the load, start, warm-up and shown times.
+- **Test:** sounds made in a batch are the ones `Synth.make` returns.
 - **Status:** Accepted

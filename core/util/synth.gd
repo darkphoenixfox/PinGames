@@ -26,6 +26,50 @@ static func make(spec: Variant) -> AudioStreamWAV:
 	var key := var_to_str(spec)
 	if _cache.has(key):
 		return _cache[key]
+	var w := _build(spec)
+	_cache[key] = w
+	return w
+
+
+## Starts synthesizing `specs` on worker threads, so a game's sounds are made
+## while its loading screen loads files instead of in one long stall when it
+## starts (synthesis runs in script, sample by sample). Returns a job for
+## many_done() / finish_many(); null when there's nothing to do or the build
+## has no threads (the browser), where make() does the work as before.
+static func begin_many(specs: Array) -> Variant:
+	if not OS.has_feature("threads"):
+		return null
+	var todo: Array = []
+	var seen := {}
+	for spec in specs:
+		var key := var_to_str(spec)
+		if not _cache.has(key) and not seen.has(key):
+			seen[key] = true
+			todo.append([key, spec, null])
+	if todo.is_empty():
+		return null
+	var job := {"todo": todo}
+	job["id"] = WorkerThreadPool.add_group_task(func(i: int) -> void:
+		todo[i][2] = _build(todo[i][1]), todo.size(), -1, false, "PinGames sfx synthesis")
+	return job
+
+
+static func many_done(job: Variant) -> bool:
+	return job == null or job.has("done") or WorkerThreadPool.is_group_task_completed(job["id"])
+
+
+## Waits for a begin_many() job and stores its sounds, so make() finds them.
+static func finish_many(job: Variant) -> void:
+	if job == null or job.has("done"):
+		return
+	WorkerThreadPool.wait_for_group_task_completion(job["id"])
+	job["done"] = true   # the pool forgets the group once it has been waited for
+	for t in job["todo"]:
+		if t[2] != null:
+			_cache[t[0]] = t[2]
+
+
+static func _build(spec: Variant) -> AudioStreamWAV:
 	var voices: Array = []
 	var echo: Array = []
 	var reverb: Array = []
@@ -66,7 +110,6 @@ static func make(spec: Variant) -> AudioStreamWAV:
 	w.mix_rate = RATE
 	w.stereo = false
 	w.data = data
-	_cache[key] = w
 	return w
 
 

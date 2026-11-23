@@ -27,6 +27,14 @@ static func has(id: String) -> bool:
 	return all_ids().has(id)
 
 
+## The game's script path ("" if unknown).
+static func script_path(id: String) -> String:
+	for g in GAMES:
+		if g[0] == id:
+			return g[1]
+	return ""
+
+
 static func instantiate(id: String) -> Node:
 	for g in GAMES:
 		if g[0] == id:

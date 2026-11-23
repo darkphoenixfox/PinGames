@@ -43,10 +43,18 @@ static func outline_arrays(mesh: Mesh, surface: int) -> Array:
 	return out
 
 
-## A separate mesh holding the outline of every surface of `mesh`.
+static var _outlines := {}   # source mesh -> its outline mesh
+
+
+## A separate mesh holding the outline of every surface of `mesh`. Kept for
+## the session: building one walks every vertex in script, and a game starts
+## again after each game over (D-277).
 static func outline_mesh(mesh: Mesh) -> ArrayMesh:
+	if _outlines.has(mesh):
+		return _outlines[mesh]
 	var am := ArrayMesh.new()
 	for s in mesh.get_surface_count():
 		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, outline_arrays(mesh, s))
 		am.surface_set_material(s, outline_material())
+	_outlines[mesh] = am
 	return am

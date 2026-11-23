@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cthnlyx7aceo1"
-path="res://.godot/imported/red_car_red_car_albedo.jpg-ea9a5b6444c9baf971bb56d672d6db4f.ctex"
+path.bptc="res://.godot/imported/red_car_red_car_albedo.jpg-ea9a5b6444c9baf971bb56d672d6db4f.bptc.ctex"
+path.astc="res://.godot/imported/red_car_red_car_albedo.jpg-ea9a5b6444c9baf971bb56d672d6db4f.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "73e922bad7d941e2d233ac498b1ed571"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/racer/red_car_red_car_albedo.jpg"
-dest_files=["res://.godot/imported/red_car_red_car_albedo.jpg-ea9a5b6444c9baf971bb56d672d6db4f.ctex"]
+dest_files=["res://.godot/imported/red_car_red_car_albedo.jpg-ea9a5b6444c9baf971bb56d672d6db4f.bptc.ctex", "res://.godot/imported/red_car_red_car_albedo.jpg-ea9a5b6444c9baf971bb56d672d6db4f.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

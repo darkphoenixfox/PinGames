@@ -29,7 +29,13 @@ var _bar: ColorRect
 var _bar_w := 600.0
 const LoadingAnim = preload("res://shell/loading_anim.gd")
 var _anim: Control   # D-238: the loading screen's little scene
-const REVEAL_DELAY := 2.0   # s the loading screen stays after loading (D-259)
+const Synth = preload("res://core/util/synth.gd")
+## D-278 (supersedes the 2 s of D-259): once the warm-up copies are freed, the
+## loading screen stays for a few frames (so no frame with them can still be on
+## its way to the screen), then fades out over the clean game.
+const REVEAL_FRAMES := 8
+const REVEAL_MIN := 0.25    # s, at least, however fast the frames are
+const REVEAL_FADE := 0.35   # s
 var _overlay_bg: ColorRect   # D-261
 
 
@@ -39,10 +45,12 @@ func _init(p_game_id: String) -> void:
 
 func enter() -> void:
 	Audio.stop_music(0.6)  # games start their own music
+	var t_enter := Time.get_ticks_msec()
 	if not _cache.has(game_id):
 		await _preload()
 	if not is_inside_tree():
 		return
+	var t_loaded := Time.get_ticks_msec()
 	module = Registry.instantiate(game_id)
 	module.name = "Game_" + game_id
 	add_child(module)
@@ -50,7 +58,8 @@ func enter() -> void:
 	Audio.sfx("start")
 	Dmd.stop_anim()   # D-238: the loading animation hands the DMD to the game
 	module.start(1)
-	print("Shell: started game '%s'" % game_id)
+	print("Shell: started game '%s' (load %d ms, start %d ms)" % [game_id,
+		t_loaded - t_enter, Time.get_ticks_msec() - t_loaded])
 	get_tree().node_added.connect(_on_node_added)
 	for r in _game_roots():
 		_keep_node(r)
@@ -72,16 +81,34 @@ func enter() -> void:
 				return
 		for n in warm:
 			if is_instance_valid(n):
+				if n is CanvasItem or n is Node3D:
+					n.visible = false   # gone from the very next frame drawn
 				n.queue_free()
-		# D-259: the warm-up copies go first; the loading screen stays up a
-		# little longer, so their last frame never shows and the game starts clean.
-		await get_tree().create_timer(REVEAL_DELAY).timeout
+		print("Shell: warm-up done, %d ms after entering" % (Time.get_ticks_msec() - t_enter))
+		# D-259 / D-278: the warm-up copies go first; the loading screen stays
+		# up a little longer, so their last frame never shows and the game
+		# starts clean. Then it fades out.
+		var t_free := Time.get_ticks_msec()
+		for i in REVEAL_FRAMES:
+			await get_tree().process_frame
+			if not is_inside_tree():
+				return
+		while Time.get_ticks_msec() - t_free < REVEAL_MIN * 1000.0:
+			await get_tree().process_frame
+			if not is_inside_tree():
+				return
+		var fade := create_tween().set_parallel(true)
+		for o in [_overlay, _overlay_bg]:
+			if is_instance_valid(o):
+				fade.tween_property(o, "modulate:a", 0.0, REVEAL_FADE)
+		await fade.finished
 		if not is_inside_tree():
 			return
 		if is_instance_valid(_overlay):
 			_overlay.queue_free()
 		if is_instance_valid(_overlay_bg):
 			_overlay_bg.queue_free()
+		print("Shell: game shown, %d ms after entering" % (Time.get_ticks_msec() - t_enter))
 
 
 ## Draws everything the game loaded once, hidden behind the loading bar (D-178):
@@ -331,6 +358,16 @@ func _asset_paths() -> Array[String]:
 	return out
 
 
+## The sounds the game synthesizes when it starts (its SOUNDS table), if any.
+func _sound_specs() -> Array:
+	var path := Registry.script_path(game_id)
+	var script := load(path) as Script if not path.is_empty() else null
+	if script == null:
+		return []
+	var sounds: Variant = script.get_script_constant_map().get("SOUNDS")
+	return (sounds as Dictionary).values() if sounds is Dictionary else []
+
+
 func _scan(dir: String, out: Array[String]) -> void:
 	if not DirAccess.dir_exists_absolute(dir):
 		return
@@ -352,22 +389,58 @@ func _preload() -> void:
 	var info: Dictionary = Registry.info(game_id)
 	Dmd.play(LoadingAnim.dmd_anim(game_id, info.get("color", Dmd.YELLOW)), 3600.0)   # D-238
 	var kept: Array = []
-	var t0 := Time.get_ticks_msec()
-	for i in paths.size():
-		var r := load(paths[i])
-		if r != null:
-			kept.append(r)
-		_bar.size.x = _bar_w * float(i + 1) / maxf(1.0, paths.size())
-		_anim.progress = float(i + 1) / maxf(1.0, paths.size())
-		# Yield to draw the bar only every ~50 ms, not after every asset: a
-		# slow or throttled browser gives few frames, and waiting one per asset
-		# made loading take far longer than the loading itself. (D-238: 50 ms,
-		# was 100, so the loading animation moves smoothly enough.)
-		if Time.get_ticks_msec() - t0 > 50:
+	# D-278: the game's synthesized sounds are made on worker threads meanwhile.
+	var sfx_job: Variant = Synth.begin_many(_sound_specs())
+	if OS.has_feature("threads"):
+		# D-278: every file loads on the worker threads at once, so loading
+		# uses all the cores and the loading animation never waits for a file.
+		var pending: Array[String] = []
+		for p in paths:
+			if ResourceLoader.load_threaded_request(p, "", true) == OK:
+				pending.append(p)
+		var total := maxf(1.0, pending.size())
+		while not pending.is_empty():
+			for i in range(pending.size() - 1, -1, -1):
+				var st := ResourceLoader.load_threaded_get_status(pending[i])
+				if st == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+					continue
+				if st == ResourceLoader.THREAD_LOAD_LOADED:
+					var res := ResourceLoader.load_threaded_get(pending[i])
+					if res != null:
+						kept.append(res)
+				pending.remove_at(i)
+			_bar.size.x = _bar_w * (1.0 - pending.size() / total)
+			_anim.progress = 1.0 - pending.size() / total
+			if pending.is_empty():
+				break
 			await get_tree().process_frame
 			if not is_inside_tree():
+				Synth.finish_many(sfx_job)
 				return
-			t0 = Time.get_ticks_msec()
+	else:
+		var t0 := Time.get_ticks_msec()
+		for i in paths.size():
+			var r := load(paths[i])
+			if r != null:
+				kept.append(r)
+			_bar.size.x = _bar_w * float(i + 1) / maxf(1.0, paths.size())
+			_anim.progress = float(i + 1) / maxf(1.0, paths.size())
+			# Yield to draw the bar only every ~50 ms, not after every asset: a
+			# slow or throttled browser gives few frames, and waiting one per asset
+			# made loading take far longer than the loading itself. (D-238: 50 ms,
+			# was 100, so the loading animation moves smoothly enough.)
+			if Time.get_ticks_msec() - t0 > 50:
+				await get_tree().process_frame
+				if not is_inside_tree():
+					return
+				t0 = Time.get_ticks_msec()
+	while not Synth.many_done(sfx_job):
+		await get_tree().process_frame
+		if not is_inside_tree():
+			break
+	Synth.finish_many(sfx_job)
+	if not is_inside_tree():
+		return
 	if Config.cli.has("loading-hold"):   # dev: keep the loading screen up N s (D-238)
 		await get_tree().create_timer(float(str(Config.cli["loading-hold"]))).timeout
 	_cache[game_id] = kept

@@ -58,6 +58,7 @@ func setup(layout_name: String) -> void:
 		o.queue_free()
 	_outputs.clear()
 	current_layout = layout_name
+	backglass.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	var sink := str(Config.get_value("display", "dmd_sink"))
 	dmd_in_backglass = sink != "hardware" and (layout_name == "2screen" or sink == "backglass")
 	if layout_name == "vr" or layout_name == "web" or layout_name == "single":
@@ -521,6 +522,10 @@ func _place_single(win: Vector2) -> void:
 			t.position = Vector2(0, dh)
 			t.size = Vector2(win.x, win.y - dh)
 	_shape_table(t.size)
+	# D-278: one screen shows the BACKGLASS only in the side-panel layout;
+	# otherwise it isn't drawn at all (a full 1920x1080 pass saved each frame).
+	var bg_shown := is_instance_valid(_single_bgv) and _single_bgv.visible
+	backglass.render_target_update_mode = SubViewport.UPDATE_ALWAYS if bg_shown else SubViewport.UPDATE_DISABLED
 	var bar := _single_bar
 	if is_instance_valid(bar) and is_instance_valid(_touch):
 		_touch.fit(win)

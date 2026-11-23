@@ -35,8 +35,18 @@ func mark(what: String) -> void:
 		print("Event: %s at %.2f s" % [what, Time.get_ticks_msec() / 1000.0])
 
 
+## With --log-perf (?log-perf on the web): every 2 s, the frame rate, the
+## slowest frame, and what the renderer drew (D-278). On Android the lines go
+## to logcat (`adb logcat -s godot`).
+var _log_perf := false
+var _perf_t := 0.0
+var _perf_n := 0
+var _perf_worst := 0.0
+
+
 func _ready() -> void:
 	_log_spikes = Config.cli.has("log-spikes")
+	_log_perf = Config.cli.has("log-perf")
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	# Debug builds, and the browser build too (director, D-175).
 	enabled = (OS.is_debug_build() or OS.has_feature("web")) and str(Config.cli.get("debug-tools", "on")) != "off"
@@ -102,6 +112,20 @@ func _process(delta: float) -> void:
 			Time.get_ticks_msec() / 1000.0,
 			int(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0),
 			int(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0)])
+	if _log_perf:
+		_perf_t += delta
+		_perf_n += 1
+		_perf_worst = maxf(_perf_worst, delta)
+		if _perf_t >= 2.0:
+			print("Perf: %.0f fps, worst frame %d ms, %d draw calls, %d k primitives, %d MB video memory, at %.1f s" % [
+				_perf_n / _perf_t, int(_perf_worst * 1000.0),
+				int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+				int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0),
+				int(Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0),
+				Time.get_ticks_msec() / 1000.0])
+			_perf_t = 0.0
+			_perf_n = 0
+			_perf_worst = 0.0
 	if not is_instance_valid(_monitor):
 		return
 	var lines: PackedStringArray = ["INPUT MONITOR  focus: %s" % ("YES" if CabinetInput.has_focus else "NO")]
