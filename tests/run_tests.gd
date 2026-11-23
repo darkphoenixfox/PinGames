@@ -952,6 +952,23 @@ func test_racer_sim() -> void:
 		close_cop.step(dt, false, false)
 	check(not close_cop.police.is_empty() and close_cop.police.state == "chase",
 		"a police car close behind never gives up, however long the chase")
+	# D-201: flat out in H, every car slowly pulls away from the police.
+	for ci in Sim.CARS.size():
+		var flat = Sim.new()
+		flat.setup(7)
+		flat.car = ci
+		flat.state = Sim.State.RACE
+		flat.freeze_time = true
+		flat.grace_t = 999.0
+		flat.gear = Sim.Gear.HIGH
+		flat.v = flat.top_speed()
+		flat.police = {"s": flat.s - 20.0, "x": 5.0, "v": flat.v, "state": "chase", "t": 1.0, "side": 1.0}
+		for i in 60 * 10:
+			flat.traffic.clear()
+			flat.v = flat.top_speed()
+			flat.step(dt, false, false)
+		check(flat.police.is_empty() or float(flat.police.s) < flat.s - 40.0,
+			"car %d at its top speed pulls away from the police" % ci)
 	var run = Sim.new()
 	run.setup(7)
 	run.state = Sim.State.RACE

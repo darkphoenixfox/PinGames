@@ -1878,3 +1878,11 @@
 - **Now:** while chasing, `police.lose_t` counts up while the player is more than `ESCAPE_GAP` (120 m) ahead and drops to 0 whenever it's closer. At `ESCAPE_TIME` (4 s) it gives up as before: it falls back, lights and siren go off, and the escape bonus and LOST THEM! show. The chase's length no longer matters.
 - **Tests:** a police car 30 m behind through 10 s of chase (500 s in) never gives up, and staying more than 120 m ahead loses it after 4 s, not sooner.
 - **Status:** Accepted (supersedes D-145's give-up rule)
+
+### D-201 — Flat out, every car keeps away from the police
+- **Date:** 2026-11-23
+- **Decision (director):** at each car's top speed the player should be able to keep away from the cop car.
+- **Change:** the police car's top speed is 95 % of the chosen car's top speed (`POLICE_TOP`, was 106 %, which only nitro could beat). Flat out in H the player gains about 3.6–4.4 m/s on it, depending on the car. Slowing for bends, traffic or a crash lets it close in, and nitro still gets away fastest.
+- **Escaping:** from close behind it takes roughly 30 s flat out to open the 120 m gap, then 4 s held, to lose it (D-200).
+- **Tests:** each of the three cars, held at its top speed, pulls more than 40 m ahead of a chasing police car within 10 s.
+- **Status:** Accepted (amends D-142)
