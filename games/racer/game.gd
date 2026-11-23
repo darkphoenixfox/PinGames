@@ -18,6 +18,13 @@ const Sim = preload("res://games/racer/sim.gd")
 const Track = preload("res://games/racer/track.gd")
 const Scenery = preload("res://games/racer/scenery.gd")
 const City = preload("res://games/racer/city.gd")   # D-216
+const Weather = preload("res://games/racer/weather.gd")   # D-217
+const PUDDLE_SHADER = preload("res://games/racer/shaders/puddles.gdshader")
+## Weather looks (D-217): fog [begin, end] m at full strength per kind, and
+## the haze's sandy fog colour.
+const WEATHER_FOG := {"rain": Vector2(90.0, 430.0), "snow": Vector2(45.0, 320.0),
+	"fog": Vector2(12.0, 160.0), "haze": Vector2(60.0, 380.0)}
+const HAZE_COL := Color(0.84, 0.68, 0.48)
 const Toon = preload("res://games/racer/toon.gd")
 const Sprites = preload("res://games/racer/sprites.gd")
 const Night = preload("res://games/racer/night.gd")
@@ -363,6 +370,9 @@ var _manual_locked := false      # operator.cabinet_buttons = 4
 static var _seen_magna := false  # a magna save was pressed this session (stays 4-button, D-189)
 var _root: Node3D
 var _cam: Camera3D
+var _weather: Node3D            # D-217
+var _puddle_mat: ShaderMaterial
+var _wx := {"rain": 0.0, "snow": 0.0, "fog": 0.0, "haze": 0.0}   # smoothed weather weights
 var _env: Environment
 var _sun: DirectionalLight3D
 var _road_mat: ShaderMaterial
@@ -731,6 +741,7 @@ func _apply_gfx(mode: String) -> void:
 	Sprites.set_hd(on)
 	if _road_mat != null:
 		_road_mat.set_shader_parameter("hd", on)
+		_puddle_mat.set_shader_parameter("hd", on)
 	for m in _car_mats.values():
 		(m as ShaderMaterial).set_shader_parameter("hd", on)
 	if on:
@@ -1222,6 +1233,15 @@ func _build_world() -> void:
 
 	_road_mat = ShaderMaterial.new()
 	_road_mat.shader = ROAD_SHADER
+	# Rain puddles (D-217): a second pass over the road strip.
+	_puddle_mat = ShaderMaterial.new()
+	_puddle_mat.shader = PUDDLE_SHADER
+	_puddle_mat.set_shader_parameter("road_half", Track.ROAD_HALF)
+	_puddle_mat.set_shader_parameter("reach", Track.CITY_WALL + 2.5)
+	_road_mat.next_pass = _puddle_mat
+	_weather = Weather.new()
+	_root.add_child(_weather)
+	_weather.build(_loop_wav(func(_t: float) -> float: return 0.0, 1.0, 0.45))
 
 	_build_cars()
 
@@ -2732,6 +2752,46 @@ func _update_night(delta: float) -> void:
 		_sky_mat.set_shader_parameter("stars", 1.0 - smoothstep(-14.0, -4.0, el))
 		_sky_mat.set_shader_parameter("moon", 1.0 - smoothstep(-6.0, -1.0, el))
 	var dim := 1.0 - 0.85 * _tunnel_k
+	# Weather (D-217): overcast skies, closer fog, dimmer sun; rain wets the
+	# road and fills the puddles; particles fall around the camera.
+	var wt: Dictionary = sim.track.weather(sim.s) if sim != null and _phase != "attract" else {}
+	if Config.cli.has("rc-weather"):   # dev: force a weather for screenshots
+		wt = {str(Config.cli["rc-weather"]): 1.0}
+	for k in _wx:
+		_wx[k] = move_toward(float(_wx[k]), float(wt.get(k, 0.0)), delta * 0.6)
+	var overcast := maxf(maxf(float(_wx.rain), float(_wx.snow)), float(_wx.fog) * 0.8)
+	var haze := float(_wx.haze)
+	if _sky_mat != null and (overcast > 0.0 or haze > 0.0):
+		var grey := func(c: Color, k: float) -> Color:
+			var l := c.get_luminance()
+			return c.lerp(Color(l, l, l * 1.05), k)
+		_sky_mat.set_shader_parameter("zenith", grey.call(pal.zenith, 0.85 * overcast).darkened(0.25 * overcast).lerp(HAZE_COL.darkened(0.2), 0.5 * haze))
+		_sky_mat.set_shader_parameter("horizon", grey.call(pal.horizon, 0.8 * overcast).lerp(HAZE_COL, 0.7 * haze))
+		_sky_mat.set_shader_parameter("cloud_lit", grey.call(pal.cloud_lit, 0.7 * overcast).darkened(0.3 * overcast).lerp(HAZE_COL.lightened(0.3), 0.5 * haze))
+		_sky_mat.set_shader_parameter("cloud_shade", grey.call(pal.cloud_shade, 0.7 * overcast).darkened(0.35 * overcast).lerp(HAZE_COL.darkened(0.1), 0.5 * haze))
+		_sky_mat.set_shader_parameter("sun_col", (pal.sun as Color) * (1.0 - overcast))
+		_sky_mat.set_shader_parameter("glow_strength", float(pal.glow_k) * (1.0 - overcast))
+	if _sky_mat != null:
+		_sky_mat.set_shader_parameter("cloud_cover", lerpf(0.56, 0.12, overcast))
+	fog = fog.lerp(Color(fog.get_luminance(), fog.get_luminance(), fog.get_luminance() * 1.04), 0.6 * overcast)
+	fog = fog.lerp(HAZE_COL * clampf(fog.get_luminance() * 1.6, 0.2, 1.0), 0.8 * haze)
+	if _sky_mat != null:
+		_sky_mat.set_shader_parameter("ground", fog)
+	var fog_b := 250.0
+	var fog_e := VIEW_AHEAD - 50.0
+	for k in WEATHER_FOG:
+		var w := float(_wx[k])
+		if w > 0.0:
+			fog_b = minf(fog_b, lerpf(250.0, (WEATHER_FOG[k] as Vector2).x, w))
+			fog_e = minf(fog_e, lerpf(VIEW_AHEAD - 50.0, (WEATHER_FOG[k] as Vector2).y, w))
+	_env.fog_depth_begin = fog_b
+	_env.fog_depth_end = fog_e
+	dim *= 1.0 - 0.55 * overcast
+	_road_mat.set_shader_parameter("wet", _wx.rain)
+	_puddle_mat.set_shader_parameter("wet", _wx.rain)
+	if _cam != null and _cam.is_inside_tree() and _weather.is_inside_tree():
+		var ahead := _cam.global_position - _cam.global_basis.z * 16.0 + Vector3(0.0, 4.0, 0.0)
+		_weather.update(_wx.rain, _wx.snow, ahead, _tunnel_k > 0.5)
 	_env.fog_light_color = fog
 	_env.ambient_light_color = pal.amb
 	_env.ambient_light_energy = float(pal.amb_e) * (1.0 - 0.5 * _tunnel_k)

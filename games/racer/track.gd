@@ -522,6 +522,36 @@ func areas(s: float) -> Dictionary:
 	return {cur: 1.0 - t, nxt: t}
 
 
+## Weather (D-217): clear on stages 1-3, then over each 8-stage round of the
+## areas: city clear then rain, desert clear then a dust haze, forest fog then
+## rain, snow falling on both mountain stages.
+const WEATHER_CYCLE := ["clear", "rain", "clear", "haze", "fog", "rain", "snow", "snow"]
+const WEATHER_IN := 300.0    # m it takes to set in at a stage's start
+const WEATHER_OUT := 200.0   # m it clears before the stage ends (if the next differs)
+
+
+static func stage_weather(k: int) -> String:
+	if k <= 3:
+		return "clear"
+	return WEATHER_CYCLE[(k - 3) % WEATHER_CYCLE.size()]
+
+
+## Weather weights at s: {kind: 0..1}, empty when clear.
+func weather(s: float) -> Dictionary:
+	if avoid_every <= 0.0:
+		return {}
+	var k := stage_at(s)
+	var cur := stage_weather(k)
+	if cur == "clear":
+		return {}
+	var a := (k - 1) * avoid_every
+	var b := k * avoid_every
+	var w_in := 1.0 if stage_weather(k - 1) == cur else clampf((s - a) / WEATHER_IN, 0.0, 1.0)
+	var w_out := 1.0 if stage_weather(k + 1) == cur else clampf((b - s) / WEATHER_OUT, 0.0, 1.0)
+	var w := minf(w_in, w_out)
+	return {cur: w * w * (3.0 - 2.0 * w)}
+
+
 func area_w(s: float, name: String) -> float:
 	return float(areas(s).get(name, 0.0))
 

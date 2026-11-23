@@ -694,6 +694,11 @@ func test_racer_hd_assets() -> void:
 		seq.append(TrackA.stage_area(k))
 	check(seq == ["beach", "fields", "city", "city", "desert", "desert", "forest", "forest", "snow", "snow", "city"],
 		"areas change every two stages after the beach and fields (%s)" % ", ".join(seq))
+	var wseq: Array = []
+	for k in range(1, 12):
+		wseq.append(TrackA.stage_weather(k))
+	check(wseq == ["clear", "clear", "clear", "rain", "clear", "haze", "fog", "rain", "snow", "snow", "clear"],
+		"weather by stage (D-217: %s)" % ", ".join(wseq))
 	var SimA = load("res://games/racer/sim.gd")
 	var cs = SimA.new()
 	cs.setup(5)
@@ -709,6 +714,10 @@ func test_racer_hd_assets() -> void:
 		if o.kind == "building":
 			nb += 1
 	check(nb > 10 and not cs.track.junctions.is_empty(), "the city has buildings (%d) and junctions (%d)" % [nb, cs.track.junctions.size()])
+	var w4: Dictionary = cs.track.weather(3.0 * SimA.CHECKPOINT_EVERY + 1000.0)
+	var w4s: Dictionary = cs.track.weather(3.0 * SimA.CHECKPOINT_EVERY + 20.0)
+	check(is_equal_approx(float(w4.get("rain", 0.0)), 1.0) and float(w4s.get("rain", 0.0)) < 0.1,
+		"rain sets in gradually on stage 4 (D-217)")
 
 
 func test_racer_time_of_day() -> void:

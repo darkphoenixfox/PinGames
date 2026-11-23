@@ -137,12 +137,16 @@ func _warmup_nodes() -> Array[Node]:
 					dup.remove_child(ch)
 					ch.free()
 				dup.visible = true
-				if dup is CPUParticles3D:
-					(dup as CPUParticles3D).one_shot = false
-					(dup as CPUParticles3D).emitting = true
 				dup.transform = Transform3D(Basis().scaled(Vector3.ONE * 0.2),
 					Vector3(float(i % 9) * 0.5 - 2.0, float(i / 9 % 6) * 0.5 - 1.2, -1.0))
 				holder3d.add_child(dup)
+				# Warm-up copies only compile shaders: local space, since a
+				# world-space emitter (the weather, D-217) reads its global
+				# transform when it starts, and the holder may not be in the tree.
+				if dup is CPUParticles3D:
+					(dup as CPUParticles3D).local_coords = true
+					(dup as CPUParticles3D).one_shot = false
+					(dup as CPUParticles3D).emitting = true
 				i += 1
 				continue
 			for pair in _mesh_materials(g):

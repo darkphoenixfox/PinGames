@@ -17,6 +17,7 @@ uniform vec3 deep : source_color = vec3(0.05, 0.3, 0.62);
 uniform vec3 foam : source_color = vec3(0.95, 0.98, 1.0);
 uniform vec3 dune_grass : source_color = vec3(0.62, 0.66, 0.35);
 varying float beach;
+uniform float wet = 0.0;   // D-217 rain
 // D-216 areas: UV2.y = city, COLOR.rgb = (desert, forest, snow) weights.
 varying float city;
 varying vec3 area3;
@@ -136,7 +137,9 @@ void fragment() {
 			col = mix(col, snow_a, area3.b * 0.55 * smoothstep(road_half - 1.2, road_half + rumble, x));
 		}
 	}
+	// D-217: rain darkens the road and gives it a sheen.
+	col *= 1.0 - 0.32 * wet;
 	ALBEDO = col;
-	ROUGHNESS = 0.92;
-	SPECULAR = 0.2;
+	ROUGHNESS = mix(0.92, 0.35, wet);
+	SPECULAR = mix(0.2, 0.55, wet);
 }

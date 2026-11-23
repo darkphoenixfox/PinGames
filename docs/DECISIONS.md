@@ -2070,3 +2070,28 @@
 - **Start stage (testing):** after GRAPHICS, a START STAGE (TEST) screen. Flippers pick 1–10, the area's name shows, Launch confirms (or the timer). It isn't saved, and every game starts the picker at 1. The race starts at that stage's beginning, with its clock and checkpoint count (as `--rc-stage`).
 - **Tests:** the area order, the city barrier, and that the city has buildings and junctions.
 - **Status:** Accepted
+
+### D-217 — Turbo Run weather: rain with reflecting puddles, fog, haze, snow
+- **Date:** 2026-11-23
+- **Decision (director):** add weather effects that trigger on different stages. Rain makes puddles with fake reflections.
+- **Schedule:** `Track.stage_weather(k)`: clear on stages 1–3, then per 8-stage round of the areas: city clear / rain, desert clear / haze, forest fog / rain, snow / snow.
+  - So rain is on 4 and 8, haze on 6, fog on 7 and snow on 9–10.
+  - `Track.weather(s)` gives the weight: it sets in over 300 m and clears 200 m before a stage whose weather differs.
+  - The view smooths it further (0.6 per s).
+  - `--rc-weather=rain|snow|fog|haze` forces one for screenshots.
+- **Sky and light:**
+  - **Overcast** (rain, snow; fog at 80 %): sky and clouds turn grey and darker, clouds thicken (cloud cover 0.56 → 0.12), the sun disc and glow fade, and sunlight dims by up to 55 %.
+  - **Haze:** sky, clouds and fog take a sandy tint.
+  - **Fog depth** at full strength (begin–end m): rain 90–430, snow 45–320, fog 12–160, haze 60–380. Clear is 250–850.
+- **Rain:**
+  - **Particles:** 1,400 world-space CPU streaks (an X of thin quads aligned to their velocity), emitted in a box ahead of the camera, so the car drives through them.
+  - **Sound:** a noise hiss whose volume follows the rain.
+  - **Wet road:** `road.gdshader` `wet` darkens it by 32 % and makes it glossy (roughness 0.92 → 0.35).
+  - **Puddles:** `puddles.gdshader`, as the road material's `next_pass`. A value-noise mask in road metres, out to the sidewalk, grows with the rain. Inside it, the screen is sampled mirrored about the horizon line (a far level point ahead, projected), which is the fake reflection. Raindrop rings ripple it, and it is tinted grey-blue. At night it reflects the lit windows, lamps and lights.
+- **Snow:** 2,200 billboard flakes falling slowly with drift.
+- **Fog / haze:** fog and sky only.
+- **Tunnels:** nothing falls inside, and the hiss drops 10 dB.
+- **Warm-up fix:** the web warm-up (D-195) started copied particle emitters out of the scene tree, which errored for world-space emitters. Its copies are now local-space.
+- **Gameplay:** no grip change; it is visual only.
+- **Tests:** the weather order, and that rain sets in gradually.
+- **Status:** Accepted
