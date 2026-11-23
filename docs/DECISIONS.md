@@ -2810,3 +2810,18 @@
 - **Unchanged:** the side-column style of the old `web` page layout.
 - **Checked:** landscape (Turbo Run) and portrait (menu) previews with mouse clicks. Not checked on a real phone.
 - **Status:** Accepted
+
+### D-283 — Turbo Run on phones: sound cuts, frame rate, touch help
+- **Date:** 2026-11-23
+- **Reports (director, phone browser):** Turbo Run still stutters a bit and the sound cuts. The attract screen's help still names the magna saves, which the touch overlay no longer has (D-282).
+- **Measured:** the browser build in desktop Edge holds a steady frame rate in a race (one 141 ms frame in 40 s), so nothing in the race stalls by itself; the phone simply has less to spare. No phone was attached, so the fixes below are aimed at the known costs, not measured on the device.
+- **Why the sound cuts:** the browser build has no threads, so sound is mixed on the game's own thread (D-175). Any frame longer than the sound buffer (about 46 ms) leaves a gap.
+- **Sound fixes:**
+  - `audio/driver/output_latency.web = 100` (was the default 50): the buffer is about twice as long (93 ms), so a slow frame no longer empties it. Sounds start about 50 ms later in the browser.
+  - The tunnel reverb (D-127) ran for the whole race at zero level. It is now switched on only in tunnels.
+  - Turbo Run's loops (engine, whine, wind, skid, siren, passing cars) are paused while too quiet to hear (under -58 dB), so the mixer skips them. In the menus that is all of them.
+- **Frame rate** (browser and Android only; cabinets and the PC build are untouched): in HD, if a race averages under about 48 fps for 4 s, the world's quality goes down one step, and stays there for the session: 4× anti-aliasing → 2× → none at 85 % resolution → 70 % → 58 %. The HUD and touch controls stay at full resolution. 16-BIT and 8-BIT already render small and don't change. `--rc-auto-quality` turns this on in a dev run and `--rc-full-quality` turns it off anywhere.
+- **Touch help:** with the touch overlay on, Turbo Run is always in its 2-button mode (the operator's 4-button setting is ignored there), and uses shorter texts: the attract help (`RC_HOW_TO_TOUCH`) and the car select hint without the magna colour change (`RC_SELECT_HINT_TOUCH`). Gears are still shifted by holding both sides.
+- **Not done:** a threaded browser build would mix sound off the game's thread, the complete cure for cuts. It needs cross-origin isolation on the server and can't be tested here on a phone; proposed to the director.
+- **Checked:** the quality steps by capping a dev run at 30 fps (all four steps taken; the lowest still looks right); the touch attract screen. Not checked on a phone.
+- **Status:** Accepted

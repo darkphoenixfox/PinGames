@@ -443,6 +443,17 @@ var _tunnel_k := 0.0        # 0 outside .. 1 inside a tunnel (D-127)
 var _tunnel_shown := -1.0
 var _lamps := 0.0           # car lights level: max(night, tunnel)
 var _reverb: AudioEffectReverb
+var _reverb_on := false
+## D-283: the phone can't hold the frame rate in HD -> steps down the world's
+## anti-aliasing, then its resolution (the HUD stays sharp). Kept for the session.
+const QUALITY_STEPS := [[Viewport.MSAA_4X, 1.0], [Viewport.MSAA_2X, 1.0], [Viewport.MSAA_DISABLED, 0.85],
+	[Viewport.MSAA_DISABLED, 0.7], [Viewport.MSAA_DISABLED, 0.58]]
+const QUALITY_WINDOW := 2.0      # seconds measured per verdict
+const QUALITY_SLOW := 1.0 / 48.0 # an average frame slower than this is "can't keep up"
+static var _quality := 0
+var _q_t := 0.0
+var _q_n := 0
+var _q_bad := 0
 var _radar_player: AudioStreamPlayer   # D-215: dry, no tunnel reverb (it's inside the car)
 var _sky_mat: ShaderMaterial     # the procedural sky (D-193)
 var _player_lights: Node3D
@@ -553,7 +564,7 @@ func start(_players: int) -> void:
 		{&"magna_l": "brake", &"magna_r": "shift"})   # D-279: their icons
 	for s in SOUNDS:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
-	_manual_locked = str(Config.get_value("operator", "cabinet_buttons")) == "4"
+	_manual_locked = str(Config.get_value("operator", "cabinet_buttons")) == "4" and not _touch_play()
 	# Cel shading (D-091); --rc-no-toon shows the plain look for comparison.
 	Toon.enabled = not Config.cli.has("rc-no-toon")
 	DebugTools.debug_action.connect(_on_debug_action)
@@ -573,6 +584,8 @@ func start(_players: int) -> void:
 		_reverb.dry = 1.0
 		_reverb.wet = 0.0
 		AudioServer.add_bus_effect(bus, _reverb)
+		_reverb_on = true
+		_set_reverb(false)
 	if Config.cli.has("rc-car"):   # dev: race with car 0 (easy) / 1 / 2 (hard), D-122
 		_chosen_car = clampi(int(str(Config.cli["rc-car"])), 0, Sim.CARS.size() - 1)
 	if Config.cli.has("rc-skip-intro"):
@@ -660,7 +673,7 @@ func _process(delta: float) -> void:
 			_confirm_gfx()
 	elif _phase == "select":
 		var left := ceili(SELECT_TIME - _phase_t)
-		_select_hint.text = tr("RC_SELECT_HINT") % maxi(left, 0)
+		_select_hint.text = tr("RC_SELECT_HINT_TOUCH" if _touch_play() else "RC_SELECT_HINT") % maxi(left, 0)
 		if _phase_t >= SELECT_TIME:
 			_confirm_car()
 	elif _phase == "race":
@@ -682,6 +695,7 @@ func _process(delta: float) -> void:
 		_update_hud(delta)
 		if sim.done and _finale_t < 0.0:
 			_begin_finale()
+		_watch_quality(delta)
 	elif _phase == "finale":
 		sim.step(dt, false, false)
 		_finale(delta)
@@ -703,7 +717,7 @@ func _new_sim() -> void:
 	sim.freeze_time = _freeze_time
 	sim.car = _chosen_car
 	sim.time_left = sim.start_time()   # the car sets the clock (D-183)
-	sim.manual = _manual_locked or _seen_magna   # once detected, the next races keep it (D-189)
+	sim.manual = (_manual_locked or _seen_magna) and not _touch_play()   # once detected, the next races keep it (D-189)
 	sim.autopilot = Config.cli.has("rc-autopilot")
 	var n := _start_stage
 	if Config.cli.has("rc-stage"):  # dev: start at the beginning of stage N (D-204)
@@ -800,7 +814,10 @@ func _enter_attract() -> void:
 	_attract_ui.add_child(_logo_rect(900))
 	_attract_blink = UI.styled_label(tr("RC_PRESS_START"), TITLE_FONT, 2)
 	_attract_ui.add_child(_attract_blink)
-	var hint := UI.label(tr("RC_HOW_TO_4") if _four_buttons() else tr("RC_HOW_TO"), 36, UI.WHITE)
+	var how := tr("RC_HOW_TO_4") if _four_buttons() else tr("RC_HOW_TO")
+	if _touch_play():
+		how = tr("RC_HOW_TO_TOUCH")
+	var hint := UI.label(how, 36, UI.WHITE)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.custom_minimum_size.x = 900
 	hint.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # wraps at 900 px: no lines lost, margins kept
@@ -858,8 +875,9 @@ func _apply_gfx(mode: String) -> void:
 	var low := _low_res(mode)   # D-254: at the TABLE's shape
 	_retro_post.set_shader_parameter("low_res", Vector2(low))
 	_retro_post.set_shader_parameter("nes", mode == "nes")
-	_pix_vp.size = Vector2i(Screens.table.size) if on else low
-	_pix_vp.msaa_3d = Viewport.MSAA_4X if on else Viewport.MSAA_DISABLED
+	var q: Array = QUALITY_STEPS[_quality if _auto_quality() else 0]
+	_pix_vp.size = Vector2i((Vector2(Screens.table.size) * float(q[1])).round()) if on else low
+	_pix_vp.msaa_3d = (q[0] as Viewport.MSAA) if on else Viewport.MSAA_DISABLED
 	_world_view.material = null if on else _retro_post
 	_world_view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if on else CanvasItem.TEXTURE_FILTER_NEAREST
 	Sprites.set_hd(on)
@@ -1322,6 +1340,43 @@ func _hud_layout() -> void:
 		_radar_bar.size = Vector2(w, _radar_bar.custom_minimum_size.y)
 		_radar_bar.center_gap = 520.0 if land else 0.0
 		_radar_bar.queue_redraw()
+
+
+## D-283: phones and browsers only; cabinets and the PC build keep full quality.
+func _auto_quality() -> bool:
+	return (OS.has_feature("web") or OS.has_feature("android") or Config.cli.has("rc-auto-quality")) \
+		and not Config.cli.has("rc-full-quality")
+
+
+## While racing in HD: two measuring windows in a row under about 48 fps take
+## the world's quality down one step (never back up: each change is a hitch).
+func _watch_quality(delta: float) -> void:
+	if not _gfx_hd or not _auto_quality() or _quality >= QUALITY_STEPS.size() - 1 or get_tree().paused:
+		return
+	if sim.state != Sim.State.RACE or delta > 0.25:   # not on the grid; not a one-off stall
+		return
+	_q_t += delta
+	_q_n += 1
+	if _q_t < QUALITY_WINDOW:
+		return
+	_q_bad = _q_bad + 1 if _q_t / _q_n > QUALITY_SLOW else 0
+	_q_t = 0.0
+	_q_n = 0
+	if _q_bad >= 2:
+		_q_bad = 0
+		_quality += 1
+		print("Turbo Run: quality step %d (frame rate too low)" % _quality)
+		_apply_gfx(_gfx_mode)
+
+
+func _set_reverb(on: bool) -> void:
+	if on == _reverb_on:
+		return
+	_reverb_on = on
+	var bus := AudioServer.get_bus_index("SFX")
+	for i in AudioServer.get_bus_effect_count(bus):
+		if AudioServer.get_bus_effect(bus, i) == _reverb:
+			AudioServer.set_bus_effect_enabled(bus, i, on)
 
 
 func _on_table_shape() -> void:
@@ -2829,7 +2884,20 @@ func _gear_text(g: int) -> String:
 ## The 4-button layout is in use: the operator set it, or a magna save was
 ## pressed this session (D-189).
 func _four_buttons() -> bool:
+	if _touch_play():
+		return false
 	return _manual_locked or (sim != null and sim.manual) or _seen_magna
+
+
+## D-283: playing on the touch overlay, which has the two flippers and LAUNCH
+## only (D-282): no magna saves, so the 2-button mode and shorter help texts.
+func _touch_play() -> bool:
+	if not is_inside_tree():
+		return false
+	for n in get_tree().get_nodes_in_group("touch_controls"):
+		if n.overlay and n.left.visible:
+			return true
+	return false
 
 
 func _show_mode() -> void:
@@ -3134,6 +3202,7 @@ func _update_night(delta: float) -> void:
 	_lamps = maxf(_night, _tunnel_k)
 	if _reverb != null:
 		_reverb.wet = 0.45 * _tunnel_k
+		_set_reverb(_tunnel_k > 0.0)
 	if absf(_lamps - _lamps_shown) > 0.002:
 		_lamps_shown = _lamps
 		Night.set_level(_lamps)
@@ -3580,3 +3649,9 @@ func _update_audio() -> void:
 		for pl in [_engine, _engine_hi, _wind, _skid, _siren, _horn] + _passers:
 			if pl != null:
 				(pl as AudioStreamPlayer).volume_db = -80.0
+	# D-283: a loop too quiet to hear is paused, so the mixer skips it.
+	for pl in [_engine, _engine_hi, _wind, _skid, _siren] + _passers:
+		if pl != null:
+			var quiet: bool = (pl as AudioStreamPlayer).volume_db < -58.0
+			if (pl as AudioStreamPlayer).stream_paused != quiet:
+				(pl as AudioStreamPlayer).stream_paused = quiet
