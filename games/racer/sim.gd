@@ -29,7 +29,7 @@ const NITRO_SPEED := 100.0     # m/s while nitro burns (normal car; see CARS)
 const CARS := [
 	# time: the starting clock (s); bonus: added to every checkpoint's time and
 	# to its floor (D-183), so the easy car gets more time, the hard car less.
-	{"name": "RC_CAR_EASY", "hue": 0.62, "top": 72.0, "grip": 1.25, "time": 55.0, "bonus": 10.0},     # blue (D-202)
+	{"name": "RC_CAR_EASY", "hue": 0.0, "top": 72.0, "grip": 1.25, "time": 55.0, "bonus": 10.0},     # the red hot hatch (D-206; was blue, D-202)
 	{"name": "RC_CAR_NORMAL", "hue": 0.0, "top": 80.0, "grip": 1.0, "time": START_TIME, "bonus": 0.0},   # red
 	{"name": "RC_CAR_HARD", "hue": 0.08, "top": 88.0, "grip": 0.8, "time": 40.0, "bonus": -4.0},     # orange
 ]
@@ -108,6 +108,10 @@ const CRASH_GRACE := 5.0         # s immune to traffic once moving again (D-125;
 const RECOVER_X := Track.ROAD_HALF - 1.9   # outer lane: where an off-road crash is put back
 ## Hitting a big roadside object (D-098) rolls the car over sideways instead.
 const FLIP_TIME := 1.33          # roll-over animation (D-105: 1.5x faster than 2.0)
+## A big hit at 100 mph or more (shown speed) rolls the car twice (D-206),
+## over a longer animation.
+const DOUBLE_FLIP_MPH := 100.0
+const DOUBLE_FLIP_TIME := 2.1
 ## A roll-over keeps tumbling down the road (D-105), then lands on its side and
 ## keeps sliding until friction stops it (D-106), and only then the CRASH_STOP.
 const FLIP_SPEED := 30.0
@@ -217,6 +221,7 @@ var flipping := false          # this crash is a roll-over (big obstacle)
 var crash_anim := 0.0          # animation length of the current crash (s)
 var crash_slide := false       # a rolled car sliding to a stop (D-106)
 var flip_dir := 1.0            # +1 rolls to the right, -1 to the left
+var flip_turns := 1            # full rolls in this roll-over (2 at 100+ mph, D-206)
 var time_left := START_TIME
 var next_checkpoint := CHECKPOINT_EVERY
 var checkpoints := 0
@@ -843,7 +848,8 @@ func _crash(kind: String, side: float = 0.0, slide: bool = true) -> void:
 	flipping = kind in FLIP_KINDS
 	# Rolls away from the obstacle: one on the right (+side) rolls it left.
 	flip_dir = -signf(side) if side != 0.0 else 1.0
-	crash_anim = FLIP_TIME if flipping else SPIN_TIME
+	flip_turns = 2 if flipping and v * MPH >= DOUBLE_FLIP_MPH else 1
+	crash_anim = (DOUBLE_FLIP_TIME if flip_turns == 2 else FLIP_TIME) if flipping else SPIN_TIME
 	spin_t = crash_anim + CRASH_STOP
 	v = minf(v, (FLIP_SPEED if slide else 6.0) if flipping else 14.0)
 	crash_slide = false

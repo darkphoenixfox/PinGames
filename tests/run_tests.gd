@@ -1392,8 +1392,10 @@ func test_racer_sim() -> void:
 		"hitting a rock flips the car over, away from it")
 	check(fl.gear == Sim.Gear.LOW, "a crash shifts down to low gear by itself (D-112)")
 	# The roll-over tumbles on down the road, then stops (D-105).
+	check(fl.flip_turns == (2 if 60.0 * Sim.MPH >= Sim.DOUBLE_FLIP_MPH else 1),
+		"a roll-over at 100+ mph rolls twice (D-206)")
 	var s_hit: float = fl.s
-	for i in int(Sim.FLIP_TIME * 60.0) + 2:
+	for i in int(fl.crash_anim * 60.0) + 2:
 		fl.traffic.clear()
 		fl.step(dt, false, false)
 	check(fl.s - s_hit > 25.0 and fl.v > 10.0, "the car keeps advancing as it rolls over (%.0f m)" % (fl.s - s_hit))

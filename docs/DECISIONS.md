@@ -1927,3 +1927,13 @@
 - **Colour:** it keeps the easy car's blue (D-202) through the usual hue recolour; its texture is red like the red car's.
 - **Traffic:** one in five cars is a hot hatch (`id % 5 == 4`), from a pool of 6, with the same per-car hue and night lights as the others.
 - **Status:** Accepted
+
+### D-206 — Turbo Run: double roll-over at 100+ mph; the hot hatch is red
+- **Date:** 2026-11-23
+- **Decision (director):** a car that hits a big obstacle at over 100 mph does 2 sideways flips. The hot hatch is red.
+- **Double roll:** in `Sim._crash`, a roll-over (`FLIP_KINDS`: palm, rock, lamp, truck, wall) at a shown speed of `DOUBLE_FLIP_MPH` (100) or more sets `flip_turns = 2`.
+  - The animation runs `DOUBLE_FLIP_TIME` 2.1 s instead of 1.33 s.
+  - The view rolls twice, with twice as many stepped poses, and hops 60 % higher.
+  - Below 100 mph it is the one roll of D-098.
+- **Colour:** the easy car's hue is 0.0, so the hot hatch keeps its own red paint. This supersedes D-202's blue. The normal car is red too: the two are told apart by their model.
+- **Status:** Accepted

@@ -1857,8 +1857,10 @@ func _animate(delta: float) -> void:
 	var lift := bounce
 	if sim.spin_t > 0.0 and sim.flipping:
 		var q := clampf((crash_p - FLIP_TURN_END) / (FLIP_ROLL_END - FLIP_TURN_END), 0.0, 1.0)
-		roll = roundf(q * FLIP_FRAMES) / FLIP_FRAMES * TAU * sim.flip_dir
-		lift += 4.0 * FLIP_HOP * q * (1.0 - q)
+		# Two rolls and a higher hop at 100+ mph (D-206).
+		var turns := float(sim.flip_turns)
+		roll = roundf(q * FLIP_FRAMES * turns) / FLIP_FRAMES * TAU * sim.flip_dir
+		lift += 4.0 * FLIP_HOP * (1.0 + 0.6 * (turns - 1.0)) * q * (1.0 - q)
 	var pivot := Vector3(0, 0.65, 0)             # roll around the body's middle
 	var rb := Basis(Vector3.UP, yaw) * Basis(Vector3.FORWARD, roll)
 	_car_body.transform = Transform3D(rb * MODEL_TURN, Vector3(0, lift, 0) + pivot - rb * pivot)
