@@ -2358,3 +2358,15 @@
 - **View:** each car's drawn heading adds its sway (before the sprite-angle stepping, D-092/D-208).
 - **Test:** a side-swipe turns both cars away from each other.
 - **Status:** Accepted
+
+### D-240 — Turbo Run loading: the driver walks to the red car (DMD graphics)
+- **Date:** 2026-11-23
+- **Decision (director):** the game's loading screen should show a guy walking towards the red car from the backglass, in DMD graphics.
+- **Scene** (`LoadingAnim.racer_scene`): dot sprites on a 128×32 grid, looping every 6.5 s.
+  1. The driver (a 5×9 sprite with two walk frames and a bob: dark hair, white jacket, blue jeans) walks in from the left to the red sports car.
+  2. The door swings open, and he's in.
+  3. The headlights and tail lights come on, with a beam.
+  4. The car pulls away to the right, faster and faster, puffing exhaust.
+- **DMD:** the scene with LOADING at the top left (replaces D-238's racer DMD animation).
+- **TABLE:** the same scene as a big dot-matrix panel (128×32 dots at 7 px, unlit dots shown), between the logo and the track-to-flag progress bar (replaces D-238's road scene, which is kept in the code as `_draw_racer_road`).
+- **Status:** Accepted

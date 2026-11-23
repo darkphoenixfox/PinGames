@@ -40,7 +40,92 @@ func _draw() -> void:
 
 
 # --- Turbo Run ---------------------------------------------------------------------------
+## The driver and the red car (D-240), as dot sprites on a 128x32 grid: he walks
+## up to the backglass's red sports car, gets in, the lights come on and it
+## pulls away, then again. Drawn on the DMD and, as a big dot panel, on the TABLE.
+const SCENE_LOOP := 6.5
+const CAR_SPRITE := [
+	".............RRRRRRRRRRRRRR",
+	"...........RRWWWWWWRWWWWWWRR",
+	".........RRRWWWWWWWRWWWWWWWRRR",
+	"....RRRRRRRRWWWWWWWRWWWWWWWRRRRRRRRR",
+	"..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR",
+	".TRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRY",
+	".RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR",
+	".rrrrrKKKKKrrrrrrrrrrrrrrrrrrKKKKKrrrrr",
+	"......KGGGK..................KGGGK",
+	"......KGGGK..................KGGGK",
+	".......KKK....................KKK",
+]
+const GUY_A := [".HHH.", ".SSS.", "JJJJJ", "SJJJS", ".JJJ.", ".PPP.", ".P.P.", ".P.P.", ".B.B."]
+const GUY_B := [".HHH.", ".SSS.", "JJJJ.", "JJJJS", "SJJJ.", ".PPP.", "P...P", "P...P", "B...B"]
+const SCENE_COLS := {"R": Color(0.95, 0.12, 0.12), "r": Color(0.5, 0.05, 0.05), "W": Color(0.35, 0.65, 1.0),
+	"T": Color(1.0, 0.3, 0.3), "Y": Color(1.0, 0.95, 0.6), "K": Color(0.12, 0.12, 0.14), "G": Color(0.65, 0.65, 0.7),
+	"H": Color(0.3, 0.18, 0.08), "S": Color(1.0, 0.78, 0.6), "J": Color(0.9, 0.9, 0.95), "P": Color(0.2, 0.35, 0.85),
+	"B": Color(0.15, 0.12, 0.1)}
+
+
+## Calls put(x, y, colour) for every lit dot of the scene at time t.
+static func racer_scene(put: Callable, t: float) -> void:
+	var lt := fmod(t, SCENE_LOOP)
+	for x in range(0, 128, 2):   # the kerb line
+		put.call(x, 29, Color(0.3, 0.3, 0.35))
+	var car_x := 80.0
+	var lights := lt > 4.0
+	if lt > 4.6:   # pulling away, faster and faster
+		var d := lt - 4.6
+		car_x += d * d * 40.0
+		for k in 4:   # exhaust puffs
+			put.call(int(car_x) - 2 - k * 3 - int(fmod(lt * 20.0, 3.0)), 24 - k / 2, Color(0.55, 0.55, 0.6))
+	for r in CAR_SPRITE.size():
+		var row: String = CAR_SPRITE[r]
+		for c in row.length():
+			var ch := row[c]
+			if ch == ".":
+				continue
+			var col: Color = SCENE_COLS[ch]
+			if ch == "Y" and not lights:
+				col = Color(0.4, 0.38, 0.25)
+			if ch == "T" and not lights:
+				col = Color(0.5, 0.1, 0.1)
+			put.call(int(car_x) + c, 18 + r, col)
+	if lights:   # headlight beam
+		for k in range(1, 7):
+			put.call(int(car_x) + 39 + k, 23 - k / 3, Color(1.0, 0.95, 0.6, 0.6 - k * 0.08))
+	# The driver walks in from the left to the door, then he's gone (in).
+	if lt < 3.6:
+		var gx := -6.0 + minf(lt / 3.4, 1.0) * 98.0
+		var walking := lt < 3.4
+		var stride := walking and fmod(lt, 0.3) < 0.15
+		var frame: Array = GUY_B if stride else GUY_A
+		var bob := 1 if stride else 0
+		for r in frame.size():
+			var row2: String = frame[r]
+			for c in row2.length():
+				if row2[c] != ".":
+					put.call(int(gx) + c, 19 + r + bob, SCENE_COLS[row2[c]])
+	if lt >= 3.4 and lt < 3.9:   # the door swings open for him
+		for r in 4:
+			put.call(int(car_x) + 18 - r, 20 + r, Color(0.95, 0.12, 0.12))
+
+
 func _draw_racer() -> void:
+	# D-240: the driver-and-car scene on a dot-matrix panel.
+	var pitch := 7.0
+	var panel := Rect2(540.0 - 64.0 * pitch, 1040.0, 128.0 * pitch, 32.0 * pitch)
+	draw_rect(panel.grow(10.0), Color(0.12, 0.1, 0.1))
+	draw_rect(panel, Color(0.03, 0.02, 0.02))
+	for yy in 32:   # unlit dots
+		for xx in 128:
+			draw_circle(panel.position + Vector2(xx + 0.5, yy + 0.5) * pitch, pitch * 0.32, Color(0.09, 0.06, 0.05))
+	racer_scene(func(x: int, y: int, c: Color) -> void:
+		if x >= 0 and x < 128 and y >= 0 and y < 32:
+			draw_circle(panel.position + Vector2(x + 0.5, y + 0.5) * pitch, pitch * 0.42, c), _t)
+	_draw_track_bar(1360.0)
+
+
+## The first loading scene (D-238): a car on a scrolling road. Kept for reference.
+func _draw_racer_road() -> void:
 	var cy := 1180.0
 	# Sky glow and the road band.
 	draw_rect(Rect2(90, cy - 170, 900, 260), Color(0.1, 0.05, 0.18))
@@ -166,25 +251,9 @@ static func dmd_anim(id: String, color: Color) -> Callable:
 	match id:
 		"racer":
 			return func(p, t: float) -> void:
-				var w: int = p.width
-				# Road: two rows of dashes scrolling left.
-				var s := fmod(t * 60.0, 8.0)
-				for i in 20:
-					var x := i * 8.0 - s
-					p.block(x, 29, 4, 1, Color(0.6, 0.6, 0.6))
-				# A dot car, bobbing, wheels flickering.
-				var cx := 10.0 + fmod(t * 25.0, float(w + 40)) - 30.0
-				var cy := 22.0 + (1.0 if fmod(t * 8.0, 1.0) < 0.5 else 0.0)
-				p.block(cx, cy, 18, 3, color)
-				p.block(cx + 5, cy - 3, 8, 3, color)
-				p.block(cx + 7, cy - 2, 2, 1, Color(0.4, 0.7, 1.0))
-				p.dot(cx + 17, cy, Color.WHITE)
-				p.dot(cx, cy, Color(1, 0.2, 0.2))
-				p.disc(cx + 4, cy + 4, 1.5, Color(0.8, 0.8, 0.8))
-				p.disc(cx + 14, cy + 4, 1.5, Color(0.8, 0.8, 0.8))
-				for k in 3:   # puffs
-					p.dot(cx - 2 - k * 3 - fmod(t * 20.0, 3.0), cy + 1 - k, Color(0.5, 0.5, 0.5))
-				p.text_center("LOADING", 2, 1, Color(1.0, 0.82, 0.24) if fmod(t, 1.0) < 0.7 else Color(0.5, 0.4, 0.12))
+				# D-240: the driver walks up to the red car and drives off.
+				racer_scene(func(x: int, y: int, c: Color) -> void: p.dot(x, y, c), t)
+				p.text("LOADING", 2, 2, 1, Color(1.0, 0.82, 0.24) if fmod(t, 1.0) < 0.7 else Color(0.5, 0.4, 0.12))
 		"breakout":
 			return func(p, t: float) -> void:
 				var w: float = p.width
