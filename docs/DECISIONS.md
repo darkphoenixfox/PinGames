@@ -2978,3 +2978,12 @@
   - **The tachometer as a horizontal bar** under the speedo's MPH caption, replacing the round tacho (hidden in 2P): 20 segments, yellow, green in the perfect-shift band (the perfect-start band on the grid), and red from the redline (7/8). Unlit segments are dimmed in the same colours.
 - 1P is unchanged.
 - **Status:** Accepted
+
+### D-294 — Turbo Run 2P: the shifter at its small size, level with the speedo
+- **Date:** 2026-11-23
+- **Decision (director):** the 2P shifter was too big and ran off the bottom of the screen. It should line up with the speedo + tacho.
+- **Cause:** a container resets its children's scale on every layout, so D-291/D-293's scaled lever went back to full size (150×210) after the first re-layout.
+- **Fix:**
+  - The lever now sits in a plain holder Control (the container sizes the holder, not the lever) at `GEAR_COMPACT` 0.4.
+  - The gear column is as tall as the speedo + MPH + tach bar block and centres the lever on it (`SIZE_SHRINK_END`, `ALIGNMENT_CENTER`).
+- **Status:** Accepted

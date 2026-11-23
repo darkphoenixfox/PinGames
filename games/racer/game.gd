@@ -1503,11 +1503,26 @@ func _hud_compact() -> void:
 	_tacho.lamp_at = (_tacho.hub() + _tacho.label_pos(4.0 / 8.0) + _tacho.label_pos(6.0 / 8.0)) / 3.0
 	_speed_label.position = _speedo.hub() + Vector2(-80, 6)
 	_nitro_pop.position = _speedo.hub() + Vector2(-160, -r - 70.0)
+	# The gears at GEAR_COMPACT size (D-293, D-294): in a plain holder, since a
+	# container resets its children's scale on every layout.
+	var gbox := _gear_lever.get_parent() as BoxContainer
+	if not (gbox is BoxContainer):
+		return   # already done
 	var full := _gear_lever.custom_minimum_size
+	var holder := Control.new()
+	holder.custom_minimum_size = full * GEAR_COMPACT
+	holder.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var at := _gear_lever.get_index()
+	gbox.remove_child(_gear_lever)
+	holder.add_child(_gear_lever)
+	gbox.add_child(holder)
+	gbox.move_child(holder, at)
+	_gear_lever.position = Vector2.ZERO
 	_gear_lever.scale = Vector2.ONE * GEAR_COMPACT
-	_gear_lever.custom_minimum_size = full * GEAR_COMPACT
-	_gear_lever.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	(_gear_lever.get_parent() as Control).custom_minimum_size.x = 90
+	gbox.custom_minimum_size.x = 90
+	gbox.alignment = BoxContainer.ALIGNMENT_CENTER   # level with the speedo + tacho block
+	gbox.size_flags_vertical = Control.SIZE_SHRINK_END
 	# D-293 (director): the speedo in the player's bottom right corner with
 	# the gears beside it, and the tachometer as a bar under the speedo.
 	(_tacho.get_parent() as Control).visible = false
@@ -1518,6 +1533,9 @@ func _hud_compact() -> void:
 		_tach_bar.custom_minimum_size = Vector2(_speedo.custom_minimum_size.x + 40.0, 18.0)
 		_tach_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		_speedo.get_parent().add_child(_tach_bar)
+	# The gear column as tall as the speedo + tacho block, its lever centred on it.
+	var sbox := _speedo.get_parent() as Control
+	(_gear_lever.get_parent().get_parent() as Control).custom_minimum_size.y = sbox.get_combined_minimum_size().y
 
 
 ## D-293: 2P's tachometer, a segmented bar: yellow, green in the perfect-shift
