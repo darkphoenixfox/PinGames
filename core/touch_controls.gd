@@ -150,6 +150,9 @@ func set_shown(on: bool) -> void:
 
 ## Column width and label size for a window of this size.
 func fit(win: Vector2) -> void:
+	if overlay:
+		_fit_round(win)
+		return
 	var w := clampf(minf(win.x, win.y) * 0.17, 64.0, 240.0)
 	left.custom_minimum_size.x = w
 	right.custom_minimum_size.x = w
@@ -165,16 +168,62 @@ func fit(win: Vector2) -> void:
 			(panel.get_child(0) as Label).add_theme_font_size_override("font_size", px)
 
 
+## D-273: the overlay's buttons: round, all one size, four to a column in the
+## bottom bar (its height as Screens sets it: 42 % portrait, 60 % landscape).
+var _round_d := 0.0
+
+
+func _fit_round(win: Vector2) -> void:
+	var bar_h := win.y * (0.42 if win.y > win.x else 0.6)
+	var sep := 10.0
+	var d := floorf(minf((bar_h - sep * 3.0) / 4.0, minf(win.x, win.y) * 0.17))
+	d = maxf(d, 44.0)
+	_toggle_space.custom_minimum_size.y = 0
+	_left_space.custom_minimum_size.y = 0
+	for col in [left, right]:
+		col.alignment = BoxContainer.ALIGNMENT_END
+		col.add_theme_constant_override("separation", int(sep))
+		col.custom_minimum_size.x = d
+		for c in col.get_children():
+			if c == _toggle_space or c == _left_space:
+				continue
+			(c as Control).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			(c as Control).custom_minimum_size = Vector2(d, d)
+	var px := maxi(12, int(d * 0.2 / 12.0) * 12)
+	toggle.add_theme_font_size_override("font_size", maxi(12, int(minf(win.x, win.y) * 0.04 / 12.0) * 12))
+	toggle.offset_right = -6
+	toggle.offset_top = 6
+	if d != _round_d or px != _font_px:
+		_round_d = d
+		_font_px = px
+		# D-273: the dot font sized so the longest label (6 letters, 6 bits a
+		# letter) fits across the circle.
+		var bit := maxi(2, int(d * 0.8 / 36.0))
+		var size := int(ceilf(bit * 7.0 / 0.72))
+		var f := UI.DotText.font(size)
+		for act in _buttons:
+			var l := (_buttons[act] as Panel).get_child(0) as Label
+			l.add_theme_font_override("font", f)
+			l.add_theme_font_size_override("font_size", size)
+			# Tiny circles: scale the label down so it still fits.
+			var k := minf(1.0, d * 0.85 / (36.0 * bit))
+			l.pivot_offset = Vector2(d, d) * 0.5
+			l.scale = Vector2(k, k)
+			_style(act, false)
+
+
 func _style(action: StringName, down: bool) -> void:
 	var c: Color = COLORS[action]
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(c, 0.75) if down else Color(c.darkened(0.6), 0.55)
 	sb.border_color = c.lightened(0.3) if down else Color(c, 0.8)
-	if overlay:
-		sb.bg_color = Color(c, 0.45) if down else Color(c.darkened(0.4), 0.18)
-		sb.border_color = Color(c.lightened(0.3), 0.85) if down else Color(c, 0.45)
 	sb.set_border_width_all(3)
 	sb.set_corner_radius_all(18)
+	if overlay:   # D-273: round, a little more visible than D-251
+		sb.bg_color = Color(c, 0.55) if down else Color(c.darkened(0.35), 0.32)
+		sb.border_color = Color(c.lightened(0.3), 0.95) if down else Color(c, 0.7)
+		sb.set_border_width_all(4)
+		sb.set_corner_radius_all(int(maxf(_round_d, 48.0) * 0.5) + 1)
 	(_buttons[action] as Panel).add_theme_stylebox_override("panel", sb)
 
 

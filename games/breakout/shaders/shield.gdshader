@@ -20,7 +20,9 @@ void fragment() {
 	// Cheap hex/scanline texture
 	float hex = 0.6 + 0.4 * step(0.5, fract(UV.x * 26.0 + step(0.5, fract(UV.y * 6.0)) * 0.5)) * step(0.15, fract(UV.y * 6.0));
 	float a = band * edge * strength * (0.35 * hex + 1.2 * core + 0.9 * ripple);
-	a = max(a, band * edge * idle * hex);
-	ALBEDO = shield_color.rgb * a * 2.5;
-	ALPHA = clamp(a, 0.0, 1.0);
+	// D-274: added light, written straight: a hit as before (2.5 a x a), the
+	// resting glow at its own level (it came out squared: 10 % showed as 1 %).
+	float i = band * edge * idle * hex;
+	ALBEDO = shield_color.rgb * max(2.5 * a * clamp(a, 0.0, 1.0), i);
+	ALPHA = 1.0;
 }

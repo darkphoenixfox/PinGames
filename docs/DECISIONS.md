@@ -2704,3 +2704,19 @@
 - **Fix:** on the web, the shell listens for `JavaScriptBridge.pwa_update_available` (and checks `pwa_needs_update()` at start). When a new version is waiting, it calls `pwa_update()`, which activates it and reloads: at once on the menus, or when the player returns to the menu if a game is running.
 - **Note:** this code only arrives with the update itself, so getting off the old cached version takes one manual step: fully close the app or tab and reopen it, or clear the site's data.
 - **Status:** Accepted
+
+### D-273 — Touch overlay: round buttons, all one size, more visible
+- **Date:** 2026-11-23
+- **Decision (director):** make the Android buttons round and slightly more visible, all the same size on screen.
+- **Shape:** in the overlay (`TouchControls.overlay`, single layout), every button is a circle of one size: four to a column in the bottom bar (42 % of the height in portrait, 60 % in landscape), at most 17 % of the short side, sitting at the bar's bottom. The empty slot on the left keeps the two columns level.
+- **Visibility:** idle fill 32 % (was 18 %), border 70 % (was 45 %) and 4 px wide; pressed 55 %.
+- **Labels:** sized in the dot font so the longest (6 letters) fits across the circle, and scaled down further on tiny screens.
+- **Unchanged:** the side-column style for other layouts.
+- **Status:** Accepted
+
+### D-274 — Tilt Breaker: the resting edge glow really at 10 %
+- **Date:** 2026-11-23
+- **Bug (director):** the walls were more invisible than before; they should have been more visible after going from 5 % to 10 % (D-269).
+- **Cause:** with additive blending the shader's light was colour × a × alpha (= a), so the resting glow came out squared: 10 % showed as 1 % (and 5 % as 0.25 %).
+- **Fix:** the shader writes its light straight, with alpha 1. A hit keeps exactly its old look (2.5 × a × a), and the resting glow is `idle` (10 %) of the shield colour.
+- **Status:** Accepted
