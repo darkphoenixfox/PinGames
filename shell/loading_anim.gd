@@ -40,61 +40,71 @@ func _draw() -> void:
 
 
 # --- Turbo Run ---------------------------------------------------------------------------
-## The driver and the red car (D-240), as dot sprites on a 128x32 grid: he walks
-## up to the backglass's red sports car, gets in, the lights come on and it
+## The driver and his car (D-240, D-241), as dots on a 128x32 grid: he walks up
+## to the director's yellow sports car, gets in, the lights come on and it
 ## pulls away, then again. Drawn on the DMD and, as a big dot panel, on the TABLE.
 const SCENE_LOOP := 6.5
-const CAR_SPRITE := [
-	".............RRRRRRRRRRRRRR",
-	"...........RRWWWWWWRWWWWWWRR",
-	".........RRRWWWWWWWRWWWWWWWRRR",
-	"....RRRRRRRRWWWWWWWRWWWWWWWRRRRRRRRR",
-	"..RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR",
-	".TRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRY",
-	".RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR",
-	".rrrrrKKKKKrrrrrrrrrrrrrrrrrrKKKKKrrrrr",
-	"......KGGGK..................KGGGK",
-	"......KGGGK..................KGGGK",
-	".......KKK....................KKK",
+## The driver, 9x19 dots (D-242: a person is taller than a supercar, about 1.8
+## to 1.25 m, so 19 dots against the car's 14), walking right: legs apart with
+## arms swinging, then passing.
+const GUY_A := [
+	"...HHH...", "..HHHHH..", "..HSSSS..", "..SSSSS..", "...SSS...", "....S....",
+	"..JJJJJ..", ".JJJJJJJ.", "SJJJJJJJ.", "S.JJJJJ.S", "..JJJJJ.S", "..JJJJJ..",
+	"..PPPPP..", "..PP.PP..", ".PP...PP.", ".PP...PP.", "PP.....PP", "PP.....PP", "BB.....BBB",
 ]
-const GUY_A := [".HHH.", ".SSS.", "JJJJJ", "SJJJS", ".JJJ.", ".PPP.", ".P.P.", ".P.P.", ".B.B."]
-const GUY_B := [".HHH.", ".SSS.", "JJJJ.", "JJJJS", "SJJJ.", ".PPP.", "P...P", "P...P", "B...B"]
+const GUY_B := [
+	"...HHH...", "..HHHHH..", "..HSSSS..", "..SSSSS..", "...SSS...", "....S....",
+	"..JJJJJ..", ".JJJJJJJ.", ".JJJJJJS.", ".JJJJJJ.S", "..JJJJJ..", "..JJJJJ..",
+	"..PPPPP..", "...PPP...", "...PPP...", "...PP....", "...PP....", "...PP....", "...BBB...",
+]
 const SCENE_COLS := {"R": Color(0.95, 0.12, 0.12), "r": Color(0.5, 0.05, 0.05), "W": Color(0.35, 0.65, 1.0),
 	"T": Color(1.0, 0.3, 0.3), "Y": Color(1.0, 0.95, 0.6), "K": Color(0.12, 0.12, 0.14), "G": Color(0.65, 0.65, 0.7),
 	"H": Color(0.3, 0.18, 0.08), "S": Color(1.0, 0.78, 0.6), "J": Color(0.9, 0.9, 0.95), "P": Color(0.2, 0.35, 0.85),
 	"B": Color(0.15, 0.12, 0.1)}
 
 
+const CAR_DMD := "res://assets/textures/racer/loading_car_dmd.png"   # D-241: the director's car, as dots
+static var _car_img: Image
+
+
 ## Calls put(x, y, colour) for every lit dot of the scene at time t.
 static func racer_scene(put: Callable, t: float) -> void:
+	if _car_img == null:
+		var tex := load(CAR_DMD) as Texture2D
+		if tex != null:
+			_car_img = tex.get_image()
+			if _car_img.is_compressed():
+				_car_img.decompress()
 	var lt := fmod(t, SCENE_LOOP)
 	for x in range(0, 128, 2):   # the kerb line
 		put.call(x, 29, Color(0.3, 0.3, 0.35))
-	var car_x := 80.0
+	var cw := _car_img.get_width() if _car_img != null else 46
+	var ch_ := _car_img.get_height() if _car_img != null else 14
+	var car_y := 29 - ch_
+	var car_x := 76.0
 	var lights := lt > 4.0
 	if lt > 4.6:   # pulling away, faster and faster
 		var d := lt - 4.6
 		car_x += d * d * 40.0
 		for k in 4:   # exhaust puffs
-			put.call(int(car_x) - 2 - k * 3 - int(fmod(lt * 20.0, 3.0)), 24 - k / 2, Color(0.55, 0.55, 0.6))
-	for r in CAR_SPRITE.size():
-		var row: String = CAR_SPRITE[r]
-		for c in row.length():
-			var ch := row[c]
-			if ch == ".":
-				continue
-			var col: Color = SCENE_COLS[ch]
-			if ch == "Y" and not lights:
-				col = Color(0.4, 0.38, 0.25)
-			if ch == "T" and not lights:
-				col = Color(0.5, 0.1, 0.1)
-			put.call(int(car_x) + c, 18 + r, col)
-	if lights:   # headlight beam
-		for k in range(1, 7):
-			put.call(int(car_x) + 39 + k, 23 - k / 3, Color(1.0, 0.95, 0.6, 0.6 - k * 0.08))
+			put.call(int(car_x) - 2 - k * 3 - int(fmod(lt * 20.0, 3.0)), car_y + ch_ - 3 - k / 2, Color(0.55, 0.55, 0.6))
+	if _car_img != null:
+		for r in ch_:
+			for c in cw:
+				var px := _car_img.get_pixel(c, r)
+				if px.a > 0.5:
+					put.call(int(car_x) + c, car_y + r, Color(px.r, px.g, px.b))
+	if lights:   # headlight at the nose, tail light at the back, a beam ahead
+		put.call(int(car_x) + cw - 1, car_y + 8, Color(1.0, 1.0, 0.85))
+		put.call(int(car_x) + cw - 2, car_y + 8, Color(1.0, 1.0, 0.85))
+		put.call(int(car_x), car_y + 6, Color(1.0, 0.15, 0.15))
+		put.call(int(car_x) + 1, car_y + 6, Color(1.0, 0.15, 0.15))
+		for k in range(1, 8):
+			put.call(int(car_x) + cw - 1 + k, car_y + 8 + k / 3, Color(1.0, 0.95, 0.6, 0.65 - k * 0.07))
 	# The driver walks in from the left to the door, then he's gone (in).
+	var door := int(car_x) + 20
 	if lt < 3.6:
-		var gx := -6.0 + minf(lt / 3.4, 1.0) * 98.0
+		var gx := -9.0 + minf(lt / 3.4, 1.0) * float(door - 7 + 9)
 		var walking := lt < 3.4
 		var stride := walking and fmod(lt, 0.3) < 0.15
 		var frame: Array = GUY_B if stride else GUY_A
@@ -103,10 +113,10 @@ static func racer_scene(put: Callable, t: float) -> void:
 			var row2: String = frame[r]
 			for c in row2.length():
 				if row2[c] != ".":
-					put.call(int(gx) + c, 19 + r + bob, SCENE_COLS[row2[c]])
+					put.call(int(gx) + c, 10 + r - bob, SCENE_COLS[row2[c]])   # feet on the kerb line
 	if lt >= 3.4 and lt < 3.9:   # the door swings open for him
-		for r in 4:
-			put.call(int(car_x) + 18 - r, 20 + r, Color(0.95, 0.12, 0.12))
+		for r in 5:
+			put.call(door - r / 2, car_y + 5 + r, Color(0.98, 0.78, 0.15))
 
 
 func _draw_racer() -> void:

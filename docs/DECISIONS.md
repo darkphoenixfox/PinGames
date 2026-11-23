@@ -2370,3 +2370,16 @@
 - **DMD:** the scene with LOADING at the top left (replaces D-238's racer DMD animation).
 - **TABLE:** the same scene as a big dot-matrix panel (128×32 dots at 7 px, unlit dots shown), between the logo and the track-to-flag progress bar (replaces D-238's road scene, which is kept in the code as `_draw_racer_road`).
 - **Status:** Accepted
+
+### D-241 — Turbo Run loading: the director's yellow car
+- **Date:** 2026-11-23
+- **Decision (director):** the guy walks to this car (the director's yellow supercar picture), DMD LED-styled.
+- **Sprite:** `scripts/tools/gen_loading_car.py` turns the picture into a 46×14 dot sprite (`loading_car_dmd.png`). It masks the white background and the grey ground shadow, area-averages to 46 dots and brightens a little for LEDs.
+- **Scene:** `racer_scene` draws the sprite dot by dot (replacing D-240's boxy red car). The lights come on at the nose and tail with a beam, the door opens about 20 dots in, and the puffs come from the back.
+- **Status:** Accepted
+
+### D-242 — Turbo Run loading: the driver to scale with the car
+- **Date:** 2026-11-23
+- **Decision (director):** the car was huge next to the person. Supercars are lower than a person, so make the car smaller or the person taller.
+- **Change:** the driver is redrawn at 9×19 dots (was 5×9). A person is about 1.8 m and a supercar about 1.25 m, and the car is 14 dots tall. He has two walk frames (legs apart with arms swinging, then passing), his feet are on the kerb line, and he walks to the door.
+- **Status:** Accepted
