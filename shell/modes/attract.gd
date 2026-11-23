@@ -21,6 +21,7 @@ func allows_operator_combo() -> bool:
 
 
 func enter() -> void:
+	portrait_only = false   # D-255
 	add_table(UI.fill(Color.BLACK))
 	add_backglass(UI.fill(Color.BLACK))
 	if Config.get_value("operator", "attract_sounds"):
@@ -72,8 +73,17 @@ func _title_page() -> void:
 	# Shell text in the shell's styled fonts (D-186); the games as their logos.
 	var col := UI.vstack(60)
 	col.add_child(UI.styled_label(tr("APP_TITLE"), UI.SHELL_TITLE_FONT, 3))
+	var land := Screens.table_base().x > Screens.table_base().y   # D-255: side by side
+	var list: BoxContainer = col
+	col.offset_top = Screens.dmd_cover()
+	if land:
+		col.add_theme_constant_override("separation", 24)
+		list = HBoxContainer.new()
+		list.alignment = BoxContainer.ALIGNMENT_CENTER
+		list.add_theme_constant_override("separation", 80)
+		col.add_child(list)
 	for id in Registry.ids():
-		col.add_child(_game_title(id, 380.0))
+		list.add_child(_game_title(id, 330.0 if land else 380.0))
 	col.add_child(UI.spacer(40))
 	_blink = UI.styled_label(tr("ATTRACT_PRESS_START"), UI.SHELL_TITLE_FONT, 2)
 	col.add_child(_blink)

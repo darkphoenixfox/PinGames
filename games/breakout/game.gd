@@ -189,6 +189,7 @@ const SOUNDS := {
 		{"f": [165.0, 165.0], "t": 0.16, "w": "pulse25", "v": 0.2}]]},
 }
 
+var _portrait_req := false   # D-255
 var sim: Sim
 var _root: Node3D
 var _cam: Camera3D
@@ -261,6 +262,9 @@ func get_info() -> Dictionary:
 
 
 func start(_players: int) -> void:
+	# D-255: the playfield is portrait: keep the 9:16 TABLE on a single screen.
+	_portrait_req = true
+	Screens.want_portrait_table(true)
 	for s in SOUNDS:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
 	sim = Sim.new()
@@ -1610,3 +1614,9 @@ func _update_backglass_lights(delta: float) -> void:
 	if Config.cli.has("tb-lights-on"):  # dev: hold every light group fully lit
 		lv = Vector4.ONE
 	_backglass_mat.set_shader_parameter("levels", lv)
+
+
+func _exit_tree() -> void:
+	if _portrait_req:
+		Screens.want_portrait_table(false)   # D-255
+	super._exit_tree()

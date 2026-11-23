@@ -42,17 +42,30 @@ func allows_operator_combo() -> bool:
 
 
 func enter() -> void:
+	portrait_only = false   # D-255: lays itself out for the TABLE's shape
+	if not Screens.table_shape_changed.is_connected(_on_shape):
+		Screens.table_shape_changed.connect(_on_shape)
 	_ids = [locked_game] if not locked_game.is_empty() else Registry.ids()
 	_index = clampi(_index, 0, _ids.size() - 1)
 	add_table(UI.fill(UI.DARK))
 	var col := UI.vstack(40)
 	add_table(col)
 	# Shell text in the shell's styled fonts (D-186): gold marquee titles, chrome headings.
-	col.add_child(UI.styled_label(tr("APP_TITLE"), UI.SHELL_TITLE_FONT, 3))
+	col.add_child(UI.styled_label(tr("APP_TITLE"), UI.SHELL_TITLE_FONT, 2 if Screens.table_base().x > Screens.table_base().y else 3))
 	col.add_child(UI.styled_label(tr("PICKER_TITLE") if locked_game.is_empty() else tr("PICKER_PLAY_AGAIN"),
 		UI.SHELL_TEXT_FONT, 1))
 	col.add_child(UI.spacer(10))
 	_labels.clear()
+	# Landscape (D-255): the games side by side.
+	var land := Screens.table_base().x > Screens.table_base().y
+	var list: BoxContainer = col
+	col.offset_top = Screens.dmd_cover()   # D-255: clear of the DMD over the top
+	if land:
+		col.add_theme_constant_override("separation", 18)
+		list = HBoxContainer.new()
+		list.alignment = BoxContainer.ALIGNMENT_CENTER
+		list.add_theme_constant_override("separation", 60)
+		col.add_child(list)
 	for id in _ids:
 		# A game's logo replaces its name in the list; otherwise its styled title.
 		var info := Registry.info(id)
@@ -65,12 +78,12 @@ func enter() -> void:
 			item = UI.styled_label(tr(info.title_key), font, 2)
 		else:
 			item = UI.label(tr(info.title_key), 78)
-		col.add_child(item)
+		list.add_child(item)
 		_labels.append(item)
-	col.add_child(UI.spacer(30))
+	col.add_child(UI.spacer(10 if land else 30))
 	_hiscore = UI.styled_label("", UI.SHELL_TEXT_FONT, 1)
 	col.add_child(_hiscore)
-	col.add_child(UI.spacer(60))
+	col.add_child(UI.spacer(10 if land else 60))
 	_credits = UI.styled_label("", UI.SHELL_TITLE_FONT, 1)
 	col.add_child(_credits)
 	# Windows Sticky/Filter Keys shortcuts can freeze the Shift flippers (D-070).
@@ -197,6 +210,19 @@ func _logo_rect(min_size: Vector2) -> TextureRect:
 	return r
 
 
+## The screen changed shape: build the picker again for it (D-255).
+func _on_shape() -> void:
+	if is_inside_tree():
+		Screens.table_shape_changed.disconnect(_on_shape)
+		shell.switch_to(get_script().new(locked_game, _index))
+
+
+func _exit_tree() -> void:
+	if Screens.table_shape_changed.is_connected(_on_shape):
+		Screens.table_shape_changed.disconnect(_on_shape)
+	super._exit_tree()
+
+
 func selected_index() -> int:
 	return _index
 
@@ -209,7 +235,11 @@ func _refresh() -> void:
 		var sel := i == _index
 		var item := _labels[i]
 		if item is TextureRect:
-			item.custom_minimum_size = LOGO_SELECTED if sel else LOGO_OTHER
+			var land := Screens.table_base().x > Screens.table_base().y
+			if land:   # D-255: smaller, they share the width
+				item.custom_minimum_size = Vector2(620, 440) if sel else Vector2(440, 320)
+			else:
+				item.custom_minimum_size = LOGO_SELECTED if sel else LOGO_OTHER
 		elif item is Label:
 			(item as Label).text = ("> %s <" if sel else "%s") % tr(Registry.info(_ids[i]).title_key)
 		item.modulate = Color.WHITE if sel else Color(0.45, 0.45, 0.5)

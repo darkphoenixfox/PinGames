@@ -26,6 +26,19 @@ const ROW_COLS := [Color("4fff7a"), Color("ffd23e"), Color("ff3b4f")]   # easy, 
 var selected := Sim.DEFAULT_CAR
 var hd := false        # set before build() (D-195)
 var nes := false       # 8-BIT palette (D-207), set before build()
+## D-255: landscape: the three cars side by side, each card under its car.
+var landscape := false
+const LAND_X := [-6.6, 0.0, 6.6]
+
+
+func _car_pos(i: int) -> Vector3:
+	if landscape:
+		return Vector3(float(LAND_X[i]), 0.0, 0.0)
+	return Vector3(CAR_X, float(ROW_Y[i]), 0.0)
+
+
+func _base() -> Vector2:
+	return Vector2(1920, 1080) if landscape else Vector2(1080, 1920)
 var _res := RES
 var _vp: SubViewport
 var _cam: Camera3D
@@ -43,6 +56,8 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_vp = SubViewport.new()
 	_res = HD_RES if hd else RES
+	if landscape:
+		_res = Vector2i(_res.y, _res.x)
 	_vp.size = _res
 	if hd:
 		_vp.msaa_3d = Viewport.MSAA_4X
@@ -79,7 +94,8 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 	_ring_mat_on = _ring_mat(Color(1.0, 0.82, 0.25), 2.0)
 	_ring_mat_off = _ring_mat(Color(0.35, 0.35, 0.45), 0.0)
 	for i in 3:
-		var y: float = ROW_Y[i]
+		var cp := _car_pos(i)
+		var y: float = cp.y
 		var table := MeshInstance3D.new()
 		var cyl := CylinderMesh.new()
 		cyl.top_radius = 2.7
@@ -90,7 +106,7 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 		tm.albedo_color = Color(0.22, 0.22, 0.28)
 		cyl.material = tm
 		table.mesh = cyl
-		table.position = Vector3(CAR_X, y - 0.09, 0)
+		table.position = Vector3(cp.x, y - 0.09, 0)
 		root.add_child(table)
 		var ring := MeshInstance3D.new()
 		var rc := CylinderMesh.new()
@@ -99,11 +115,11 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 		rc.height = 0.08
 		rc.radial_segments = 32
 		ring.mesh = rc
-		ring.position = Vector3(CAR_X, y - 0.16, 0)
+		ring.position = Vector3(cp.x, y - 0.16, 0)
 		root.add_child(ring)
 		_rings.append(ring)
 		var car: Node3D = make_car.call(float(Sim.CARS[i].hue), i)   # each car's own model (D-205)
-		car.position = Vector3(CAR_X, y, 0)
+		car.position = Vector3(cp.x, y, 0)
 		root.add_child(car)
 		_cars.append(car)
 	# Orthographic, looking down from the front: every row is seen from above
@@ -111,10 +127,11 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 	_cam = Camera3D.new()
 	_cam.keep_aspect = Camera3D.KEEP_WIDTH
 	_cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	_cam.size = 9.6
+	_cam.size = 21.0 if landscape else 9.6
 	_cam.position = Vector3(0, 7.0, 14.0)
 	root.add_child(_cam)
-	_cam.look_at(Vector3(0, -0.4, 0), Vector3.UP)
+	# Landscape: the cars in the upper half, the cards below them.
+	_cam.look_at(Vector3(0, -1.5 if landscape else -0.4, 0), Vector3.UP)
 	_cam.current = true
 	var view := TextureRect.new()
 	view.texture = _vp.get_texture()
@@ -125,17 +142,17 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 	if not hd:   # retro: the 16-bit palette/dither pass (HD shows the render as it is)
 		var post := ShaderMaterial.new()
 		post.shader = PIXEL_POST
-		post.set_shader_parameter("low_res", Vector2(RES))
+		post.set_shader_parameter("low_res", Vector2(_res))
 		post.set_shader_parameter("keep_alpha", true)
 		post.set_shader_parameter("nes", nes)
 		if nes:
-			post.set_shader_parameter("low_res", Vector2(RES) * 0.75)
+			post.set_shader_parameter("low_res", Vector2(_res) * 0.75)
 		view.material = post
 	add_child(view)
 	# Title + a stats card beside each car (fixed slots: nothing moves, D-096).
 	var title := UI.styled_label(tr("RC_CHOOSE_CAR"), title_font, 2)
 	title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	title.offset_top = 30
+	title.offset_top = 30 + (Screens.dmd_cover() if landscape else 0.0)   # D-255: clear of the DMD
 	add_child(title)
 	for i in 3:
 		_boxes.append(_stats_box(i))
@@ -179,9 +196,12 @@ func _stats_box(i: int) -> Control:
 	_stat_row(box, tr("RC_STAT_CLOCK"), time_pips(i), tr("RC_STAT_SECONDS") % roundi(float(spec.time)), col)
 	add_child(panel)
 	# Level with its turntable: centre the card on the car's row.
-	var mid := _cam.unproject_position(Vector3(CAR_X, float(ROW_Y[i]), 0.0))
+	var mid := _cam.unproject_position(_car_pos(i)) * (_base().y / _res.y)
 	var h := panel.get_combined_minimum_size().y
-	panel.position = Vector2(CARD_X, mid.y * (1920.0 / _res.y) - h * 0.5)
+	if landscape:   # under its car (D-255)
+		panel.position = Vector2(mid.x - CARD_W * 0.5, mid.y + 120.0)
+	else:
+		panel.position = Vector2(CARD_X, mid.y - h * 0.5)
 	return panel
 
 

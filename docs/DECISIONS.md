@@ -2533,3 +2533,14 @@
     - the tacho goes bottom left, gear and speedo bottom right;
     - the radar lights spread out to the sides, leaving the DMD's spot (the centre 1,040 px) clear.
 - **Status:** Accepted (slice 2 of 4)
+
+### D-255 — Single screen: every screen uses the screen's shape; smaller DMD in landscape
+- **Date:** 2026-11-23
+- **Bug (director):** the game still rendered with vertical intent: the menu and car select were vertical strips. Also, the DMD was too big and should be 50 % of its size.
+- **Default:** in the single layout the TABLE takes its area's shape by default (D-254). Tilt Breaker, whose playfield is portrait, asks for 9:16 (`Screens.want_portrait_table`) and gives it back on exit. Turbo Run applies its layout at start, since the shape may already be landscape when it begins.
+- **Shell:**
+  - **Picker and attract title page:** they lay themselves out for any shape (`portrait_only = false`). In landscape the game logos sit side by side, spacing is tighter, the title is smaller and the content starts below the DMD (`Screens.dmd_cover()`). The picker rebuilds itself if the shape changes.
+  - **Other modes** (operator menu, initials, the loading screen): built for 1080×1920, so `Mode.add_table` puts their nodes in a 1080×1920 frame, scaled to fit and centred.
+- **Car select (landscape):** the showroom renders landscape. The three turntables sit side by side, each stats card under its car, and the title below the DMD. It's in the 16:9 UI area.
+- **DMD (landscape):** a quarter of a 16:9 width, half its D-251 size. Portrait keeps it across the full width, as specified.
+- **Status:** Accepted

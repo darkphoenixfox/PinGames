@@ -267,9 +267,25 @@ func set_flexible(on: bool) -> void:
 	table_flex = on
 	if current_layout == "single" and is_instance_valid(_single_page):
 		_place_single(Vector2(get_window().size))
-	elif not on:
+	elif not on and table.size_2d_override != TABLE_BASE:
 		table.size_2d_override = TABLE_BASE
 		table_shape_changed.emit()
+
+
+## D-255: a game that needs the 9:16 TABLE (Tilt Breaker's portrait playfield).
+func want_portrait_table(on: bool) -> void:
+	if current_layout == "single":
+		set_flexible(not on)
+
+
+## D-255: how much of the TABLE's top the DMD covers (base px), 0 if it doesn't.
+func dmd_cover() -> float:
+	if current_layout != "single" or not table_flex:
+		return 0.0
+	var b := Vector2(table_base())
+	if b.y >= b.x:
+		return 0.0   # portrait: the DMD sits above the TABLE
+	return minf(b.x, b.y * 16.0 / 9.0) * 0.25 / (float(Dmd.size.x) / Dmd.size.y) + 10.0
 
 
 ## The TABLE's base size (its 2D coordinates): TABLE_BASE, or the flexible shape.
@@ -279,6 +295,7 @@ func table_base() -> Vector2i:
 
 func _setup_single() -> void:
 	table.size = TABLE_BASE
+	table_flex = true   # D-255: every screen takes the area's shape; 9:16 games ask
 	var root := get_window()
 	if not OS.has_feature("android"):
 		root.mode = Window.MODE_WINDOWED
@@ -392,8 +409,8 @@ func _place_single(win: Vector2) -> void:
 		t.position = Vector2(0, dh)
 		t.size = Vector2(win.x, win.y - dh)
 	else:
-		# Half the width of a 16:9 screen, centred at the top.
-		var dw := minf(win.x, win.y * 16.0 / 9.0) * 0.5
+		# A quarter of the width of a 16:9 screen, centred at the top (D-255: was half).
+		var dw := minf(win.x, win.y * 16.0 / 9.0) * 0.25
 		var dh := dw / ratio
 		d.position = Vector2((win.x - dw) * 0.5, 0)
 		d.size = Vector2(dw, dh)

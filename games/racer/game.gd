@@ -546,8 +546,8 @@ func start(_players: int) -> void:
 	# D-254: in the single-screen layout the TABLE takes the screen's shape.
 	if not Screens.table_shape_changed.is_connected(_on_table_shape):
 		Screens.table_shape_changed.connect(_on_table_shape)
-	_flex_req = true
-	Screens.set_flexible.call_deferred(true)
+	_on_table_shape.call_deferred()   # D-255: the TABLE may already have its shape
+
 	# Touch buttons (D-219): the magna saves are the brake and the shifter here.
 	get_tree().call_group("touch_controls", "set_labels", {&"magna_l": tr("TOUCH_BRAKE"), &"magna_r": tr("TOUCH_SHIFT")})
 	for s in SOUNDS:
@@ -1037,6 +1037,7 @@ func _begin_select() -> void:
 	_world_view.visible = false
 	_showroom = Showroom.new()
 	_showroom.hd = _gfx_hd
+	_showroom.landscape = _landscape()   # D-255: the cars side by side
 	_showroom.nes = _gfx_mode == "nes"
 	_add_ui(_showroom)
 	_showroom.selected = _chosen_car
@@ -1289,8 +1290,6 @@ func _low_res(mode: String) -> Vector2i:
 ## whole TABLE; landscape = a 1920x1080 area, centred (16:9 at most); car select
 ## = a 1080x1920 panel, centred (its art is portrait).
 func _ui_base() -> Vector2i:
-	if _phase == "select" and _landscape():
-		return Vector2i(1080, 1920)
 	if _landscape():
 		return Vector2i(1920, 1080)
 	return _table_base()
@@ -3248,8 +3247,7 @@ func _exit_tree() -> void:
 	get_tree().call_group("touch_controls", "set_labels", {})   # D-219
 	if Screens.table_shape_changed.is_connected(_on_table_shape):
 		Screens.table_shape_changed.disconnect(_on_table_shape)
-	if _flex_req:   # only the module that asked (others are made just for get_info)
-		Screens.set_flexible(false)   # D-254: the next game gets the 9:16 TABLE
+
 	# Take the tunnel reverb off the shared effects bus (D-127).
 	var bus := AudioServer.get_bus_index("SFX")
 	if _reverb != null and bus >= 0:
