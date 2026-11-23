@@ -675,7 +675,9 @@ func _new_sim() -> void:
 
 
 ## The player car's DMD dot sprite (D-243), or null for the plain dot car.
-const DMD_SPRITES := {SUPERCAR_MODEL: "res://assets/textures/racer/dmd_car_supercar.png"}
+const DMD_SPRITES := {SUPERCAR_MODEL: "res://assets/textures/racer/dmd_car_supercar.png",
+	CAR_MODEL: "res://assets/textures/racer/dmd_car_sports.png",
+	HOTHATCH_MODEL: "res://assets/textures/racer/dmd_car_sports.png"}   # D-244: red sports car (no hatch picture)
 static var _dmd_sprites := {}
 
 
@@ -688,6 +690,21 @@ func _dmd_sprite(model: String) -> Image:
 			img.decompress()
 		_dmd_sprites[model] = img
 	return _dmd_sprites[model]
+
+
+## The sprite in the car's paint (D-244): the same hue turn the 3D car gets,
+## on the painted (saturated) dots only, so windows and tyres stay as they are.
+func _painted(img: Image, hue: float) -> Image:
+	if img == null or is_zero_approx(hue):
+		return img
+	var out := img.duplicate() as Image
+	for y in out.get_height():
+		for x in out.get_width():
+			var c := out.get_pixel(x, y)
+			if c.a > 0.5 and c.s > 0.35:
+				c.h = fposmod(c.h + hue, 1.0)
+				out.set_pixel(x, y, c)
+	return out
 
 
 ## The song for stage k (D-226): one per MUSIC_STAGES stages; the last one goes
@@ -1018,7 +1035,7 @@ func _begin_race() -> void:
 	if is_instance_valid(_attract_ui):
 		_attract_ui.queue_free()
 	_build_body(CAR_MODELS[_chosen_car])   # the hot hatch for the easy car (D-205)
-	_anims.player_sprite = _dmd_sprite(CAR_MODELS[_chosen_car])   # D-243
+	_anims.player_sprite = _painted(_dmd_sprite(CAR_MODELS[_chosen_car]), _car_hue(_chosen_car))   # D-243, D-244
 	_phase = "race"
 	_phase_t = 0.0
 	_new_sim()

@@ -2391,3 +2391,10 @@
 - **Animations:** `DmdAnims.player_sprite`, set by the game at race start for the chosen car (`DMD_SPRITES`, by model), is drawn by `_player()`. It stands on the same ground row and is centred where the 13×5 dot car was. It's used in near miss, nitro, the crash approach, upright and upside-down crash poses, and the police fine; the police car stops a little further on, clear of it. The police car and other traffic keep their dot patterns.
 - **Pending:** the red sports car picture (for Normal and Easy) didn't reach disk. Until the director saves it, those cars keep the 13×5 dot car. Adding it is one `DMD_SPRITES` line plus the converter (with `--flip`, since it faces left).
 - **Status:** Accepted
+
+### D-244 — Turbo Run DMD: the red sports car sprite, in each car's paint
+- **Date:** 2026-11-23
+- **Decision (director):** the red sports car picture for the DMD animations (completing D-243).
+- **Sprite:** converted with `gen_loading_car.py ... 22 --flip` (it faces left) to `dmd_car_sports.png`, 22×7. It's used for Normal (the sports car) and Easy (the hot hatch, which has no side picture yet).
+- **Paint:** the chosen car's sprite takes its in-game paint (`_painted`). Saturated dots get the same hue turn as the 3D car (`_car_hue`: the car's hue plus the paint picked on car select), while windows and tyres stay. So Normal shows green, Hard yellow, Easy red, or whatever was picked.
+- **Status:** Accepted
