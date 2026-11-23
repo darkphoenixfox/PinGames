@@ -533,6 +533,12 @@ func _new_sim() -> void:
 	sim.time_left = sim.start_time()   # the car sets the clock (D-183)
 	sim.manual = _manual_locked or _seen_magna   # once detected, the next races keep it (D-189)
 	sim.autopilot = Config.cli.has("rc-autopilot")
+	if Config.cli.has("rc-stage"):  # dev: start at the beginning of stage N (D-204)
+		var n := maxi(1, int(str(Config.cli["rc-stage"])))
+		sim.checkpoints = n - 1
+		sim.s = (n - 1) * Sim.CHECKPOINT_EVERY + 150.0
+		sim.next_checkpoint = n * Sim.CHECKPOINT_EVERY
+		sim.track.ensure(sim.s + 1500.0)
 	if Config.cli.has("rc-time"):  # dev: short clock to test TIME UP
 		sim.time_left = float(str(Config.cli["rc-time"]))
 	for k in _chunks.keys():
@@ -1353,6 +1359,11 @@ func _prop_kind(o: Dictionary) -> String:
 	var h := int(absf(o.s * 7.13 + o.x * 3.1) * 10.0)
 	match o.kind:
 		"palm":
+			# Stage 2's grass fields have their own trees (D-204), mixing in over
+			# its first 300 m.
+			var into2: float = o.s - Sim.CHECKPOINT_EVERY
+			if into2 >= 0.0 and o.s < 2.0 * Sim.CHECKPOINT_EVERY and (h % 100) < into2 / 3.0:
+				return "tree_oak" if h % 3 != 0 else "tree_cypress"
 			return "palm_1" if h % 3 != 0 else "palm_2"
 		"bush":
 			return "bush_1" if h % 2 == 0 else "bush_2"
@@ -1362,6 +1373,8 @@ func _prop_kind(o: Dictionary) -> String:
 			return "sign_curve_l" if o.dir < 0.0 else "sign_curve"
 		"sign":
 			return "sign_green"
+		"house":   # beach stage (D-204): two beach houses and a surf shop
+			return ["house_1", "house_2", "house_3"][h % 3]
 	return o.kind
 
 
@@ -1596,11 +1609,15 @@ func _build_chunk(k: int) -> Node3D:
 		# Skirts (D-197): the ground strip's outer edges hang a steep slope far
 		# down into the fog, so on hills the edge never shows sky under it.
 		for j in cols:
+			# D-204: UV2.x carries the beach stage's weight to the road shader.
+			var bw := tr_.beach_w(s)
+			st.set_uv2(Vector2(bw, 0.0))
 			if j == 0 or j == cols - 1:
 				var edge: float = xs[0] if j == 0 else xs[xs.size() - 1]
 				var side := signf(edge)
 				var p := tr_.point(s, edge) + tr_.right(s) * side * SKIRT_OUT
-				p.y -= SKIRT_DROP
+				# The sea stays flat out to the horizon on the beach's left.
+				p.y -= SKIRT_DROP * (1.0 - bw if side < 0.0 else 1.0)
 				st.set_uv(Vector2(edge + side * SKIRT_OUT, s))
 				st.add_vertex(p)
 			else:

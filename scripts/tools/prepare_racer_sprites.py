@@ -34,6 +34,9 @@ SPRITES = {
     "gantry": 144,
     "nitro": 128,
     "speedtrap": 128,
+    # D-204: beach stage buildings and tower, stage 2 trees (HD cut-outs only)
+    "house_1": 132, "house_2": 192, "house_3": 120, "lifeguard": 156,
+    "tree_oak": 240, "tree_cypress": 288,
 }
 
 
@@ -102,7 +105,7 @@ def sprite_hd(name):
     img = cutout(Image.open(src))
     if name in HOLES:
         img = remove_grey_framed_holes(img)
-    if name.startswith(("bush", "palm")):
+    if name.startswith(("bush", "palm", "tree")):
         # Plants: drop the pale grey-white ground halo some generations leave
         # (low saturation, very light); signs keep their white arrows.
         px = img.load()

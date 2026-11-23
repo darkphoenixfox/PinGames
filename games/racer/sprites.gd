@@ -20,6 +20,14 @@ const KINDS := {
 	"gantry": ["gantry", 12.9, false, false, 151],
 	"nitro": ["nitro", 2.6, true, false, 126],               # pick-up (D-115)
 	"speedtrap": ["speedtrap", 8.0, true, false, 126],       # speed camera (D-135; oversized like the palms, D-137)
+	# Beach stage (D-204): small buildings on the right, a lifeguard tower on the sand.
+	"house_1": ["house_1", 5.5, true, false, 132],
+	"house_2": ["house_2", 8.0, true, false, 192],
+	"house_3": ["house_3", 5.0, true, false, 120],
+	"lifeguard": ["lifeguard", 6.5, true, false, 156],
+	# Grass fields, stage 2 (D-204): trees instead of palms.
+	"tree_oak": ["tree_oak", 10.0, true, false, 240],
+	"tree_cypress": ["tree_cypress", 12.0, true, false, 288],
 }
 
 static var _meshes := {}

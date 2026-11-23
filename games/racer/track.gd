@@ -27,7 +27,14 @@ const MAX_TURN := deg_to_rad(110.0)      # per curve section
 const MAX_HEADING := deg_to_rad(80.0)    # overall, from the start direction
 ## Roadside objects: [kind, collision radius]. Kinds are drawn by the view.
 const OBJ_RADIUS := {"palm": 0.6, "rock": 1.5, "chevron": 0.5, "lamp": 0.35, "gate": 0.0,
-	"bush": 0.0, "sign": 2.5, "gantry": 0.0, "speedtrap": 0.4}   # bushes are scenery: off-road stays as it was
+	"bush": 0.0, "sign": 2.5, "gantry": 0.0, "speedtrap": 0.4, "house": 0.0, "lifeguard": 0.0}
+## Beach stage (D-204): sand and sea on the left (with waves), a flat-ish road,
+## small buildings on the right, palms. Blends in and out over BEACH_BLEND m at
+## the stage's ends.
+const BEACH_STAGES := [1]   # the race starts on the beach (director, D-204)
+const BEACH_BLEND := 200.0
+const SHORE := ROAD_HALF + RUMBLE + 22.0   # m left of the centre line where the sea starts
+const SEA_LEVEL := -1.6                    # m below the road   # bushes are scenery: off-road stays as it was
 ## Roadside dressing (D-107): bushes line the road densely, green direction
 ## signs stand on straights, and an overhead gantry spans the road now and then.
 const SIGN_EVERY := Vector2(350.0, 650.0)
@@ -114,7 +121,9 @@ func _random_section() -> void:
 			len = maxf(60.0, (MAX_HEADING - absf(y)) / (absf(c) * 0.7))
 	var dh := 0.0
 	var hill := _rng.randf()
-	if hill < STEEP_CHANCE and _built_to > START_STRAIGHT + 300.0:
+	if beach_w(_built_to) > 0.0 or beach_w(_built_to + len) > 0.0:
+		dh = _rng.randf_range(-1.0, 1.0) * len * 0.015   # flat-ish along the beach (D-204)
+	elif hill < STEEP_CHANCE and _built_to > START_STRAIGHT + 300.0:
 		# Steep climb or drop (D-143): up to STEEP_GRADE average over a
 		# shorter section, so it reads as a proper hill.
 		len = minf(len, 260.0)
@@ -144,7 +153,7 @@ func _add_section(len: float, c: float, dh: float) -> void:
 		curv.append(ck)
 	var s0 := _built_to
 	_built_to = (pos.size() - 1) * SAMPLE
-	if absf(dh) <= (_built_to - s0) * TUNNEL_MAX_GRADE:
+	if absf(dh) <= (_built_to - s0) * TUNNEL_MAX_GRADE and beach_w(s0) <= 0.0 and beach_w(_built_to) <= 0.0:
 		_maybe_tunnel(s0, _built_to, c)
 	_place_objects(s0, _built_to)
 
@@ -173,6 +182,10 @@ func _place_props(s1: float) -> void:
 				_add_obj(s + 6.0, -side * (ROAD_HALF + _rng.randf_range(5.0, 14.0)), "palm")
 			_next_obj_s += 18.0
 			continue
+		if beach_w(s) > 0.5:
+			_place_beach(s)
+			_next_obj_s += _rng.randf_range(22.0, 34.0)
+			continue
 		for side in [-1.0, 1.0]:
 			var r := _rng.randf()
 			var off := ROAD_HALF + _rng.randf_range(3.5, 16.0)
@@ -185,12 +198,32 @@ func _place_props(s1: float) -> void:
 		_next_obj_s += _rng.randf_range(22.0, 34.0)
 
 
+## Beach dressing (D-204): palms on the sand by the road (and now and then a
+## lifeguard tower near the water), small buildings with palms between them
+## on the right, lamps along the promenade.
+func _place_beach(s: float) -> void:
+	if _rng.randf() < 0.6:
+		_add_obj(s + _rng.randf_range(0.0, 8.0), -(ROAD_HALF + RUMBLE + _rng.randf_range(3.0, 12.0)), "palm")
+	if _rng.randf() < 0.07:
+		_add_obj(s + 4.0, -(SHORE - 4.0), "lifeguard")
+	var r := _rng.randf()
+	if r < 0.45:
+		_add_obj(s + _rng.randf_range(0.0, 6.0), ROAD_HALF + RUMBLE + _rng.randf_range(16.0, 26.0), "house")
+	elif r < 0.8:
+		_add_obj(s + _rng.randf_range(0.0, 8.0), ROAD_HALF + RUMBLE + _rng.randf_range(4.0, 12.0), "palm")
+	if _rng.randf() < 0.3:
+		_add_obj(s, ROAD_HALF + 2.5, "lamp")
+
+
 ## Bushes, signs and gantries (D-107); _place_objects re-sorts afterwards.
 func _place_dressing(s1: float) -> void:
 	while _next_bush_s < s1:
 		var s := _next_bush_s
+		var bw := beach_w(s)
 		for side in [-1.0, 1.0]:
-			if _rng.randf() < 0.7:
+			# On the beach (D-204): no bushes on the sand, fewer on the right.
+			var chance := 0.7 * (1.0 - bw) if side < 0.0 else 0.7 * (1.0 - bw * 0.6)
+			if _rng.randf() < chance:
 				_add_obj(s + _rng.randf_range(0.0, 6.0),
 					side * (ROAD_HALF + RUMBLE + _rng.randf_range(2.2, 6.5)), "bush")
 		_next_bush_s += _rng.randf_range(9.0, 16.0)
@@ -324,7 +357,39 @@ func right(s: float) -> Vector3:
 
 ## Point on the road surface at distance s, lateral offset x (+ height above).
 func point(s: float, x: float, up: float = 0.0) -> Vector3:
-	return center(s) + right(s) * x + Vector3(0.0, up + terrain_rise(x), 0.0)
+	return center(s) + right(s) * x + Vector3(0.0, up + ground_rise(s, x), 0.0)
+
+
+## 0..1: how much of the beach stage's look applies at s (D-204).
+func beach_w(s: float) -> float:
+	if avoid_every <= 0.0:
+		return 0.0
+	var w := 0.0
+	for st in BEACH_STAGES:
+		var a: float = (st - 1) * avoid_every
+		var b: float = st * avoid_every
+		# The first stage starts fully on the beach (no blend in from s = 0).
+		var into := 1.0 if a <= 0.0 else clampf((s - a) / BEACH_BLEND, 0.0, 1.0)
+		var k := into * clampf((b - s) / BEACH_BLEND, 0.0, 1.0)
+		w = maxf(w, k * k * (3.0 - 2.0 * k))
+	return w
+
+
+## Ground height beside the road at s: the embankments, or on the beach the sand
+## dipping to the sea on the left and a gentle rise on the right (D-204).
+func ground_rise(s: float, x: float) -> float:
+	var base := terrain_rise(x)
+	var w := beach_w(s)
+	if w <= 0.0:
+		return base
+	var beach := 0.0
+	var d := absf(x) - (ROAD_HALF + RUMBLE)
+	if x < 0.0:
+		if d > 0.0:
+			beach = SEA_LEVEL * clampf(d / (SHORE - ROAD_HALF - RUMBLE), 0.0, 1.0)
+	else:
+		beach = base * 0.25
+	return lerpf(base, beach, w)
 
 
 ## Ground rises gently away from the road (embankments), 0 on the road.

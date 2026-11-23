@@ -1900,3 +1900,16 @@
 - **Catch-up:** a new chase starts with the police capped at `POLICE_CATCH_TOP` (105 %) of the car's top speed, closing at up to 16 m/s over the player (`CHASE_CLOSE`), and the escape count held at 0. It ends (`police.caught`) the first time the police gets within `CAUGHT_GAP` (25 m), or after `CATCH_UP_MAX` (25 s) so a long nitro run can't make it unshakeable. After that D-201 applies: 95 % top speed, and 120 m held for 4 s loses it (D-200).
 - **Tests:** a fresh chase on a car flat out isn't lost in 8 s and the police gains more than 10 m. The escape test starts with a police car that has already caught up.
 - **Status:** Accepted (amends D-200, D-201)
+
+### D-204 — Turbo Run beach stage (stage 1) and stage 2 trees
+- **Date:** 2026-11-23
+- **Decision (director):** a beach stage: sand and sea on one side with moving waves, a flat-ish road, small buildings on the other side, palm trees. Then: the beach is stage 1, before the change to grass fields, and stage 2 gets different trees.
+- **Beach weight:** `Track.beach_w(s)` is 0..1 per stage in `BEACH_STAGES` (`[1]`). Stage 1 starts at 1, and the beach blends out over the last 200 m (`BEACH_BLEND`). Other beach stages would blend in and out at both ends.
+- **Ground:** `Track.ground_rise(s, x)` replaces the plain embankment in `point()`. On the beach the left side dips from the kerb to the sea (`SEA_LEVEL` −1.6 m, reached at `SHORE` 30.7 m from the centre) and the right side keeps a quarter of the embankment. The left skirt stays flat at sea level, so the sea runs to the horizon.
+- **Road:** sections that touch the beach get gentle grades (±1.5 %), no steep hills and no tunnels.
+- **Water** (`road.gdshader`, beach weight in UV2.x): sand, then wet sand, then a sea from shallow turquoise to deep blue over 60 m. Foam lines roll in, broken up along the shore, the waterline washes in and out (±0.9 m), there's surf at the edge and glints on the water. The right side is sand, then sandy grass.
+- **Dressing:** palms on the sand by the road; a lifeguard tower near the water now and then; on the right, small buildings (blue cottage, pink villa, surf shop) at 16–26 m from the edge with palms between; lamps along the promenade. No bushes on the sand, and fewer on the right.
+- **Stage 2:** palms become oaks and cypresses, mixing in over its first 300 m.
+- **Art:** the 4 beach sprites and 2 trees, from Qwen-Image 2.1 in the D-196 painted style (two candidates each, picks copied to `gen_hd/<name>.png`), cut by `prepare_racer_sprites.py --hd` and drawn by `sprite.gdshader` (HD, or RETRO pixelated).
+- **Dev:** `--rc-stage=N` starts the race at the beginning of stage N.
+- **Status:** Accepted

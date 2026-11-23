@@ -7,6 +7,20 @@ render_mode cull_disabled;
 
 uniform float road_half = 7.5;
 uniform bool hd = false;   // D-195: HD graphics: no 25 cm texels, finer grain
+// D-204 beach stage (UV2.x = its weight, from the track): sand down to the
+// sea on the left (SHORE m from the centre), then water with rolling foam
+// lines and a moving waterline; light sandy grass on the right.
+uniform float shore = 30.7;
+uniform vec3 wet_sand : source_color = vec3(0.72, 0.6, 0.42);
+uniform vec3 shallow : source_color = vec3(0.25, 0.78, 0.8);
+uniform vec3 deep : source_color = vec3(0.05, 0.3, 0.62);
+uniform vec3 foam : source_color = vec3(0.95, 0.98, 1.0);
+uniform vec3 dune_grass : source_color = vec3(0.62, 0.66, 0.35);
+varying float beach;
+
+void vertex() {
+	beach = UV2.x;
+}
 uniform float rumble = 1.2;
 uniform vec3 asphalt_a : source_color = vec3(0.36, 0.36, 0.4);
 uniform vec3 asphalt_b : source_color = vec3(0.32, 0.32, 0.36);
@@ -41,6 +55,37 @@ void fragment() {
 		col = mix(grass_a, grass_b, band);
 	}
 	col *= 0.92 + 0.08 * hash(hd ? floor(UV * 24.0) : m);
+	if (beach > 0.001 && x >= road_half + rumble) {
+		vec3 b;
+		if (m.x < 0.0) {
+			// Left: sand, wet sand, then the sea (dist = metres out to sea).
+			float wl = shore + 0.9 * sin(TIME * 1.3 + sv * 0.04);   // the waterline washes in and out
+			float dist = x - wl;
+			if (dist < -2.0) {
+				b = mix(sand_a, sand_b, band) * (0.92 + 0.08 * hash(m));
+			} else if (dist < 0.0) {
+				b = wet_sand;
+			} else {
+				b = mix(shallow, deep, smoothstep(0.0, 60.0, dist));
+				// Foam lines rolling in towards the beach, broken up along the shore.
+				float wave = fract(dist * 0.06 + TIME * 0.22 + 0.15 * sin(sv * 0.03));
+				float broken = step(0.35, hash(floor(vec2(dist * 0.06 + TIME * 0.22, sv / 6.0))));
+				if (wave < 0.07 && dist < 45.0 && broken > 0.5) {
+					b = mix(b, foam, 0.85);
+				}
+				if (dist < 1.4) {
+					b = foam;   // surf at the waterline
+				}
+				// Glints on the water.
+				if (hash(floor(vec2(x * 2.0, sv * 2.0)) + floor(TIME * 3.0)) > 0.985) {
+					b = mix(b, foam, 0.6);
+				}
+			}
+		} else {
+			b = x < road_half + rumble + 3.0 ? mix(sand_a, sand_b, band) : mix(dune_grass, grass_b, 0.25 + 0.2 * band);
+		}
+		col = mix(col, b, beach);
+	}
 	ALBEDO = col;
 	ROUGHNESS = 0.92;
 	SPECULAR = 0.2;

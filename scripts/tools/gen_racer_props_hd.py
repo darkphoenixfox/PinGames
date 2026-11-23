@@ -26,6 +26,18 @@ PROPS = {
                    "on a single grey metal pole", 768, 1024),
     "sign_green": ("a wide rectangular green highway direction sign with a white border and two white arrows "
                    "pointing down and to the left, on two grey metal posts, no text", 1024, 768),
+    # Beach stage (D-204): small buildings along the road, a lifeguard tower on the sand.
+    "house_1": ("a small pastel blue single-storey beach house with a flat roof, a wooden porch and white "
+                "window frames, seen from the front", 1024, 768),
+    "house_2": ("a small pastel pink and white two-storey beach villa with a red tiled roof and a balcony, "
+                "seen from the front", 1024, 768),
+    "house_3": ("a small colourful wooden surf shop shack with surfboards leaning against the front wall and a "
+                "striped awning, no text, seen from the front", 1024, 768),
+    "lifeguard": ("a wooden lifeguard tower on tall stilts with a small hut, red and white, a ramp up to it, "
+                  "seen from the front", 768, 1024),
+    # Grass-fields stage 2 trees (D-204): instead of palms.
+    "tree_oak": ("a big round leafy green deciduous oak tree with a thick brown trunk and a full rounded crown", 768, 1024),
+    "tree_cypress": ("a tall slim dark green italian cypress tree, narrow and pointed, with a short trunk", 768, 1024),
     "gantry": ("an overhead highway sign gantry: a grey steel truss beam on two tall steel posts holding two "
                "square green highway signs, each with a white arrow pointing up, no text", 1024, 768),
 }
