@@ -2720,3 +2720,11 @@
 - **Cause:** with additive blending the shader's light was colour × a × alpha (= a), so the resting glow came out squared: 10 % showed as 1 % (and 5 % as 0.25 %).
 - **Fix:** the shader writes its light straight, with alpha 1. A hit keeps exactly its old look (2.5 × a × a), and the resting glow is `idle` (10 %) of the shield colour.
 - **Status:** Accepted
+
+### D-275 — Tilt Breaker: the ship enters each level centred; no drop of the power-up you have
+- **Date:** 2026-11-23
+- **Decisions (director):** the paddle always flies into the horizontal centre of the level, and the power-up you currently have can't spawn again.
+- **Ship:** the level-clear outro glided the ship to the centre only in the view, while the sim kept its old position, so the next level's ship rose in where the last one had been. `Sim.next_level` now puts the paddle in the field's centre, standing still.
+- **Power-ups:** drops pick from every kind except the active one (`random_powerup_kind`). With none active, all six can drop.
+- **Test:** covers both.
+- **Status:** Accepted

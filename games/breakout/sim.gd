@@ -251,6 +251,9 @@ func next_level() -> void:
 	powerups.clear()
 	_end_powerup()
 	extra_balls.clear()
+	# D-275: the ship always rises into the middle of the new level.
+	paddle_x = FIELD.get_center().x
+	paddle_vx = 0.0
 	_reset_serve()
 
 
@@ -522,7 +525,7 @@ func _damage_brick(i: int) -> bool:
 	events.append(["brick", i])
 	_broken_count += 1
 	if _broken_count % POWERUP_EVERY == 0 and randf() < POWERUP_CHANCE and bricks_alive() > 0:
-		spawn_powerup(POWERUP_KINDS[randi() % POWERUP_KINDS.size()], b.rect.get_center())
+		spawn_powerup(random_powerup_kind(), b.rect.get_center())
 	if bricks_alive() == 0:
 		score += RACK_BONUS
 		# Level complete (D-068): every enemy left explodes; play pauses until
@@ -709,6 +712,12 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 
 # --- power-ups (D-072) ------------------------------------------------------------------
 ## Spawns a falling power-up capsule (public for tests / debug).
+## D-275: any power-up but the one the ship already has.
+func random_powerup_kind() -> String:
+	var kinds: Array = POWERUP_KINDS.filter(func(k): return k != powerup)
+	return kinds[randi() % kinds.size()]
+
+
 func spawn_powerup(kind: String, pos: Vector2) -> int:
 	var id := _next_powerup_id
 	_next_powerup_id += 1

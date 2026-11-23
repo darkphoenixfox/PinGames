@@ -301,6 +301,17 @@ func test_breakout_difficulty(Sim) -> void:
 	for i in 20:
 		cb.step(1.0 / 60.0, false, false, false, 0)
 	check(cb.state == Sim.State.PLAY and cb.blast_charge > 0.0, "the charge button charges the shot (%.2f)" % cb.blast_charge)
+	# D-275: never the power-up you have; the ship enters the next level centred.
+	var pw = Sim.new()
+	pw.setup(3)
+	pw.powerup = "L"
+	var same := false
+	for i in 300:
+		same = same or pw.random_powerup_kind() == "L"
+	pw.paddle_x = 3.0
+	pw.next_level()
+	check(not same and is_equal_approx(pw.paddle_x, Sim.FIELD.get_center().x),
+		"no drop of the power-up you have; the ship starts a level in the centre")
 	n.set_difficulty("hard", 3)
 	check(n.balls_left == 2 and n.balls_total == 2 and n.ball_speed == 10.0 and n.level == 1, "picking later keeps the level")
 
