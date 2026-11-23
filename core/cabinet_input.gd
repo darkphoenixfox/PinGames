@@ -32,7 +32,7 @@ const DEFAULT_BINDINGS := {
 
 ## D-256: the single-screen version's gamepad (director): D-pad and left stick
 ## move in menus (the flipper actions; in the race the stick steers analog,
-## D-252), Cross accepts, Circle goes back, Start is START; L1 brakes and R1
+## D-252), Cross accepts, Circle goes back, Start quits (D-257); L1 brakes and R1
 ## shifts (the magna actions); R2 is the analog accelerator (read directly).
 ## Replaces the pad bindings (keys stay) when the layout is "single".
 const SINGLE_PAD := {
@@ -41,9 +41,9 @@ const SINGLE_PAD := {
 	"magna_l": ["joy:9"],
 	"magna_r": ["joy:10"],
 	"launch": ["joy:0"],
-	"start": ["joy:6"],
+	"start": [],
 	"coin": [],
-	"exit": ["joy:1"],
+	"exit": ["joy:1", "joy:6"],   # D-257: Start quits (as does Circle)
 }
 
 ## Emitted on focus loss/gain (D-069), e.g. for the input monitor.

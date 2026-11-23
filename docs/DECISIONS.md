@@ -2565,3 +2565,13 @@
 - **Race:** the stick's analog steering (D-252) overrides the flipper actions it also drives. Using L1, R1 or R2 switches to the 4-button controls (own brake and shifter, D-189).
 - **Cabinet layouts:** unchanged (D-019).
 - **Status:** Accepted
+
+### D-257 — Single screen gamepad: Start quits
+- **Date:** 2026-11-23
+- **Bug (director):** there was no way to quit the game; it should be Start.
+- **Change:** in `SINGLE_PAD` the Start/Options button (6) is now on EXIT, alongside Circle.
+  - In a game it quits to the menu.
+  - On the menu it asks to quit the app (Cross confirms).
+  - Held, it opens the operator menu, as EXIT does.
+- **START action:** no pad button now. Cross plays from the menu, so nothing needs it.
+- **Status:** Accepted
