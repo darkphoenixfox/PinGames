@@ -2461,3 +2461,27 @@
   - **Shader:** `car.gdshader` draws the rim picture over each wheel's rim circle on the outward-facing sides, turned by `wheel_phase`. The model's own tyre, wheel arch and body stay untouched. The D-249 vertex rotation is removed, along with the old axle uniforms.
   - **Who turns:** the player's car, the police car (D-246/248 rate) and now every traffic car and truck, each at its own speed (capped by `WHEEL_MAX`).
 - **Status:** Accepted
+
+### D-251 — Single-screen version (Android and PC), slice 1: layout
+- **Date:** 2026-11-23
+- **Decision (director):** a version for Android and PC on one screen (the TABLE, with the DMD at the top of the game area), gamepad support with analog controls, and an Android touch overlay.
+- **Director's answers:**
+  - Same codebase, as a new layout mode.
+  - No backglass.
+  - **Portrait:** the DMD side to side (no black bars), the game filling the rest, touch controls at the bottom.
+  - **Landscape:** the game fills the monitor, the DMD centred at the top at about 50 % of a 16:9 screen, and the TABLE UI (timer, radar...) at the sides. On 32:9 screens the game fills the monitor but the UI stays within 16:9.
+  - **Racer analog:** stick steers, R2 gas, L2 brake.
+  - **Touch:** translucent buttons over the game.
+- **Slices:**
+  1. the layout (this entry);
+  2. the game area taking the screen's shape (Turbo Run landscape-native, HUD at the sides);
+  3. analog gamepad;
+  4. the touch overlay finished.
+- **Slice 1:**
+  - **Layout:** `Screens` layout `single`. Android uses it; PC chooses SINGLE SCREEN in the operator menu (LAYOUT), or `--single-preview` (with `--single-portrait` for a tall window).
+  - **Portrait:** the DMD across the full width (128:32), the TABLE in the rest.
+  - **Landscape:** the DMD centred at the top at half of a 16:9 width, the TABLE in the rest.
+  - **Fit:** the TABLE keeps its 9:16 shape for now, so it's fitted until slice 2.
+  - **Touch:** the touch buttons are a translucent bar along the bottom of the screen over the game (`TouchControls.overlay`). They're hidden while a gamepad is connected, and the layout rebuilds when one is plugged in or out.
+  - **Web:** the browser build keeps its `web` layout (D-173).
+- **Status:** Accepted (slice 1 of 4)

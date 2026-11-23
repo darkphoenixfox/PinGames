@@ -59,7 +59,7 @@ func setup(layout_name: String) -> void:
 	current_layout = layout_name
 	var sink := str(Config.get_value("display", "dmd_sink"))
 	dmd_in_backglass = sink != "hardware" and (layout_name == "2screen" or sink == "backglass")
-	if layout_name == "vr" or layout_name == "web":
+	if layout_name == "vr" or layout_name == "web" or layout_name == "single":
 		dmd_in_backglass = false   # VR head / web page show their own DMD panel (D-164, D-173)
 	if is_headless():
 		print("Screens: headless, layout '%s' not shown" % layout_name)
@@ -69,6 +69,8 @@ func setup(layout_name: String) -> void:
 			_setup_vr()
 		"web":
 			_setup_web()
+		"single":
+			_setup_single()
 		"3screen":
 			_setup_cabinet(false)
 		"2screen":
@@ -239,6 +241,131 @@ func _web_dmd() -> Control:
 	box.ratio = float(Dmd.size.x) / Dmd.size.y
 	box.add_child(d)
 	return box
+
+
+# --- single screen: Android and PC (D-251) --------------------------------------
+## One screen, no backglass. Portrait: the DMD across the full width at the top,
+## the TABLE filling the rest, the touch overlay at the bottom over it.
+## Landscape: the DMD centred at the top (half the width of a 16:9 screen), the
+## TABLE filling the rest. Touch controls (when wanted and no gamepad is
+## connected) are translucent buttons over the game.
+var _single_page: Control
+var _single_portrait := -1
+var _single_touch_on := false
+var _single_table: Control
+var _single_dmd: Control
+var _single_bar: Control
+
+
+func _setup_single() -> void:
+	table.size = TABLE_BASE
+	var root := get_window()
+	if not OS.has_feature("android"):
+		root.mode = Window.MODE_WINDOWED
+		root.title = "PinGames"
+		var mon := _clamp_monitor(int(Config.get_value("display", "windowed_monitor")))
+		var area := DisplayServer.screen_get_usable_rect(mon)
+		var want := Vector2i(1280, 720)
+		if Config.cli.has("single-portrait"):
+			want = Vector2i(450, 960)
+		root.size = Vector2i(mini(want.x, area.size.x - 40), mini(want.y, area.size.y - 80))
+		root.position = area.position + (area.size - root.size) / 2
+	_single_page = Control.new()
+	_single_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_single_page.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_single_page)
+	_outputs.append(_single_page)
+	_single_portrait = -1
+	_single_layout()
+	if not root.size_changed.is_connected(_single_layout):
+		root.size_changed.connect(_single_layout)
+	if not Input.joy_connection_changed.is_connected(_on_joy_changed):
+		Input.joy_connection_changed.connect(_on_joy_changed)
+
+
+func _on_joy_changed(_device: int, _connected: bool) -> void:
+	if current_layout == "single":
+		_single_portrait = -1   # rebuild: a gamepad hides the touch overlay
+		_single_layout()
+
+
+func _single_layout() -> void:
+	if not is_instance_valid(_single_page):
+		return
+	var win := Vector2(get_window().size)
+	var portrait := 1 if win.y > win.x else 0
+	var touch := TouchControls.wanted() and Input.get_connected_joypads().is_empty()
+	if portrait == _single_portrait and touch == _single_touch_on:
+		_place_single(win)
+		return
+	_single_portrait = portrait
+	_single_touch_on = touch
+	for c in _single_page.get_children():
+		_single_page.remove_child(c)   # gone now, not at the end of the frame
+		c.queue_free()
+	_touch = null
+	_single_bar = null
+	var bg := ColorRect.new()
+	bg.color = Color.BLACK
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_single_page.add_child(bg)
+	var t := ScreenView.new()
+	t.name = "Table"
+	t.texture = table.get_texture()
+	_single_page.add_child(t)
+	_single_table = t
+	var d := _web_dmd()
+	d.name = "Dmd"
+	_single_page.add_child(d)
+	_single_dmd = d
+	if touch:
+		_touch = TouchControls.new()
+		_touch.table_view = t
+		_touch.overlay = true
+		_single_page.add_child(_touch)
+		var bar := HBoxContainer.new()
+		bar.name = "TouchBar"
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar.add_child(_touch.left)
+		var gap := Control.new()
+		gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar.add_child(gap)
+		bar.add_child(_touch.right)
+		_single_page.add_child(bar)
+		_single_bar = bar
+		_single_page.add_child(_touch.toggle)
+	_place_single(win)
+
+
+## Positions the DMD, the TABLE and the touch overlay for the window size.
+func _place_single(win: Vector2) -> void:
+	var d := _single_dmd
+	var t := _single_table
+	if not is_instance_valid(d) or not is_instance_valid(t):
+		return
+	var ratio := float(Dmd.size.x) / Dmd.size.y
+	if win.y > win.x:
+		var dh := win.x / ratio
+		d.position = Vector2.ZERO
+		d.size = Vector2(win.x, dh)
+		t.position = Vector2(0, dh)
+		t.size = Vector2(win.x, win.y - dh)
+	else:
+		# Half the width of a 16:9 screen, centred at the top.
+		var dw := minf(win.x, win.y * 16.0 / 9.0) * 0.5
+		var dh := dw / ratio
+		d.position = Vector2((win.x - dw) * 0.5, 0)
+		d.size = Vector2(dw, dh)
+		t.position = Vector2(0, dh)
+		t.size = Vector2(win.x, win.y - dh)
+	var bar := _single_bar
+	if is_instance_valid(bar) and is_instance_valid(_touch):
+		_touch.fit(win)
+		var bh := win.y * (0.42 if win.y > win.x else 0.6)
+		bar.position = Vector2(0, win.y - bh)
+		bar.size = Vector2(win.x, bh)
 
 
 # --- vr: a 3D cabinet with the screens on it (D-164) ----------------------------

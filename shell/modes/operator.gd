@@ -158,8 +158,8 @@ func _display_items() -> Array:
 	var rot := [0, 90, 180, 270]
 	var rot_labels := ["0", "90", "180", "270"]
 	return [
-		_pending("OP_LAYOUT", "layout", ["windowed", "2screen", "3screen"],
-			[tr("LAYOUT_WINDOWED"), tr("LAYOUT_2SCREEN"), tr("LAYOUT_3SCREEN")]),
+		_pending("OP_LAYOUT", "layout", ["windowed", "2screen", "3screen", "single"],
+			[tr("LAYOUT_WINDOWED"), tr("LAYOUT_2SCREEN"), tr("LAYOUT_3SCREEN"), tr("LAYOUT_SINGLE")]),
 		_pending("OP_TABLE_MONITOR", "table_monitor", mons, mon_labels),
 		_pending("OP_TABLE_ROTATION", "table_rotation", [-1] + rot, [tr("VAL_AUTO")] + rot_labels),
 		_pending("OP_BACKGLASS_MONITOR", "backglass_monitor", mons, mon_labels),

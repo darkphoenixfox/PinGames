@@ -46,6 +46,12 @@ var toggle := Button.new()
 var _toggle_space := Control.new()
 var _left_space := Control.new()   # the same height on the left (D-220)
 var table_view: Control  # touches on its halves work the flippers
+## D-251: over the game (single-screen layout): more see-through buttons.
+var overlay := false:
+	set(v):
+		overlay = v
+		for act in _buttons:
+			_style(act, false)
 var _buttons := {}        # action -> Panel
 var _fingers := {}        # pointer index -> action held by it
 var _font_px := 24
@@ -164,6 +170,9 @@ func _style(action: StringName, down: bool) -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(c, 0.75) if down else Color(c.darkened(0.6), 0.55)
 	sb.border_color = c.lightened(0.3) if down else Color(c, 0.8)
+	if overlay:
+		sb.bg_color = Color(c, 0.45) if down else Color(c.darkened(0.4), 0.18)
+		sb.border_color = Color(c.lightened(0.3), 0.85) if down else Color(c, 0.45)
 	sb.set_border_width_all(3)
 	sb.set_corner_radius_all(18)
 	(_buttons[action] as Panel).add_theme_stylebox_override("panel", sb)
