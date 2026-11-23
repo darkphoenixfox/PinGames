@@ -38,8 +38,7 @@ func set_state(lvl: float, fl: bool) -> void:
 ## balls evenly spaced on each side out to the screen edges. No housing.
 func _draw() -> void:
 	var c := size * 0.5
-	draw_rect(Rect2(c - BLOCK * 0.5, BLOCK), Color(0.0, 0.0, 0.0))
-	draw_rect(Rect2(c - BLOCK * 0.5, BLOCK), Color(0.3, 0.3, 0.35), false, 2.0)
+	# D-215: no black block in the middle any more; the balls keep their spacing.
 	var inner := BLOCK.x * 0.5 + R + 14.0
 	var outer := size.x * 0.5 - R - 10.0
 	var lit := ceili(level * BALLS) if level > 0.0 else 0

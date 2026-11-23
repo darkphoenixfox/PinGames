@@ -2027,3 +2027,10 @@
   - **Ducking:** while it sounds, the engine and wind dip by `HORN_DUCK_DB` 6 dB.
   - The tone, Doppler and synthesis are unchanged.
 - **Status:** Accepted
+
+### D-215 — Turbo Run radar: no black block; dry beeps in tunnels
+- **Date:** 2026-11-23
+- **Decision (director):** remove the radar's black square. The radar beeps shouldn't get the tunnel reverb, because the detector is inside the car.
+- **Bar:** the black block between the blue and red balls is gone (supersedes that part of D-137/D-139). The balls keep their spacing, leaving a gap in the middle.
+- **Beep:** it plays on its own player on an `SFXDry` bus, which sends straight to Master and copies the SFX bus's volume and mute at each beep. The tunnel reverb sits on the SFX bus (D-127), so it no longer touches the beep. `Audio.sfx` isn't used for it, so the shared player pool keeps its buses.
+- **Status:** Accepted

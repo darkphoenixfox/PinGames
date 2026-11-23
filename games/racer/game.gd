@@ -175,6 +175,7 @@ const BLINKERS := {
 	"truck": [Vector3(-1.3, 0.9, -4.95), Vector3(-1.2, 1.1, 4.95)],
 	"truck2": [Vector3(-1.4, 0.9, -4.95), Vector3(-1.3, 1.1, 4.95)],
 }
+const DRY_BUS := "SFXDry"   # D-215: effects that stay dry in tunnels
 ## Lamp areas per model for car.gdshader (model space, |x|; D-144). The red
 ## car uses the shader defaults.
 const LAMP_BOXES := {
@@ -406,6 +407,7 @@ var _tunnel_k := 0.0        # 0 outside .. 1 inside a tunnel (D-127)
 var _tunnel_shown := -1.0
 var _lamps := 0.0           # car lights level: max(night, tunnel)
 var _reverb: AudioEffectReverb
+var _radar_player: AudioStreamPlayer   # D-215: dry, no tunnel reverb (it's inside the car)
 var _sky_mat: ShaderMaterial     # the procedural sky (D-193)
 var _player_lights: Node3D
 var _flame_mats: Array = []
@@ -1625,7 +1627,7 @@ func _update_radar(delta: float) -> void:
 		if _radar_beep_t <= 0.0:
 			_radar_beep_t = lerpf(1.1, 0.09, sim.radar)
 			_radar_led = minf(0.07, _radar_beep_t * 0.5)
-			Audio.sfx("rc_radar")
+			_radar_beep()
 	if is_instance_valid(_radar_bar):
 		_radar_bar.smooth = _gfx_hd   # D-212
 		_radar_bar.set_state(sim.radar if sim.state == Sim.State.RACE else 0.0, _radar_led > 0.0)
@@ -2634,6 +2636,27 @@ func _tod_progress() -> float:
 		return 0.5
 	var into := 1.0 - clampf((sim.next_checkpoint - sim.s) / Sim.CHECKPOINT_EVERY, 0.0, 1.0)
 	return float(sim.checkpoints) + into
+
+
+## Radar beep (D-215): its own player on a dry bus with the SFX bus's volume,
+## so the tunnel reverb on SFX doesn't touch it (the detector is in the car).
+func _radar_beep() -> void:
+	var sfx := AudioServer.get_bus_index("SFX")
+	var dry := AudioServer.get_bus_index(DRY_BUS)
+	if dry < 0:
+		dry = AudioServer.bus_count
+		AudioServer.add_bus(dry)
+		AudioServer.set_bus_name(dry, DRY_BUS)
+		AudioServer.set_bus_send(dry, "Master")
+	if sfx >= 0:
+		AudioServer.set_bus_volume_db(dry, AudioServer.get_bus_volume_db(sfx))
+		AudioServer.set_bus_mute(dry, AudioServer.is_bus_mute(sfx))
+	if _radar_player == null:
+		_radar_player = AudioStreamPlayer.new()
+		_radar_player.bus = DRY_BUS
+		_radar_player.stream = Audio._sounds.get("rc_radar")
+		add_child(_radar_player)
+	_radar_player.play()
 
 
 func _exit_tree() -> void:
