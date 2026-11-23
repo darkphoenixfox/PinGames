@@ -777,6 +777,21 @@ func test_racer_hd_assets() -> void:
 		if float(t.s) > SimA.FINISH_STAGE * SimA.CHECKPOINT_EVERY:
 			past += 1
 	check(past == 0 and sf.traffic_target() <= 11, "no traffic spawns past the finish line; at most 11 cars")
+	# D-239: a side swipe turns both cars away from each other.
+	var sws = SimA.new()
+	sws.setup(4)
+	sws.state = SimA.State.RACE
+	sws.s = 1000.0
+	sws.track.ensure(2000.0)
+	sws.traffic.clear()
+	sws.x = 3.6
+	sws.v = 30.0
+	sws.traffic.append({"id": 950, "s": sws.s + 0.5, "x": 1.875, "lane": 2, "v": 30.0, "hue": 0.0,
+		"weave": 0.0, "last_ds": 0.5, "kind": "car", "len": SimA.CAR_LEN, "w": SimA.CAR_W})
+	sws.step(1.0 / 60.0, false, false)
+	var tsw: float = float(sws.traffic[0].get("sway", 0.0)) if not sws.traffic.is_empty() else 0.0
+	# We're on its right (+x): our nose swings right (negative), its nose left (positive).
+	check(sws.sway < -0.1 and tsw > 0.1, "a side swipe turns both cars away from each other (%.2f, %.2f)" % [sws.sway, tsw])
 	# D-219: random weather spells: at least WEATHER_MIN long, suited to the
 	# area, different per seed, the same for the same seed.
 	var spell_ok := true

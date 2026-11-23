@@ -177,6 +177,11 @@ const YIELD_AHEAD := 350.0      # m ahead of the police where traffic pulls over
 const YIELD_SLOW := 0.6         # speed traffic slows to while yielding
 const SIDE_SLOW := 0.93         # speed kept on a side-swipe
 const SIDE_BOUNCE := 7.0        # m/s sideways shove
+## Side impacts make both cars turn away from each other a little (D-239):
+## a yaw kick of SWAY rad that eases back at SWAY_BACK rad/s. `sway` is a turn
+## about the vertical (+ = anticlockwise from above; nose to -x when driving on).
+const SWAY := 0.3
+const SWAY_BACK := 0.8
 const TRUCK_LEN := 10.0
 const TRUCK_W := 2.66
 const TRUCK_SHARE := 0.25       # of spawns (D-099)
@@ -233,6 +238,7 @@ var in_tunnel := false         # D-127
 var _scrape_t := 0.0
 var grace_t := 0.0             # s of traffic immunity left after a crash (D-125)
 var finished := false          # crossed the finish line (D-221)
+var sway := 0.0                # D-239: the player's yaw kick from a side impact
 var time_bonus := 0            # points for the seconds left at the finish
 var spin_t := 0.0              # crash timer (spin-out or flip)
 var flipping := false          # this crash is a roll-over (big obstacle)
@@ -591,6 +597,7 @@ func _update_police(dt: float) -> void:
 				return
 	if police.state != "bust":
 		_police_obstacles(dt)
+	police.sway = move_toward(float(police.get("sway", 0.0)), 0.0, SWAY_BACK * dt)   # D-239
 	police.s += police.v * dt
 
 
@@ -629,6 +636,8 @@ func _hit_police() -> void:
 	police.x = float(police.x) + away * 1.4
 	v *= RAMMER_SLOW
 	lat_v = -away * HIT_BOUNCE * 0.5
+	police.sway = -away * SWAY    # D-239: both turn away
+	sway = away * SWAY * 0.7
 	_end_drift()
 	events.append(["police_bumped"])
 
@@ -647,6 +656,8 @@ func _police_hit() -> void:
 		v *= HIT_SLOW
 		lat_v = away * HIT_BOUNCE
 		police.x = float(police.x) - away * 1.2
+		sway = -away * SWAY            # D-239: both turn away
+		police.sway = away * SWAY * 0.7
 		police.v = minf(float(police.v), v) - 4.0
 		_end_drift()
 	events.append(["police_ram", police.hits])
@@ -731,6 +742,7 @@ func _update_pickups() -> void:
 
 
 func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
+	sway = move_toward(sway, 0.0, SWAY_BACK * dt)   # D-239
 	var want := (1.0 if right else 0.0) - (1.0 if left else 0.0)
 	if busted_t > 0.0:
 		busted_t -= dt
@@ -1003,6 +1015,10 @@ func _update_traffic(dt: float) -> void:
 				var away := signf(x - t.x + 0.001)
 				v *= SIDE_SLOW
 				lat_v = away * SIDE_BOUNCE
+				# Both turn away from each other (D-239): our nose to our side,
+				# theirs to theirs (an oncoming car faces the other way).
+				sway = -away * SWAY
+				t.sway = (away if t.v >= 0.0 else -away) * SWAY
 				x += away * 0.3
 				t.shove = float(t.get("shove", 0.0)) - away * (0.8 if big else 1.6)
 				t.swipe_cd = 0.4
@@ -1028,6 +1044,7 @@ func _update_traffic(dt: float) -> void:
 					t.v = minf(t.v + 4.0, 52.0)
 				events.append(["bump", t.id])
 		t.swipe_cd = maxf(0.0, float(t.get("swipe_cd", 0.0)) - dt)
+		t.sway = move_toward(float(t.get("sway", 0.0)), 0.0, SWAY_BACK * dt)
 		if ds < -60.0 or ds > 900.0:
 			traffic.remove_at(i)
 	if state == State.OVER:

@@ -2347,3 +2347,14 @@
 - **Smoothness:** the loader now yields a frame every ~50 ms (was 100 ms), so the animations move smoothly. The old cyan bar is hidden.
 - **Dev:** `--loading-hold=N` keeps the loading screen up N s, for screenshots.
 - **Status:** Accepted
+
+### D-239 — Turbo Run: cars sway apart after a side impact
+- **Date:** 2026-11-23
+- **Decision (director):** when bumping other cars (the police car and others) from the side, the cars should sway away from each other after the impact, turning a little.
+- **Change:** a side contact now also gives both cars a yaw kick of `SWAY` 0.3 rad (about 17°), easing back at `SWAY_BACK` 0.8 rad/s (about 0.4 s). Each car's nose turns towards the side it was pushed: away from the other car, with oncoming cars accounted for.
+  - **Side-swipes with traffic** (D-152): the player (`Sim.sway`) and the other car (`t.sway`).
+  - **The police ramming you:** you turn the full amount, the police car 70 %.
+  - **You hitting the police:** the police car turns the full amount, you 70 %.
+- **View:** each car's drawn heading adds its sway (before the sprite-angle stepping, D-092/D-208).
+- **Test:** a side-swipe turns both cars away from each other.
+- **Status:** Accepted

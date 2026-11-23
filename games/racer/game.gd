@@ -1822,7 +1822,7 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	# Across the lane in front (D-161): it swings the way it cut in.
 	var side: float = pd.get("swing", 1.0)
 	lean += roundf(_police_swing * 4.0) / 4.0 * PI * 0.5 * side
-	_police.basis = _police.basis * Basis(Vector3.UP, _sprite_yaw(h - lean, cam_yaw) - h) * MODEL_TURN
+	_police.basis = _police.basis * Basis(Vector3.UP, _sprite_yaw(h - lean + float(pd.get("sway", 0.0)), cam_yaw) - h) * MODEL_TURN
 	var ph := fmod(_phase_t, 0.5)
 	var lights := sim.police_lights()   # off once it has given up or is driving off (D-145)
 	var red_on := lights and ph < 0.25 and (ph < 0.08 or ph > 0.15)
@@ -2192,7 +2192,7 @@ func _animate(delta: float) -> void:
 		travel = clampf(atan2(sim.lat_v, maxf(sim.v, 12.0)), -MAX_TRAVEL_YAW, MAX_TRAVEL_YAW)
 		travel *= clampf(sim.v / 15.0, 0.0, 1.0)
 	_travel = move_toward(_travel, travel, delta * 1.8)
-	var yaw := deg_to_rad(sim.drift_angle) - _travel
+	var yaw := deg_to_rad(sim.drift_angle) - _travel + sim.sway   # D-239: side-impact sway
 	var crash_p := _anim_steps(sim.crash_progress(), sim.crash_anim)
 	if sim.spin_t > 0.0 and not sim.flipping:
 		# Spin-out: two full turns stepped like sprite frames, ending nose
@@ -2335,7 +2335,7 @@ func _animate(delta: float) -> void:
 		node.visible = true
 		node.transform = tr_.frame(t.s, t.x)
 		var h := tr_.heading(t.s)
-		var wy := h + (PI if t.v < 0.0 else 0.0)     # oncoming faces us (D-099)
+		var wy := h + (PI if t.v < 0.0 else 0.0) + float(t.get("sway", 0.0))   # oncoming faces us (D-099); D-239 sway
 		node.basis = node.basis * Basis(Vector3.UP, _sprite_yaw(wy, cam_yaw) - h) * MODEL_TURN
 		if kind == "car" or kind == "hatch" or kind == "hothatch":
 			for m in node.find_children("*", "MeshInstance3D", true, false):
