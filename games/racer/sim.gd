@@ -93,7 +93,7 @@ const REV_UP := 1.5               # rpm/s while revving on the grid (D-112; slow
 const REV_DOWN := 1.0
 ## After the clock runs out the car coasts (D-103): reaching a checkpoint
 ## before it stops extends the time and the race goes on.
-const COAST_OVER := 7.0          # m/s^2 decel while coasting out
+const COAST_OVER := 14.0         # m/s^2 decel while coasting out (D-231: doubled, half the slide)
 ## Race clock
 const START_TIME := 45.0
 const CHECKPOINT_EVERY := 2300.0   # D-101 (was 1800)
@@ -109,7 +109,7 @@ const SOFT_CRASH_SLOW := 0.45   # speed kept
 ## line with the car, brake and wait STOP_GAP m behind it until it's going again.
 const WAIT_BEHIND := 140.0
 const WAIT_GAP := 5.0
-const FINISH_DECEL := 15.0   # m/s^2: the drift-brake after the line, harder than coasting out (D-222)
+const FINISH_DECEL := 30.0   # m/s^2: the drift-brake after the line (D-222; D-231: doubled, half the slide)
 const FINISH_BONUS := 100000
 const TIME_BONUS_PER_S := 2000
 const CHECKPOINT_BONUS := 34.0   # minus 2 s per checkpoint passed, never below 20

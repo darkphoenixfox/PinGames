@@ -2264,3 +2264,10 @@
   - The car sits dark for `LIGHTS_OFF_WAIT` 1 s, and the player is held until it starts to leave.
 - **Test:** the lights stay on until the fine and go off before the car leaves.
 - **Status:** Accepted
+
+### D-231 — Turbo Run: half the slide when stopping at TIME UP or the finish
+- **Date:** 2026-11-23
+- **Decision (director):** when stopping at time out or the finish line, the drift distance should be half.
+- **Change:** stopping distance is v²/2a, so the deceleration doubles: `COAST_OVER` 7 → 14 m/s² (TIME UP), `FINISH_DECEL` 15 → 30 m/s² (finish drift-brake).
+- **Effect:** at 40 m/s the TIME UP slide is about 57 m (was about 114 m), and the finish slide about 27 m. Reaching a checkpoint on momentum after TIME UP (D-103) is correspondingly rarer.
+- **Status:** Accepted
