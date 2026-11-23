@@ -1982,3 +1982,11 @@
 - **Colours:** car hues rotate each model's own paint. Easy is 0 (the hot hatch's red). Normal is 0.36 (the red car turned green). Hard is 0 (the supercar's own yellow; was 0.08 orange on the red car, D-202).
 - **Traffic:** the supercar is not added to traffic (not asked).
 - **Status:** Accepted
+
+### D-211 — Turbo Run: the car bounces after a roll-over
+- **Date:** 2026-11-23
+- **Decision (director):** make the car bounce a bit after the side flips.
+- **Bounce:** when the roll-over lands, the car bounces on its wheels every `LAND_PERIOD` 0.26 s, starting `LAND_HEIGHT` 0.45 m high (40 % higher after a double roll), dying away exponentially over `LAND_TIME` 1 s. It also rocks side to side by up to `LAND_ROCK` 0.12 rad.
+- **Timing:** the view times it with its own timer, so it plays out whether the car is still sliding or already stopped.
+- **Steps:** it follows the graphics mode's animation steps (D-208): 20 frames/s in 8-BIT, 40 in 16-BIT, smooth in HD.
+- **Status:** Accepted

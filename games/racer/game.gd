@@ -80,6 +80,13 @@ const PLATE_Z := -2.215           # nitro canisters read from far away (D-103)
 const FLIP_TURN_END := 0.25
 const FLIP_ROLL_END := 0.8
 const FLIP_UNTURN := 0.4
+## Landing bounce after a roll-over (D-211): bounces every LAND_PERIOD s,
+## starting LAND_HEIGHT m high and dying away, for LAND_TIME s.
+const LAND_HEIGHT := 0.45
+const LAND_PERIOD := 0.26
+const LAND_DECAY := 3.2
+const LAND_TIME := 1.0
+const LAND_ROCK := 0.12   # rad of side-to-side rock
 const CAR_TEXTURE := "res://assets/models/racer/red_car_albedo.png"
 ## Director's truck (D-099): 10 m, same orientation as the car.
 const TRUCK_MODEL := "res://assets/models/racer/truck.glb"
@@ -412,6 +419,7 @@ var _puffs: MultiMesh
 var _puff_list: Array = []       # {pos, vel, age, size, col}
 var _puff_t := 0.0
 var _flames: Array = []          # nitro flame meshes
+var _land_t := 0.0              # s since a roll-over landed (D-211)
 var _body_model := ""            # the player's car model built (D-205)
 var _exhaust_z := -2.2           # its exhaust tips' z (model space)
 var _cam_pos := Vector3.ZERO
@@ -1834,6 +1842,11 @@ func _frame_steps(x: float, frames: float) -> float:
 	return roundf(x * n) / n
 
 
+## The double roll lands harder (D-211).
+func turns_bounce(turns: float) -> float:
+	return 1.0 + 0.4 * (turns - 1.0)
+
+
 ## Horizontal yaw of the chase camera's view (same convention as Track: 0 = -Z).
 func _camera_yaw() -> float:
 	var tr_ := sim.track
@@ -1909,6 +1922,23 @@ func _animate(delta: float) -> void:
 		var turns := float(sim.flip_turns)
 		roll = _frame_steps(q * turns, FLIP_FRAMES) * TAU * sim.flip_dir
 		lift += 4.0 * FLIP_HOP * (1.0 + 0.6 * (turns - 1.0)) * q * (1.0 - q)
+		# D-211: landing, it bounces on its wheels a few times, each lower,
+		# with a little side-to-side rock.
+		if q >= 1.0:
+			_land_t += delta
+			var t := _land_t
+			if _anim_mult > 0.0:
+				var fps := ANIM_FPS * 2.0 * _anim_mult
+				t = floorf(t * fps) / fps
+			if t < LAND_TIME:
+				var k := exp(-t * LAND_DECAY)
+				var ph := t * PI / LAND_PERIOD
+				lift += absf(sin(ph)) * LAND_HEIGHT * turns_bounce(turns) * k
+				roll += sin(ph * 0.5) * LAND_ROCK * k * sim.flip_dir
+		else:
+			_land_t = 0.0
+	else:
+		_land_t = 0.0
 	var pivot := Vector3(0, 0.65, 0)             # roll around the body's middle
 	var rb := Basis(Vector3.UP, yaw) * Basis(Vector3.FORWARD, roll)
 	_car_body.transform = Transform3D(rb * MODEL_TURN, Vector3(0, lift, 0) + pivot - rb * pivot)
