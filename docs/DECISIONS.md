@@ -2697,3 +2697,10 @@
 - **Fix:** while the hero is crashed (`spin_t`) or below 4 m/s, an oncoming car up to `DODGE_AHEAD` 170 m ahead whose lane overlaps it swerves round. It moves across (`t.dodge`, at `DODGE_RATE` 4.5 m/s) to the side it's already on, keeping `DODGE_CLEAR` 0.7 m clearance and using the kerb if needed (else the other side), and slows to 60 %. If neither side has room, it brakes to a stop `WAIT_GAP` 5 m short. Once the hero is moving again, it eases back into its lane. Same-direction traffic already waits behind (D-223).
 - **Test:** an oncoming car never overlaps a car crashed in its lane.
 - **Status:** Accepted
+
+### D-272 — The web app applies new versions by itself
+- **Report (director):** Edge on Android still showed the 3-screen web layout with the buttons at the sides, after D-270 was deployed.
+- **Cause:** the PWA's service worker (D-176) serves the cached build. A new version installs in the background but only takes over once every tab and the installed app are fully closed. The server had the new build (`no-cache`, new `CACHE_VERSION`).
+- **Fix:** on the web, the shell listens for `JavaScriptBridge.pwa_update_available` (and checks `pwa_needs_update()` at start). When a new version is waiting, it calls `pwa_update()`, which activates it and reloads: at once on the menus, or when the player returns to the menu if a game is running.
+- **Note:** this code only arrives with the update itself, so getting off the old cached version takes one manual step: fully close the app or tab and reopen it, or clear the site's data.
+- **Status:** Accepted

@@ -30,6 +30,12 @@ func _ready() -> void:
 	add_child(Dev.new())
 	if FocusPause.wanted():
 		add_child(FocusPause.new())   # browser: stop while the page has no focus (D-178)
+	# D-272: the installed web app applies a new version by itself: the page
+	# otherwise keeps running the cached one until every tab is closed.
+	if OS.has_feature("web"):
+		JavaScriptBridge.pwa_update_available.connect(_on_pwa_update)
+		if JavaScriptBridge.pwa_needs_update():
+			_on_pwa_update()
 
 	var requested := Config.requested_game()
 	if not requested.is_empty():
@@ -89,7 +95,21 @@ func _process(_delta: float) -> void:
 
 
 # --- transitions -------------------------------------------------------------------
+var _pwa_pending := false
+
+
+## Updates now unless a game is running; then at the next menu (D-272).
+func _on_pwa_update() -> void:
+	_pwa_pending = true
+	if mode == null or not (mode is GameMode):
+		print("Shell: new web version, reloading")
+		JavaScriptBridge.pwa_update()
+
+
 func goto_picker() -> void:
+	if _pwa_pending:
+		JavaScriptBridge.pwa_update()
+		return
 	switch_to(Picker.new(direct_game, _picker_index))
 
 
