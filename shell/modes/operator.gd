@@ -43,6 +43,8 @@ func enter() -> void:
 func on_action(action: StringName, pressed: bool) -> void:
 	if not pressed:
 		return
+	if action == &"back":
+		action = &"exit"   # D-260: BACK steps back like EXIT does here
 	if _confirm_left > 0.0:
 		match action:
 			&"launch", &"start":

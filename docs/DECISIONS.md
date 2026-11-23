@@ -2589,3 +2589,16 @@
 - **Cause:** the shader warm-up (D-178) draws copies of the game's objects (cars included) behind the loading screen. The screen and the copies were freed in the same frame, so their last frame could show.
 - **Fix:** the copies are freed first, then the loading screen stays `REVEAL_DELAY` 2 s more (with its animation, D-238) before the game shows. Game input waits until it's gone; EXIT still leaves.
 - **Status:** Accepted
+
+### D-260 — Single screen gamepad: Circle is BACK; Start asks before quitting
+- **Date:** 2026-11-23
+- **Decision (director):** Circle should not be exit, just cancel in menus. To exit the game, press Start to show a confirmation (OK / Cancel), selected with X. Supersedes D-257's Circle-as-exit.
+- **New action BACK** (`CabinetInput.ACTIONS`): Circle on the single-screen pad, Escape on the keyboard. It cancels and steps back, never quits:
+  - in the operator menu, it steps back like EXIT;
+  - on the menu, it cancels the quit-the-app question;
+  - in the in-game quit dialog, it cancels.
+- **EXIT on the pad:** Start only (`SINGLE_PAD`).
+  - **In a game on a single screen:** it pauses the game and shows QUIT GAME? with OK and CANCEL. CANCEL is selected first, so a stray press is safe. The flippers (D-pad, stick) choose, LAUNCH (Cross) picks, and BACK or EXIT again cancels. It covers the whole screen.
+  - **Cabinet layouts:** EXIT still leaves straight away.
+  - **On the menu:** Start keeps the quit-the-app question (Cross confirms).
+- **Status:** Accepted

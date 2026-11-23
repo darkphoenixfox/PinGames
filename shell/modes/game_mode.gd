@@ -420,12 +420,86 @@ func on_action(action: StringName, pressed: bool) -> void:
 		if action == &"exit" and pressed:
 			shell.abort_game()
 		return
+	if is_instance_valid(_quit_box):
+		_quit_action(action, pressed)
+		return
 	if action == &"exit" and pressed:
-		shell.abort_game()
+		if Screens.current_layout == "single":
+			_open_quit()   # D-260: ask first
+		else:
+			shell.abort_game()
 		return
 	if is_instance_valid(_overlay) and not _overlay.is_queued_for_deletion():
 		return   # D-259: still behind the loading screen
 	module.on_action(action, pressed)
+
+
+# --- quit confirmation (D-260) -----------------------------------------------------
+## Single screen: EXIT (a pad's Start) pauses the game and asks QUIT GAME?
+## with OK / CANCEL. The flippers (D-pad, stick) choose, LAUNCH (Cross) picks,
+## BACK (Circle) or EXIT again cancels.
+var _quit_box: Control
+var _quit_sel := 1   # 0 OK, 1 CANCEL (cancel first, so a stray press is safe)
+var _quit_items: Array = []
+
+
+func _open_quit() -> void:
+	module.process_mode = Node.PROCESS_MODE_DISABLED
+	_quit_sel = 1
+	# Over the whole TABLE, whatever its shape (not the portrait frame).
+	_quit_box = UI.fill(Color(0, 0, 0, 0.75))
+	Screens.table.add_child(_quit_box)
+	_owned.append(_quit_box)
+	_quit_box.z_index = 120
+	var col := UI.vstack(60)
+	col.add_child(UI.styled_label(tr("QUIT_GAME_TITLE"), UI.SHELL_TITLE_FONT, 2))
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 120)
+	_quit_items.clear()
+	for k in ["QUIT_OK", "QUIT_CANCEL"]:
+		var l := UI.label(tr(k), 72, UI.WHITE)
+		row.add_child(l)
+		_quit_items.append(l)
+	col.add_child(row)
+	_quit_box.add_child(col)
+	_refresh_quit()
+	Audio.sfx("error")
+	Dmd.show_text(tr("QUIT_GAME_TITLE"), tr("QUIT_OK") + " / " + tr("QUIT_CANCEL"), Dmd.YELLOW, Dmd.WHITE)
+
+
+func _refresh_quit() -> void:
+	for i in _quit_items.size():
+		var l: Label = _quit_items[i]
+		var on := i == _quit_sel
+		l.text = ("> %s <" if on else "%s") % tr(["QUIT_OK", "QUIT_CANCEL"][i])
+		l.add_theme_color_override("font_color", UI.YELLOW if on else UI.GREY)
+
+
+func _quit_action(action: StringName, pressed: bool) -> void:
+	if not pressed:
+		return
+	match action:
+		&"flip_l", &"flip_r":
+			_quit_sel = 1 - _quit_sel
+			Audio.sfx("move")
+			_refresh_quit()
+		&"launch":
+			if _quit_sel == 0:
+				shell.abort_game()
+			else:
+				_close_quit()
+		&"back", &"exit":
+			_close_quit()
+
+
+func _close_quit() -> void:
+	if is_instance_valid(_quit_box):
+		_quit_box.queue_free()
+	_quit_box = null
+	module.process_mode = Node.PROCESS_MODE_INHERIT
+	CabinetInput.mute_until_release()
+	Audio.sfx("back")
 
 
 func _on_finished(scores: Array) -> void:

@@ -127,7 +127,7 @@ func on_action(action: StringName, pressed: bool) -> void:
 	if pressed:
 		_press_ms[action] = Time.get_ticks_msec()
 		if _quit_left > 0.0:
-			if action in [&"flip_l", &"flip_r", &"magna_l", &"magna_r"]:
+			if action in [&"flip_l", &"flip_r", &"magna_l", &"magna_r", &"back"]:
 				_hide_quit_confirm()
 			return
 		match action:

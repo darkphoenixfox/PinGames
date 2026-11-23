@@ -14,6 +14,7 @@ const Bindings = preload("res://core/util/bindings.gd")
 ## Optional (4+1 cabinets): magna_l, magna_r. Optional: coin.
 const ACTIONS: Array[StringName] = [
 	&"flip_l", &"flip_r", &"magna_l", &"magna_r", &"launch", &"start", &"coin", &"exit",
+	&"back",   # D-260: cancel / go back in menus (a pad's Circle); never quits
 ]
 
 ## Director-specified defaults (D-019; flippers moved off Shift in D-075). Godot joypad indices use SDL layout:
@@ -28,6 +29,7 @@ const DEFAULT_BINDINGS := {
 	"start": ["key:Enter", "key:Kp Enter", "joy:1"],  # Circle
 	"coin": ["key:5"],
 	"exit": ["key:Backspace", "joy:2"],         # Square
+	"back": ["key:Escape"],                     # D-260
 }
 
 ## D-256: the single-screen version's gamepad (director): D-pad and left stick
@@ -43,7 +45,8 @@ const SINGLE_PAD := {
 	"launch": ["joy:0"],
 	"start": [],
 	"coin": [],
-	"exit": ["joy:1", "joy:6"],   # D-257: Start quits (as does Circle)
+	"exit": ["joy:6"],            # D-260: Start (asks before quitting)
+	"back": ["joy:1"],            # D-260: Circle cancels, never quits
 }
 
 ## Emitted on focus loss/gain (D-069), e.g. for the input monitor.
