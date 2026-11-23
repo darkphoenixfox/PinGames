@@ -579,10 +579,6 @@ func on_action(action: StringName, pressed: bool) -> void:
 			&"flip_r":
 				_showroom.move(1)
 				Audio.sfx("rc_shift")
-			&"magna_l":
-				_repaint(-1)
-			&"magna_r":
-				_repaint(1)
 			&"launch", &"start":
 				_confirm_car()
 		return
@@ -678,25 +674,6 @@ func _new_sim() -> void:
 ## on past the finish.
 func _stage_music(k: int) -> String:
 	return MUSIC_RACE[clampi((k - 1) / MUSIC_STAGES, 0, MUSIC_RACE.size() - 1)]
-
-
-## Paint (D-236): on the car select screen the magna buttons step the
-## highlighted car through PAINTS (tints on top of its own paint, 0 = as it
-## comes); kept for the session.
-const PAINTS := [0.0, 0.36, 0.62, 0.08, 0.13, 0.8, 0.5, 0.92]
-static var _car_paint := [0, 0, 0]
-
-
-func _car_hue(i: int) -> float:
-	return fposmod(float(Sim.CARS[i].hue) + float(PAINTS[int(_car_paint[i])]), 1.0)
-
-
-func _repaint(d: int) -> void:
-	var i: int = _showroom.selected
-	_car_paint[i] = posmod(int(_car_paint[i]) + d, PAINTS.size())
-	_showroom.set_hue(i, _car_hue(i))
-	_phase_t = 0.0
-	Audio.sfx("rc_shift")
 
 
 func _enter_attract() -> void:
@@ -953,9 +930,9 @@ func _begin_select() -> void:
 	_showroom.nes = _gfx_mode == "nes"
 	_add_ui(_showroom)
 	_showroom.selected = _chosen_car
-	_showroom.build(func(_hue: float, i: int) -> Node3D:
+	_showroom.build(func(hue: float, i: int) -> Node3D:
 		var m: String = CAR_MODELS[i]
-		return _car_instance(_car_hue(i), m, MODEL_TEXTURES[m]), load(SKY_TEXTURE), TITLE_FONT)   # D-236
+		return _car_instance(hue, m, MODEL_TEXTURES[m]), load(SKY_TEXTURE), TITLE_FONT)
 	_select_hint = UI.label("", 36, UI.WHITE)
 	_select_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	_select_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1011,7 +988,7 @@ func _begin_race() -> void:
 	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
 		var gi := m as MeshInstance3D
 		if gi.material_override != null:
-			InstParam.set_param(gi, "hue", _car_hue(_chosen_car))
+			InstParam.set_param(gi, "hue", float(Sim.CARS[_chosen_car].hue))
 	# The start stage's song (D-226): stage 1 carries on attract's from where it
 	# is; a later start stage (testing) plays its own from the top.
 	Audio.play_music(_stage_music(sim.checkpoints + 1))
@@ -3316,7 +3293,7 @@ func _update_audio() -> void:
 	var squeal := sim.drifting or (sim.state == Sim.State.OVER and sim.v > 3.0) 		or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
 	_skid.volume_db = lerpf(_skid.volume_db, -10.0 if squeal else -60.0, 0.2)
 	# D-235: the attract demo (and the menus over it) is music only.
-	if _phase in ["attract", "gfx", "stage", "select"]:   # D-236: car select too
+	if _phase in ["attract", "gfx", "stage"]:
 		for pl in [_engine, _engine_hi, _wind, _skid, _siren, _horn] + _passers:
 			if pl != null:
 				(pl as AudioStreamPlayer).volume_db = -80.0
