@@ -4,6 +4,7 @@
 extends RefCounted
 
 const StyledFonts = preload("res://core/ui/styled_fonts.gd")
+const DotText = preload("res://core/ui/dot_text.gd")
 
 const YELLOW := Color("ffd23e")
 const CYAN := Color("3ec7ff")
@@ -26,10 +27,13 @@ static func label(text: String, size: int, color: Color = WHITE,
 	l.text = text
 	l.horizontal_alignment = align
 	var ps := pixel_size(size)
+	# D-232: dot-matrix lettering (the DMD's font as dots; its dark rim is the
+	# outline). `dot_size` lets a low-res canvas swap in its own version (D-233).
+	l.add_theme_font_override("font", DotText.font(ps))
 	l.add_theme_font_size_override("font_size", ps)
 	l.add_theme_color_override("font_color", color)
-	l.add_theme_constant_override("outline_size", maxi(4, ps / 6))  # 2 font pixels
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	l.add_theme_constant_override("outline_size", 0)
+	l.set_meta("dot_size", ps)
 	return l
 
 

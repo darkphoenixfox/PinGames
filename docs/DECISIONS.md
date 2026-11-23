@@ -2271,3 +2271,16 @@
 - **Change:** stopping distance is v²/2a, so the deceleration doubles: `COAST_OVER` 7 → 14 m/s² (TIME UP), `FINISH_DECEL` 15 → 30 m/s² (finish drift-brake).
 - **Effect:** at 40 m/s the TIME UP slide is about 57 m (was about 114 m), and the finish slide about 27 m. Reaching a checkpoint on momentum after TIME UP (D-103) is correspondingly rarer.
 - **Status:** Accepted
+
+### D-232 — Dot-matrix lettering for the on-screen UI
+- **Date:** 2026-11-23
+- **Decision (director):** replace all the text in the simple retro font (PinPixel) with DMD-style lettering made of dots: single lines of dots, and a heavier density of dots for bigger text (reference: a red DMD with BOGEY MAN / SMASH WINDOWS). Asked: this applies to the on-screen UI text, not the DMD itself.
+- **`core/ui/dot_text.gd`:** builds bitmap `FontFile`s at run time from the DMD's 5×7 dot font (`core/dmd/dot_font.gd`), cached per size. No font asset and no licence.
+  - **Size:** the cap height is 72 % of the font size, and a glyph bit is `floor(cap / 7)` pixels. That is rounded down so text is never wider than PinPixel was, and layouts still fit.
+  - **Small text:** one round dot per bit, so strokes are single lines of dots.
+  - **From size 60:** 2×2 smaller dots per bit (heavier density).
+  - **Outline:** each dot has a dark rim baked in. The label's font colour tints the dots and leaves the rim dark, so text reads over bright scenes (it replaces the outline).
+  - **Characters:** lower case shows as capitals, accented letters fold to their base letter, and anything missing falls back to PinPixel.
+  - **Low resolution:** `font(size, px)` also makes fonts for low-resolution canvases (`px` target pixels per base pixel), used by D-233.
+- **`UI.label`:** uses it, so the shell, Tilt Breaker and Turbo Run UI text all change. Styled title fonts (D-062, D-186) and 3D `Label3D` world text (gate banners, Tilt Breaker's capsule letters) are unchanged.
+- **Status:** Accepted
