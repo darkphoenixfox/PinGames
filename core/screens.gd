@@ -270,6 +270,9 @@ var side_panels := false
 var _single_bgv: Control
 ## D-266: frames round the side panels, tiled from a game's texture.
 var panel_frame: Texture2D
+## D-267: the play area's half width as a share of the TABLE's width, reported
+## by the game (its edges as seen through its camera); panels stay outside it.
+var play_half_w := 0.0
 var _frame_d: TextureRect
 var _frame_b: TextureRect
 
@@ -287,6 +290,16 @@ func set_flexible(on: bool) -> void:
 func want_side_panels(on: bool, frame_tex: Texture2D = null) -> void:
 	side_panels = on
 	panel_frame = frame_tex
+	if not on:
+		play_half_w = 0.0
+
+
+## D-267: the game says how wide its play area is (half width / TABLE width).
+func set_play_half_width(k: float) -> void:
+	if absf(k - play_half_w) > 0.002:
+		play_half_w = k
+		if current_layout == "single" and is_instance_valid(_single_page):
+			_place_single(Vector2(get_window().size))
 	if current_layout == "single" and is_instance_valid(_single_page):
 		_place_single(Vector2(get_window().size))
 
@@ -465,13 +478,19 @@ func _place_single(win: Vector2) -> void:
 			# both on the same middle line, each in a frame.
 			t.position = Vector2.ZERO
 			t.size = win
-			var side_w := maxf(win.x * 0.5 - win.y * 9.0 / 32.0, 1.0)
+			# D-267: the space beside the play area as the game reports it,
+			# less a gap; each panel and its frame fit inside it.
+			var half := win.x * play_half_w if play_half_w > 0.0 else win.y * 9.0 / 32.0
+			var gap := win.x * 0.025
+			var th := maxf(6.0, win.y * 0.018)
+			var side_w := maxf(win.x * 0.5 - half - gap, 1.0)
+			var room := maxf(side_w - th * 2.0 - win.x * 0.02, 1.0)
 			var mid_y := win.y * 0.4
-			var lw := minf(win.x * 0.26, side_w * 0.86)
+			var lw := minf(win.x * 0.26, room)
 			var dsz := Vector2(lw, lw / ratio)
 			d.position = Vector2(side_w * 0.5 - dsz.x * 0.5, mid_y - dsz.y * 0.5)
 			d.size = dsz
-			var bw := minf(win.x * 0.27, side_w * 0.86)   # 10 % bigger than D-265
+			var bw := minf(win.x * 0.27, room)   # 10 % bigger than D-265
 			var bsz := Vector2(bw, bw * 9.0 / 16.0)
 			var bpos := Vector2(win.x - side_w * 0.5 - bsz.x * 0.5, mid_y - bsz.y * 0.5)
 			if is_instance_valid(_single_bgv):
@@ -479,7 +498,6 @@ func _place_single(win: Vector2) -> void:
 				_single_bgv.size = bsz
 				_single_bgv.visible = true
 			if panel_frame != null:
-				var th := maxf(6.0, win.y * 0.018)
 				for pair in [[_frame_d, Rect2(d.position, dsz)], [_frame_b, Rect2(bpos, bsz)]]:
 					var fr: TextureRect = pair[0]
 					var r: Rect2 = pair[1]

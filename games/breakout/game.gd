@@ -539,6 +539,12 @@ func _finale(delta: float) -> void:
 
 # --- per-frame visuals ----------------------------------------------------------------
 func _animate(delta: float) -> void:
+	# D-267: tell the single-screen layout how wide the play area is (its field
+	# plus the edge shields and a margin), so the side panels stay clear of it.
+	# The camera is orthographic, 16 units high: half width / TABLE width.
+	if Screens.side_panels:
+		var b := Vector2(Screens.table_base())
+		Screens.set_play_half_width((Sim.FIELD.size.x * 0.5 + PLAY_MARGIN) / (16.0 * b.x / b.y))
 	_paddle.position = Vector3(sim.paddle_x, 0.0, Sim.PADDLE_Y)
 	# Bank into the movement (visual only).
 	var target_bank := -sim.paddle_vx / Sim.PADDLE_MAX_SPEED * deg_to_rad(MAX_BANK_DEG)
@@ -691,6 +697,7 @@ func _build_starfield() -> void:
 ## D-263: the field's edge shields always glow faintly, so the play area reads
 ## on a wide screen (D-262).
 const EDGE_IDLE := 0.05
+const PLAY_MARGIN := 0.9   # units beyond the field the panels keep clear of (D-267)
 
 
 func _build_edge_shields() -> void:
@@ -1025,7 +1032,14 @@ func _enter_attract() -> void:
 		n.visible = false
 	_paddle.visible = false
 	_attract_ui = UI.vstack(60)
-	_attract_ui.add_child(UI.styled_label(tr("GAME_BREAKOUT_TITLE"), TITLE_FONT, 3))
+	# D-267: the game's logo above PRESS START (was the title in its font).
+	var logo := TextureRect.new()
+	logo.texture = load("res://assets/textures/breakout/logo.png")
+	logo.custom_minimum_size = Vector2(760, 520)
+	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	logo.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_attract_ui.add_child(logo)
 	_attract_blink = UI.styled_label(tr("TB_PRESS_START"), TITLE_FONT, 2)
 	_attract_ui.add_child(_attract_blink)
 	add_to_table(_attract_ui)

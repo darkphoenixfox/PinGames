@@ -2654,3 +2654,11 @@
   - **Height:** both are centred on the same line, 40 % down the window.
 - **Frames:** `want_side_panels(on, frame_tex)` puts a tiled frame (1.8 % of the window height thick) behind each panel. Tilt Breaker passes its bricks' blue circuit texture (`circuit_blue.png`), drawn with hard pixels.
 - **Status:** Accepted
+
+### D-267 — Tilt Breaker: side panels clear of the play area; the logo on the start screen
+- **Date:** 2026-11-23
+- **Bug (director):** the panel frames overlapped the game area.
+  - **Cause:** D-266 estimated the play area as 9:16 of the window's height.
+  - **Fix:** Tilt Breaker reports its real play area (`Screens.set_play_half_width`): its field's half width plus `PLAY_MARGIN` 0.9 units, over the TABLE's width in its 16-unit-high orthographic view. Each panel, frame included, fits between that edge (plus a 2.5 % gap) and the window edge, shrinking if the space is narrow.
+- **Decision (director):** replace the TILT BREAKER text above PRESS START at the start of the game with the game's logo. The attract screen shows `logo.png` (760×520 box, aspect kept) instead of the title in its styled font.
+- **Status:** Accepted
