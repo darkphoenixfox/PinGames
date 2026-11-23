@@ -2148,3 +2148,9 @@
 - **After the line:** the track goes on behind it (back into the city), only as run-off.
 - **Test:** crossing the end of stage 10 finishes the race with both bonuses and ends it.
 - **Status:** Accepted
+
+### D-222 — Turbo Run: drift-brake after the finish line
+- **Date:** 2026-11-23
+- **Decision (director):** the car should slide sideways in a drift-brake after the finish line.
+- **Change:** past the line, the car uses the TIME UP slide (D-105), which D-221 had skipped. It swings `FINISH_DRIFT` 0.83 of 90° (about 75°) towards the inside of the bend, in stepped frames, with tyre smoke and the skid squeal. It brakes at `FINISH_DECEL` 15 m/s² (coasting out after TIME UP is 7), so it stops in about 3 s, sideways.
+- **Status:** Accepted

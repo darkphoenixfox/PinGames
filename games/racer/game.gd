@@ -78,6 +78,7 @@ const FLIP_HOP := 1.6
 ## TIME UP slide (D-105): 90 degrees in OVER_TURN_TIME s, OVER_TURN_FRAMES steps.
 const OVER_TURN_TIME := 0.6
 const OVER_TURN_FRAMES := 6.0
+const FINISH_DRIFT := 0.83   # of 90 degrees: the finish drift-brake angle (D-222)
 ## Number plate spot on the red car's rear bumper (model space, D-114).
 const PLATE_Y := 0.56     # raised clear of the bumper's bottom edge (D-127)
 const PLATE_SIZE := Vector2(0.51, 0.255)   # oversized so TRN reads at pixel scale (15 % smaller, D-127)
@@ -2102,7 +2103,9 @@ func _animate(delta: float) -> void:
 		yaw += turn * PI * 0.5 * sim.flip_dir
 	# TIME UP (D-105): the car swings 90 degrees and slides to a stop sideways,
 	# nose towards the inside of the bend. Turns back if a checkpoint saves it.
-	if sim.state == Sim.State.OVER and not sim.finished:
+	# D-222: past the finish line the car drift-brakes the same way, a little
+	# less than sideways (FINISH_DRIFT of 90 degrees), smoking and squealing.
+	if sim.state == Sim.State.OVER:
 		if _over_dir == 0.0:
 			var c := sim.track.curvature(sim.s)
 			_over_dir = signf(c) if absf(c) > 1e-4 else (-1.0 if sim.x > 0.0 else 1.0)
@@ -2111,7 +2114,7 @@ func _animate(delta: float) -> void:
 		_over_turn = move_toward(_over_turn, 0.0, delta / OVER_TURN_TIME)
 		if _over_turn == 0.0:
 			_over_dir = 0.0
-	yaw += _frame_steps(_over_turn, OVER_TURN_FRAMES) * PI * 0.5 * _over_dir
+	yaw += _frame_steps(_over_turn, OVER_TURN_FRAMES) * PI * 0.5 * _over_dir * (FINISH_DRIFT if sim.finished else 1.0)
 	var cam_yaw := _camera_yaw()
 	yaw = _sprite_yaw(tr_.heading(sim.s) + yaw, cam_yaw) - tr_.heading(sim.s)
 	var bounce := 0.0

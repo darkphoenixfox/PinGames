@@ -101,6 +101,7 @@ const CHECKPOINT_EVERY := 2300.0   # D-101 (was 1800)
 ## race: no more time, a finish bonus plus a bonus for every second left, and
 ## the car coasts to a stop.
 const FINISH_STAGE := 10
+const FINISH_DECEL := 15.0   # m/s^2: the drift-brake after the line, harder than coasting out (D-222)
 const FINISH_BONUS := 100000
 const TIME_BONUS_PER_S := 2000
 const CHECKPOINT_BONUS := 34.0   # minus 2 s per checkpoint passed, never below 20
@@ -742,7 +743,7 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	if state == State.OVER or spin_t > 0.0 or busted_t > 0.0:
 		throttle = 0.0
 		braking = false
-		accel = -(COAST_OVER if state == State.OVER else ((FLIP_SLIDE_DECEL if crash_slide else FLIP_ROLL_DECEL) if flipping else COAST_DRAG * 3.0))
+		accel = -((FINISH_DECEL if finished else COAST_OVER) if state == State.OVER else ((FLIP_SLIDE_DECEL if crash_slide else FLIP_ROLL_DECEL) if flipping else COAST_DRAG * 3.0))
 	elif manual:
 		# 4 buttons (D-189): automatic throttle, the player's own brake (no auto-brake).
 		throttle = 0.0 if brake else 1.0
