@@ -447,6 +447,7 @@ var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
 var _bg_dark := 0.0     # s of crash flicker left
 var _wheel_phase := 0.0
 var _police_wheel := 0.0       # D-246
+const POLICE_WHEEL_MAX := 30.0  # phase rad/s at most (5 spokes: about 1 turn a second, D-248)
 var _travel := 0.0         # eased nose angle from sideways travel (D-128)
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
@@ -1875,14 +1876,17 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	lean += roundf(_police_swing * 4.0) / 4.0 * PI * 0.5 * side
 	_police.basis = _police.basis * Basis(Vector3.UP, _sprite_yaw(h - lean + float(pd.get("sway", 0.0)), cam_yaw) - h) * MODEL_TURN
 	# Its wheels turn with its own speed (D-246), stepped like the player's.
-	_police_wheel = fmod(_police_wheel + absf(float(pd.v)) / 0.37 * delta, TAU * 100.0)
+	# D-248: seen side-on, a flat blurred disc reads as wheels standing still,
+	# so the spokes stay visible: their turning is capped at a rate the eye
+	# can follow (like film of a fast wheel) and only half blurred.
+	_police_wheel = fmod(_police_wheel + minf(absf(float(pd.v)) / 0.37, POLICE_WHEEL_MAX) * delta, TAU * 100.0)
 	var pstep := _police_wheel if _anim_mult <= 0.0 else floorf(_police_wheel * 3.0 * _anim_mult) / (3.0 * _anim_mult)
 	for m in _police.find_children("*", "MeshInstance3D", true, false):
 		var pmi := m as MeshInstance3D
 		if pmi.material_override != null:
 			InstParam.set_param(pmi, "spin", 1.0)
 			InstParam.set_param(pmi, "wheel_phase", pstep)
-			InstParam.set_param(pmi, "wheel_blur", clampf((absf(float(pd.v)) - 6.0) / 20.0, 0.0, 1.0))
+			InstParam.set_param(pmi, "wheel_blur", clampf((absf(float(pd.v)) - 6.0) / 20.0, 0.0, 1.0) * 0.45)
 	var ph := fmod(_phase_t, 0.5)
 	var lights := sim.police_lights()   # off once it has given up or is driving off (D-145)
 	var red_on := lights and ph < 0.25 and (ph < 0.08 or ph > 0.15)

@@ -2422,3 +2422,20 @@
 - **DMD sprite:** the converter's ground-shadow filter had removed the grey tyres from the transparent render, so it is skipped for pictures with their own transparency. A new `--wheels` option draws each run of tyre dots in light grey with a bright hub dot above its centre.
 - **Dev:** `--rc-police` calls a police car right after GO (`Sim.call_police`).
 - **Status:** Accepted
+
+### D-247 — EXIT during a game's loading screen no longer leaves the TABLE stuck
+- **Date:** 2026-11-23
+- **Bug (director):** pressing EXIT while a game's loading screen was up left the TABLE on the loading screen, while the DMD showed the game start and the main menu come back.
+- **Cause:** `GameMode._exit_tree` overrode the base mode's without calling it, so what the mode had put on the TABLE (the loading overlay) was never freed. EXIT during the warm-up just after loading (D-178) aborted the game mid-warm-up, before its own `queue_free` of the overlay.
+- **Fix:**
+  - `GameMode._exit_tree` calls `super`, so the overlay goes.
+  - The DMD loading animation stops if the mode is left mid-load.
+  - EXIT during the loading itself now goes back to the menu straight away (it used to be ignored until the game had started).
+- **Status:** Accepted
+
+### D-248 — Turbo Run: the police car's wheels visibly turn at speed
+- **Date:** 2026-11-23
+- **Bug (director):** the cop car's wheels look static while it drives next to you to ram you.
+- **Cause:** at speed the D-143 effect blurs the spokes into a flat grey disc (`wheel_blur` 1 above ~26 m/s). From behind, on the player's car, that reads as speed; side-on, next to you, it reads as still.
+- **Fix:** for the police car, the spoke pattern's turning is capped at `POLICE_WHEEL_MAX` 30 rad/s of phase (about one visible turn a second with 5 spokes, like film of a fast wheel), and the blur goes to 45 % at most. The spokes keep visibly spinning.
+- **Status:** Accepted

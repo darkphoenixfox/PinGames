@@ -202,6 +202,11 @@ func _warmup_nodes() -> Array[Node]:
 func _exit_tree() -> void:
 	if get_tree().node_added.is_connected(_on_node_added):
 		get_tree().node_added.disconnect(_on_node_added)
+	# D-247: left during loading (EXIT): the loading animation stops, and the
+	# base class frees what was put on the TABLE (the loading overlay).
+	if module == null:
+		Dmd.stop_anim()
+	super._exit_tree()
 
 
 func _on_node_added(n: Node) -> void:
@@ -404,7 +409,10 @@ func _build_overlay() -> void:
 
 func on_action(action: StringName, pressed: bool) -> void:
 	if module == null:
-		return   # still loading
+		# Still loading: EXIT goes back now (D-247); everything else waits.
+		if action == &"exit" and pressed:
+			shell.abort_game()
+		return
 	if action == &"exit" and pressed:
 		shell.abort_game()
 		return
