@@ -19,6 +19,31 @@ const CAP := 0.72          # cap height as a share of the font size
 const DENSE_FROM := 60     # font sizes from here get 2x2 dots per bit
 const RIM := Color(0.02, 0.02, 0.04, 0.85)
 
+## A 3x5 pixel font for the smallest low-resolution text (D-233), where the
+## 5x7 at one pixel per bit would be too big for its space.
+const MICRO := {
+	"A": "010 101 111 101 101", "B": "110 101 110 101 110", "C": "011 100 100 100 011",
+	"D": "110 101 101 101 110", "E": "111 100 110 100 111", "F": "111 100 110 100 100",
+	"G": "011 100 101 101 011", "H": "101 101 111 101 101", "I": "111 010 010 010 111",
+	"J": "001 001 001 101 010", "K": "101 101 110 101 101", "L": "100 100 100 100 111",
+	"M": "101 111 111 101 101", "N": "110 101 101 101 101", "O": "010 101 101 101 010",
+	"P": "110 101 110 100 100", "Q": "010 101 101 110 011", "R": "110 101 110 101 101",
+	"S": "011 100 010 001 110", "T": "111 010 010 010 010", "U": "101 101 101 101 111",
+	"V": "101 101 101 101 010", "W": "101 101 111 111 101", "X": "101 101 010 101 101",
+	"Y": "101 101 010 010 010", "Z": "111 001 010 100 111",
+	"0": "111 101 101 101 111", "1": "010 110 010 010 111", "2": "110 001 010 100 111",
+	"3": "110 001 010 001 110", "4": "101 101 111 001 001", "5": "111 100 110 001 110",
+	"6": "011 100 111 101 111", "7": "111 001 010 010 010", "8": "111 101 111 101 111",
+	"9": "111 101 111 001 110",
+	" ": "000 000 000 000 000", ".": "000 000 000 000 010", ",": "000 000 000 010 100",
+	":": "000 010 000 010 000", "!": "010 010 010 000 010", "?": "110 001 010 000 010",
+	"-": "000 000 111 000 000", "+": "000 010 111 010 000", "/": "001 001 010 100 100",
+	"%": "101 001 010 100 101", "'": "010 010 000 000 000", "(": "001 010 010 010 001",
+	")": "100 010 010 010 100", "<": "001 010 100 010 001", ">": "100 010 001 010 100",
+	"=": "000 111 000 111 000", "#": "101 111 101 111 101", "_": "000 000 000 000 111",
+	"*": "000 101 010 101 000", "&": "010 101 010 101 011",
+}
+
 static var _cache := {}
 
 
@@ -36,6 +61,18 @@ static func font(size: int, px: float = 1.0) -> FontFile:
 static func _build(size: int, px: float) -> FontFile:
 	var low := px < 0.99
 	var cap_px := size * CAP * px                 # cap height in target pixels
+	# The glyph set: the DMD's 5x7, or the 3x5 for tiny low-res text (D-233).
+	var micro := low and cap_px < 6.3
+	var GW := 3 if micro else DotFont.W
+	var GH := 5 if micro else DotFont.H
+	var GADV := 4 if micro else DotFont.ADVANCE
+	var glyph := func(ch: String) -> PackedInt32Array:
+		if not micro:
+			return DotFont._glyph(ch)
+		var rows := PackedInt32Array()
+		for r in str(MICRO.get(ch, MICRO[" "])).split(" "):
+			rows.append(r.bin_to_int())
+		return rows
 	var sub := 1                                  # dots per bit, per axis
 	var b: int                                    # target pixels per glyph bit
 	if not low and size >= DENSE_FROM:
@@ -43,12 +80,12 @@ static func _build(size: int, px: float) -> FontFile:
 		b = maxi(4, int(cap_px / 14.0) * 2)
 	else:
 		# Rounded down, so text is never wider than the old font's (layouts fit).
-		b = maxi(1 if low else 2, int(cap_px / 7.0))
+		b = 1 if micro else maxi(1 if low else 2, int(cap_px / 7.0))
 	var pad := 1 if (low and b <= 2) else maxi(1, b / sub / 3)
-	var gw := DotFont.W * b + pad * 2
-	var gh := DotFont.H * b + pad * 2
+	var gw := GW * b + pad * 2
+	var gh := GH * b + pad * 2
 	# All glyphs in one atlas row per 16.
-	var chars: Array = DotFont.GLYPHS.keys()
+	var chars: Array = MICRO.keys() if micro else DotFont.GLYPHS.keys()
 	var cols := 16
 	var rows := int(ceil(chars.size() / float(cols)))
 	var atlas := Image.create(maxi(1, cols * gw), maxi(1, rows * gh), false, Image.FORMAT_RGBA8)
@@ -57,7 +94,7 @@ static func _build(size: int, px: float) -> FontFile:
 		var ch: String = chars[i]
 		var ox := (i % cols) * gw
 		var oy := (i / cols) * gh
-		_draw_glyph(atlas, DotFont._glyph(ch), ox + pad, oy + pad, b, sub, low)
+		_draw_glyph(atlas, glyph.call(ch), ox + pad, oy + pad, b, sub, low, GW, GH)
 		cells[ch] = Rect2(ox, oy, gw, gh)
 	var s := 1.0 / px                             # base pixels per target pixel
 	var f := FontFile.new()
@@ -65,12 +102,12 @@ static func _build(size: int, px: float) -> FontFile:
 	f.fixed_size_scale_mode = TextServer.FIXED_SIZE_SCALE_DISABLE
 	f.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 	var sz := Vector2i(size, 0)
-	var asc := (DotFont.H * b + pad) * s + size * 0.12
+	var asc := (GH * b + pad) * s + size * 0.12
 	var desc := size * 0.28
 	f.set_cache_ascent(0, size, asc)
 	f.set_cache_descent(0, size, desc)
 	f.set_texture_image(0, sz, 0, atlas)
-	var adv := (DotFont.ADVANCE * b) * s
+	var adv := (GADV * b) * s
 	for ch in chars:
 		var r: Rect2 = cells[ch]
 		var codes := [ch.unicode_at(0)]
@@ -78,7 +115,7 @@ static func _build(size: int, px: float) -> FontFile:
 			codes.append(ch.to_lower().unicode_at(0))   # lower case shows as capitals
 		for code in codes:
 			f.set_glyph_advance(0, size, code, Vector2(adv, 0.0))
-			f.set_glyph_offset(0, sz, code, Vector2(-pad * s, -(DotFont.H * b + pad) * s))
+			f.set_glyph_offset(0, sz, code, Vector2(-pad * s, -(GH * b + pad) * s))
 			f.set_glyph_size(0, sz, code, r.size * s)
 			f.set_glyph_uv_rect(0, sz, code, r)
 			f.set_glyph_texture_idx(0, sz, code, 0)
@@ -88,7 +125,7 @@ static func _build(size: int, px: float) -> FontFile:
 			var r2: Rect2 = cells[base]
 			for code in [fold.unicode_at(0), fold.to_lower().unicode_at(0)]:
 				f.set_glyph_advance(0, size, code, Vector2(adv, 0.0))
-				f.set_glyph_offset(0, sz, code, Vector2(-pad * s, -(DotFont.H * b + pad) * s))
+				f.set_glyph_offset(0, sz, code, Vector2(-pad * s, -(GH * b + pad) * s))
 				f.set_glyph_size(0, sz, code, r2.size * s)
 				f.set_glyph_uv_rect(0, sz, code, r2)
 				f.set_glyph_texture_idx(0, sz, code, 0)
@@ -100,13 +137,14 @@ static func _build(size: int, px: float) -> FontFile:
 
 ## One glyph into the atlas at (x0, y0): its bits as dots (or pixels), with
 ## the dark rim drawn first underneath.
-static func _draw_glyph(img: Image, rows: PackedInt32Array, x0: int, y0: int, b: int, sub: int, low: bool) -> void:
+static func _draw_glyph(img: Image, rows: PackedInt32Array, x0: int, y0: int, b: int, sub: int, low: bool,
+		gw: int = 5, gh: int = 7) -> void:
 	var on := func(c: int, r: int) -> bool:
-		return r >= 0 and r < DotFont.H and c >= 0 and c < DotFont.W and (rows[r] & (1 << (DotFont.W - 1 - c))) != 0
+		return r >= 0 and r < gh and c >= 0 and c < gw and (rows[r] & (1 << (gw - 1 - c))) != 0
 	if low and b <= 2:
 		# Crisp pixels: each bit a b x b block, a 1 px dark outline round them.
-		for r in DotFont.H:
-			for c in DotFont.W:
+		for r in gh:
+			for c in gw:
 				if not on.call(c, r):
 					continue
 				for yy in range(-1, b + 1):
@@ -116,15 +154,15 @@ static func _draw_glyph(img: Image, rows: PackedInt32Array, x0: int, y0: int, b:
 						if px >= 0 and py >= 0 and px < img.get_width() and py < img.get_height() \
 								and img.get_pixel(px, py).a == 0.0:
 							img.set_pixel(px, py, RIM)
-		for r in DotFont.H:
-			for c in DotFont.W:
+		for r in gh:
+			for c in gw:
 				if on.call(c, r):
 					img.fill_rect(Rect2i(x0 + c * b, y0 + r * b, b, b), Color.WHITE)
 		return
 	var d := float(b) / sub                    # dot pitch in target pixels
 	for pass_i in 2:                           # rim first, then the dots
-		for r in DotFont.H:
-			for c in DotFont.W:
+		for r in gh:
+			for c in gw:
 				if not on.call(c, r):
 					continue
 				for sy in sub:

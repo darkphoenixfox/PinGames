@@ -2284,3 +2284,16 @@
   - **Low resolution:** `font(size, px)` also makes fonts for low-resolution canvases (`px` target pixels per base pixel), used by D-233.
 - **`UI.label`:** uses it, so the shell, Tilt Breaker and Turbo Run UI text all change. Styled title fonts (D-062, D-186) and 3D `Label3D` world text (gate banners, Tilt Breaker's capsule letters) are unchanged.
 - **Status:** Accepted
+
+### D-233 — Turbo Run: the UI follows the graphics mode (low-resolution UI in 8-BIT/16-BIT)
+- **Date:** 2026-11-23
+- **Decision (director):** all UI should be affected by the HD/retro setting, with lower-resolution UI elements that are clean and legible. Asked: in 8-BIT and 16-BIT the HUD and menus are drawn at the game's low resolution, with fonts made for it.
+- **UI layer:** all of Turbo Run's UI (HUD, gauges, banners, attract, GRAPHICS, START STAGE, the showroom, results, centre messages) now draws into `_ui_vp`. It is a transparent SubViewport laid out in TABLE base coordinates (1080×1920 via `size_2d_override`), shown over the 3D view. The police screen wash stays on the TABLE (additive) under it.
+- **Resolution** (`_set_ui_res`, on every graphics change):
+  - HD: full resolution, linear filtering.
+  - 16-BIT: 480×854; 8-BIT: 270×480. Both use nearest upscaling and snapping to the pixel grid, so gauges, icons and text are real low-resolution pixel art, like the 3D view.
+- **Fonts:** every dot-font label (`dot_size`, D-232) is rebuilt for the layer's resolution (`DotText.font(size, px)`), including labels created later.
+  - At 1–2 target pixels per bit: crisp square pixels with a 1 px dark outline.
+  - With more room: hard-edged dots.
+  - Where even one pixel per bit would make the 5×7 oversized (cap under 6.3 target pixels: most 8-BIT labels), a new 3×5 pixel font (`DotText.MICRO`) is used, so the gauge numbers fit.
+- **Status:** Accepted

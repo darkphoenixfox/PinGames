@@ -18,6 +18,7 @@ const Sim = preload("res://games/racer/sim.gd")
 const Track = preload("res://games/racer/track.gd")
 const Scenery = preload("res://games/racer/scenery.gd")
 const City = preload("res://games/racer/city.gd")   # D-216
+const DotText = preload("res://core/ui/dot_text.gd")   # D-233
 const Weather = preload("res://games/racer/weather.gd")   # D-217
 const PUDDLE_SHADER = preload("res://games/racer/shaders/puddles.gdshader")
 ## Weather looks (D-217): fog [begin, end] m at full strength per kind, and
@@ -369,6 +370,12 @@ static var _seen_magna := false  # a magna save was pressed this session (stays 
 var _root: Node3D
 var _cam: Camera3D
 var _weather: Node3D            # D-217
+## D-233: all of the game's UI draws in its own viewport over the 3D view, at
+## full resolution in HD and at the game's low resolution in 8-BIT/16-BIT.
+var _ui_vp: SubViewport
+var _ui_root: Control
+var _ui_view: TextureRect
+var _ui_px := 1.0                # target pixels per base pixel of the UI
 var _puddle_mat: ShaderMaterial
 var _wx := {"rain": 0.0, "snow": 0.0, "fog": 0.0, "haze": 0.0}   # smoothed weather weights
 var _env: Environment
@@ -689,7 +696,7 @@ func _enter_attract() -> void:
 	hint.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # wraps at 900 px: no lines lost, margins kept
 	_attract_ui.add_child(hint)
 	_attract_ui.alignment = BoxContainer.ALIGNMENT_BEGIN
-	add_to_table(_attract_ui)
+	_add_ui(_attract_ui)
 	Dmd.show_image(load(DMD_LOGO))
 
 
@@ -735,6 +742,7 @@ func _start_gfx() -> String:
 func _apply_gfx(mode: String) -> void:
 	_gfx_mode = mode
 	_anim_mult = {"nes": 1.0, "retro": 2.0}.get(mode, 0.0)
+	_set_ui_res.call_deferred()   # D-233
 	var on := mode == "hd"
 	_gfx_hd = on
 	var low := NES_RES if mode == "nes" else PIXEL_RES
@@ -818,7 +826,7 @@ func _begin_gfx() -> void:
 	_gfx_hint = UI.label("", 36, UI.WHITE)
 	col.add_child(_gfx_hint)
 	_gfx_ui.add_child(col)
-	add_to_table(_gfx_ui)
+	_add_ui(_gfx_ui)
 	_refresh_gfx()
 
 
@@ -882,7 +890,7 @@ func _begin_stage_select() -> void:
 	_stage_hint = UI.label("", 36, UI.WHITE)
 	col.add_child(_stage_hint)
 	_stage_ui.add_child(col)
-	add_to_table(_stage_ui)
+	_add_ui(_stage_ui)
 	_refresh_stage()
 
 
@@ -920,7 +928,7 @@ func _begin_select() -> void:
 	_showroom = Showroom.new()
 	_showroom.hd = _gfx_hd
 	_showroom.nes = _gfx_mode == "nes"
-	add_to_table(_showroom)
+	_add_ui(_showroom)
 	_showroom.selected = _chosen_car
 	_showroom.build(func(hue: float, i: int) -> Node3D:
 		var m: String = CAR_MODELS[i]
@@ -1004,7 +1012,7 @@ func _finale(delta: float) -> void:
 	if before < FINALE_TEXT_AT and _finale_t >= FINALE_TEXT_AT:
 		_finale_ui = UI.vstack(40)
 		var dim := UI.fill(Color(0, 0, 0, 0.55))
-		add_to_table(dim)
+		_add_ui(dim)
 		_finale_ui.add_child(UI.styled_label(tr("RC_FINISH") if sim.finished else tr("DMD_GAME_OVER"), TITLE_FONT, 3))
 		_finale_ui.add_child(UI.spacer(30))
 		if sim.finished:   # D-221
@@ -1015,7 +1023,7 @@ func _finale(delta: float) -> void:
 		var dist := UI.styled_label(tr("RC_DISTANCE") % (sim.s / 1609.34), TITLE_FONT, 2)   # miles (D-147)
 		dist.add_theme_color_override("font_color", Color(0.55, 0.9, 1.0))
 		_finale_ui.add_child(dist)
-		add_to_table(_finale_ui)
+		_add_ui(_finale_ui)
 		Dmd.show_text(tr("RC_FINISH") if sim.finished else tr("DMD_GAME_OVER"), ScoreTable.format_score(sim.score), Dmd.YELLOW if sim.finished else Dmd.RED, Dmd.YELLOW)
 	if _finale_t >= FINALE_END_AT:
 		_finale_t = -100.0
@@ -1139,6 +1147,73 @@ func _handle_events() -> void:
 
 
 # --- world ---------------------------------------------------------------------------
+## The UI layer (D-233): a transparent viewport laid out in TABLE base
+## coordinates, shown over the 3D view (and the police wash).
+func _build_ui_layer() -> void:
+	if _ui_vp != null:
+		return
+	_ui_vp = SubViewport.new()
+	_ui_vp.transparent_bg = true
+	_ui_vp.size = Screens.TABLE_BASE
+	_ui_vp.size_2d_override = Screens.TABLE_BASE
+	_ui_vp.size_2d_override_stretch = true
+	_ui_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_ui_vp.disable_3d = false
+	add_to_table(_ui_vp)
+	_ui_root = Control.new()
+	_ui_root.size = Vector2(Screens.TABLE_BASE)
+	_ui_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ui_vp.add_child(_ui_root)
+	_ui_view = TextureRect.new()
+	_ui_view.texture = _ui_vp.get_texture()
+	_ui_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_ui_view.stretch_mode = TextureRect.STRETCH_SCALE
+	_ui_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_ui_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_to_table(_ui_view)
+	get_tree().node_added.connect(_on_ui_node_added)
+	_set_ui_res()
+
+
+## Adds a piece of UI to the UI layer (D-233).
+func _add_ui(node: Node) -> Node:
+	if _ui_vp == null:
+		_build_ui_layer()
+	_ui_root.add_child(node)
+	return node
+
+
+## The UI layer's resolution for the graphics mode (D-233): full in HD; in
+## 8-BIT/16-BIT the 3D view's own low resolution, upscaled with hard pixels,
+## and every dot-font label rebuilt for that resolution.
+func _set_ui_res() -> void:
+	if _ui_vp == null:
+		return
+	var low := _gfx_mode != "hd"
+	var res: Vector2i = Screens.TABLE_BASE
+	if low:
+		res = NES_RES if _gfx_mode == "nes" else PIXEL_RES
+	_ui_vp.size = res
+	_ui_vp.snap_2d_transforms_to_pixel = low
+	_ui_vp.snap_2d_vertices_to_pixel = low
+	_ui_vp.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST if low \
+		else Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR
+	_ui_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if low else CanvasItem.TEXTURE_FILTER_LINEAR
+	_ui_px = float(res.x) / float(Screens.TABLE_BASE.x)
+	for n in _ui_root.find_children("*", "Label", true, false):
+		_refont(n as Label)
+
+
+func _refont(l: Label) -> void:
+	if l.has_meta("dot_size"):
+		l.add_theme_font_override("font", DotText.font(int(l.get_meta("dot_size")), _ui_px))
+
+
+func _on_ui_node_added(n: Node) -> void:
+	if n is Label and _ui_root != null and _ui_root.is_ancestor_of(n):
+		_refont(n as Label)
+
+
 func _build_world() -> void:
 	_root = Node3D.new()
 	_root.name = "TurboRunWorld"
@@ -1167,6 +1242,7 @@ func _build_world() -> void:
 	view.material = post
 	_retro_post = post
 	add_to_table(view)
+	_build_ui_layer.call_deferred()
 	# Police light wash (D-137): red and blue glows from the screen edges.
 	var add_mat := CanvasItemMaterial.new()
 	add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -2293,7 +2369,7 @@ func _animate(delta: float) -> void:
 func _build_hud() -> void:
 	_hud = Control.new()
 	_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_to_table(_hud)
+	_add_ui(_hud)
 	_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var top := HBoxContainer.new()
 	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
@@ -2486,7 +2562,7 @@ func _center_message(text: String, seconds: float) -> void:
 	l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.offset_bottom = -300
-	add_to_table(l)
+	_add_ui(l)
 	_center = l
 	_center_t = seconds
 
