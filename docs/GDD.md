@@ -252,7 +252,7 @@ Rules:
 - **Race:** no time limit. The first to the end of stage 10 wins; the race ends when both have stopped, or 8 s after the winner crosses. There's no high-score entry.
 - **Shared:** traffic, which reacts to both cars.
 - **Per player:** police chases, nitro canisters, weather and time of day (each half shows its own stage's sky, sun and fog).
-- **DMD:** each player has their own DMD at the top of their half, with the full 1P content (D-291). There are no radar lights, and the bottom gauges are half size with full-size text.
+- **DMD:** each player has their own DMD at the top of their half, with the full 1P content (D-291). There are no radar lights. At the bottom right of each half: a half-size speedo (full-size text), smaller gears beside it, and the tachometer as a yellow/green/red bar under the speedo (D-293).
 - **Controls:** P1 uses the arrows, Space and Ctrl, or their own pad. P2 uses A/D (steer), W (launch) and Q/E (brake / shift), or their own pad.
 
 ### 3D models (D-020)

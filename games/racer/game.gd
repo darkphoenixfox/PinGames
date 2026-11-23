@@ -1484,6 +1484,8 @@ func _start_p2(p1: Node) -> void:
 ## D-291 (director): 2P halves get the bottom gauges at half size; their
 ## numbers, RPM/MPH captions and the digital speed keep their text size.
 const COMPACT := 0.5
+const GEAR_COMPACT := 0.4   # D-293: the gears smaller still
+var _tach_bar: Control = null
 
 
 func _hud_compact() -> void:
@@ -1502,10 +1504,50 @@ func _hud_compact() -> void:
 	_speed_label.position = _speedo.hub() + Vector2(-80, 6)
 	_nitro_pop.position = _speedo.hub() + Vector2(-160, -r - 70.0)
 	var full := _gear_lever.custom_minimum_size
-	_gear_lever.scale = Vector2.ONE * COMPACT
-	_gear_lever.custom_minimum_size = full * COMPACT
+	_gear_lever.scale = Vector2.ONE * GEAR_COMPACT
+	_gear_lever.custom_minimum_size = full * GEAR_COMPACT
 	_gear_lever.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	(_gear_lever.get_parent() as Control).custom_minimum_size.x = 140
+	(_gear_lever.get_parent() as Control).custom_minimum_size.x = 90
+	# D-293 (director): the speedo in the player's bottom right corner with
+	# the gears beside it, and the tachometer as a bar under the speedo.
+	(_tacho.get_parent() as Control).visible = false
+	_hud_bottom.alignment = BoxContainer.ALIGNMENT_END
+	_hud_bottom.add_theme_constant_override("separation", 36)   # the gear letters clear of the speedo
+	if _tach_bar == null:
+		_tach_bar = TachBar.new()
+		_tach_bar.custom_minimum_size = Vector2(_speedo.custom_minimum_size.x + 40.0, 18.0)
+		_tach_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_speedo.get_parent().add_child(_tach_bar)
+
+
+## D-293: 2P's tachometer, a segmented bar: yellow, green in the perfect-shift
+## band, red at the redline; the unlit segments dim in the same colours.
+class TachBar extends Control:
+	const SEGS := 20
+	var value := 0.0
+	var good_from := 2.0
+	var good_to := 2.0
+	var red_from := 7.0 / 8.0
+
+	func set_state(v: float, g0: float, g1: float) -> void:
+		if is_equal_approx(v, value) and is_equal_approx(g0, good_from) and is_equal_approx(g1, good_to):
+			return
+		value = v
+		good_from = g0
+		good_to = g1
+		queue_redraw()
+
+	func _draw() -> void:
+		var w := size.x / SEGS
+		for i in SEGS:
+			var f := (i + 0.5) / SEGS
+			var col := Color("ffd23e")
+			if f >= red_from:
+				col = Color("ff3b4f")
+			elif f >= good_from and f < good_to:
+				col = Color("4fff7a")
+			var on := value >= f
+			draw_rect(Rect2(i * w + 1.0, 0.0, w - 2.0, size.y), col if on else col.darkened(0.75))
 
 
 ## D-291: a view's DMD at the top centre of its half, as the single screen
@@ -3556,6 +3598,10 @@ func _update_hud(delta: float) -> void:
 	UI.set_color(_speed_label, UI.CYAN if sim.boosting else UI.WHITE)
 	_speedo.set_value(sim.v * Sim.MPH / SPEEDO_MAX)
 	_tacho.set_value(_tach_value())
+	if _tach_bar != null:   # D-293: 2P's bar tachometer, with the start band on the grid
+		var cd := sim.state == Sim.State.COUNTDOWN
+		_tach_bar.set_state(_tach_value(), _tach_of(Sim.START_FROM if cd else Sim.PERFECT_FROM),
+			_tach_of(Sim.START_TO if cd else Sim.PERFECT_TO))
 	var countdown := sim.state == Sim.State.COUNTDOWN
 	_tacho.good_from = _tach_of(Sim.START_FROM if countdown else Sim.PERFECT_FROM)
 	_tacho.good_to = _tach_of(Sim.START_TO if countdown else Sim.PERFECT_TO)

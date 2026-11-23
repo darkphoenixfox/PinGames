@@ -2969,3 +2969,12 @@
 - **Particles:** `CPUParticles3D` (GPU particles don't move in our TABLE viewports). Fired with `restart()` after placing them, with no shadows. Setting `emitting = true` left an inactive particle drawn as a black square at the emitter and could hide the sparks entirely.
 - **Dev:** `--rc-burst` fires a burst in front of the car every half second.
 - **Status:** Accepted
+
+### D-293 — Turbo Run 2P: the speedo in the corner, smaller gears, a bar tachometer
+- **Date:** 2026-11-23
+- **Decision (director):** in a 2-player race, each half's bottom HUD is:
+  - **The speedo** in that player's bottom right corner (the bottom row right-aligned).
+  - **The gear lever** beside it at 0.4 size (D-291 had 0.5), with a gap so its H/L letters stay clear of the speedo.
+  - **The tachometer as a horizontal bar** under the speedo's MPH caption, replacing the round tacho (hidden in 2P): 20 segments, yellow, green in the perfect-shift band (the perfect-start band on the grid), and red from the redline (7/8). Unlit segments are dimmed in the same colours.
+- 1P is unchanged.
+- **Status:** Accepted
