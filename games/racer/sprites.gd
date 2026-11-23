@@ -38,6 +38,13 @@ const KINDS := {
 	"fern": ["fern", 1.4, true, false, 60],
 	"pine_snow": ["pine_snow", 13.0, true, false, 260],
 	"snow_rock": ["snow_rock", 3.0, true, false, 90],
+	# Finish town (D-229): houses and spectators.
+	"chalet_1": ["chalet_1", 7.5, true, false, 150],
+	"chalet_2": ["chalet_2", 9.0, true, false, 170],
+	"townhouse": ["townhouse", 12.0, true, false, 200],
+	"crowd_1": ["crowd_1", 2.1, true, false, 70],
+	"crowd_2": ["crowd_2", 2.1, true, false, 70],
+	"crowd_3": ["crowd_3", 2.3, true, false, 76],
 }
 
 static var _meshes := {}

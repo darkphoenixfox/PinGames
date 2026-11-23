@@ -40,6 +40,8 @@ SPRITES = {
     # D-216: desert, forest and snowy mountain
     "cactus_1": 120, "cactus_2": 70, "desert_bush": 60, "mesa": 300,
     "pine_1": 300, "pine_2": 260, "fern": 60, "pine_snow": 260, "snow_rock": 90,
+    # D-229: finish town
+    "chalet_1": 150, "chalet_2": 170, "townhouse": 200, "crowd_1": 70, "crowd_2": 70, "crowd_3": 76,
 }
 
 

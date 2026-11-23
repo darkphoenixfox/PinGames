@@ -1597,6 +1597,10 @@ func _prop_kind(o: Dictionary) -> String:
 			return "snow_rock" if _obj_area(o, h) == "snow" else "rock"
 		"cactus":
 			return "cactus_1" if h % 3 == 0 else "cactus_2"
+		"chalet":   # the finish town (D-229)
+			return ["chalet_1", "chalet_2", "townhouse"][h % 3]
+		"crowd":
+			return ["crowd_1", "crowd_2", "crowd_3"][h % 3]
 		"chevron":   # curve warning: the arrow turns the way the road does.
 			# Track: dir = -1 on a left turn (curvature > 0); the sprite's arrow
 			# turns right as drawn.
@@ -1945,6 +1949,8 @@ func _build_chunk(k: int) -> Node3D:
 					f.basis = Basis.from_scale(Vector3.ONE * (1.05 + h * 0.4 + 0.1 * clampf(float(o.dir) - 1.0, 0.0, 2.0)))
 				"palm_1", "palm_2", "pine_snow", "tree_oak", "tree_cypress", "cactus_1":
 					f.basis = Basis.from_scale(Vector3.ONE * (0.85 + h * 0.35))
+				"crowd_1", "crowd_2", "crowd_3":
+					f.basis = Basis.from_scale(Vector3.ONE * (0.92 + h * 0.16))
 				"bush_1", "bush_2", "fern", "desert_bush", "cactus_2", "snow_rock":
 					f.basis = Basis.from_scale(Vector3.ONE * (0.8 + h * 0.5))
 				"mesa":

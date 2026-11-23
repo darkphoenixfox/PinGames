@@ -28,7 +28,15 @@ const MAX_HEADING := deg_to_rad(80.0)    # overall, from the start direction
 ## Roadside objects: [kind, collision radius]. Kinds are drawn by the view.
 const OBJ_RADIUS := {"palm": 0.6, "rock": 1.5, "chevron": 0.5, "lamp": 0.35, "gate": 0.0,
 	"bush": 0.0, "sign": 2.5, "gantry": 0.0, "speedtrap": 0.4, "house": 0.0, "lifeguard": 0.0,
-	"building": 0.0, "tlight": 0.4, "cactus": 0.5, "mesa": 0.0}
+	"building": 0.0, "tlight": 0.4, "cactus": 0.5, "mesa": 0.0, "chalet": 0.0, "crowd": 0.0}
+## The finish (D-221) is the end of stage FINISH_STAGE. A small town (D-229)
+## stands in the last TOWN_BEFORE m before it and TOWN_AFTER m after, with
+## spectators along both kerbs over the last CROWD_BEFORE m.
+const FINISH_STAGE := 10
+const TOWN_BEFORE := 600.0
+const TOWN_AFTER := 120.0
+const CROWD_BEFORE := 260.0
+const CROWD_AFTER := 40.0
 ## Areas (D-216; order D-225, director): the area of each stage 1..10; past the
 ## finish (stage 11 on) the last one goes on. The look cross-fades into the
 ## next area over the last AREA_BLEND m of a stage.
@@ -145,7 +153,8 @@ func _random_section() -> void:
 	var hill := _rng.randf()
 	var here := area_at(_built_to)
 	var there := area_at(_built_to + len)
-	if beach_w(_built_to) > 0.0 or beach_w(_built_to + len) > 0.0 or here == "city" or there == "city":
+	var town := in_town(_built_to) or in_town(_built_to + len) or (_built_to < finish_s() and _built_to + len > finish_s())
+	if beach_w(_built_to) > 0.0 or beach_w(_built_to + len) > 0.0 or here == "city" or there == "city" or town:
 		dh = _rng.randf_range(-1.0, 1.0) * len * 0.015   # flat-ish on the beach and in town (D-204, D-216)
 	elif here == "desert":
 		dh = _rng.randf_range(-1.0, 1.0) * len * 0.05    # long gentle rises (D-216)
@@ -216,6 +225,10 @@ func _place_props(s1: float) -> void:
 		if beach_w(s) > 0.5:
 			_place_beach(s)
 			_next_obj_s += _rng.randf_range(22.0, 34.0)
+			continue
+		if in_town(s):
+			_place_town(s)
+			_next_obj_s += 9.0
 			continue
 		var ar := area_at(s)
 		if ar == "city":
@@ -297,6 +310,33 @@ func _place_city(s: float) -> void:
 			_next_bld[si] = b0 + w + _rng.randf_range(0.5, 2.5)
 
 
+## The finish line's distance (D-221), 0 if checkpoints aren't set.
+func finish_s() -> float:
+	return avoid_every * FINISH_STAGE
+
+
+## In the finish town (D-229)?
+func in_town(s: float) -> bool:
+	var f := finish_s()
+	return f > 0.0 and s > f - TOWN_BEFORE and s < f + TOWN_AFTER
+
+
+## The finish town (D-229): houses close on both sides with lamps, and from
+## CROWD_BEFORE m out, groups of spectators along both kerbs.
+func _place_town(s: float) -> void:
+	var f := finish_s()
+	for side in [-1.0, 1.0]:
+		if _rng.randf() < 0.55:
+			_add_obj(s + _rng.randf_range(0.0, 4.0), side * (ROAD_HALF + RUMBLE + _rng.randf_range(9.0, 13.0)), "chalet", side)
+		if s > f - CROWD_BEFORE and s < f + CROWD_AFTER:
+			_add_obj(s + _rng.randf_range(0.0, 3.0), side * (ROAD_HALF + RUMBLE + _rng.randf_range(1.8, 3.2)), "crowd", side)
+			if _rng.randf() < 0.6:
+				_add_obj(s + _rng.randf_range(4.0, 8.0), side * (ROAD_HALF + RUMBLE + _rng.randf_range(4.0, 6.0)), "crowd", side)
+	if fmod(s, 30.0) < 9.0:
+		_add_obj(s, ROAD_HALF + RUMBLE + 1.0, "lamp")
+		_add_obj(s + 15.0, -(ROAD_HALF + RUMBLE + 1.0), "lamp")
+
+
 ## The junction within `reach` m of s, or -1.
 func near_junction(s: float, reach: float) -> float:
 	for j in junctions:
@@ -357,7 +397,7 @@ func _place_dressing(s1: float) -> void:
 			# On the beach (D-204): no bushes on the sand, fewer on the right.
 			# None in town; sparse in the desert and on the snow (D-216).
 			var chance := 0.7 * (1.0 - bw) if side < 0.0 else 0.7 * (1.0 - bw * 0.6)
-			if ar == "city":
+			if ar == "city" or in_town(s):
 				chance = 0.0
 			elif ar == "desert" or ar == "snow":
 				chance *= 0.35
@@ -369,17 +409,17 @@ func _place_dressing(s1: float) -> void:
 	if _next_trap_s < 0.0 and avoid_every > 0.0:
 		_next_trap_s = avoid_every * TRAPS_FROM_STAGE + 300.0
 	while _next_trap_s > 0.0 and _next_trap_s < s1:
-		if absf(curvature(_next_trap_s)) < 1.0 / 400.0 and not in_tunnel(_next_trap_s):
+		if absf(curvature(_next_trap_s)) < 1.0 / 400.0 and not in_tunnel(_next_trap_s) and not in_town(_next_trap_s):
 			_add_obj(_next_trap_s, ROAD_HALF + RUMBLE + 1.6, "speedtrap")
 			_next_trap_s += _rng.randf_range(TRAP_GAP.x, TRAP_GAP.y)
 		else:
 			_next_trap_s += 80.0
 	while _next_sign_s < s1:
-		if absf(curvature(_next_sign_s)) < 1.0 / 400.0:
+		if absf(curvature(_next_sign_s)) < 1.0 / 400.0 and not in_town(_next_sign_s):
 			_add_obj(_next_sign_s, ROAD_HALF + RUMBLE + 5.5, "sign")
 		_next_sign_s += _rng.randf_range(SIGN_EVERY.x, SIGN_EVERY.y)
 	while _next_gantry_s < s1:
-		if absf(curvature(_next_gantry_s)) < 1.0 / 500.0:
+		if absf(curvature(_next_gantry_s)) < 1.0 / 500.0 and not in_town(_next_gantry_s):
 			_add_obj(_next_gantry_s, 0.0, "gantry")
 			_next_gantry_s += GANTRY_EVERY
 		else:

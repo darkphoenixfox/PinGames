@@ -48,6 +48,19 @@ PROPS = {
     "fern": ("a lush low clump of green forest ferns", 1024, 768),
     "pine_snow": ("a conical dark green spruce tree heavily covered with white snow on its branches", 768, 1024),
     "snow_rock": ("a large grey granite boulder with thick white snow on top", 1024, 768),
+    # Finish town (D-229): a small snowy mountain town and the spectators.
+    "chalet_1": ("a small wooden alpine chalet house with a steep roof covered in thick snow, warm lit windows, "
+                 "seen from the front", 1024, 768),
+    "chalet_2": ("a two-storey alpine mountain house with white walls, dark wooden balconies and a snowy roof, "
+                 "seen from the front", 1024, 768),
+    "townhouse": ("a narrow tall old european town house with a pastel facade, shop on the ground floor and a "
+                  "snowy roof, seen from the front, no text", 768, 1024),
+    "crowd_1": ("a small group of five cheering spectators in colourful winter jackets and hats, waving and "
+                "raising their arms, full bodies, standing side by side, seen from the front", 1024, 768),
+    "crowd_2": ("a group of four excited racing fans in winter coats and scarves waving a checkered flag and "
+                "clapping, full bodies, seen from the front", 1024, 768),
+    "crowd_3": ("a family of spectators in warm winter clothes cheering, a child on a parent's shoulders, full "
+                "bodies, seen from the front", 1024, 768),
     "gantry": ("an overhead highway sign gantry: a grey steel truss beam on two tall steel posts holding two "
                "square green highway signs, each with a white arrow pointing up, no text", 1024, 768),
 }

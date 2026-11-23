@@ -2239,3 +2239,17 @@
 - **Cause:** `building.gdshader` passed each building's seed and size through ordinary interpolated varyings. They arrived with tiny per-pixel differences, and the `sin()`-based hash, fed large arguments (about 40,000), turned those into random per-pixel values that changed from frame to frame.
 - **Fix:** the per-building varyings (`cust`, `bsize`) are `flat`, and the hash is a sin-free one (Dave Hoskins' hash12), stable on every GPU. Windows, rooms, blinds and shopfronts are now solid and steady.
 - **Status:** Accepted
+
+### D-229 — Turbo Run: a small town at the finish, with spectators
+- **Date:** 2026-11-23
+- **Decision (director):** add a small town right before the finish line, with groups of people (sprites) on both sides watching the end of the race.
+- **Town:** `Track.in_town(s)` covers `TOWN_BEFORE` 600 m before the finish to `TOWN_AFTER` 120 m after. `Track.FINISH_STAGE` is now the one source of the finish stage (`Sim.FINISH_STAGE` takes it).
+  - **Road:** flat-ish through the town.
+  - **Houses:** in place of the mountain's scattered trees, houses (`chalet`: two alpine chalets and a town house) stand 9–13 m past the kerb on both sides, more than half the time every 9 m.
+  - **Lamps:** street lamps every 30 m.
+  - **Left out:** no bushes, speed cameras, signs or gantries.
+- **Spectators:** `crowd` groups stand 1.8–3.2 m past the kerb on both sides, every 9 m, with a second row (4–6 m out) 60 % of the time. They run from `CROWD_BEFORE` 260 m before the line to `CROWD_AFTER` 40 m after. They have no collision radius: the gap from the kerb keeps them clear, and the car scraping past doesn't hit them.
+- **Art:** 6 sprites from Qwen-Image 2.1 in the D-196 painted style (two candidates each, one picked):
+  - houses: a wooden chalet, a white alpine house, a pastel town house;
+  - crowds: five cheering in colourful jackets, four fans with a chequered flag, a family with a child on a parent's shoulders.
+- **Status:** Accepted

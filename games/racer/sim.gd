@@ -100,7 +100,7 @@ const CHECKPOINT_EVERY := 2300.0   # D-101 (was 1800)
 ## The finish line (D-221): the end of stage FINISH_STAGE. Crossing it ends the
 ## race: no more time, a finish bonus plus a bonus for every second left, and
 ## the car coasts to a stop.
-const FINISH_STAGE := 10
+const FINISH_STAGE := Track.FINISH_STAGE
 ## Slow crashes (D-223): below this shown speed a hit only slows the car and
 ## bounces it off; no spin, no roll-over.
 const SOFT_CRASH_MPH := 55.0
