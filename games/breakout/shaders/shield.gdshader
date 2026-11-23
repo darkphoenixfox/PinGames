@@ -8,6 +8,7 @@ uniform vec4 shield_color : source_color = vec4(0.3, 0.75, 1.0, 1.0);
 uniform float strength = 0.0;
 uniform float hit_x = 0.0;
 uniform float age = 0.0;  // seconds since the hit
+uniform float idle = 0.0; // D-263: a faint resting glow (the field's edges), 0..1
 
 void fragment() {
 	vec2 p = vec2(UV.x * 2.0 - 1.0, UV.y);           // x across, y 0 (front) .. 1 (ship)
@@ -19,6 +20,7 @@ void fragment() {
 	// Cheap hex/scanline texture
 	float hex = 0.6 + 0.4 * step(0.5, fract(UV.x * 26.0 + step(0.5, fract(UV.y * 6.0)) * 0.5)) * step(0.15, fract(UV.y * 6.0));
 	float a = band * edge * strength * (0.35 * hex + 1.2 * core + 0.9 * ripple);
+	a = max(a, band * edge * idle * hex);
 	ALBEDO = shield_color.rgb * a * 2.5;
 	ALPHA = clamp(a, 0.0, 1.0);
 }

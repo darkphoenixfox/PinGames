@@ -2616,3 +2616,10 @@
 - **Screens:** `want_dmd_above(on)` keeps the flexible TABLE (D-255), but in landscape it takes the area under the DMD (full width) instead of the whole window with the DMD over it. `dmd_cover()` is 0 then. Tilt Breaker asks for this, instead of D-255's 9:16 TABLE, and gives it back on exit.
 - **Tilt Breaker:** its orthographic camera keeps the playfield's height (16 units), so on a wide area the playfield stays centred at the same size, and the starfield, planet and space fill the sides. The edge shields are invisible, so nothing marks the extra width. Gameplay (the field, 8.2 × 15.1) is unchanged. Its text is centre-anchored, so it fits as it is.
 - **Status:** Accepted
+
+### D-263 — Tilt Breaker: the edge shields glow faintly at rest
+- **Date:** 2026-11-23
+- **Decision (director):** render the side (blue) shields at 5 % even when no ball is hitting them, to make clear what the play area is on 16:9 (D-262).
+- **Change:** `shield.gdshader` gains `idle`, a resting glow with the same band, edge and hex texture as a hit. The field's left, right and top edge shields use `EDGE_IDLE` 0.05; hits still flash them fully, then they fade back to the glow. The ship's own shield keeps `idle` 0, so it's unchanged. The glow shows in every layout.
+- **Supersedes:** D-049's fully invisible barriers.
+- **Status:** Accepted

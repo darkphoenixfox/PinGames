@@ -681,6 +681,11 @@ func _build_starfield() -> void:
 
 
 ## Shield strips along the invisible boundaries, same effect as the ship's shield.
+## D-263: the field's edge shields always glow faintly, so the play area reads
+## on a wide screen (D-262).
+const EDGE_IDLE := 0.05
+
+
 func _build_edge_shields() -> void:
 	var f := Sim.FIELD
 	var side_len := Sim.DRAIN_Y - f.position.y
@@ -700,6 +705,7 @@ func _build_edge_shields() -> void:
 		var mat := ShaderMaterial.new()
 		mat.shader = SHIELD_SHADER
 		mat.set_shader_parameter("strength", 0.0)
+		mat.set_shader_parameter("idle", EDGE_IDLE)   # D-263: always faintly there
 		m.material_override = mat
 		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		m.position = spec[1]
