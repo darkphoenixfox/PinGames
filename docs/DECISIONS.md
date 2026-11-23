@@ -2439,3 +2439,12 @@
 - **Cause:** at speed the D-143 effect blurs the spokes into a flat grey disc (`wheel_blur` 1 above ~26 m/s). From behind, on the player's car, that reads as speed; side-on, next to you, it reads as still.
 - **Fix:** for the police car, the spoke pattern's turning is capped at `POLICE_WHEEL_MAX` 30 rad/s of phase (about one visible turn a second with 5 spokes, like film of a fast wheel), and the blur goes to 45 % at most. The spokes keep visibly spinning.
 - **Status:** Accepted
+
+### D-249 — Turbo Run: the wheels really turn
+- **Date:** 2026-11-23
+- **Bug (director):** the turning wheels looked like a faint texture over or under the wheel, not like wheels moving.
+- **Cause:** D-143's effect painted spoke streaks (blurring to a grey disc) over the wheel texture in the fragment shader, so the model's own rims never moved.
+- **Fix:** `car.gdshader`'s vertex stage rotates the wheels themselves. Every vertex inside a wheel's cylinder (|x| above `wheel_x` 0.66, within `wheel_r` of its axle, using the per-model axle data from D-246) turns about the axle by `wheel_phase`, normals too. The model's rims and tyres spin, texture and all. The painted streaks are removed.
+- **Rate:** the turning is capped at `WHEEL_MAX` 25 rad/s, about 4 turns a second and under half a spoke per frame at 60 fps. Faster would strobe, so the wheels are always seen turning forwards. This applies to the player's car and the police car (replacing D-248's cap).
+- **Dev:** `--rc-wheeltest` spins the wheels on the car-select turntables, to check them side-on.
+- **Status:** Accepted

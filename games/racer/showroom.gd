@@ -256,6 +256,12 @@ func _refresh() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	if Config.cli.has("rc-wheeltest"):   # dev (D-249): spin every car's wheels to check them
+		for car in _cars:
+			for m in (car as Node3D).find_children("*", "MeshInstance3D", true, false):
+				if (m as MeshInstance3D).material_override != null:
+					InstParam.set_param(m, "spin", 1.0)
+					InstParam.set_param(m, "wheel_phase", _t * 2.0)
 	# Only the chosen car turns (stepped like a sprite set); the others hold
 	# their pose (D-123).
 	# D-208: 8-BIT steps through SPRITE_ANGLES poses, 16-BIT twice as many, HD turns smoothly.

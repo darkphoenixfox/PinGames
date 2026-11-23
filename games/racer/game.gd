@@ -447,7 +447,7 @@ var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
 var _bg_dark := 0.0     # s of crash flicker left
 var _wheel_phase := 0.0
 var _police_wheel := 0.0       # D-246
-const POLICE_WHEEL_MAX := 30.0  # phase rad/s at most (5 spokes: about 1 turn a second, D-248)
+const WHEEL_MAX := 25.0   # rad/s the wheels are seen to turn at most (~4 turns a second, D-249)
 var _travel := 0.0         # eased nose angle from sideways travel (D-128)
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
@@ -1879,7 +1879,7 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	# D-248: seen side-on, a flat blurred disc reads as wheels standing still,
 	# so the spokes stay visible: their turning is capped at a rate the eye
 	# can follow (like film of a fast wheel) and only half blurred.
-	_police_wheel = fmod(_police_wheel + minf(absf(float(pd.v)) / 0.37, POLICE_WHEEL_MAX) * delta, TAU * 100.0)
+	_police_wheel = fmod(_police_wheel + minf(absf(float(pd.v)) / 0.37, WHEEL_MAX) * delta, TAU * 100.0)
 	var pstep := _police_wheel if _anim_mult <= 0.0 else floorf(_police_wheel * 3.0 * _anim_mult) / (3.0 * _anim_mult)
 	for m in _police.find_children("*", "MeshInstance3D", true, false):
 		var pmi := m as MeshInstance3D
@@ -2330,7 +2330,9 @@ func _animate(delta: float) -> void:
 	var braking := sim.braking or sim.auto_braking or (sim.state == Sim.State.OVER and sim.v > 1.0)
 	# Turning wheels (D-143): the phase follows the road speed (radius 0.32 m),
 	# stepped at ANIM_FPS like sprite frames; fast = a blurred disc.
-	_wheel_phase = fmod(_wheel_phase + sim.v / 0.32 * delta, TAU * 100.0)
+	# D-249: the wheels turn for real; capped at WHEEL_MAX so they're seen to
+	# turn (faster would strobe between frames).
+	_wheel_phase = fmod(_wheel_phase + minf(sim.v / 0.32, WHEEL_MAX) * delta, TAU * 100.0)
 	var phase_step := _wheel_phase if _anim_mult <= 0.0 else floorf(_wheel_phase * 3.0 * _anim_mult) / (3.0 * _anim_mult)
 	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
 		var gi := m as MeshInstance3D

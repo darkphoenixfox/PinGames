@@ -44,8 +44,28 @@ uniform bool tail_red_only = false;
 
 varying vec3 mp;
 
+uniform float wheel_x = 0.66;   // D-249: |x| from which the wheel's vertices start
+
 void vertex() {
 	mp = VERTEX;
+	// D-249: the wheels really turn. Every vertex inside a wheel's cylinder
+	// (outer side, within wheel_r of its axle) rotates about the axle by
+	// wheel_phase, so the model's own rims and tyres spin, texture and all.
+	if (spin > 0.5 && abs(VERTEX.x) > wheel_x) {
+		float az = sign(VERTEX.z) * axle_yz.y;
+		vec2 d = vec2(VERTEX.z - az, VERTEX.y - axle_yz.x);
+		if (length(d) < wheel_r * 1.04) {
+			float ca = cos(wheel_phase);
+			float sa = sin(wheel_phase);
+			// Rolling forward (nose +Z): the top of the wheel moves to +Z.
+			vec2 r = vec2(d.x * ca + d.y * sa, -d.x * sa + d.y * ca);
+			VERTEX.z = az + r.x;
+			VERTEX.y = axle_yz.x + r.y;
+			vec2 n = vec2(NORMAL.z * ca + NORMAL.y * sa, -NORMAL.z * sa + NORMAL.y * ca);
+			NORMAL.z = n.x;
+			NORMAL.y = n.y;
+		}
+	}
 }
 
 // D-198: a box with soft edges (fading over `f` metres), so lamp light has
@@ -72,21 +92,7 @@ void fragment() {
 	vec3 c = hd ? texture(tex_hd, UV).rgb : texture(tex, UV).rgb;
 	ALBEDO = hue_rotate(c, hue * 6.2831853) * bright;
 	float lum = dot(c, vec3(0.3, 0.59, 0.11));
-	if (spin > 0.5 && abs(mp.x) > 0.7) {
-		vec2 d = vec2(mp.z - sign(mp.z) * axle_yz.y, mp.y - axle_yz.x);
-		float r = length(d);
-		bool not_paint = c.r < c.g * 1.6 + 0.05;   // rims + tyre, not red bodywork
-		if (r < wheel_r && not_paint) {
-			float a = atan(d.y, d.x);
-			float rim = 1.0 - smoothstep(wheel_r * 0.62, wheel_r * 0.78, r);
-			float spokes = step(0.0, sin(a * 5.0 + wheel_phase));
-			vec3 dark = vec3(0.12);
-			vec3 streak = mix(dark, vec3(0.75), spokes);
-			vec3 disc = vec3(0.42);
-			vec3 w = mix(streak, disc, wheel_blur);
-			ALBEDO = mix(ALBEDO, w, rim * 0.85);
-		}
-	}
+	// (D-143's painted spoke streaks are gone: the wheels turn for real, D-249.)
 	float redness = (c.r > 0.3 && c.r > c.g * 1.8 && c.r > c.b * 1.8) ? 1.0 : 0.0;
 	// Tail lamps (D-198): a dim running glow at night, full brightness braking
 	// (with a hot core), instead of one flat level.
