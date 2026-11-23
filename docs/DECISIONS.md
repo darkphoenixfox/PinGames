@@ -2882,3 +2882,12 @@
 - **Dev:** `--tb-2p` starts straight in 2P. `--screenshot-delay` counts frames, not seconds.
 - **1P:** unchanged.
 - **Status:** Accepted
+
+### D-287 — Tilt Breaker 2P: two power bars on the DMD
+- **Date:** 2026-11-23
+- **Decision (director):** in 2-player Tilt Breaker the DMD shows both players' power bars.
+- **Layout:** `Dmd.show_status_two` keeps the shared score (top) and lives (bottom left). P1's compact 3-cell bar comes after the lives, P2's is at the right edge, and the level (`L1`) sits between them.
+- **Badges:** each bar's badge slot shows that player's power-up letter in its colour, or the player's number (dim) when they have none.
+- **Per player:** the bar hides for Lightspeed or Shield (as in 1P), and each player's LOW warning blinks in their own bar (`_low_power_t` is per ship).
+- **Drawing:** `_draw_bar` takes an optional cell width and right edge; 1P is unchanged.
+- **Status:** Accepted

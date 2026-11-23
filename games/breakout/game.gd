@@ -563,6 +563,19 @@ func _refresh_status() -> void:
 		score_changed.emit(0, sim.score)
 	if _finale_t >= 0.0 or _phase != "play":
 		return  # the finale / attract / intro own the DMD
+	if _two:   # D-287: a power bar for each player
+		var bars := []
+		for i in 2:
+			var pu2: String = sim.player_get(i, "powerup")
+			var c2: Color = POWERUP_COLORS.get(pu2, Dmd.YELLOW)
+			var low: float = _low_power_t if i == _vship else float(_vs[i]._low_power_t)
+			var enabled: bool = pu2 != "L" and pu2 != "S"
+			# No power-up: the badge slot shows the player's number instead.
+			bars.append({"value": sim.player_get(i, "power"), "color": c2,
+				"badge": pu2 if not pu2.is_empty() else str(i + 1),
+				"badge_color": c2 if not pu2.is_empty() else Dmd.DIM, "bar": enabled, "warn": low > 0.0})
+		Dmd.show_status_two(sim.score, sim.balls_left, sim.balls_total, sim.level, bars, ACCENT)
+		return
 	var pu: String = sim.powerup
 	var pcol: Color = POWERUP_COLORS.get(pu, Dmd.YELLOW)
 	Dmd.show_status(sim.score, sim.balls_left, sim.balls_total,
@@ -646,6 +659,7 @@ func _animate(delta: float) -> void:
 ## (sim._use / _view_use): position, banking, engines, blinking, its shield
 ## flash and recoil, the charge glow, Lightspeed ghosts, the recharge flash.
 func _animate_ship(delta: float) -> void:
+	_low_power_t = maxf(0.0, _low_power_t - delta)
 	_paddle.position = Vector3(sim.paddle_x, 0.0, sim.paddle_y)
 	# Bank into the movement (visual only).
 	var target_bank := -sim.paddle_vx / Sim.PADDLE_MAX_SPEED * deg_to_rad(MAX_BANK_DEG)
@@ -849,7 +863,7 @@ func _animate_ships(delta: float) -> void:
 ## D-286: makes ship i's nodes and view state live (and its sim state).
 const VIEW_FIELDS := ["_paddle", "_ship", "_recharge_mat", "_engines", "_shield_mat", "_belly_engines",
 	"_charge_particles", "_charge_glow", "_dash_glow", "_recoil", "_shield_age", "_ghost_nodes",
-	"_recharge_flash", "_last_power_step", "_charge_level_shown"]
+	"_recharge_flash", "_last_power_step", "_charge_level_shown", "_low_power_t"]
 var _two := false
 var _vship := 0
 var _vs := [{}, {}]
@@ -1672,7 +1686,6 @@ func _fire_ion_beam(x: float) -> void:
 
 ## Capsules, extra plasma balls, Lightspeed afterimages, Shield barrier.
 func _animate_powerups(delta: float) -> void:
-	_low_power_t = maxf(0.0, _low_power_t - delta)
 	for p in sim.powerups:
 		if _powerup_nodes.has(p.id):
 			var cap: Fx.PowerupCapsule = _powerup_nodes[p.id]

@@ -136,6 +136,31 @@ func show_status(score: int, lives: int, max_lives: int, power: float, segments:
 		"badge_color": badge_color if badge_color != null else WHITE})
 
 
+## D-287: the status line for two players: shared score, lives and level, and
+## one compact power bar per player (P1 left of centre, P2 at the right). Each
+## bar is a Dictionary: value, color, badge, badge_color, bar (shown), warn.
+func show_status_two(score: int, lives: int, max_lives: int, level: int, bars: Array,
+		score_color: Variant = null) -> void:
+	show_score(score, "", "", score_color)
+	var y := size.y - 7 * _unit
+	_elements.append({"type": "lives", "y": y, "lives": lives, "max": max_lives, "color": CYAN})
+	var u := _unit
+	var cell := 7 * u
+	var bar_w := 3 * cell + 2 * u
+	# P1's bar right after the lives, P2's at the right edge (badges left of each).
+	var rights := [(2 + max_lives * 7 + 2) * u + 10 * u + bar_w, size.x - 2 * u]
+	if level > 0:
+		var lv := "L%d" % level
+		var lx: float = (rights[0] + (rights[1] - bar_w - 10 * u) - DotFont.measure(lv, u)) / 2.0
+		_elements.append({"type": "text_at", "text": lv, "x": floorf(lx / u) * u, "y": y, "color": DIM})
+	for i in mini(bars.size(), 2):
+		var b: Dictionary = bars[i]
+		_elements.append({"type": "bar", "y": y + u, "value": clampf(float(b.get("value", 0.0)), 0.0, 1.0),
+			"segments": 3, "color": b.get("color", YELLOW), "hidden": not b.get("bar", true),
+			"warn": b.get("warn", false), "badge": b.get("badge", ""),
+			"badge_color": b.get("badge_color", WHITE), "cell_w": cell, "right": rights[i]})
+
+
 ## A game-drawn frame (D-103): `draw` is called every frame as
 ## draw.call(painter: Dmd.Painter) in logical 128x32 dots. Flashes and
 ## animations still show over it.
@@ -327,11 +352,11 @@ func _draw_lives(el: Dictionary) -> void:
 func _draw_bar(el: Dictionary) -> void:
 	var u := _unit
 	var segs := int(el.segments)
-	var cell_w := 12 * u
-	var gap := 2 * u
+	var cell_w: float = el.get("cell_w", 12 * u)   # D-287: compact bars for 2 players
+	var gap := 2 * u if cell_w >= 12 * u else u
 	var h := 4 * u
 	var total := segs * cell_w + (segs - 1) * gap
-	var x0 := size.x - 2 * u - total
+	var x0: float = float(el.get("right", size.x - 2 * u)) - total
 	# Power-up badge: its letter in a small frame, just left of the bar (D-072).
 	var badge: String = el.get("badge", "")
 	if not badge.is_empty():

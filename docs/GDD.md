@@ -154,7 +154,7 @@ Rules:
 
 **2 players (D-285, D-286).** Available only on a single landscape screen with a keyboard or gamepads (D-284). After PRESS START, players choose 1 PLAYER or 2 PLAYERS, then the difficulty.
 - **Field:** wider, with 19-column levels (`levels/level2p_*.txt`).
-- **Ships:** two, P2's flying slightly higher, so they pass each other. Each has its own power-up and energy bar (shown at the bottom corners).
+- **Ships:** two, P2's flying slightly higher, so they pass each other. Each has its own power-up and energy bar (at the bottom corners of the TABLE, and both on the DMD, D-287).
 - **Shared:** one ball, the lives and the score. A drain costs a shared life and passes the serve to the other player.
 - **Controls:** P1 uses the arrows, Space and Ctrl, or their own pad. P2 uses A/D (move), W (launch) and Q/E (dash), or their own pad.
 
