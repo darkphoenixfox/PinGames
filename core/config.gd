@@ -90,6 +90,13 @@ func get_value(section: String, key: String, fallback: Variant = null) -> Varian
 	var def: Variant = fallback
 	if DEFAULTS.has(section) and DEFAULTS[section].has(key):
 		def = DEFAULTS[section][key]
+	if section == "display" and key == "layout":
+		# D-268: a build can default to another layout (the PC tester build's
+		# override.cfg sets pingames/default_layout = "single").
+		if OS.has_feature("single"):
+			def = "single"
+		if ProjectSettings.has_setting("pingames/default_layout"):
+			def = str(ProjectSettings.get_setting("pingames/default_layout"))
 	var cli_key := "%s.%s" % [section, key]
 	if cli.has(cli_key):
 		return coerce(cli[cli_key], def)

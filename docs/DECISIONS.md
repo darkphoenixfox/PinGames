@@ -2662,3 +2662,14 @@
   - **Fix:** Tilt Breaker reports its real play area (`Screens.set_play_half_width`): its field's half width plus `PLAY_MARGIN` 0.9 units, over the TABLE's width in its 16-unit-high orthographic view. Each panel, frame included, fits between that edge (plus a 2.5 % gap) and the window edge, shrinking if the space is narrow.
 - **Decision (director):** replace the TILT BREAKER text above PRESS START at the start of the game with the game's logo. The attract screen shows `logo.png` (760×520 box, aspect kept) instead of the title in its styled font.
 - **Status:** Accepted
+
+### D-268 — PC tester build (Windows zip on a GitHub release)
+- **Date:** 2026-11-23
+- **Decision (director):** build a PC version in a zip to distribute to testers, upload it to GitHub, then commit, push and merge to main.
+- **Build:** the Windows export templates aren't installed (downloading them needs approval), so the build is the game exported as a `.pck` (new export preset "Windows", no template needed) next to the official Godot 4.7.2 runtime, renamed `PinGames.exe`. Godot runs a same-named `.pck` beside it. Also included: `PinGames_console.exe` (the same with a log window), `README.txt` (controls), and `override.cfg`.
+- **override.cfg:**
+  - `pingames/default_layout = "single"`: the build starts on one screen. `Config` reads that setting, or the export feature `single`, as the layout's default.
+  - `application/config/custom_user_dir_name = "PinGamesTester"`: settings and scores go to `%APPDATA%\PinGamesTester`, apart from a development install.
+- **Distribution:** `PinGames-tester-2026-11-23.zip` on a GitHub release of the (private) repo, so testers need repo access.
+- **Note:** the runtime is the editor binary, so the title bar says (DEBUG). A proper release build would need the export templates.
+- **Status:** Accepted
