@@ -2797,4 +2797,16 @@
 - **Quieter at rest** (amends D-279): the glass is 22 % opaque (was 55 %), the rim 50 %, the shadow and glow much lighter, icons and labels at about 60 %. A held button still fills with colour and lights up fully.
 - **Unchanged:** the side-column style of the old `web` page layout keeps all its buttons and the flipper pads.
 - **Checked:** landscape (Turbo Run) and portrait (the menu and Tilt Breaker) previews; a tap on the menu starts the game. Not checked on a real phone.
+- **Status:** Superseded by D-282 (the layout and tap-to-launch; the quieter look and the EXIT button stay)
+
+### D-282 — Touch overlay: the bottom half of the screen is the flippers
+- **Date:** 2026-11-23
+- **Decision (director):** make the bottom half of the screen the LEFT and RIGHT flippers, and only add buttons for EXIT and LAUNCH in the top half, glass-like and unintrusive. At the start of the game, show a message and an overlay pointing out which areas are the LEFT and RIGHT flippers. Supersedes D-281's layout (magna buttons above flipper buttons, tap anywhere for LAUNCH).
+- **Flippers** (`core/ui/touch_zones.gd`, the overlay of the single layout: web and Android): a touch in the bottom half of the screen holds LEFT on its left half and RIGHT on its right half. Each finger is tracked, so both can be held, and a finger sliding across changes side. Nothing is drawn there in play except a faint blue light rising from the bottom of a held side.
+- **Buttons:** only two, in the quiet glass style (D-279, D-281): EXIT, the small cross in the top left corner, and LAUNCH at the right edge just above the middle of the screen, within a thumb's reach. LAUNCH does everything START does. A touch elsewhere in the top half does nothing.
+- **Magna saves:** no touch control. Turbo Run stays in its automatic 2-button mode on touch (no BRAKE or SHIFT), and Tilt Breaker has no dash there (D-007: two flippers and LAUNCH are enough).
+- **Hint:** when the overlay first appears (the menu) and each time a game starts (`GameMode` calls `show_hint` through the `touch_controls` group), the two areas show for 4 s as dark glass panels with a blue edge, an arrow and LEFT / RIGHT, with "TOUCH THE LOWER HALF OF THE SCREEN FOR THE FLIPPERS" above them. Touching an area fades them out sooner.
+- **HIDE** still hides the buttons and turns the touch areas off.
+- **Unchanged:** the side-column style of the old `web` page layout.
+- **Checked:** landscape (Turbo Run) and portrait (menu) previews with mouse clicks. Not checked on a real phone.
 - **Status:** Accepted

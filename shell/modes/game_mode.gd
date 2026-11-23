@@ -109,6 +109,7 @@ func enter() -> void:
 		if is_instance_valid(_overlay_bg):
 			_overlay_bg.queue_free()
 		print("Shell: game shown, %d ms after entering" % (Time.get_ticks_msec() - t_enter))
+	get_tree().call_group("touch_controls", "show_hint")   # D-282: where the flippers are
 
 
 ## Draws everything the game loaded once, hidden behind the loading bar (D-178):

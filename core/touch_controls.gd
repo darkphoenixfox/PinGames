@@ -16,6 +16,7 @@ extends Node
 
 const UI = preload("res://core/ui/ui.gd")
 const Face = preload("res://core/ui/touch_button.gd")
+const Zones = preload("res://core/ui/touch_zones.gd")
 
 ## D-279: each button's icon in the overlay (a game can swap them, set_labels).
 const ICONS := {
@@ -60,9 +61,11 @@ var overlay := false:
 		for act in _buttons:
 			(_faces[act] as Control).visible = v
 			_style(act, false)
-		# D-281: over the game, START and LAUNCH have no button (a touch on the
-		# game itself is LAUNCH, which does everything START does), and EXIT
-		# floats small at the top left (`exit_button`, placed by Screens).
+		# D-282: over the game, the bottom half of the screen is the two
+		# flippers (`zones`), and the only buttons are EXIT (small, top left)
+		# and LAUNCH (right edge, just above the middle), which Screens adds
+		# to the page. LAUNCH does everything START does; the magna saves
+		# have no touch control (D-007: two flippers and LAUNCH are enough).
 		for act in OVERLAY_HIDDEN:
 			(_buttons[act] as Control).visible = not v
 		_left_blank.visible = not v
@@ -74,12 +77,28 @@ var overlay := false:
 			(_labels[&"exit"] as Label).visible = false
 			_faces[&"exit"].icon_y = 0.0
 			_faces[&"exit"].icon_r = 0.42
-## D-281: the overlay's EXIT button, for Screens to add to the page (null in
-## the side-column layout, where EXIT stays in the left column).
+		var la := _buttons[&"launch"] as Control
+		if v and la.get_parent() == right:
+			right.remove_child(la)
+			launch_button = la
+		if v and zones == null:
+			zones = Zones.new()
+## D-281 / D-282: the overlay's EXIT and LAUNCH buttons and its flipper areas,
+## for Screens to add to the page (null in the side-column layout).
 var exit_button: Control
+var launch_button: Control
+var zones: Control
 var _left_blank: Control
-const OVERLAY_HIDDEN := [&"start", &"launch"]
-const EXIT_SIZE := 0.62   # the floating EXIT's diameter, as a share of the others'
+const OVERLAY_HIDDEN := [&"start", &"flip_l", &"flip_r", &"magna_l", &"magna_r"]
+const EXIT_SIZE := 0.62   # the floating EXIT's diameter, as a share of LAUNCH's
+static var _hint_shown := false   # once per run on the menu; then at each game's start
+
+
+## D-282: marks the flipper areas for a few seconds (GameMode calls it through
+## the "touch_controls" group when a game starts).
+func show_hint() -> void:
+	if overlay and is_instance_valid(zones) and left.visible:
+		zones.show_hint()
 var _buttons := {}        # action -> Panel
 var _labels := {}         # action -> Label
 var _faces := {}          # action -> Face (the overlay's look, D-279)
@@ -118,6 +137,9 @@ func _ready() -> void:
 	# it never sees the "just released" frame (and the picker acts on release).
 	process_priority = -100
 	set_shown(bool(Config.get_value("display", "touch_controls")))
+	if overlay and not _hint_shown:   # the menu needs the flippers too
+		_hint_shown = true
+		show_hint.call_deferred()
 
 
 func _make_blank(b: Array) -> Control:
@@ -183,6 +205,9 @@ func set_labels(labels: Dictionary, icons: Dictionary = {}) -> void:
 func set_shown(on: bool) -> void:
 	left.visible = on
 	right.visible = on
+	for n in [exit_button, launch_button, zones]:
+		if is_instance_valid(n):
+			(n as Control).visible = on
 	toggle.text = tr("TOUCH_HIDE") if on else tr("TOUCH_SHOW")
 	if not on:
 		_release_all()
@@ -226,6 +251,10 @@ func _fit_round(win: Vector2) -> void:
 		exit_button.custom_minimum_size = Vector2.ZERO
 		exit_button.position = Vector2(edge, edge) * 0.6
 		exit_button.size = Vector2(de, de)
+	if is_instance_valid(launch_button):   # D-282: right edge, just above the middle
+		launch_button.custom_minimum_size = Vector2.ZERO
+		launch_button.size = Vector2(d, d)
+		launch_button.position = Vector2(win.x - edge - d, win.y * 0.5 - d - edge)
 	_toggle_space.custom_minimum_size.y = 0
 	_left_space.custom_minimum_size.y = 0
 	for col in [left, right]:
@@ -277,6 +306,8 @@ var _edge_space := {}  # column -> the spacer under its lowest button
 
 func _style(action: StringName, down: bool) -> void:
 	if overlay:   # D-279: the face draws the button; the panel only takes touches
+		if is_instance_valid(zones) and (action == &"flip_l" or action == &"flip_r"):
+			zones.set_held(0 if action == &"flip_l" else 1, down)
 		(_buttons[action] as Panel).add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 		_faces[action].set_down(down)
 		(_labels[action] as Label).modulate = Color(1, 1, 1, 1.0 if down else 0.6)   # D-281: quieter at rest
@@ -318,11 +349,12 @@ func _finger(index: int, pos: Vector2) -> void:
 				break
 		if now == &"" and is_instance_valid(table_view):
 			var r := table_view.get_global_rect()
-			if r.has_point(pos):
-				if overlay:   # D-281: a touch on the game is LAUNCH (and so START)
-					now = &"launch"
-				else:
-					now = &"flip_l" if pos.x < r.get_center().x else &"flip_r"
+			if overlay:   # D-282: the screen's bottom half is the flippers
+				var win := Vector2(get_window().size)
+				if pos.y >= win.y * 0.5 and pos.y <= win.y and pos.x >= 0.0 and pos.x <= win.x:
+					now = &"flip_l" if pos.x < win.x * 0.5 else &"flip_r"
+			elif r.has_point(pos):
+				now = &"flip_l" if pos.x < r.get_center().x else &"flip_r"
 	var before: StringName = _fingers.get(index, &"")
 	if now == before:
 		return
@@ -371,6 +403,6 @@ func _release_all() -> void:
 
 func _exit_tree() -> void:
 	_release_all()
-	for n in [left, right, toggle, exit_button]:
+	for n in [left, right, toggle, exit_button, launch_button, zones]:
 		if is_instance_valid(n) and n.get_parent() == null:
 			n.free()

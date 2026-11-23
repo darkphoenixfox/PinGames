@@ -437,8 +437,10 @@ func _single_layout() -> void:
 		bar.add_child(_touch.right)
 		_single_page.add_child(bar)
 		_single_bar = bar
+		_single_page.add_child(_touch.zones)           # D-282: the flipper areas, under the buttons
 		_single_page.add_child(_touch.toggle)
-		_single_page.add_child(_touch.exit_button)   # D-281: EXIT, top left
+		_single_page.add_child(_touch.exit_button)     # D-281: EXIT, top left
+		_single_page.add_child(_touch.launch_button)   # D-282: LAUNCH, right edge
 	_place_single(win)
 
 
