@@ -669,6 +669,24 @@ func test_racer_hd_assets() -> void:
 		if not ResourceLoader.exists(Game.HD_TEXTURES[lo]):
 			miss_tex.append(Game.HD_TEXTURES[lo])
 	check(miss_tex.is_empty() and Game.HD_TEXTURES.size() == 7, "HD car textures exist for all seven models")
+	# D-213: the oncoming horn is synthesised quickly, audible and not clipped flat.
+	var hg = Game.new()
+	var h_t0 := Time.get_ticks_msec()
+	var horns: Array = []
+	for pat in Game.HORN_PATTERNS:
+		horns.append(hg._horn_wav(pat))
+	var h_ms := Time.get_ticks_msec() - h_t0
+	var h_ok := true
+	for i in horns.size():
+		var hw: AudioStreamWAV = horns[i]
+		var peak := 0
+		for j in range(0, hw.data.size(), 64):
+			peak = maxi(peak, absi(hw.data.decode_s16(j)))
+		h_ok = h_ok and peak > 16000 and hw.get_length() > 0.5
+		if OS.has_environment("PG_HORN_OUT"):
+			hw.save_to_wav(OS.get_environment("PG_HORN_OUT") + "/horn_%d.wav" % i)
+	hg.free()
+	check(h_ok and h_ms < 1500, "oncoming horns synthesise (%d ms) and are audible" % h_ms)
 
 
 func test_racer_time_of_day() -> void:

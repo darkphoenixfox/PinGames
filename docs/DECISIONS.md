@@ -2002,3 +2002,17 @@
     - **On:** a soft glow halo, a hot rim, the colour, and a white core.
   - 8-BIT and 16-BIT keep the pixel lamps.
 - **Status:** Accepted
+
+### D-213 — Turbo Run: realistic oncoming horns
+- **Date:** 2026-11-23
+- **Decision (director):** make the oncoming traffic's horns more realistic. Before, they were a chiptune beep: two square waves (392 and 494 Hz), 0.18 s, with an echo.
+- **Sound:** a dual-tone electric car horn synthesised at load (`_horn_wav`).
+  - **Tones:** a low and a high tone, 415 and 500 Hz, a dissonant interval apart like real horn pairs.
+  - **Timbre:** each is a buzzy diaphragm tone (harmonics at 1/k up to 11 kHz), boosted around a nasal resonance at 2 kHz. It is read from a 512-sample single-cycle wavetable, so building it is cheap.
+  - **Each press:** starts about 4 % flat and settles in 25 ms (the diaphragm scoop), with a slight pitch jitter, an 8 ms attack, a 35 ms release and soft clipping for grit.
+- **Patterns:** "beep-beeep", one long blast, or "beep-beep-beeep", picked at random per honk.
+- **From the car:** it plays from the honking car.
+  - **Pitch:** Doppler from the car's closing speed against `HORN_SOUND_SPEED` 300 game m/s. That is near the real speed of sound in game units (about 400), so a head-on pass is roughly +30 % pitch, dropping as it goes by. The engine buzz keeps its exaggerated 85 (D-192).
+  - **Volume:** falls 6 dB per doubling of distance past 15 m.
+- **Test:** the three patterns synthesise in under 1.5 s and are audible.
+- **Status:** Accepted

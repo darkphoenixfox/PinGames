@@ -223,6 +223,16 @@ const TITLE_FONT := "sunset"
 ## Attract mode: "Maximum Overdrive" by Bogart VGM, CC BY 3.0 (D-104).
 const MUSIC_STAGES := 4
 const PASSERS := 2          # traffic engine voices (D-134)
+## Oncoming horns (D-213): a dual-tone electric car horn (low and high tones a
+## dissonant interval apart, buzzy diaphragm harmonics with a nasal resonance,
+## a pitch scoop at each press), honked from the car itself: Doppler from its
+## closing speed against a near-real speed of sound, volume by distance.
+const HORN_TONES := [415.0, 500.0]
+const HORN_FORMANT := 2000.0
+const HORN_SOUND_SPEED := 300.0    # game m/s (real ~400 here; a touch exaggerated)
+const HORN_RANGE := 260.0          # m where it fades out
+## Honk patterns (s): [start, length] presses.
+const HORN_PATTERNS := [[[0.0, 0.13], [0.21, 0.5]], [[0.0, 0.75]], [[0.0, 0.12], [0.19, 0.12], [0.38, 0.4]]]
 const PASS_RANGE := 70.0    # m: how far a car can be heard (D-192: was 45)
 const SOUND_SPEED := 85.0   # m/s, exaggerated so the Doppler shift is obvious (D-192: was 110)
 const ENGINE_GAIN_DB := -0.92   # D-192: the hero car's engine 10% lower (0.9x)
@@ -316,8 +326,6 @@ const SOUNDS := {
 	# Downshift: a short tyre chirp.
 	"rc_chirp": {"voices": [[{"f": [1400.0, 900.0], "t": 0.18, "w": "triangle", "v": 0.18, "vib": [30.0, 0.8]}],
 		[{"f": [5000.0, 3000.0], "t": 0.16, "w": "noise", "v": 0.12, "lp": 0.4}]]},
-	"rc_horn": {"voices": [[{"f": [392.0, 392.0], "t": 0.18, "w": "square", "v": 0.14, "env": "hold", "lp": 0.5}],
-		[{"f": [494.0, 494.0], "t": 0.18, "w": "square", "v": 0.14, "env": "hold", "lp": 0.5}]], "echo": [0.26, 0.5, 1.5]},
 	# Gear change: a mechanical clunk.
 	"rc_shift": {"voices": [[{"f": [150.0, 60.0], "t": 0.09, "w": "sine", "v": 0.5}],
 		[{"f": [2200.0, 900.0], "t": 0.04, "w": "lfsr", "v": 0.18, "lp": 0.4}]]},
@@ -429,6 +437,9 @@ var _cam_ready := false
 var _cam_x := 0.0
 var _engine: AudioStreamPlayer
 var _pass_duck := 0.0       # dB the hero's engine and wind dip for a passing car (D-192)
+var _horn: AudioStreamPlayer      # D-213
+var _horn_waves: Array = []       # one AudioStreamWAV per pattern
+var _horn_id := -1                # traffic id honking
 var _skid: AudioStreamPlayer
 var _engine_hi: AudioStreamPlayer
 var _wind: AudioStreamPlayer
@@ -967,7 +978,7 @@ func _handle_events() -> void:
 				_dmd_anim("nitro", [tr("RC_NITRO")])
 				_shake = 0.3
 			"high_beams":
-				Audio.sfx("rc_horn")
+				_honk(int(e[1]))
 			"perfect_start":
 				Audio.sfx("rc_perfect")
 				Audio.sfx("rc_backfire")
@@ -2757,8 +2768,117 @@ func _build_audio_loops() -> void:
 		return sin(TAU * 950.0 * t + sin(TAU * 25.0 * t) * 2.0) * 0.25, 0.4, 0.5)
 	_skid.volume_db = -80.0
 	add_child(_skid)
+	_build_horn()   # D-213: synthesised up front, not at the first honk
 	_engine.play()
 	_skid.play()
+
+
+func _build_horn() -> void:
+	_horn = AudioStreamPlayer.new()
+	_horn.bus = "SFX"
+	add_child(_horn)
+	for pat in HORN_PATTERNS:
+		_horn_waves.append(_horn_wav(pat))
+
+
+## An oncoming car honks (D-213): one of the patterns, from that car.
+func _honk(id: int) -> void:
+	if _horn == null:
+		_build_horn()
+	_horn_id = id
+	_horn.stream = _horn_waves[randi() % _horn_waves.size()]
+	_horn_volume_pitch(true)
+	_horn.play()
+
+
+func _update_horn() -> void:
+	if _horn != null and _horn.playing:
+		_horn_volume_pitch(false)
+
+
+func _horn_volume_pitch(snap: bool) -> void:
+	var t: Dictionary = {}
+	for c in sim.traffic:
+		if int(c.id) == _horn_id:
+			t = c
+			break
+	if t.is_empty():
+		_horn.volume_db = move_toward(_horn.volume_db, -60.0, 3.0)
+		return
+	var ds: float = t.s - sim.s
+	var d := Vector2(ds, float(t.x) - sim.x).length()
+	var closing: float = (sim.v - float(t.v)) * signf(ds if absf(ds) > 0.5 else 1.0)
+	var pitch := clampf(HORN_SOUND_SPEED / maxf(HORN_SOUND_SPEED - closing, 60.0), 0.7, 1.5)
+	# Inverse-distance falloff (6 dB per doubling past 15 m), quieter past HORN_RANGE.
+	var vol := -3.0 - 20.0 * log(maxf(d, 15.0) / 15.0) / log(10.0) - 20.0 * clampf((d - HORN_RANGE) / 60.0, 0.0, 1.0)
+	if snap:
+		_horn.pitch_scale = pitch
+		_horn.volume_db = vol
+	else:
+		_horn.pitch_scale = lerpf(_horn.pitch_scale, pitch, 0.35)
+		_horn.volume_db = lerpf(_horn.volume_db, vol, 0.35)
+
+
+## One cycle of a horn tone (D-213): harmonics at 1/k, boosted around the
+## nasal resonance; read back as a wavetable so the synthesis stays cheap.
+func _horn_table(f0: float) -> PackedFloat32Array:
+	var n := 512
+	var table := PackedFloat32Array()
+	table.resize(n)
+	var k := 1
+	while k * f0 < 11000.0:
+		var w := 1.0 / k * (1.0 + 2.2 * exp(-pow((k * f0 - HORN_FORMANT) / 700.0, 2.0)))
+		for j in n:
+			table[j] += sin(TAU * j * k / n) * w
+		k += 1
+	return table
+
+
+## Synthesises one honk pattern (mono 16-bit, 32 kHz).
+func _horn_wav(pattern: Array) -> AudioStreamWAV:
+	var rate := 32000
+	var last: Array = pattern[pattern.size() - 1]
+	var n := int((float(last[0]) + float(last[1]) + 0.08) * rate)
+	var buf := PackedFloat32Array()
+	buf.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7 + pattern.size()
+	for press in pattern:
+		var t0: float = press[0]
+		var len: float = press[1]
+		var i0 := int(t0 * rate)
+		var i1 := mini(n, int((t0 + len + 0.05) * rate))
+		for ti in HORN_TONES.size():
+			var f0: float = HORN_TONES[ti]
+			var table := _horn_table(f0)
+			var tn := table.size()
+			var ph := rng.randf()
+			var jitter := 0.0
+			for i in range(i0, i1):
+				var t := float(i - i0) / rate
+				# Diaphragm scoop: starts ~4 % flat, settles in 25 ms; slight jitter.
+				jitter = clampf(jitter + rng.randf_range(-1.0, 1.0) * 0.0004, -0.004, 0.004)
+				var f := f0 * (1.0 - 0.04 * exp(-t / 0.025)) * (1.0 + jitter)
+				ph = fmod(ph + f / rate, 1.0)
+				var x := ph * tn
+				var j := int(x)
+				var v := lerpf(table[j % tn], table[(j + 1) % tn], x - j)
+				var env := clampf(t / 0.008, 0.0, 1.0) * clampf((t0 + len - (t0 + t)) / 0.035 + 1.0, 0.0, 1.0)
+				buf[i] += v * env * (1.0 if ti == 0 else 0.85)
+	var peak := 0.001
+	for v in buf:
+		peak = maxf(peak, absf(v))
+	var data := PackedByteArray()
+	data.resize(n * 2)
+	for i in n:
+		# Soft clipping gives the horn its grit.
+		var v := tanh(buf[i] / peak * 1.6) / tanh(1.6) * 0.8
+		data.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 32767.0))
+	var w := AudioStreamWAV.new()
+	w.format = AudioStreamWAV.FORMAT_16_BITS
+	w.mix_rate = rate
+	w.data = data
+	return w
 
 
 ## Doppler engine noise from the nearest traffic (D-134). Pitch follows the
@@ -2827,6 +2947,7 @@ func _update_audio() -> void:
 	_engine.volume_db = -11.0 + sim.throttle * 3.0 - rpm * 3.0 + (3.0 if revving else 0.0) + ENGINE_GAIN_DB - _pass_duck
 	_engine_hi.volume_db = -34.0 + rpm * 22.0 + sim.throttle * 2.0 + (2.0 if revving else 0.0) + ENGINE_GAIN_DB - _pass_duck
 	_update_passers()
+	_update_horn()
 	_wind.volume_db = -46.0 + clampf(sim.v / Sim.MAX_SPEED, 0.0, 1.3) * 28.0 - _pass_duck
 	var squeal := sim.drifting or (sim.state == Sim.State.OVER and sim.v > 3.0) 		or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
 	_skid.volume_db = lerpf(_skid.volume_db, -10.0 if squeal else -60.0, 0.2)
