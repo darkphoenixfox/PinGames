@@ -49,6 +49,48 @@ const SINGLE_PAD := {
 	"back": ["joy:1"],            # D-260: Circle cancels, never quits
 }
 
+## D-284: local 2-player (single-screen landscape only). Player 2 has its own
+## actions; when 2P is on (`set_two_player`), each gamepad is a player (pad 1 =
+## P1, pad 2 = P2), one pad alone is P2 with the keyboard as P1, and with no
+## pad the keyboard splits: P1 arrows / Space / Ctrl, P2 A D / W / Q E.
+const P2_ACTIONS: Array[StringName] = [&"p2_flip_l", &"p2_flip_r", &"p2_launch", &"p2_magna_l", &"p2_magna_r"]
+const P2_KEYS := {
+	"p2_flip_l": ["key:A"], "p2_flip_r": ["key:D"], "p2_launch": ["key:W"],
+	"p2_magna_l": ["key:Q"], "p2_magna_r": ["key:E"],
+}
+## Per-player actions: each pad only drives its own player's.
+const PLAYER_ACTIONS: Array[StringName] = [&"flip_l", &"flip_r", &"launch", &"magna_l", &"magna_r"]
+var two_player := false
+var devices := [-1, -1]   # each player's gamepad (-1 = keyboard)
+
+
+## 2P is offered only on a landscape single screen, with keys or two pads.
+func two_player_possible() -> bool:
+	if Screens.current_layout != "single":
+		return false
+	var win := Vector2(get_viewport().get_visible_rect().size) if is_inside_tree() else Vector2(1, 0)
+	if win.y > win.x:
+		return false
+	var touch_only := (OS.has_feature("android") or OS.has_feature("web")) and DisplayServer.is_touchscreen_available()
+	return not touch_only or Input.get_connected_joypads().size() >= 2
+
+
+func set_two_player(on: bool) -> void:
+	two_player = on
+	apply_bindings()
+	if on and not Input.joy_connection_changed.is_connected(_on_joy):
+		Input.joy_connection_changed.connect(_on_joy)
+
+
+func _on_joy(_device: int, _connected: bool) -> void:
+	if two_player:
+		apply_bindings()
+
+
+## "launch" -> "p2_launch" for player 1 (0-based: 0 is player 1).
+static func for_player(action: StringName, player: int) -> StringName:
+	return action if player == 0 else StringName("p2_" + String(action))
+
 ## Emitted on focus loss/gain (D-069), e.g. for the input monitor.
 signal focus_changed(has_focus: bool)
 
@@ -64,6 +106,31 @@ func _ready() -> void:
 
 
 func apply_bindings() -> void:
+	if two_player:
+		var pads := Input.get_connected_joypads()
+		if pads.size() >= 2:
+			devices = [pads[0], pads[1]]
+		elif pads.size() == 1:
+			devices = [-1, pads[0]]
+		else:
+			devices = [-1, -1]
+	else:
+		devices = [-1, -1]
+	for action in P2_ACTIONS:   # D-284
+		if InputMap.has_action(action):
+			InputMap.action_erase_events(action)
+		else:
+			InputMap.add_action(action, 0.5)
+		if not two_player:
+			continue
+		for b in P2_KEYS[String(action)]:
+			InputMap.action_add_event(action, Bindings.to_event(str(b)))
+		if devices[1] >= 0:
+			for b in SINGLE_PAD.get(String(action).trim_prefix("p2_"), []):
+				var ev := Bindings.to_event(str(b))
+				if ev != null:
+					ev.device = devices[1]
+					InputMap.action_add_event(action, ev)
 	for action in ACTIONS:
 		if InputMap.has_action(action):
 			InputMap.action_erase_events(action)
@@ -73,11 +140,18 @@ func apply_bindings() -> void:
 		if Config.layout() == "single":   # D-256
 			binds = binds.filter(func(b): return Bindings.kind(str(b)) == "key")
 			binds.append_array(SINGLE_PAD.get(String(action), []))
+		if two_player and action in PLAYER_ACTIONS:
+			# D-284: player 1's pad (if any) only; the keyboard stays.
+			binds = binds.filter(func(b): return Bindings.kind(str(b)) == "key")
+			if devices[0] >= 0:
+				binds.append_array(SINGLE_PAD.get(String(action), []))
 		for b in binds:
 			var ev := Bindings.to_event(str(b))
 			if ev == null:
 				push_warning("CabinetInput: bad binding '%s' for %s" % [b, action])
 				continue
+			if two_player and action in PLAYER_ACTIONS and Bindings.kind(str(b)) != "key":
+				ev.device = devices[0]
 			InputMap.action_add_event(action, ev)
 
 
@@ -129,9 +203,9 @@ const STICK_DEAD := 0.18
 const TRIGGER_DEAD := 0.06
 
 
-func steer_axis() -> float:
+func steer_axis(player: int = -1) -> float:
 	var best := 0.0
-	for dev in Input.get_connected_joypads():
+	for dev in _pads_of(player):
 		var v := Input.get_joy_axis(dev, JOY_AXIS_LEFT_X)
 		if absf(v) > absf(best):
 			best = v
@@ -140,11 +214,18 @@ func steer_axis() -> float:
 	return signf(best) * (absf(best) - STICK_DEAD) / (1.0 - STICK_DEAD)
 
 
-func trigger(right: bool) -> float:
+func trigger(right: bool, player: int = -1) -> float:
 	var best := 0.0
-	for dev in Input.get_connected_joypads():
+	for dev in _pads_of(player):
 		best = maxf(best, Input.get_joy_axis(dev, JOY_AXIS_TRIGGER_RIGHT if right else JOY_AXIS_TRIGGER_LEFT))
 	return 0.0 if best < TRIGGER_DEAD else best
+
+
+## The pads whose sticks count for a player (-1 = anyone, D-284).
+func _pads_of(player: int) -> Array:
+	if player < 0 or not two_player:
+		return Input.get_connected_joypads()
+	return [] if devices[player] < 0 else [devices[player]]
 
 
 func is_down(action: StringName) -> bool:
@@ -178,8 +259,8 @@ func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_APPLICATION_FOCUS_OUT:
 			has_focus = false
-			for a in ACTIONS:
-				if Input.is_action_pressed(a):
+			for a in ACTIONS + P2_ACTIONS:
+				if InputMap.has_action(a) and Input.is_action_pressed(a):
 					Input.action_release(a)
 			focus_changed.emit(false)
 		NOTIFICATION_APPLICATION_FOCUS_IN:
@@ -201,7 +282,7 @@ func _input(event: InputEvent) -> void:
 
 func _process(_delta: float) -> void:
 	var any_down := false
-	for action in ACTIONS:
+	for action in (ACTIONS + P2_ACTIONS) if two_player else ACTIONS:
 		if Input.is_action_pressed(action):
 			any_down = true
 		if Input.is_action_just_pressed(action):

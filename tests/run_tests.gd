@@ -866,6 +866,10 @@ func test_racer_hd_assets() -> void:
 			if absf(float(t.s) - od.s) < SimA.CAR_LEN and absf(float(t.x) - od.x) < SimA.CAR_W:
 				hit = true
 	check(not hit, "oncoming traffic avoids a crashed car instead of driving through it")
+	# D-284: 2P input: player 2's actions and keys.
+	var CI = load("res://core/cabinet_input.gd")
+	check(CI.for_player(&"launch", 1) == &"p2_launch" and CI.for_player(&"launch", 0) == &"launch"
+		and CI.P2_ACTIONS.size() == 5 and CI.P2_KEYS.has("p2_flip_l"), "2P input: player 2's actions and keys")
 	# D-219: random weather spells: at least WEATHER_MIN long, suited to the
 	# area, different per seed, the same for the same seed.
 	var spell_ok := true

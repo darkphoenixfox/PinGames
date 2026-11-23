@@ -2825,3 +2825,29 @@
 - **Not done:** a threaded browser build would mix sound off the game's thread, the complete cure for cuts. It needs cross-origin isolation on the server and can't be tested here on a phone; proposed to the director.
 - **Checked:** the quality steps by capping a dev run at 30 fps (all four steps taken; the lowest still looks right); the touch attract screen. Not checked on a phone.
 - **Status:** Accepted
+
+### D-284 — Local 2-player: plan, and slice 1 (input)
+- **Date:** 2026-11-23
+- **Decision (director), on branch `two-player`:** 2-player options.
+  - **Where:** landscape screens only, with a keyboard or gamepads; local multiplayer only.
+  - **Tilt Breaker:** two paddles, offset slightly vertically so they don't collide. Shared 3 lives, separate power-ups and energy bars, shared score. A wider play area and levels made for two.
+  - **Turbo Run:** side-by-side split-screen racing. Each player chooses a car. The first to reach the end of stage 10 wins, with no time limit.
+- **Director's answers:**
+  - **Controls:** a gamepad per player; one pad alone is P2 with the keyboard as P1; keyboard only splits between the two.
+  - **Choosing 2P:** a 1 PLAYER / 2 PLAYERS choice in each game after PRESS START, shown only when 2P is possible.
+  - **Turbo Run 2P keeps:** traffic, police chases, weather and time of day, and each half shows the other car (they can bump).
+  - **Tilt Breaker 2P:** one shared ball; a drain costs a shared life.
+- **Slices:** 1. input (this entry); 2. Tilt Breaker 2P; 3. Turbo Run 2P.
+- **Slice 1** (`CabinetInput`):
+  - **Actions:** player 2 has `p2_flip_l`, `p2_flip_r`, `p2_launch`, `p2_magna_l`, `p2_magna_r`.
+  - **`set_two_player(on)`** rebinds:
+    - two pads: pad 1 drives only P1's per-player actions and pad 2 only P2's (the `SINGLE_PAD` mapping, D-256);
+    - one pad: P2, with the keyboard as P1;
+    - none: the keyboard splits, P1 on arrows / Space / Ctrl and P2 on A / D / W / Q / E.
+  - **Shared:** EXIT, START and BACK stay on every device.
+  - **Pads coming and going:** a pad connecting or disconnecting rebinds.
+  - **Analog:** `steer_axis(player)` and `trigger(right, player)` read that player's pad.
+  - **Signals:** player 2's presses and releases come through `action_pressed` / `action_released` like the others.
+  - **Availability:** `two_player_possible()` is true on a landscape single screen, except touch-only devices (web or Android) without two pads.
+- **Test:** player 2's actions and keys.
+- **Status:** Accepted (slice 1 of 3)
