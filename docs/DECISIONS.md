@@ -2398,3 +2398,14 @@
 - **Sprite:** converted with `gen_loading_car.py ... 22 --flip` (it faces left) to `dmd_car_sports.png`, 22×7. It's used for Normal (the sports car) and Easy (the hot hatch, which has no side picture yet).
 - **Paint:** the chosen car's sprite takes its in-game paint (`_painted`). Saturated dots get the same hue turn as the 3D car (`_car_hue`: the car's hue plus the paint picked on car select), while windows and tyres stay. So Normal shows green, Hard yellow, Easy red, or whatever was picked.
 - **Status:** Accepted
+
+### D-245 — Turbo Run DMD: the police distance indicator and BUSTED use car sprites
+- **Date:** 2026-11-23
+- **Decision (director):** the police distance indicator still used cars that don't look like the in-game cars, and the busted animation's police car didn't match the style of the rest.
+- **Police sprite:** the police car's 3D model is rendered side-on in Blender with a transparent background (`scripts/tools/render_car_side.py`, orthographic, sun plus white world). It's converted to 22×7 by `gen_loading_car.py`, which now:
+  - uses a picture's own transparency when it has one, so the car's white panels aren't taken for background;
+  - takes `--contrast`, which snaps grey dots to a black-and-white livery (white, or a charcoal that stays visible on the black DMD).
+- **Drawing:** `DmdAnims._police()` draws it like the player's sprite, with a 2-dot red and blue light bar flashing on its roof.
+- **Chase indicator** (D-162): the player's own painted sprite (D-243/244) on the right, the police sprite behind at a gap that follows the real distance (up to 150 m), and speed lines behind it.
+- **BUSTED:** the police car that rolls in is the sprite (it was a 13×5 dot pattern).
+- **Status:** Accepted

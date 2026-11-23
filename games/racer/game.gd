@@ -681,6 +681,13 @@ const DMD_SPRITES := {SUPERCAR_MODEL: "res://assets/textures/racer/dmd_car_super
 static var _dmd_sprites := {}
 
 
+func _dmd_image(path: String) -> Image:
+	var img := (load(path) as Texture2D).get_image()
+	if img.is_compressed():
+		img.decompress()
+	return img
+
+
 func _dmd_sprite(model: String) -> Image:
 	if not DMD_SPRITES.has(model):
 		return null
@@ -1035,6 +1042,8 @@ func _begin_race() -> void:
 	if is_instance_valid(_attract_ui):
 		_attract_ui.queue_free()
 	_build_body(CAR_MODELS[_chosen_car])   # the hot hatch for the easy car (D-205)
+	if _anims.police_sprite == null:   # D-245
+		_anims.police_sprite = _dmd_image("res://assets/textures/racer/dmd_car_police.png")
 	_anims.player_sprite = _painted(_dmd_sprite(CAR_MODELS[_chosen_car]), _car_hue(_chosen_car))   # D-243, D-244
 	_phase = "race"
 	_phase_t = 0.0
@@ -2711,27 +2720,14 @@ func _draw_dmd_chase(p) -> void:
 	for i in 9:
 		var dx := 128.0 - fmod(i * 16.0 + scroll, 144.0)
 		p.line(dx, 31, dx + 6, 31, Color(0.5, 0.5, 0.55))
-	_anims._car(p, 108, 24, CAR_COLS[_chosen_car])
-	var px := 108.0 - 15.0 - clampf(d / 150.0, 0.0, 1.0) * 86.0
-	# Police car: white body, dark lower half, flashing bar.
-	for r in DmdAnims.CAR.size():
-		var row: String = DmdAnims.CAR[r]
-		for c in row.length():
-			var k := row[c]
-			if k == "0":
-				continue
-			var col := Dmd.WHITE if r < 2 or (r == 2 and c > 2) else Color(0.25, 0.25, 0.3)
-			if k == "2":
-				col = Color(0.4, 0.55, 0.7)
-			elif k == "4":
-				col = Color(0.45, 0.45, 0.5)
-			p.dot(px + c, 24 + r, col)
+	# D-245: the player's own car (D-243) and the police car's sprite.
+	_anims._player(p, 108, 24)
+	var px := 108.0 - 24.0 - clampf(d / 150.0, 0.0, 1.0) * 78.0
+	_anims._police(p, px, 24, t)
 	var red := fmod(t, 0.24) < 0.12
-	p.block(px + 4, 22, 2, 2, Dmd.RED if red else Color(0.2, 0.05, 0.05))
-	p.block(px + 7, 22, 2, 2, Color("3f6bff") if not red else Color(0.05, 0.05, 0.2))
 	# Speed lines behind the police car.
 	for i in 3:
-		p.line(px - 4 - i * 2, 24 + i * 2, px - 8 - i * 4 - fmod(t * 40.0, 4.0), 24 + i * 2, Color(0.35, 0.35, 0.4))
+		p.line(px - 6 - i * 2, 24 + i * 2, px - 10 - i * 4 - fmod(t * 40.0, 4.0), 24 + i * 2, Color(0.35, 0.35, 0.4))
 	var ft := roundi(d * 3.281)
 	p.text(tr("RC_DMD_FT") % ft, 2, 2, 1, Dmd.RED if d < 30.0 and red else Dmd.YELLOW)
 	var spd := tr("RC_DMD_MPH") % sim.speed_mph()

@@ -23,13 +23,18 @@ if len(_args) >= 3:
     OUT = os.path.join(ROOT, _args[1])
     WIDTH = int(_args[2])
 
-im = np.asarray(Image.open(SRC).convert("RGB")).astype(float) / 255.0
+_src = Image.open(SRC)
+im = np.asarray(_src.convert("RGB")).astype(float) / 255.0
 mx = im.max(axis=2)
 mn = im.min(axis=2)
 sat = (mx - mn) / np.maximum(mx, 1e-6)
-# Background: near white. Shadow: light, unsaturated grey under the car.
-bg = (mn > 0.86) | ((sat < 0.12) & (mx > 0.55) & (mx < 0.9))
-mask = ~bg
+if _src.mode == "RGBA" and np.asarray(_src)[..., 3].min() < 128:
+    # D-245: a render with a transparent background (white car panels survive).
+    mask = np.asarray(_src)[..., 3] > 128
+else:
+    # Background: near white. Shadow: light, unsaturated grey under the car.
+    bg = (mn > 0.86) | ((sat < 0.12) & (mx > 0.55) & (mx < 0.9))
+    mask = ~bg
 ys, xs = np.nonzero(mask)
 y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
 # The ground shadow under the car: unsaturated mid greys in the bottom strip.
@@ -50,6 +55,15 @@ col = rgb / np.maximum(cov[..., None], 1e-6)
 out = np.zeros((h, WIDTH, 4))
 on = cov > 0.45
 out[..., :3] = np.clip(col * 1.15, 0, 1)   # LEDs: a little brighter
+if "--contrast" in sys.argv:
+    # D-245: two-tone liveries (the police car) snap towards black and white.
+    c3 = out[..., :3]
+    lum = c3 @ np.array([0.3, 0.59, 0.11])
+    cs = (c3.max(axis=2) - c3.min(axis=2)) / np.maximum(c3.max(axis=2), 1e-6)
+    grey = cs < 0.25
+    c3[grey & (lum > 0.74)] = [0.95, 0.95, 0.97]
+    c3[grey & (lum <= 0.74)] = [0.32, 0.32, 0.37]   # dark, but visible on the black DMD
+    out[..., :3] = c3
 out[..., 3] = on.astype(float)
 img = Image.fromarray((out * 255).astype(np.uint8), "RGBA")
 if FLIP:

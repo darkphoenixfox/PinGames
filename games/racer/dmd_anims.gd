@@ -38,6 +38,8 @@ const CAR := [
 ## D-243: the player's own car as a dot sprite (from the director's pictures,
 ## nose right), set by the game for the chosen car; null = the 13x5 dot car.
 var player_sprite: Image
+## D-245: the police car (from its 3D model, rendered side-on), drawn the same way.
+var police_sprite: Image
 
 
 # --- helpers ------------------------------------------------------------------------
@@ -59,6 +61,33 @@ func _player(p, x: float, y: float, flip: bool = false, upside_down: bool = fals
 			var dc := (w - 1 - c) if flip else c
 			var dr := (h - 1 - r) if upside_down else r
 			p.dot(x0 + dc, y0 + dr, Color(px.r, px.g, px.b))
+
+
+## The police car at the 13x5 car's spot, its roof light bar flashing red and
+## blue (`flash` = time; < 0 = lights off).
+func _police(p, x: float, y: float, flash: float) -> void:
+	if police_sprite == null:
+		return
+	var w := police_sprite.get_width()
+	var h := police_sprite.get_height()
+	var x0 := x + 6.5 - w * 0.5
+	var y0 := y + 5 - h
+	var roof_l := w
+	var roof_r := -1
+	for c in w:
+		if police_sprite.get_pixel(c, 0).a > 0.5:
+			roof_l = mini(roof_l, c)
+			roof_r = maxi(roof_r, c)
+	for r in h:
+		for c in w:
+			var px := police_sprite.get_pixel(c, r)
+			if px.a >= 0.5:
+				p.dot(x0 + c, y0 + r, Color(px.r, px.g, px.b))
+	if flash >= 0.0 and roof_r >= roof_l:
+		var mid := (roof_l + roof_r) / 2
+		var red_on := fmod(flash, 0.3) < 0.15
+		p.block(x0 + mid - 2, y0 - 1, 2, 1, RED if red_on else Color(0.25, 0.05, 0.05))
+		p.block(x0 + mid + 1, y0 - 1, 2, 1, Color("3f6bff") if not red_on else Color(0.05, 0.05, 0.25))
 
 
 func _car(p, x: float, y: float, body: Color, flip: bool = false) -> void:
@@ -301,20 +330,7 @@ func fine(p, t: float, title: String, label: String, amount: String) -> void:
 	_player(p, 10, 24)
 	# Police car rolls in from the left and stops behind ours.
 	var px := lerpf(-16.0, 30.0, clampf(t / 0.6, 0.0, 1.0))   # D-243: clear of the bigger player sprite
-	for r in CAR.size():
-		for c in CAR[r].length():
-			var k: String = CAR[r][c]
-			if k == "0":
-				continue
-			var col := WHITE if (r < 2 or c > 6) else DARK.lightened(0.2)
-			if k == "2":
-				col = CYAN * 0.6
-			elif k == "4":
-				col = DARK.lightened(0.3)
-			p.dot(px + c, 24 + r, col)
-	var red_on := fmod(t, 0.4) < 0.2
-	p.block(px + 5, 22, 2, 2, RED if red_on else DARK)
-	p.block(px + 7, 22, 2, 2, Color("3f6bff") if not red_on else DARK)
+	_police(p, px, 24, t)   # D-245
 	# Title, then the ticket.
 	if t > 0.5:
 		p.text(title, maxf(40.0, 127.0 - p.text_width(title, 2)), 1, 2, RED if _blink(t, 0.3) else WHITE)
