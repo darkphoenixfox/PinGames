@@ -1483,8 +1483,8 @@ func _start_p2(p1: Node) -> void:
 
 ## D-291 (director): 2P halves get the bottom gauges at half size; their
 ## numbers, RPM/MPH captions and the digital speed keep their text size.
-const COMPACT := 0.5
-const GEAR_COMPACT := 0.6   # D-293, D-295: the 2P gears
+const COMPACT := 0.625   # D-291 0.5; D-296: 25% bigger
+const GEAR_COMPACT := 0.75   # D-293, D-295, D-296: the 2P gears
 var _tach_bar: Control = null
 
 
@@ -1533,7 +1533,7 @@ func _hud_compact() -> void:
 	_hud_bottom.add_theme_constant_override("separation", 6)   # the gears right beside the speedo
 	if _tach_bar == null:
 		_tach_bar = TachBar.new()
-		_tach_bar.custom_minimum_size = Vector2(_speedo.custom_minimum_size.x, 18.0)
+		_tach_bar.custom_minimum_size = Vector2(_speedo.custom_minimum_size.x, 22.0)
 		_tach_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		_speedo.get_parent().add_child(_tach_bar)
 	# The gear column as tall as the speedo + tacho block, its lever centred on it.

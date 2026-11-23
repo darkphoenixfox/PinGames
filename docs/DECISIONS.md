@@ -2998,3 +2998,9 @@
   - the tach bar, 40 px wider than the speedo (now the speedo's width), which pushed the speedo right.
 - The lever sits hard against the speedo (`SIZE_SHRINK_END`).
 - **Status:** Accepted
+
+### D-296 — Turbo Run 2P: the gauge block 25% bigger
+- **Date:** 2026-11-23
+- **Decision (director):** the 2P bottom-right gauge block is 25% bigger: the speedo (`COMPACT` 0.5 → 0.625 of the full dial), the shifter (`GEAR_COMPACT` 0.6 → 0.75) and the tach bar (18 → 22 px high, the speedo's width).
+- The text (dial numbers, MPH, digital speed) was already full size and stays as it is (PinPixel sizes snap to multiples of 12, D-060).
+- **Status:** Accepted
