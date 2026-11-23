@@ -268,6 +268,10 @@ var dmd_above := false
 ## the BACKGLASS in a box on the right.
 var side_panels := false
 var _single_bgv: Control
+## D-266: frames round the side panels, tiled from a game's texture.
+var panel_frame: Texture2D
+var _frame_d: TextureRect
+var _frame_b: TextureRect
 
 
 func set_flexible(on: bool) -> void:
@@ -280,8 +284,9 @@ func set_flexible(on: bool) -> void:
 
 
 ## D-262: the DMD above the game area instead of over it (Tilt Breaker).
-func want_side_panels(on: bool) -> void:
+func want_side_panels(on: bool, frame_tex: Texture2D = null) -> void:
 	side_panels = on
+	panel_frame = frame_tex
 	if current_layout == "single" and is_instance_valid(_single_page):
 		_place_single(Vector2(get_window().size))
 
@@ -372,6 +377,18 @@ func _single_layout() -> void:
 	t.texture = table.get_texture()
 	_single_page.add_child(t)
 	_single_table = t
+	for i in 2:   # D-266: frames, behind the panels
+		var fr := TextureRect.new()
+		fr.stretch_mode = TextureRect.STRETCH_TILE
+		fr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		fr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		fr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		fr.visible = false
+		_single_page.add_child(fr)
+		if i == 0:
+			_frame_d = fr
+		else:
+			_frame_b = fr
 	var bgv := ScreenView.new()   # D-265: the BACKGLASS, shown with side panels
 	bgv.texture = backglass.get_texture()
 	bgv.visible = false
@@ -439,21 +456,37 @@ func _place_single(win: Vector2) -> void:
 		var dh := dw / ratio
 		d.position = Vector2((win.x - dw) * 0.5, 0)
 		d.size = Vector2(dw, dh)
-		if is_instance_valid(_single_bgv):
-			_single_bgv.visible = false
+		for n in [_single_bgv, _frame_d, _frame_b]:
+			if is_instance_valid(n):
+				n.visible = false
 		if table_flex and side_panels:
-			# D-265: the game over the whole window; the DMD in a box on the
-			# left (4:1), the BACKGLASS in a box on the right (16:9).
+			# D-265/D-266: the game over the whole window. Each panel is centred
+			# in the space beside the playfield (9:16 of the height, centred),
+			# both on the same middle line, each in a frame.
 			t.position = Vector2.ZERO
 			t.size = win
-			var lw := win.x * 0.26
-			d.position = Vector2(win.x * 0.037, win.y * 0.27)
-			d.size = Vector2(lw, lw / ratio)
+			var side_w := maxf(win.x * 0.5 - win.y * 9.0 / 32.0, 1.0)
+			var mid_y := win.y * 0.4
+			var lw := minf(win.x * 0.26, side_w * 0.86)
+			var dsz := Vector2(lw, lw / ratio)
+			d.position = Vector2(side_w * 0.5 - dsz.x * 0.5, mid_y - dsz.y * 0.5)
+			d.size = dsz
+			var bw := minf(win.x * 0.27, side_w * 0.86)   # 10 % bigger than D-265
+			var bsz := Vector2(bw, bw * 9.0 / 16.0)
+			var bpos := Vector2(win.x - side_w * 0.5 - bsz.x * 0.5, mid_y - bsz.y * 0.5)
 			if is_instance_valid(_single_bgv):
-				var bw := win.x * 0.245
-				_single_bgv.position = Vector2(win.x * 0.74, win.y * 0.31)
-				_single_bgv.size = Vector2(bw, bw * 9.0 / 16.0)
+				_single_bgv.position = bpos
+				_single_bgv.size = bsz
 				_single_bgv.visible = true
+			if panel_frame != null:
+				var th := maxf(6.0, win.y * 0.018)
+				for pair in [[_frame_d, Rect2(d.position, dsz)], [_frame_b, Rect2(bpos, bsz)]]:
+					var fr: TextureRect = pair[0]
+					var r: Rect2 = pair[1]
+					fr.texture = panel_frame
+					fr.position = r.position - Vector2(th, th)
+					fr.size = r.size + Vector2(th, th) * 2.0
+					fr.visible = true
 		elif table_flex and not dmd_above:   # the game fills the window, the DMD over its top (D-254)
 			t.position = Vector2.ZERO
 			t.size = win

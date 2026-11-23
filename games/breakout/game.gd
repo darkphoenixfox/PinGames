@@ -267,7 +267,8 @@ func start(_players: int) -> void:
 	# the orthographic camera keeps the playfield's height, so a wide screen
 	# shows more space at the sides.
 	_portrait_req = true
-	Screens.want_side_panels(true)   # D-265: landscape: DMD left, backglass right
+	# D-265: landscape: DMD left, backglass right; D-266: framed in circuit brick.
+	Screens.want_side_panels(true, load("res://assets/textures/breakout/circuit_blue.png"))
 	for s in SOUNDS:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
 	sim = Sim.new()

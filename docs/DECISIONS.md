@@ -2644,3 +2644,13 @@
   - **Turbo Run:** keeps the DMD over its top centre (D-254/255).
   - **Portrait:** unchanged.
 - **Status:** Accepted
+
+### D-266 — Tilt Breaker side panels: centred, aligned, framed
+- **Date:** 2026-11-23
+- **Decision (director):** centre the backglass in the right side and make it 10 % bigger, align its middle with the DMD's middle, and frame the backglass and DMD with the brick texture.
+- **Layout** (`Screens._place_single`, side panels):
+  - **Spaces:** each panel is centred in the space beside the playfield, which is taken as 9:16 of the window's height, centred.
+  - **Sizes:** the DMD is 26 % of the width (at most 86 % of its space). The backglass is 27 % (10 % bigger than D-265's 24.5 %), at 16:9.
+  - **Height:** both are centred on the same line, 40 % down the window.
+- **Frames:** `want_side_panels(on, frame_tex)` puts a tiled frame (1.8 % of the window height thick) behind each panel. Tilt Breaker passes its bricks' blue circuit texture (`circuit_blue.png`), drawn with hard pixels.
+- **Status:** Accepted
