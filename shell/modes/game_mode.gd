@@ -30,6 +30,7 @@ var _bar_w := 600.0
 const LoadingAnim = preload("res://shell/loading_anim.gd")
 var _anim: Control   # D-238: the loading screen's little scene
 const REVEAL_DELAY := 2.0   # s the loading screen stays after loading (D-259)
+var _overlay_bg: ColorRect   # D-261
 
 
 func _init(p_game_id: String) -> void:
@@ -79,6 +80,8 @@ func enter() -> void:
 			return
 		if is_instance_valid(_overlay):
 			_overlay.queue_free()
+		if is_instance_valid(_overlay_bg):
+			_overlay_bg.queue_free()
 
 
 ## Draws everything the game loaded once, hidden behind the loading bar (D-178):
@@ -372,6 +375,16 @@ func _preload() -> void:
 
 
 func _build_overlay() -> void:
+	# D-261: black over the whole TABLE whatever its shape (the loading
+	# content itself may sit in the centred portrait frame), so nothing behind
+	# it, the warm-up copies included, shows at the sides.
+	_overlay_bg = ColorRect.new()
+	_overlay_bg.color = Color.BLACK
+	_overlay_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_overlay_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay_bg.z_index = 99
+	Screens.table.add_child(_overlay_bg)
+	_owned.append(_overlay_bg)
 	_overlay = Control.new()
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()

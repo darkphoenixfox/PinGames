@@ -2602,3 +2602,10 @@
   - **Cabinet layouts:** EXIT still leaves straight away.
   - **On the menu:** Start keeps the quit-the-app question (Cross confirms).
 - **Status:** Accepted
+
+### D-261 — The loading screen covers the whole screen in landscape
+- **Date:** 2026-11-23
+- **Bug (director, screenshot):** three seconds after the loading jingle, in landscape on a single screen, the loading screen was a portrait strip in the middle. The warm-up copies of the cars (huge, close to the camera) and the game's attract text showed at the sides.
+- **Cause:** the loading overlay went into the mode's 1080×1920 frame (D-255), which in landscape covers only the centre.
+- **Fix:** a black backdrop over the whole TABLE, whatever its shape, sits under the loading content, which stays centred. It lasts through the warm-up and the reveal delay (D-259) and is freed with the overlay.
+- **Status:** Accepted
