@@ -229,6 +229,14 @@ static func corner_pips(i: int) -> int:
 	return clampi(roundi(lerpf(1.0, 5.0, (float(Sim.CARS[i].grip) - 0.8) / 0.45)), 1, PIPS)
 
 
+## Repaints car i (D-236).
+func set_hue(i: int, hue: float) -> void:
+	for m in (_cars[i] as Node3D).find_children("*", "MeshInstance3D", true, false):
+		var gi := m as MeshInstance3D
+		if gi.material_override != null:
+			InstParam.set_param(gi, "hue", hue)
+
+
 func move(step: int) -> void:
 	selected = clampi(selected + step, 0, 2)
 	_refresh()

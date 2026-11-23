@@ -2310,3 +2310,15 @@
 - **Decision (director):** only music during the racing game's attract mode; no game sound effects.
 - **Change:** while the attract demo drives (attract, and the GRAPHICS and START STAGE menus over it), the engine, wind, skid, traffic, siren and horn loops are held at −80 dB. They fade in from there when the race starts. Menu feedback sounds (choosing, confirming) still play.
 - **Status:** Accepted
+
+### D-236 — Turbo Run car select: no engine sound; magna buttons repaint the car
+- **Date:** 2026-11-23
+- **Decisions (director):** don't play the engine sound on the car select screen. The magna buttons on the select screen swap car colours.
+- **Sound:** the car select screen joins attract, GRAPHICS and START STAGE in muting the demo's loops (D-235).
+- **Paint:**
+  - On car select, magna_l / magna_r step the highlighted car back and forth through `PAINTS`: 8 hue tints on top of the car's own paint (`CARS` hue), where 0 means as it comes.
+  - The showroom car repaints at once (`Showroom.set_hue`), and the race uses the chosen paint (`_car_hue`).
+  - Choices are kept for the session (static), not saved.
+  - The hint reads FLIPPERS: CHOOSE  MAGNA: COLOUR  LAUNCH: GO.
+  - As anywhere, pressing a magna turns on the 4-button controls (D-189).
+- **Status:** Accepted
