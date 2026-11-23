@@ -2204,3 +2204,18 @@
   - **Puddles:** slightly larger.
 - **Tests:** updated for the new area order, the tunnel in stage 3, night on 6–8 with dawn on 9–10, and the rock-flip test's search (the beach has no rocks).
 - **Status:** Accepted
+
+### D-226 — Turbo Run music: five Bogart VGM songs, one per two stages, crossfaded
+- **Date:** 2026-11-23
+- **Decision (director):** use all five Bogart VGM songs (CC BY 3.0), one for every two stages, crossfading between them, and stop using the others. Most of them start very quietly, so the crossfade goes 5–10 s into the next song, except at the start of the race.
+- **New songs:** "Chillwave Nightdrive", "Retroracing One More Round" and "Retroracing Nightlife" (the director's MP3s), converted to OGG Vorbis q5 with ffmpeg.
+- **Order** (`MUSIC_RACE`, picked by mood):
+  - 1–2 Maximum Overdrive (also attract, carried on into the race);
+  - 3–4 One More Round;
+  - 5–6 Nightlife (sunset into the night city);
+  - 7–8 Dreamstate;
+  - 9–10 Chillwave Nightdrive (dawn, the finish).
+  - Past the finish, the last one goes on.
+- **Crossfade:** `Audio.crossfade_music(path, seconds, from)` overlaps two music players. The new song starts `from` s in and rises over `seconds` while the old one falls and stops (the old `play_music` faded out, then in). At each new pair of stages the next song comes in `MUSIC_SKIP` 7 s in, over `MUSIC_XFADE` 6 s. The race start plays its stage's song from the top: stage 1 carries on attract's song, and a later test start stage plays its own.
+- **Retired:** the CodeManu "8-bit Music Pack" loops are removed from the project, along with their DMD credit; the attract DMD credits Bogart VGM. Supersedes the music parts of D-093, D-105, D-106, D-111, D-129 and D-191.
+- **Status:** Accepted

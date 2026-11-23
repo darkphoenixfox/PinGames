@@ -39,6 +39,8 @@ const UI_SOUNDS := {
 const MUSIC_MAIN := "res://assets/audio/music/main/legends.ogg"
 
 var _music: AudioStreamPlayer
+var _music_b: AudioStreamPlayer     # the other player, for crossfades (D-226)
+var _xfade_tweens: Array = []
 var _music_path := ""
 var _music_tween: Tween
 var _pool: Array[AudioStreamPlayer] = []
@@ -57,6 +59,9 @@ func _ready() -> void:
 	_music = AudioStreamPlayer.new()
 	_music.bus = "Music"
 	add_child(_music)
+	_music_b = AudioStreamPlayer.new()
+	_music_b.bus = "Music"
+	add_child(_music_b)
 	for i in POOL:
 		var p := AudioStreamPlayer.new()
 		p.bus = "SFX"
@@ -129,6 +134,8 @@ func play_music(path: String, fade: float = 1.0) -> void:
 	if stream is AudioStreamOggVorbis:
 		(stream as AudioStreamOggVorbis).loop = true
 	_music_path = path
+	if _music_b.playing:   # cut a crossfade's outgoing song short (D-226)
+		_music_b.stop()
 	_fade_to(func():
 		_music.stream = stream
 		_music.volume_db = -40.0
@@ -136,8 +143,44 @@ func play_music(path: String, fade: float = 1.0) -> void:
 		_tween_volume(0.0, fade), fade)
 
 
+## A true crossfade (D-226): the new song starts `from` s in, rising over
+## `seconds` while the current one falls away under it.
+func crossfade_music(path: String, seconds: float, from: float = 0.0) -> void:
+	if path == _music_path and _music.playing:
+		return
+	var stream := load(path) as AudioStream
+	if stream == null:
+		push_warning("Audio: cannot load music '%s'" % path)
+		return
+	if stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+	_music_path = path
+	if _music_tween:
+		_music_tween.kill()
+	for t in _xfade_tweens:
+		if (t as Tween).is_valid():
+			(t as Tween).kill()
+	_xfade_tweens.clear()
+	var old := _music
+	_music = _music_b
+	_music_b = old
+	_music.stream = stream
+	_music.volume_db = -40.0
+	_music.play(from)
+	var up := create_tween()
+	up.tween_property(_music, "volume_db", 0.0, maxf(seconds, 0.01))
+	_xfade_tweens.append(up)
+	if old.playing:
+		var down := create_tween()
+		down.tween_property(old, "volume_db", -60.0, maxf(seconds, 0.01))
+		down.tween_callback(old.stop)
+		_xfade_tweens.append(down)
+
+
 func stop_music(fade: float = 1.0) -> void:
 	_music_path = ""
+	if _music_b.playing:   # a crossfade's outgoing song (D-226)
+		_music_b.stop()
 	_fade_to(func(): _music.stop(), fade)
 
 

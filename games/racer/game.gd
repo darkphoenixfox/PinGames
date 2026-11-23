@@ -226,12 +226,20 @@ const GFX_DESC := {"nes": "RC_GFX_NES_DESC", "retro": "RC_GFX_RETRO_DESC", "hd":
 
 const ACCENT := Color("ffd23e")
 const TITLE_FONT := "sunset"
-## Director's pick: "8-bit Music Pack (Loopable)" by CodeManu, CC BY 3.0 (D-033).
-## Director's pick (D-093): the five "action" loops for attract and race. Each
-## race starts on the next one, and every checkpoint (new stage) moves on again.
-## The first race plays action_3 (director's pick).
-## Attract mode: "Maximum Overdrive" by Bogart VGM, CC BY 3.0 (D-104).
-const MUSIC_STAGES := 4
+## Music (D-226, director): the five Bogart VGM songs (CC BY 3.0), one for
+## every two stages. Attract plays the first, and the race carries it on from
+## the start; each new song crossfades in over MUSIC_XFADE s, starting
+## MUSIC_SKIP s in (they all open very quietly).
+const MUSIC_RACE := [
+	"res://assets/audio/music/racer/bogart_maximum_overdrive.ogg",   # stages 1-2
+	"res://assets/audio/music/racer/bogart_one_more_round.ogg",      # 3-4
+	"res://assets/audio/music/racer/bogart_nightlife.ogg",           # 5-6
+	"res://assets/audio/music/racer/bogart_dreamstate.ogg",          # 7-8
+	"res://assets/audio/music/racer/bogart_chillwave_nightdrive.ogg",   # 9-10
+]
+const MUSIC_STAGES := 2
+const MUSIC_XFADE := 6.0
+const MUSIC_SKIP := 7.0
 const PASSERS := 2          # traffic engine voices (D-134)
 ## Oncoming horns (D-213): a dual-tone electric car horn (low and high tones a
 ## dissonant interval apart, buzzy diaphragm harmonics with a nasal resonance,
@@ -250,21 +258,7 @@ const SOUND_SPEED := 85.0   # m/s, exaggerated so the Doppler shift is obvious (
 const ENGINE_GAIN_DB := -0.92   # D-192: the hero car's engine 10% lower (0.9x)
 const PASS_DUCK_DB := 4.0       # D-192: engine + wind dip while a car passes close
 const PASS_DUCK_RANGE := 15.0   # m
-const OPENING_STAGES := 5   # stages played to Maximum Overdrive (D-111, D-129; 5 since D-191)
-## Night (stage 6, D-191) crossfades to "Dreamstate" by Bogart VGM, CC BY 3.0
-## (D-129), which plays through stage 9; the CodeManu songs take over from stage 10.
-const MUSIC_NIGHT := "res://assets/audio/music/racer/bogart_dreamstate.ogg"
-const NIGHT_STAGES := 3   # D-225: night is stages 6-8, dawn from 9
-const NIGHT_XFADE := 6.0
 const MUSIC_ATTRACT := "res://assets/audio/music/racer/bogart_maximum_overdrive.ogg"
-const FIRST_TRACK := 2
-const MUSIC_TRACKS := [
-	"res://assets/audio/music/racer/codemanu_action_1.ogg",
-	"res://assets/audio/music/racer/codemanu_action_2.ogg",
-	"res://assets/audio/music/racer/codemanu_action_3.ogg",
-	"res://assets/audio/music/racer/codemanu_action_4.ogg",
-	"res://assets/audio/music/racer/codemanu_action_5.ogg",
-]
 const CHUNK := 100.0             # metres of road per mesh chunk
 const VIEW_AHEAD := 900.0
 const VIEW_BEHIND := 60.0
@@ -440,7 +434,6 @@ var _wheel_phase := 0.0
 var _travel := 0.0         # eased nose angle from sideways travel (D-128)
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
-var _music_i := FIRST_TRACK    # current race song index
 var _traffic_pool := {"car": [], "hatch": [], "hothatch": [], "truck": [], "truck2": []}   # pools of Node3D per model
 ## Tyre smoke / dust (D-100): our own pooled billboard puffs in one MultiMesh.
 ## CPUParticles3D drew a stray pure-black puff at the emitter when toggled.
@@ -667,6 +660,12 @@ func _new_sim() -> void:
 	_cam_ready = false
 
 
+## The song for stage k (D-226): one per MUSIC_STAGES stages; the last one goes
+## on past the finish.
+func _stage_music(k: int) -> String:
+	return MUSIC_RACE[clampi((k - 1) / MUSIC_STAGES, 0, MUSIC_RACE.size() - 1)]
+
+
 func _enter_attract() -> void:
 	_phase = "attract"
 	_phase_t = 0.0
@@ -696,8 +695,8 @@ func _attract_tick() -> void:
 	# makes the text below it jump (D-096).
 	_attract_blink.modulate.a = 1.0 if fmod(_phase_t, 1.0) < 0.6 else 0.0
 	# DMD cycle; music credits (CC BY attribution, D-129) mixed in.
-	var step := int(_phase_t / 3.0) % 6
-	if step != int((_phase_t - get_process_delta_time()) / 3.0) % 6 or _phase_t < 0.05:
+	var step := int(_phase_t / 3.0) % 5
+	if step != int((_phase_t - get_process_delta_time()) / 3.0) % 5 or _phase_t < 0.05:
 		match step:
 			0: Dmd.show_image(load(DMD_LOGO))
 			1: Dmd.show_text(tr("RC_SHIFT_HINT_4") if _four_buttons() else tr("RC_SHIFT_HINT"),
@@ -705,7 +704,6 @@ func _attract_tick() -> void:
 			2: Dmd.show_text(tr("RC_CREDIT_MUSIC"), tr("RC_CREDIT_BOGART"), Dmd.DIM, Dmd.YELLOW)
 			3: Dmd.show_text(tr("ATTRACT_HIGH_SCORES"), _top_score_line(), Dmd.YELLOW, Dmd.WHITE)
 			4: Dmd.show_text(tr("RC_CREDIT_BOGART"), tr("RC_CREDIT_BOGART_URL"), Dmd.YELLOW, Dmd.WHITE)
-			5: Dmd.show_text(tr("RC_CREDIT_MUSIC"), tr("RC_CREDIT_CODEMANU"), Dmd.DIM, Dmd.CYAN)
 
 
 func _top_score_line() -> String:
@@ -980,10 +978,9 @@ func _begin_race() -> void:
 		var gi := m as MeshInstance3D
 		if gi.material_override != null:
 			InstParam.set_param(gi, "hue", float(Sim.CARS[_chosen_car].hue))
-	# Stage 1 is always action_3 (D-106; was: each race moved on a song).
-	# Stages 1-5 play Maximum Overdrive (D-111), carried on from attract.
-	_music_i = FIRST_TRACK
-	Audio.play_music(MUSIC_ATTRACT)
+	# The start stage's song (D-226): stage 1 carries on attract's from where it
+	# is; a later start stage (testing) plays its own from the top.
+	Audio.play_music(_stage_music(sim.checkpoints + 1))
 	Audio.sfx("start")
 	_hud.visible = true
 	_show_mode()
@@ -1038,18 +1035,11 @@ func _handle_events() -> void:
 			"checkpoint":
 				_bg_flash = 1.2
 				Audio.sfx("rc_checkpoint")
-				# Stage 6 starts the CodeManu songs (action_3 first), which then
-				# change every MUSIC_STAGES stages (D-105, D-111).
+				# A new song every MUSIC_STAGES stages (D-226), crossfaded in from
+				# a little way into it.
 				var stage := int(e[1]) + 1
-				var later := OPENING_STAGES + NIGHT_STAGES + 1   # stage 10
-				if stage == OPENING_STAGES + 1:
-					Audio.play_music(MUSIC_NIGHT, NIGHT_XFADE)   # as the lights go down
-				elif stage == later:
-					_music_i = FIRST_TRACK
-					Audio.play_music(MUSIC_TRACKS[_music_i])
-				elif stage > later and (stage - later) % MUSIC_STAGES == 0:
-					_music_i += 1
-					Audio.play_music(MUSIC_TRACKS[_music_i % MUSIC_TRACKS.size()])
+				if _stage_music(stage) != Audio.current_music():
+					Audio.crossfade_music(_stage_music(stage), MUSIC_XFADE, MUSIC_SKIP)
 				# Reached on momentum after TIME UP: the race goes on (D-103).
 				var saved: bool = e.size() > 3 and e[3]
 				# No CHECKPOINT notice mid-TABLE (D-142): the gate, DMD and sound
