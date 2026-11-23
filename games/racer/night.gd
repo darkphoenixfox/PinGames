@@ -106,7 +106,7 @@ static func _disc(st: SurfaceTool, c: Vector3, rx: float, ry: float, col: Color,
 
 ## Lamp-post light in the lamp's own space (its arm reaches to -x 2.2 m, head
 ## at 6.85 m): a pool on the ground, a faint cone down from the head, and a
-## glow round the head.
+## glow round the head with a starburst (D-225).
 static func lamp_mesh() -> Mesh:
 	if _lamp_mesh != null:
 		return _lamp_mesh
@@ -128,6 +128,21 @@ static func lamp_mesh() -> Mesh:
 	st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	_disc(st, head, 1.3, 1.0, LAMP, 0.9, true)
+	# Starburst (D-225): thin rays out of the head, like a lamp seen at night
+	# through a lens.
+	for k in 4:
+		var ang := PI * 0.25 * k + 0.2
+		var d := Vector3(cos(ang), sin(ang), 0.0)
+		var n := Vector3(-d.y, d.x, 0.0) * (0.07 if k % 2 == 0 else 0.045)
+		var reach := 3.6 if k % 2 == 0 else 2.4
+		for sgn in [-1.0, 1.0]:
+			var tip: Vector3 = head + d * reach * sgn
+			st.set_color(Color(LAMP.lightened(0.4), 0.75))
+			st.add_vertex(head + n)
+			st.set_color(Color(LAMP.lightened(0.4), 0.75))
+			st.add_vertex(head - n)
+			st.set_color(Color(LAMP, 0.0))
+			st.add_vertex(tip)
 	st.commit(am)
 	for i in am.get_surface_count():
 		am.surface_set_material(i, _mat())

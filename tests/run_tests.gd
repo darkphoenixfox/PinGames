@@ -692,13 +692,13 @@ func test_racer_hd_assets() -> void:
 	var seq: Array = []
 	for k in range(1, 12):
 		seq.append(TrackA.stage_area(k))
-	check(seq == ["beach", "fields", "city", "city", "desert", "desert", "forest", "forest", "snow", "snow", "city"],
-		"areas change every two stages after the beach and fields (%s)" % ", ".join(seq))
+	check(seq == ["beach", "beach", "forest", "forest", "desert", "city", "city", "fields", "snow", "snow", "snow"],
+		"areas by stage (D-225: %s)" % ", ".join(seq))
 	var SimA = load("res://games/racer/sim.gd")
 	var cs = SimA.new()
 	cs.setup(5)
 	cs.state = SimA.State.RACE
-	cs.s = 2.0 * SimA.CHECKPOINT_EVERY + 500.0
+	cs.s = 5.0 * SimA.CHECKPOINT_EVERY + 500.0
 	cs.track.ensure(cs.s + 600.0)
 	cs.x = 20.0
 	cs.v = 30.0
@@ -808,10 +808,10 @@ func test_racer_time_of_day() -> void:
 	check(el.call(3.0) > 0.0 and el.call(3.0) < 25.0 and el.call(4.5) > 0.0 and el.call(4.5) < 8.0, "stages 4-5: the sun is low (sunset)")
 	check(el.call(4.99) < 0.0, "the sun has set by the end of stage 5")
 	var night_ok := true
-	for p in [5.2, 6.0, 7.0, 8.0, 8.9]:
+	for p in [5.2, 6.0, 7.0, 7.7]:
 		night_ok = night_ok and T.night_level(el.call(p)) > 0.5
-	check(night_ok, "stages 6-9: night (lights on)")
-	check(el.call(9.9) > 0.0, "the sun is back up in stage 10 (dawn)")
+	check(night_ok, "stages 6-8: night (lights on, D-225)")
+	check(el.call(8.0) < 0.0 and el.call(9.2) > 0.0, "dawn in stages 9-10: first light, then the sun comes up (D-225)")
 	# One sun: its direction is a single unit vector, ahead of the road at sunset.
 	var sd: Vector3 = T.sun_dir(18.0)
 	check(is_equal_approx(sd.length(), 1.0) and sd.z < -0.9, "the sun sets ahead of the road's start")
@@ -906,9 +906,9 @@ func test_racer_sim() -> void:
 		var gt = load("res://games/racer/track.gd").new()
 		gt.avoid_every = 2300.0
 		gt.setup(sd)
-		gt.ensure(4600.0)
-		check(not gt.tunnels.is_empty() and (gt.tunnels[0] as Vector2).y < 4600.0 - 60.0,
-			"seed %d: a tunnel comes before stage 3 (D-132)" % sd)
+		gt.ensure(6900.0)
+		check(not gt.tunnels.is_empty() and (gt.tunnels[0] as Vector2).y < 6900.0 - 60.0,
+			"seed %d: a tunnel comes in the forest, before stage 4 (D-132, D-225)" % sd)
 	var tn = Sim.new()
 	tn.setup(7)
 	tn.track.ensure(30000.0)
@@ -1503,7 +1503,7 @@ func test_racer_sim() -> void:
 	# A big roadside object rolls the car over, away from the obstacle (D-098).
 	var fl = Sim.new()
 	fl.setup(7)
-	fl.track.ensure(2000.0)
+	fl.track.ensure(12000.0)   # past the beach stages, which have no rocks (D-225)
 	var rock: Dictionary = {}
 	for o in fl.track.objects:
 		if o.kind == "rock":

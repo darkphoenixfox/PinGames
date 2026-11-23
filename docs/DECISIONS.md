@@ -2178,3 +2178,29 @@
 - **Change:** ALL GAMES is now first in RESET HIGH SCORES and shows RESET (then PRESS AGAIN) like the others.
 - **Access:** the operator menu opens by holding EXIT (or START + EXIT) in the attract screen or the game picker, including on the touch EXIT button.
 - **Status:** Accepted
+
+### D-225 — Turbo Run: new stage order and times; night city; screen-space rain reflections
+- **Date:** 2026-11-23
+- **Decisions (director):**
+  - Stages: beach, beach, forest, forest, desert, city, city, fields, snowy, snowy.
+  - Time of day: day, day, day, sunset, sunset, night, night, night, dawn, dawn.
+  - Darken the city's buildings but add lit rooms to the skyscrapers, and traffic lights: a night-time city mood (photo reference).
+  - The rain reflections must be screen-space-reflection style, showing cars driving over, street lamps and road signs.
+- **Stage order:** `Track.STAGE_AREAS` lists stages 1–10 (supersedes D-216's cycle); past the finish the last area goes on.
+  - The guaranteed tunnel (D-132) moves to the second half of `TUNNEL_STAGE` 3 (the forest), since stage 2 is now beach.
+- **Time of day:** `sky.gd` `PROGRESS_HOURS`: day through stage 3, sun low at 4, set by 6, first light at the start of 9 (04:54), sunrise in 9, morning in 10.
+  - The night music now plays for 3 stages, and the CodeManu songs start at stage 9.
+- **City at night:**
+  - **Facades:** darker by day, and 60 % darker at night, so only the rooms glow.
+  - **Rooms:** 62 % of windows lit, in warm tungsten, cool office white or TV blue. Each is brighter towards its ceiling, and 30 % have blinds. The glass towers light whole floors in runs of four bays. Shopfronts are almost all lit.
+  - **Brightness:** emission at 2.4 so the bloom picks them up; a dim scattering stays on by day.
+- **Traffic lights:** the lamps are emissive (5× when on), with an additive glow halo of 1.6 m that is stronger at night.
+- **Street lamps:** every lamp's night glow gains a starburst (4 thin rays out of the head).
+- **Rain reflections** (`puddles.gdshader`): replace the D-217 horizon mirror with a ray march.
+  - **March:** the view ray is reflected off the water, whose normal is tilted a little by the raindrop rings. It is marched in view space, 24 steps growing ×1.32 from 0.25 m, against the depth buffer: a hit is a point just behind the visible surface. Each hit is refined with 5 bisection steps, then the screen is sampled there, fading out towards the screen edges.
+  - **Fallback:** a miss uses the mirrored sky.
+  - **Both renderers:** depth is linearised with `CURRENT_RENDERER`, Compatibility (web) or Forward+. Which way up the screen is gets found per pixel from the fragment's own projection.
+  - **Result:** cars driving over the puddles, lamps, signs and lit windows reflect in place, in HD and in the pixel modes.
+  - **Puddles:** slightly larger.
+- **Tests:** updated for the new area order, the tunnel in stage 3, night on 6–8 with dawn on 9–10, and the rock-flip test's search (the beach has no rocks).
+- **Status:** Accepted

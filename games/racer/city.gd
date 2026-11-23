@@ -13,7 +13,7 @@ const CYCLE := [7.0, 1.6, 5.0]   # s of green, amber, red
 static var _bmat: ShaderMaterial
 static var _jmat: ShaderMaterial
 static var _lamp_mats: Array = []   # green, amber, red
-static var _dark_mats: Array = []
+static var _halo_mats: Array = []   # glow round each lit lamp (D-225)
 static var _pole_mat: StandardMaterial3D
 
 
@@ -43,8 +43,8 @@ static func update(night: float, hd: bool, time: float) -> void:
 	var t := fmod(time, CYCLE[0] + CYCLE[1] + CYCLE[2])
 	var on := 0 if t < CYCLE[0] else (1 if t < CYCLE[0] + CYCLE[1] else 2)
 	for i in 3:
-		(_lamp_mats[i] as StandardMaterial3D).emission_energy_multiplier = 3.0 if i == on else 0.0
-		(_lamp_mats[i] as StandardMaterial3D).albedo_color = _lamp_col(i) if i == on else _lamp_col(i).darkened(0.75)
+		(_lamp_mats[i] as StandardMaterial3D).emission_energy_multiplier = 5.0 if i == on else 0.12
+		(_halo_mats[i] as StandardMaterial3D).albedo_color = Color(_lamp_col(i), (0.35 + 0.4 * night) if i == on else 0.0)
 
 
 static func _lamp_col(i: int) -> Color:
@@ -146,6 +146,15 @@ static func build_lights(parent: Node3D, tr_, list: Array) -> void:
 			if side < 0.0:
 				lamp.rotation.y = PI
 			n.add_child(lamp)
+			# A soft glow round it (D-225), facing the camera.
+			var halo := MeshInstance3D.new()
+			var hq := QuadMesh.new()
+			hq.size = Vector2(1.6, 1.6)
+			halo.mesh = hq
+			halo.material_override = _halo_mats[2 - i]
+			halo.position = lamp.position + Vector3(0.0, 0.0, 0.05 * signf(face))
+			halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			n.add_child(halo)
 
 
 static func _ensure_light_mats() -> void:
@@ -153,13 +162,35 @@ static func _ensure_light_mats() -> void:
 		return
 	_pole_mat = StandardMaterial3D.new()
 	_pole_mat.albedo_color = Color(0.16, 0.17, 0.19)
+	var glow := _glow_texture()
 	for i in 3:
+		# Emissive (D-225), bright enough to bloom in the night.
 		var m := StandardMaterial3D.new()
-		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		m.albedo_color = _lamp_col(i)
+		m.albedo_color = Color(0.05, 0.05, 0.05)
 		m.emission_enabled = true
 		m.emission = _lamp_col(i)
 		_lamp_mats.append(m)
+		var h := StandardMaterial3D.new()
+		h.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		h.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		h.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		h.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		h.no_depth_test = false
+		h.albedo_texture = glow
+		h.albedo_color = Color(_lamp_col(i), 0.0)
+		_halo_mats.append(h)
+
+
+## A soft round glow (white centre fading out) for the lamp halos.
+static func _glow_texture() -> Texture2D:
+	var n := 32
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	for y in n:
+		for x in n:
+			var d := Vector2(x - n * 0.5 + 0.5, y - n * 0.5 + 0.5).length() / (n * 0.5)
+			var a := clampf(1.0 - d, 0.0, 1.0)
+			img.set_pixel(x, y, Color(1, 1, 1, a * a))
+	return ImageTexture.create_from_image(img)
 
 
 static func _box(parent: Node3D, at: Vector3, size: Vector3, mat: Material) -> void:

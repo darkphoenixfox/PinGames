@@ -29,10 +29,12 @@ const MAX_HEADING := deg_to_rad(80.0)    # overall, from the start direction
 const OBJ_RADIUS := {"palm": 0.6, "rock": 1.5, "chevron": 0.5, "lamp": 0.35, "gate": 0.0,
 	"bush": 0.0, "sign": 2.5, "gantry": 0.0, "speedtrap": 0.4, "house": 0.0, "lifeguard": 0.0,
 	"building": 0.0, "tlight": 0.4, "cactus": 0.5, "mesa": 0.0}
-## Areas (D-216): stage 1 is the beach, stage 2 the fields, then each area lasts
-## two stages: city, desert, forest, snowy mountain, and round again. The look
-## cross-fades into the next area over the last AREA_BLEND m of a stage.
-const AREA_CYCLE := ["city", "desert", "forest", "snow"]
+## Areas (D-216; order D-225, director): the area of each stage 1..10; past the
+## finish (stage 11 on) the last one goes on. The look cross-fades into the
+## next area over the last AREA_BLEND m of a stage.
+const STAGE_AREAS := ["beach", "beach", "forest", "forest", "desert", "city", "city", "fields", "snow", "snow"]
+## The guaranteed tunnel (D-132) is laid in the second half of this stage.
+const TUNNEL_STAGE := 3
 const AREA_BLEND := 200.0
 ## City (D-216): buildings stand behind a sidewalk; the car is held off it by
 ## a barrier at CITY_WALL (it scrapes along, like a tunnel wall). Junctions
@@ -110,7 +112,8 @@ func length() -> float:
 func _random_section() -> void:
 	# A tunnel is guaranteed before stage 3 (D-132): once the road reaches the
 	# middle of stage 2 without one, a gentle tunnel section is laid there.
-	if avoid_every > 0.0 and tunnels.is_empty() and _built_to >= avoid_every * 1.25 			and _built_to < avoid_every * 2.0 - TUNNEL_MIN - 200.0:
+	if avoid_every > 0.0 and tunnels.is_empty() and _built_to >= avoid_every * (TUNNEL_STAGE - 0.75) \
+			and _built_to < avoid_every * TUNNEL_STAGE - TUNNEL_MIN - 200.0:
 		_force_tunnel = true
 		_add_section(TUNNEL_MIN + 160.0, 0.0, _rng.randf_range(-1.0, 1.0) * 12.0)
 		_force_tunnel = false
@@ -502,11 +505,7 @@ func beach_w(s: float) -> float:
 
 ## The area of stage k (1-based), D-216.
 static func stage_area(k: int) -> String:
-	if k <= 1:
-		return "beach"
-	if k == 2:
-		return "fields"
-	return AREA_CYCLE[((k - 3) / 2) % AREA_CYCLE.size()]
+	return STAGE_AREAS[clampi(k, 1, STAGE_AREAS.size()) - 1]
 
 
 ## The stage (1-based) at distance s.

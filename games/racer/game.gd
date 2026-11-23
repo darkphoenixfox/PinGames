@@ -254,7 +254,7 @@ const OPENING_STAGES := 5   # stages played to Maximum Overdrive (D-111, D-129; 
 ## Night (stage 6, D-191) crossfades to "Dreamstate" by Bogart VGM, CC BY 3.0
 ## (D-129), which plays through stage 9; the CodeManu songs take over from stage 10.
 const MUSIC_NIGHT := "res://assets/audio/music/racer/bogart_dreamstate.ogg"
-const NIGHT_STAGES := 4
+const NIGHT_STAGES := 3   # D-225: night is stages 6-8, dawn from 9
 const NIGHT_XFADE := 6.0
 const MUSIC_ATTRACT := "res://assets/audio/music/racer/bogart_maximum_overdrive.ogg"
 const FIRST_TRACK := 2

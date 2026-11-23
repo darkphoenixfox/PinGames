@@ -10,12 +10,14 @@ extends RefCounted
 
 const MAX_ELEVATION := 50.0   # degrees at noon
 ## Race progress (stages played, fractional) -> hour of the day.
+## D-225 (director): day 1-3, sunset 4-5, night 6-8, dawn 9-10.
 const PROGRESS_HOURS := [
 	[0.0, 13.0],   # stage 1 starts in the early afternoon
 	[3.0, 16.4],   # stage 4: the sun is getting low
 	[5.0, 18.3],   # stage 6: just set, twilight
-	[9.0, 29.6],   # stage 10: before sunrise (05:36)
-	[10.0, 30.6],  # stage 11: sun up
+	[8.0, 28.9],   # stage 9: first light (04:54)
+	[9.0, 30.0],   # stage 10: sunrise
+	[10.0, 31.0],  # stage 11: morning
 ]
 const LATE_HOURS_PER_STAGE := 1.2   # after stage 11 the day goes on at this pace
 
