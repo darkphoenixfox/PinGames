@@ -55,6 +55,18 @@ const LEVEL_FILES := [
 	"res://games/breakout/levels/level_09.txt",
 	"res://games/breakout/levels/level_10.txt",
 ]
+## D-285: 2-player levels, 19 columns on a wider field (generated from the
+## 1-player ones; the director may edit them).
+const LEVEL_FILES_2P := [
+	"res://games/breakout/levels/level2p_01.txt", "res://games/breakout/levels/level2p_02.txt",
+	"res://games/breakout/levels/level2p_03.txt", "res://games/breakout/levels/level2p_04.txt",
+	"res://games/breakout/levels/level2p_05.txt", "res://games/breakout/levels/level2p_06.txt",
+	"res://games/breakout/levels/level2p_07.txt", "res://games/breakout/levels/level2p_08.txt",
+	"res://games/breakout/levels/level2p_09.txt", "res://games/breakout/levels/level2p_10.txt",
+]
+const BRICK_COLS_2P := 19
+const FIELD_2P := Rect2(-7.08, -7.1, 14.16, 15.1)   # 19 bricks at the 1P brick width
+const P2_LIFT := 0.6    # player 2's ship flies this much higher, so the ships pass (D-285)
 const COLOUR_POINTS := {"R": 120, "Y": 100, "G": 80, "B": 60}
 ## Brick letters (D-073): UPPERCASE = 1 hit, lowercase = 2-hit armoured
 ## (1.5x points), X = indestructible metal (doesn't count for clearing).
@@ -115,8 +127,22 @@ var ball_start_speed := BALL_START_SPEED
 var ball_max_speed := BALL_MAX_SPEED
 var level := 1
 
+## D-285: local 2-player. The field and its columns can widen; each player's
+## ship state lives in PLAYER_FIELDS, swapped in by _use(i) so the 1-player
+## code runs unchanged for whichever ship is current.
+var two_player := false
+var field := FIELD
+var cols := BRICK_COLS
+var server := 0        # the player whose ship holds the ball before a serve
+var cur := 0           # the player whose fields are live
+var _pl := [{}, {}]
+const PLAYER_FIELDS := ["paddle_x", "paddle_vx", "paddle_y", "_dash_time", "_dash_cd", "_dash_dir",
+	"powerup", "shield_active", "_paddle_hist", "power", "blast_charge", "_since_blast", "_both_held",
+	"_await_release", "_both_hold_t", "_fail_reported", "ship_invulnerable", "charge_held", "paddle_axis"]
+
 var paddle_x := 0.0
 var paddle_vx := 0.0
+var paddle_y := PADDLE_Y
 var _dash_time := 0.0
 var _dash_cd := 0.0
 var _dash_dir := 0
@@ -189,6 +215,83 @@ func setup(balls: int, diff: String = "normal") -> void:
 	_reset_serve()
 
 
+## D-285: a 2-player game on the wide field: two ships, shared lives and score.
+func setup_two(balls: int, diff: String = "normal") -> void:
+	two_player = true
+	field = FIELD_2P
+	cols = BRICK_COLS_2P
+	for i in 2:
+		var d := {}
+		for f in PLAYER_FIELDS:
+			d[f] = get(f)
+		d.paddle_x = _start_x(i)
+		d.paddle_y = PADDLE_Y - (P2_LIFT if i == 1 else 0.0)
+		d.paddle_vx = 0.0
+		d._paddle_hist = []
+		d.power = 1.0
+		d.powerup = ""
+		d.shield_active = false
+		_pl[i] = d
+	cur = 0
+	for f in PLAYER_FIELDS:
+		set(f, _pl[0][f])
+	server = 0
+	setup(balls, diff)
+
+
+func _start_x(i: int) -> float:
+	return field.size.x * (-0.22 if i == 0 else 0.22)
+
+
+## Makes player i's ship state the live one (2P, D-285).
+func _use(i: int) -> void:
+	if not two_player or i == cur:
+		return
+	for f in PLAYER_FIELDS:
+		_pl[cur][f] = get(f)
+	for f in PLAYER_FIELDS:
+		set(f, _pl[i][f])
+	cur = i
+
+
+## A player's value of a ship field, whichever is live.
+func player_get(i: int, f: String) -> Variant:
+	if not two_player or i == cur:
+		return get(f)
+	return _pl[i][f]
+
+
+## 2-player step (D-285): each player's controls as [left, right, launch, dash].
+func step_two(dt: float, a: Array, b: Array) -> void:
+	events.clear()
+	if state == State.OVER or state == State.LEVEL_CLEAR:
+		return
+	_time += dt
+	var inp := [a, b]
+	for i in 2:
+		_use(i)
+		var c: Array = inp[i]
+		_update_power_and_blast(dt, (c[0] and c[1]) or charge_held)
+		_move_paddle(dt, c[0], c[1], c[3])
+	_use(0)
+	_update_enemies(dt)
+	if state == State.OVER:
+		return
+	_update_powerups(dt)
+	if state == State.SERVE:
+		_use(server)
+		ball_pos = Vector2(paddle_x, paddle_y - PADDLE_H * 0.5 - BALL_R - 0.01)
+		_held_time += dt
+		var go: bool = inp[server][2] or _held_time >= AUTO_SERVE_SECONDS
+		if go:
+			_serve()
+		_use(0)
+		return
+	if state != State.PLAY or freeze_ball:
+		return
+	_step_balls(dt)
+
+
 ## Picks the difficulty before play starts (D-182): ball speeds and lives from
 ## the operator's balls per game. Doesn't touch the level or the score.
 func set_difficulty(diff: String, operator_balls: int) -> void:
@@ -207,18 +310,18 @@ func set_difficulty(diff: String, operator_balls: int) -> void:
 ## Builds the bricks of the current level from its text file.
 func build_rack() -> void:
 	bricks.clear()
-	var layout := level_layout(level)
-	var w := FIELD.size.x / BRICK_COLS
+	var layout := level_layout(level, two_player)
+	var w := field.size.x / cols
 	for row in mini(layout.size(), BRICK_ROWS):
 		var line: String = layout[row]
-		for col in mini(line.length(), BRICK_COLS):
+		for col in mini(line.length(), cols):
 			var raw := line[col]
 			var ch := raw.to_upper()
 			var metal := ch == "X"
 			if not metal and not COLOUR_POINTS.has(ch):
 				continue
 			var armoured := not metal and raw != ch  # lowercase
-			var rect := Rect2(FIELD.position.x + col * w + BRICK_GAP * 0.5,
+			var rect := Rect2(field.position.x + col * w + BRICK_GAP * 0.5,
 				BRICK_TOP + row * BRICK_H + BRICK_GAP * 0.5, w - BRICK_GAP, BRICK_H - BRICK_GAP)
 			var pts := 0 if metal else int(COLOUR_POINTS[ch] * (ARMOURED_MULT if armoured else 1.0))
 			bricks.append({"rect": rect, "hp": -1 if metal else (2 if armoured else 1), "alive": true,
@@ -227,8 +330,9 @@ func build_rack() -> void:
 
 
 ## Rows of level n (1-based; loops over LEVEL_FILES). Comment lines start with #.
-static func level_layout(n: int) -> Array:
-	var path: String = LEVEL_FILES[(n - 1) % LEVEL_FILES.size()]
+static func level_layout(n: int, wide: bool = false) -> Array:
+	var files: Array = LEVEL_FILES_2P if wide else LEVEL_FILES
+	var path: String = files[(n - 1) % files.size()]
 	var rows := []
 	for line in FileAccess.get_file_as_string(path).split("\n"):
 		var l := line.strip_edges()
@@ -251,9 +355,20 @@ func next_level() -> void:
 	powerups.clear()
 	_end_powerup()
 	extra_balls.clear()
-	# D-275: the ship always rises into the middle of the new level.
-	paddle_x = FIELD.get_center().x
-	paddle_vx = 0.0
+	# D-275: the ship always rises into the middle of the new level (2P: each
+	# ship in the middle of its half, D-285).
+	if two_player:
+		for i in 2:
+			_use(i)
+			paddle_x = _start_x(i)
+			paddle_vx = 0.0
+			power = 1.0
+			blast_charge = 0.0
+			_end_powerup()
+		_use(0)
+	else:
+		paddle_x = field.get_center().x
+		paddle_vx = 0.0
 	_reset_serve()
 
 
@@ -276,7 +391,7 @@ func bricks_alive() -> int:
 
 
 func paddle_rect() -> Rect2:
-	return Rect2(paddle_x - PADDLE_W * 0.5, PADDLE_Y - PADDLE_H * 0.5, PADDLE_W, PADDLE_H)
+	return Rect2(paddle_x - PADDLE_W * 0.5, paddle_y - PADDLE_H * 0.5, PADDLE_W, PADDLE_H)
 
 
 ## Advances the simulation. left/right: flipper buttons held. launch: pressed this
@@ -293,13 +408,17 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 		return
 	_update_powerups(dt)  # capsules keep falling while waiting to fire
 	if state == State.SERVE:
-		ball_pos = Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BALL_R - 0.01)
+		ball_pos = Vector2(paddle_x, paddle_y - PADDLE_H * 0.5 - BALL_R - 0.01)
 		_held_time += dt
 		if launch or _held_time >= AUTO_SERVE_SECONDS:
 			_serve()
 		return
 	if state != State.PLAY or freeze_ball:
 		return
+	_step_balls(dt)
+
+
+func _step_balls(dt: float) -> void:
 	var main := {"pos": ball_pos, "vel": ball_vel, "speed": ball_speed}
 	var r := _move_ball(main, dt)
 	ball_pos = main.pos
@@ -435,13 +554,13 @@ func _update_power_and_blast(dt: float, both: bool) -> void:
 
 
 func _blast_out(pos: Vector2) -> bool:
-	return pos.y - BLAST_H * 0.5 < FIELD.position.y or pos.x < FIELD.position.x or pos.x > FIELD.end.x
+	return pos.y - BLAST_H * 0.5 < field.position.y or pos.x < field.position.x or pos.x > field.end.x
 
 
 ## Fires the charged shot at level `lvl`, shaped by the current power-up (D-072).
 func _fire(lvl: int) -> void:
 	_since_blast = 0.0
-	var start := Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BLAST_H * 0.5)
+	var start := Vector2(paddle_x, paddle_y - PADDLE_H * 0.5 - BLAST_H * 0.5)
 	match powerup:
 		"I":  # Ion cannon: instant beam that fries the whole column
 			power = 0.0
@@ -449,7 +568,7 @@ func _fire(lvl: int) -> void:
 			_ion_beam(paddle_x)
 		"B":  # Bounce plasma: an extra plasma ball
 			power = 0.0
-			var nose := Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BALL_R - 0.05)
+			var nose := Vector2(paddle_x, paddle_y - PADDLE_H * 0.5 - BALL_R - 0.05)
 			var ang := deg_to_rad(randf_range(-12.0, 12.0))
 			extra_balls.append({"pos": nose, "vel": Vector2(sin(ang), -cos(ang)) * ball_start_speed,
 				"speed": ball_start_speed})
@@ -467,7 +586,7 @@ func _fire(lvl: int) -> void:
 
 
 func _ion_beam(x: float) -> void:
-	var beam := Rect2(x - ION_BEAM_W * 0.5, FIELD.position.y, ION_BEAM_W, PADDLE_Y - FIELD.position.y)
+	var beam := Rect2(x - ION_BEAM_W * 0.5, field.position.y, ION_BEAM_W, paddle_y - field.position.y)
 	for k in range(enemies.size() - 1, -1, -1):
 		if enemies[k].state != "wormhole" and not BP.collide_circle_rect(enemies[k].pos, ENEMY_R, beam).is_empty():
 			_destroy_enemy(k)
@@ -490,7 +609,7 @@ func _ion_beam(x: float) -> void:
 func debug_fire_line() -> void:
 	if state == State.OVER:
 		return
-	var start := Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BLAST_H * 0.5)
+	var start := Vector2(paddle_x, paddle_y - PADDLE_H * 0.5 - BLAST_H * 0.5)
 	blasts.append({"pos": start, "level": 3, "hits_left": 9999, "dir": Vector2.UP})
 
 
@@ -570,7 +689,7 @@ func _move_paddle(dt: float, left: bool, right: bool, dash: int) -> void:
 			var rate := PADDLE_REVERSE if signf(target) != signf(paddle_vx) and paddle_vx != 0.0 else PADDLE_ACCEL
 			paddle_vx = move_toward(paddle_vx, target, rate * boost * dt)
 	paddle_x += paddle_vx * dt
-	var limit := FIELD.size.x * 0.5 - PADDLE_W * 0.5
+	var limit := field.size.x * 0.5 - PADDLE_W * 0.5
 	if absf(paddle_x) > limit:
 		paddle_x = clampf(paddle_x, -limit, limit)
 		paddle_vx = 0.0
@@ -603,11 +722,16 @@ func _serve() -> void:
 
 
 func _reset_serve() -> void:
+	if two_player:
+		var keep := cur
+		_use(server)
+		ball_pos = Vector2(paddle_x, paddle_y - PADDLE_H * 0.5 - BALL_R - 0.01)
+		_use(keep)
 	state = State.SERVE
 	_held_time = 0.0
 	ball_speed = ball_start_speed
 	ball_vel = Vector2.ZERO
-	ball_pos = Vector2(paddle_x, PADDLE_Y - PADDLE_H * 0.5 - BALL_R - 0.01)
+	ball_pos = Vector2(paddle_x, paddle_y - PADDLE_H * 0.5 - BALL_R - 0.01)
 
 
 const BALL_OK := 0
@@ -634,18 +758,18 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 	var prev_y := pos.y
 	pos += vel * h
 	# Walls
-	if pos.x - BALL_R < FIELD.position.x:
-		pos.x = FIELD.position.x + BALL_R
+	if pos.x - BALL_R < field.position.x:
+		pos.x = field.position.x + BALL_R
 		vel.x = absf(vel.x)
-		events.append(["wall", ["l", Vector2(FIELD.position.x, pos.y)]])
-	elif pos.x + BALL_R > FIELD.end.x:
-		pos.x = FIELD.end.x - BALL_R
+		events.append(["wall", ["l", Vector2(field.position.x, pos.y)]])
+	elif pos.x + BALL_R > field.end.x:
+		pos.x = field.end.x - BALL_R
 		vel.x = -absf(vel.x)
-		events.append(["wall", ["r", Vector2(FIELD.end.x, pos.y)]])
-	if pos.y - BALL_R < FIELD.position.y:
-		pos.y = FIELD.position.y + BALL_R
+		events.append(["wall", ["r", Vector2(field.end.x, pos.y)]])
+	if pos.y - BALL_R < field.position.y:
+		pos.y = field.position.y + BALL_R
 		vel.y = absf(vel.y)
-		events.append(["wall", ["t", Vector2(pos.x, FIELD.position.y)]])
+		events.append(["wall", ["t", Vector2(pos.x, field.position.y)]])
 	# Bricks: resolve the deepest contact only (one bounce per substep).
 	var best := -1
 	var best_c := {}
@@ -678,28 +802,41 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 			break
 	# Ship (and Lightspeed afterimages): only bounces balls coming DOWN onto it;
 	# a ball coming back up from below passes through (D-072).
-	if vel.y > 0.0 and pos.y < PADDLE_Y:
+	# 2P (D-285): each ship in turn (P1 first).
+	var keep := cur
+	for ship in (2 if two_player else 1):
+		_use(ship)
+		if not (vel.y > 0.0 and pos.y < paddle_y):
+			continue
 		var pr := paddle_rect()
 		if not BP.collide_circle_rect(pos, BALL_R, pr).is_empty():
 			speed = minf(speed + SPEEDUP_PER_PADDLE_HIT, ball_max_speed)
 			vel = BP.paddle_bounce(pos.x, paddle_x, PADDLE_W * 0.5, speed, paddle_vx)
 			pos.y = pr.position.y - BALL_R
-			events.append(["paddle", null])
-		else:
-			for gx in ghost_xs():
-				var gr := Rect2(gx - PADDLE_W * 0.5, pr.position.y, PADDLE_W, PADDLE_H)
-				if not BP.collide_circle_rect(pos, BALL_R, gr).is_empty():
-					speed = minf(speed + SPEEDUP_PER_PADDLE_HIT, ball_max_speed)
-					vel = BP.paddle_bounce(pos.x, gx, PADDLE_W * 0.5, speed, 0.0)
-					pos.y = gr.position.y - BALL_R
-					events.append(["ghost", gx])
-					break
-	# Shield barrier: saves one sinking ball, then breaks.
-	if shield_active and vel.y > 0.0 and prev_y + BALL_R < SHIELD_Y and pos.y + BALL_R >= SHIELD_Y:
-		pos.y = SHIELD_Y - BALL_R
-		vel.y = -absf(vel.y)
-		events.append(["shield_used", pos.x])
-		_end_powerup()  # back to the normal plasma cannon (D-084)
+			events.append(["paddle", ship])
+			break
+		var ghosted := false
+		for gx in ghost_xs():
+			var gr := Rect2(gx - PADDLE_W * 0.5, pr.position.y, PADDLE_W, PADDLE_H)
+			if not BP.collide_circle_rect(pos, BALL_R, gr).is_empty():
+				speed = minf(speed + SPEEDUP_PER_PADDLE_HIT, ball_max_speed)
+				vel = BP.paddle_bounce(pos.x, gx, PADDLE_W * 0.5, speed, 0.0)
+				pos.y = gr.position.y - BALL_R
+				events.append(["ghost", gx])
+				ghosted = true
+				break
+		if ghosted:
+			break
+	# Shield barrier: saves one sinking ball, then breaks (either ship's, D-285).
+	for ship in (2 if two_player else 1):
+		_use(ship)
+		if shield_active and vel.y > 0.0 and prev_y + BALL_R < SHIELD_Y and pos.y + BALL_R >= SHIELD_Y:
+			pos.y = SHIELD_Y - BALL_R
+			vel.y = -absf(vel.y)
+			events.append(["shield_used", pos.x])
+			_end_powerup()  # back to the normal plasma cannon (D-084)
+			break
+	_use(keep)
 	vel = BP.enforce_min_vertical(vel, speed, MIN_VERTICAL)
 	b.pos = pos
 	b.vel = vel
@@ -714,7 +851,8 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 ## Spawns a falling power-up capsule (public for tests / debug).
 ## D-275: any power-up but the one the ship already has.
 func random_powerup_kind() -> String:
-	var kinds: Array = POWERUP_KINDS.filter(func(k): return k != powerup)
+	var held := [powerup] if not two_player else [player_get(0, "powerup"), player_get(1, "powerup")]
+	var kinds: Array = POWERUP_KINDS.filter(func(k): return not (k in held))
 	return kinds[randi() % kinds.size()]
 
 
@@ -727,18 +865,25 @@ func spawn_powerup(kind: String, pos: Vector2) -> int:
 
 
 func _update_powerups(dt: float) -> void:
-	var pr := paddle_rect()
+	var keep := cur
 	for i in range(powerups.size() - 1, -1, -1):
 		var p: Dictionary = powerups[i]
 		p.pos += Vector2(0.0, POWERUP_FALL * dt)
-		if not BP.collide_circle_rect(p.pos, POWERUP_R, pr).is_empty() and state != State.OVER:
+		var caught := -1
+		for ship in (2 if two_player else 1):   # D-285: whichever ship catches it
+			_use(ship)
+			if not BP.collide_circle_rect(p.pos, POWERUP_R, paddle_rect()).is_empty() and state != State.OVER:
+				caught = ship
+				break
+		if caught >= 0:
 			powerups.remove_at(i)
 			apply_powerup(p.kind)
 			power = minf(1.0, power + 1.0 / BLAST_MAX_LEVEL)  # +1 bar level (D-078)
-			events.append(["powerup_collect", [p.id, p.kind]])
+			events.append(["powerup_collect", [p.id, p.kind, caught]])
 		elif p.pos.y - POWERUP_R > DRAIN_Y:
 			powerups.remove_at(i)
 			events.append(["powerup_lost", p.id])
+	_use(keep)
 
 
 ## Only one power-up at a time: a new one replaces the current one.
@@ -763,7 +908,7 @@ func _end_powerup() -> void:
 # --- enemies (D-052) ------------------------------------------------------------------
 ## Spawns a tetrahedron through a wormhole at x (random if NAN). Public for tests.
 func spawn_enemy(x: float = NAN) -> int:
-	var lim := FIELD.size.x * 0.5 - ENEMY_R - 0.2
+	var lim := field.size.x * 0.5 - ENEMY_R - 0.2
 	if is_nan(x):
 		x = randf_range(-lim, lim)
 	var id := _next_enemy_id
@@ -777,14 +922,17 @@ func spawn_enemy(x: float = NAN) -> int:
 
 
 func _update_enemies(dt: float) -> void:
-	ship_invulnerable = maxf(0.0, ship_invulnerable - dt)
+	for ship in (2 if two_player else 1):
+		_use(ship)
+		ship_invulnerable = maxf(0.0, ship_invulnerable - dt)
+	_use(0)
 	if state == State.PLAY:
 		_enemy_timer -= dt
 		if _enemy_timer <= 0.0:
 			_enemy_timer = randf_range(ENEMY_INTERVAL.x, ENEMY_INTERVAL.y) / (1.0 + ENEMY_TIER_RATE * enemy_tier())
 			if enemies.size() < ENEMY_MAX + enemy_tier():
 				spawn_enemy()
-	var lim := FIELD.size.x * 0.5 - ENEMY_R
+	var lim := field.size.x * 0.5 - ENEMY_R
 	for i in range(enemies.size() - 1, -1, -1):
 		var en: Dictionary = enemies[i]
 		en.t += dt
@@ -828,12 +976,18 @@ func _update_enemies(dt: float) -> void:
 				var target: Vector2 = en.center + Vector2(sin(en.angle) * ENEMY_ORBIT_R.x, -cos(en.angle) * ENEMY_ORBIT_R.y)
 				en.pos = en.pos.lerp(target, 1.0 - exp(-6.0 * dt))
 		# Ship collision: the ship is destroyed and the enemy self-destructs.
-		if en.state != "wormhole" and ship_invulnerable <= 0.0 \
-				and not BP.collide_circle_rect(en.pos, ENEMY_R * 0.85, paddle_rect()).is_empty():
-			_destroy_enemy(i, false)
-			_destroy_ship()
-			if state == State.OVER:
-				return
+		var hit_ship := false
+		for ship in (2 if two_player else 1):
+			_use(ship)
+			if en.state != "wormhole" and ship_invulnerable <= 0.0 \
+					and not BP.collide_circle_rect(en.pos, ENEMY_R * 0.85, paddle_rect()).is_empty():
+				_destroy_enemy(i, false)
+				_destroy_ship()
+				hit_ship = true
+				break
+		_use(0)
+		if hit_ship and state == State.OVER:
+			return
 
 
 func _enemy_blocked(pos: Vector2) -> bool:
@@ -860,7 +1014,7 @@ func _destroy_enemy(i: int, award: bool = true) -> void:
 
 
 func _destroy_ship() -> void:
-	events.append(["ship_destroyed", Vector2(paddle_x, PADDLE_Y)])
+	events.append(["ship_destroyed", Vector2(paddle_x, paddle_y)])
 	_end_powerup()
 	extra_balls.clear()
 	blasts.clear()
@@ -876,7 +1030,15 @@ func _destroy_ship() -> void:
 
 
 func _lose_ball() -> void:
-	_end_powerup()
+	if two_player:   # D-285: a shared life: both ships start over; the serve alternates
+		for ship in 2:
+			_use(ship)
+			_end_powerup()
+			power = 1.0
+		_use(0)
+		server = 1 - server
+	else:
+		_end_powerup()
 	balls_left -= 1
 	events.append(["lost", ball_pos.x])
 	if balls_left <= 0:

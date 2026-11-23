@@ -1,0 +1,9 @@
+# Tilt Breaker 2-player level 5 (D-285): 19 columns, generated from level 5
+# by gen (its 11 columns in the middle, its edge columns mirrored out to each side). Edit freely.
+B.BBBBB.BBB.BBBBB.B
+b.bXbXb.bXb.bXbXb.b
+B.BBBBB.BBB.BBBBB.B
+G.GGGGG.GGG.GGGGG.G
+g.gXgXg.gXg.gXgXg.g
+G.GGGGG.GGG.GGGGG.G
+YYYYYYYYYYYYYYYYYYY

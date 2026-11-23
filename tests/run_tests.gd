@@ -323,6 +323,33 @@ func test_breakout_difficulty(Sim) -> void:
 	pw.next_level()
 	check(not same and is_equal_approx(pw.paddle_x, Sim.FIELD.get_center().x),
 		"no drop of the power-up you have; the ship starts a level in the centre")
+	# D-285: 2-player Tilt Breaker.
+	var tp = Sim.new()
+	tp.setup_two(3)
+	var bricks2: int = tp.bricks.size()
+	var solo = Sim.new()
+	solo.setup(3)
+	check(tp.two_player and tp.field.size.x > Sim.FIELD.size.x * 1.6 and bricks2 > solo.bricks.size(),
+		"2P: a wider field with wider levels (%d bricks vs %d)" % [bricks2, solo.bricks.size()])
+	var y0: float = tp.player_get(0, "paddle_y")
+	var y1: float = tp.player_get(1, "paddle_y")
+	check(y1 < y0 - 0.4, "2P: player 2's ship flies higher, so the ships pass")
+	var x1_before: float = tp.player_get(1, "paddle_x")
+	for i in 30:
+		tp.step_two(1.0 / 60.0, [false, false, false, 0], [true, false, false, 0])
+	check(float(tp.player_get(1, "paddle_x")) < x1_before - 0.5 and is_equal_approx(float(tp.player_get(0, "paddle_x")), tp._start_x(0)),
+		"2P: each player moves only their own ship")
+	tp._use(1)
+	tp.apply_powerup("L")
+	tp._use(0)
+	check(tp.player_get(1, "powerup") == "L" and tp.player_get(0, "powerup") == "", "2P: power-ups are per ship")
+	var lives: int = tp.balls_left
+	tp.step_two(1.0 / 60.0, [false, false, true, 0], [false, false, false, 0])   # serve
+	tp.ball_pos = Vector2(0.0, Sim.DRAIN_Y + 1.0)
+	tp.ball_vel = Vector2(0.0, 5.0)
+	tp.step_two(1.0 / 60.0, [false, false, false, 0], [false, false, false, 0])
+	check(tp.balls_left == lives - 1 and tp.server == 1 and tp.player_get(1, "powerup") == "",
+		"2P: a drain costs a shared life, ends both power-ups and passes the serve")
 	n.set_difficulty("hard", 3)
 	check(n.balls_left == 2 and n.balls_total == 2 and n.ball_speed == 10.0 and n.level == 1, "picking later keeps the level")
 

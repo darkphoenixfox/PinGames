@@ -2851,3 +2851,20 @@
   - **Availability:** `two_player_possible()` is true on a landscape single screen, except touch-only devices (web or Android) without two pads.
 - **Test:** player 2's actions and keys.
 - **Status:** Accepted (slice 1 of 3)
+
+### D-285 — Tilt Breaker 2P, part 1: the simulation
+- **Date:** 2026-11-23
+- **Decision (director):** D-284's Tilt Breaker 2P: two paddles slightly offset vertically so they don't collide, shared 3 lives, separate power-ups and energy bars, shared score, a wider field and levels for two. The director chose one shared ball; a drain costs a shared life.
+- **Field:** `Sim.setup_two`. `FIELD_2P` is 14.16 wide (1.73× the 1P field), with 19 columns at the 1P brick width.
+- **Levels:** `level2p_01..10.txt` are generated from the 1P levels: their 11 columns in the middle, with 4 edge columns mirrored out to each side, so patterns carry across. The director may edit them.
+- **Ships:** they start in the middle of each half. Player 2's ship flies `P2_LIFT` 0.6 higher, so the ships pass each other.
+- **Per-ship state** (`PLAYER_FIELDS`: position, speed, height, dash, power-up, shield, energy, charge, invulnerability, stick) is swapped in with `_use(i)`, so the 1P code runs unchanged for whichever ship is live. `player_get(i, field)` reads either ship. `step_two(dt, p1, p2)` takes each player's [left, right, launch, dash].
+- **Shared:** the ball (and Bounce extras), lives, score, bricks and enemies.
+- **The ball:** it bounces off either ship (P1 checked first) and their Lightspeed ghosts, and either ship's shield saves it.
+- **Power-ups:** a capsule goes to the ship that catches it (`powerup_collect` names the ship). A drop is never a kind either ship already has (D-275).
+- **Enemies:** a collision destroys that ship, which costs a shared life.
+- **A drain:** a shared life lost; both ships' power-ups end and their energy refills, and the serve passes to the other player (`server`).
+- **Next level:** both ships return to their halves with full energy.
+- **1P:** unchanged. All the existing tests pass.
+- **Tests:** a wider field and levels, the offset ships, each player moving only their own ship, per-ship power-ups, and a drain costing a shared life and passing the serve.
+- **Status:** Accepted (part 1; the view and the 1P/2P choice follow)
