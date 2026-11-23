@@ -234,13 +234,13 @@ func _language_items() -> Array:
 
 
 func _scores_items() -> Array:
-	var items: Array = []
+	# D-224: ALL GAMES first, showing RESET like the others (press twice).
+	var items: Array = [_action("OP_RESET_ALL_SCORES", func(): _reset_scores("*"),
+		func(): return tr("OP_PRESS_AGAIN") if _armed_reset == "*" else tr("OP_RESET"))]
 	for id in Registry.ids():
 		var gid: String = id
 		items.append(_action(Registry.info(gid).title_key, func(): _reset_scores(gid),
 			func(): return tr("OP_PRESS_AGAIN") if _armed_reset == gid else tr("OP_RESET")))
-	items.append(_action("OP_RESET_ALL_SCORES", func(): _reset_scores("*"),
-		func(): return tr("OP_PRESS_AGAIN") if _armed_reset == "*" else ""))
 	return items
 
 

@@ -2170,3 +2170,11 @@
 - **Banner:** the finish beam is a deep red, 3.4 m tall, with big yellow FINISH! letters (pixel size 0.0145, dark red outline). The chequered stripe stays on the road (supersedes D-221's chequered beam).
 - **Tests:** a slow knock into a truck only slows the car; traffic behind a crash stops and waits; nothing spawns past the finish; at most 11 cars.
 - **Status:** Accepted
+
+### D-224 — Operator menu: reset all high scores, easier to find
+- **Date:** 2026-11-23
+- **Decision (director):** add an option in the operator's menu to reset all high scores.
+- **Finding:** it already existed (RESET HIGH SCORES → ALL GAMES, press twice; `HighScores.reset("")` clears every game's tables, the hidden ones too). But it was last in the list and showed no value, unlike the per-game RESET entries.
+- **Change:** ALL GAMES is now first in RESET HIGH SCORES and shows RESET (then PRESS AGAIN) like the others.
+- **Access:** the operator menu opens by holding EXIT (or START + EXIT) in the attract screen or the game picker, including on the touch EXIT button.
+- **Status:** Accepted
