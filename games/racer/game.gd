@@ -2009,12 +2009,10 @@ func _build_gate(parent: Node3D, s: float, text: String, finish := false) -> voi
 	bm.albedo_color = Color(0.9, 0.1, 0.2)
 	bm.emission_enabled = true
 	bm.emission = Color(0.5, 0.05, 0.1)
-	if finish:   # chequered beam (D-221)
-		bm.albedo_texture = _chequer_texture()
-		bm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-		bm.uv1_scale = Vector3(3.0, 2.0, 1.0)
-		bm.albedo_color = Color.WHITE
-		bm.emission = Color(0.25, 0.25, 0.25)
+	if finish:   # D-223: a deep red banner, chequered line on the road below
+		bb.size = Vector3(w * 2.0 + 0.8, 3.4, 0.5)
+		bm.albedo_color = Color(0.85, 0.05, 0.08)
+		bm.emission = Color(0.55, 0.02, 0.04)
 		_finish_line(parent, s)
 	bb.material = bm
 	beam.mesh = bb
@@ -2029,6 +2027,12 @@ func _build_gate(parent: Node3D, s: float, text: String, finish := false) -> voi
 	label.outline_size = 24
 	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	label.position = Vector3(0, 8.0, 0.3)
+	if finish:   # big yellow letters (D-223)
+		label.pixel_size = 0.0145
+		label.modulate = Color(1.0, 0.86, 0.1)
+		label.outline_modulate = Color(0.35, 0.0, 0.02)
+		label.outline_size = 32
+		label.position = Vector3(0, 8.2, 0.3)
 	gate.add_child(label)
 
 

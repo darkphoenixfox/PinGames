@@ -733,6 +733,50 @@ func test_racer_hd_assets() -> void:
 	check(fs.finished and fin_ev and fs.done and fs.time_bonus == 12 * SimA.TIME_BONUS_PER_S
 		and fs.score - score0 >= SimA.FINISH_BONUS + fs.time_bonus,
 		"crossing the end of stage %d finishes the race with the bonuses" % SimA.FINISH_STAGE)
+	# D-223: slow crashes only slow you; traffic behind waits; none past the finish.
+	var sb = SimA.new()
+	sb.setup(4)
+	sb.state = SimA.State.RACE
+	sb.s = 1000.0
+	sb.track.ensure(2000.0)
+	sb.traffic.clear()
+	sb.x = TrackA.LANES[3]
+	sb.v = 20.0   # about 38 mph
+	sb.traffic.append({"id": 900, "s": sb.s + 3.0, "x": TrackA.LANES[3], "lane": 3, "v": 5.0, "hue": 0.0,
+		"weave": 0.0, "last_ds": 6.0, "kind": "truck", "len": SimA.TRUCK_LEN, "w": SimA.TRUCK_W})
+	sb.step(1.0 / 60.0, false, false)
+	check(sb.spin_t <= 0.0 and not sb.flipping and sb.v < 20.0, "a slow knock into a truck only slows the car (%.1f m/s)" % sb.v)
+	var sw = SimA.new()
+	sw.setup(4)
+	sw.state = SimA.State.RACE
+	sw.s = 1000.0
+	sw.track.ensure(2000.0)
+	sw.traffic.clear()
+	sw.x = TrackA.LANES[3]
+	sw.v = 0.0
+	sw.spin_t = 2.5
+	sw.traffic.append({"id": 901, "s": sw.s - 60.0, "x": TrackA.LANES[3], "lane": 3, "v": 35.0, "v0": 35.0, "hue": 0.0,
+		"weave": 0.0, "last_ds": -60.0, "kind": "car", "len": SimA.CAR_LEN, "w": SimA.CAR_W})
+	for i in 150:
+		sw.spin_t = maxf(sw.spin_t, 1.0)
+		sw.v = 0.0
+		sw._update_traffic(1.0 / 60.0)
+	var waiter: Dictionary = sw.traffic[0] if not sw.traffic.is_empty() else {}
+	check(not waiter.is_empty() and float(waiter.v) < 1.0 and sw.s - float(waiter.s) > SimA.CAR_LEN,
+		"traffic behind a crash stops and waits")
+	var sf = SimA.new()
+	sf.setup(4)
+	sf.state = SimA.State.RACE
+	sf.s = SimA.FINISH_STAGE * SimA.CHECKPOINT_EVERY - 150.0
+	sf.track.ensure(sf.s + 1500.0)
+	sf.traffic.clear()
+	for i in 200:
+		sf._spawn_traffic()
+	var past := 0
+	for t in sf.traffic:
+		if float(t.s) > SimA.FINISH_STAGE * SimA.CHECKPOINT_EVERY:
+			past += 1
+	check(past == 0 and sf.traffic_target() <= 11, "no traffic spawns past the finish line; at most 11 cars")
 	# D-219: random weather spells: at least WEATHER_MIN long, suited to the
 	# area, different per seed, the same for the same seed.
 	var spell_ok := true

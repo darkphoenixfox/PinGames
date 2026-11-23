@@ -101,6 +101,14 @@ const CHECKPOINT_EVERY := 2300.0   # D-101 (was 1800)
 ## race: no more time, a finish bonus plus a bonus for every second left, and
 ## the car coasts to a stop.
 const FINISH_STAGE := 10
+## Slow crashes (D-223): below this shown speed a hit only slows the car and
+## bounces it off; no spin, no roll-over.
+const SOFT_CRASH_MPH := 55.0
+const SOFT_CRASH_SLOW := 0.45   # speed kept
+## Traffic behind a crash (D-223): same-direction cars this close behind, in
+## line with the car, brake and wait STOP_GAP m behind it until it's going again.
+const WAIT_BEHIND := 140.0
+const WAIT_GAP := 5.0
 const FINISH_DECEL := 15.0   # m/s^2: the drift-brake after the line, harder than coasting out (D-222)
 const FINISH_BONUS := 100000
 const TIME_BONUS_PER_S := 2000
@@ -383,6 +391,14 @@ func _pass_checkpoint(saved: bool) -> void:
 	next_checkpoint += CHECKPOINT_EVERY
 	_add_score(20000.0)
 	events.append(["checkpoint", checkpoints, bonus, saved])
+
+
+## A slow knock (D-223): speed lost and a little sideways bounce, no crash.
+func _soft_bump(from_x: float) -> void:
+	_end_drift()
+	v *= SOFT_CRASH_SLOW
+	lat_v = signf(x - from_x + 0.001) * 3.0
+	events.append(["bump", -1])
 
 
 ## Across the finish line (D-221): the bonuses, then coasting out to a stop.
@@ -900,6 +916,10 @@ func _collide_objects() -> void:
 		if o.r <= 0.0:
 			continue
 		if absf(x - o.x) < o.r + CAR_W * 0.5:
+			if v * MPH < SOFT_CRASH_MPH:
+				_soft_bump(o.x)
+				x = o.x - signf(o.x - x + 0.001) * (o.r + CAR_W * 0.5 + 0.25)
+				return
 			_crash(o.kind, o.x - x)
 			x = move_toward(x, 0.0, 2.5)  # bounce back towards the road
 			return
@@ -910,7 +930,7 @@ func _collide_objects() -> void:
 ## caught up from behind; the two left lanes are oncoming (dir -1, v < 0).
 ## Trucks are long and slow and count as a big obstacle (a hit rolls the car).
 func traffic_target() -> int:
-	return mini(7 + 2 * checkpoints, 16)   # D-101 (was min(4 + n, 11))
+	return mini(7 + checkpoints, 11)   # D-223: gentler (was min(7 + 2n, 16), D-101)
 
 
 func _update_traffic(dt: float) -> void:
@@ -933,7 +953,16 @@ func _update_traffic(dt: float) -> void:
 		t.pull = move_toward(float(t.get("pull", 0.0)), (edge - lane_x) if yielding else 0.0, 2.2 * dt)
 		if not t.has("v0"):
 			t.v0 = t.v
-		t.v = move_toward(t.v, float(t.v0) * (YIELD_SLOW if yielding else 1.0), 6.0 * dt)
+		var behind: float = s - t.s
+		if spin_t > 0.0 and t.v0 > 0.0 and behind > 0.0 and behind < WAIT_BEHIND \
+				and absf(float(t.get("x", lane_x)) - x) < (CAR_W + tw) * 0.5 + 0.8:
+			# We've crashed in its way (D-223): it brakes and waits behind us.
+			var room := behind - (CAR_LEN + tlen) * 0.5 - WAIT_GAP
+			t.v = move_toward(t.v, clampf(room * 0.9, 0.0, float(t.v0)), 16.0 * dt)
+			t.waiting = true
+		else:
+			t.waiting = false
+			t.v = move_toward(t.v, float(t.v0) * (YIELD_SLOW if yielding else 1.0), 6.0 * dt)
 		t.x = lane_x + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6) * (0.0 if yielding else 1.0) + t.shove + t.pull
 		var ds: float = t.s - s
 		t.last_ds = ds
@@ -968,6 +997,12 @@ func _update_traffic(dt: float) -> void:
 				events.append(["bump", t.id])
 			elif side_hit:
 				pass
+			elif (t.v < 0.0 or (ds > 0.0 and rel > 22.0)) and v * MPH < SOFT_CRASH_MPH:
+				# Slow (D-223): just a knock; stop short of it and bounce aside.
+				_soft_bump(t.x)
+				if ds > 0.0:
+					s = t.s - (CAR_LEN + tlen) * 0.5 - 0.3
+				x += signf(x - t.x + 0.01) * 1.2
 			elif t.v < 0.0 or (ds > 0.0 and rel > 22.0):
 				# Head-on, or rear-ending at speed: a truck rolls the car over.
 				_crash("truck" if big else "car", t.x - x, t.v >= 0.0)
@@ -1009,6 +1044,8 @@ func _spawn_traffic() -> void:
 	for t in traffic:  # keep spawns apart
 		if absf(t.s - (s + ahead)) < 40.0 and t.lane == lane:
 			return
+	if s + ahead > FINISH_STAGE * CHECKPOINT_EVERY - 20.0:
+		return   # nothing appears past the finish line (D-223)
 	var kind := "truck" if truck else "car"
 	traffic.append({"id": _next_id, "s": s + ahead, "x": Track.LANES[lane], "lane": lane,
 		"v": v_t, "hue": _rng.randf(), "weave": _rng.randf() * 10.0, "last_ds": ahead,

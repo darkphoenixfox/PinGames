@@ -2154,3 +2154,19 @@
 - **Decision (director):** the car should slide sideways in a drift-brake after the finish line.
 - **Change:** past the line, the car uses the TIME UP slide (D-105), which D-221 had skipped. It swings `FINISH_DRIFT` 0.83 of 90° (about 75°) towards the inside of the bend, in stepped frames, with tyre smoke and the skid squeal. It brakes at `FINISH_DECEL` 15 m/s² (coasting out after TIME UP is 7), so it stops in about 3 s, sideways.
 - **Status:** Accepted
+
+### D-223 — Turbo Run: gentler traffic, soft slow crashes, traffic waits behind a crash, finish banner
+- **Date:** 2026-11-23
+- **Decisions (director):**
+  - By stage 6 the traffic is unbearable.
+  - Slow crashes should only slow the car, not spin it.
+  - Vehicles behind should stop and wait when you crash.
+  - No cars should spawn past the finish line.
+  - The finish banner is red with big yellow letters.
+- **Traffic:** `traffic_target` is `min(7 + checkpoints, 11)`, which is 7, 8, 9, 10, 11 from stage 1, and 11 from stage 5 on. It was `min(7 + 2n, 16)` (D-101), already at 15 on stage 5.
+- **Soft crashes:** below `SOFT_CRASH_MPH` 55 (shown), hitting traffic (rear-end or head-on) or a roadside object is a knock (`_soft_bump`). The car keeps 45 % of its speed and bounces aside, with no spin or roll-over. It still drops out of a drift, and the bump sound plays.
+- **Waiting traffic:** while the car is crashed (`spin_t`), same-direction traffic up to 140 m behind and in line with it brakes (up to 16 m/s²) to stop 5 m behind. It pulls away again once the car is going.
+- **Finish:** no traffic spawns past the finish line.
+- **Banner:** the finish beam is a deep red, 3.4 m tall, with big yellow FINISH! letters (pixel size 0.0145, dark red outline). The chequered stripe stays on the road (supersedes D-221's chequered beam).
+- **Tests:** a slow knock into a truck only slows the car; traffic behind a crash stops and waits; nothing spawns past the finish; at most 11 cars.
+- **Status:** Accepted
