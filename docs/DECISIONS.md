@@ -1886,3 +1886,9 @@
 - **Escaping:** from close behind it takes roughly 30 s flat out to open the 120 m gap, then 4 s held, to lose it (D-200).
 - **Tests:** each of the three cars, held at its top speed, pulls more than 40 m ahead of a chasing police car within 10 s.
 - **Status:** Accepted (amends D-142)
+
+### D-202 — Turbo Run car colours: easy blue, normal red, hard orange
+- **Date:** 2026-11-23
+- **Decision (director):** the easy car is blue, the normal car red and the hard car orange.
+- **Change:** the hue rotations in `Sim.CARS` (the cars are the red model recoloured) are 0.62 (blue), 0.0 (red, the model's own) and 0.08 (orange). Before, they were red, yellow and blue. The DMD's car icon colours (`CAR_COLS`) follow. The car-select cards keep their difficulty colours (green, yellow, red).
+- **Status:** Accepted (amends D-122)

@@ -25,7 +25,7 @@ const Showroom = preload("res://games/racer/showroom.gd")
 const Tunnel = preload("res://games/racer/tunnel.gd")
 const SELECT_TIME := 15.0   # s to choose a car before the highlighted one is taken
 ## Car colours on the DMD, matching Sim.CARS' hues (red, yellow, blue).
-const CAR_COLS := [Color("e8303a"), Color("ffd23e"), Color("3f8cff")]
+const CAR_COLS := [Color("3f8cff"), Color("e8303a"), Color("ff8a1e")]   # D-202: easy blue, normal red, hard orange
 const NIGHT_GROUP := &"rc_night_lights"
 const Dial = preload("res://games/racer/dial.gd")
 const GearLever = preload("res://games/racer/gear_lever.gd")
