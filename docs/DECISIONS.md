@@ -2333,3 +2333,17 @@
 - **Cause:** the director identified Mirillis Action (screen capture, injects into Vulkan apps) running at the time. After re-adding D-236, repeated 2× runs to car select completed.
 - **Note:** dev test runs use the Dummy audio driver and render scale 1.0. Run a check with `PINGAMES_DEV_SOUND=1` and `--display.render_scale=2.0` when a desktop-only problem is reported.
 - **Status:** Accepted
+
+### D-238 — Animated loading screens (TABLE and DMD)
+- **Date:** 2026-11-23
+- **Decision (director):** make the loading screens more attractive: a game-related animation on the DMD and a small animation on the TABLE, like PS2-era games.
+- **TABLE** (`shell/loading_anim.gd`, a Control drawn with 2D shapes, so no assets are needed before loading): the game's logo at the top, a small looping scene, then LOADING.
+  - **Turbo Run:** a retro side-view car in the game's accent colour drives a scrolling dusk road (dashes, kerbs, speed lines), bobbing, with spinning wheels and exhaust puffs. Progress is a track line with a mini car running to a chequered flag.
+  - **Tilt Breaker:** in a framed arena, a plasma ball with a trail bounces off a paddle that follows it. The row of bricks empties as loading goes on, and a progress bar sits below.
+  - **Other games:** a bouncing pinball and a bar.
+- **DMD:** `LoadingAnim.dmd_anim(id)`, played with `Dmd.play` and stopped (new `Dmd.stop_anim`) when the game starts.
+  - **Turbo Run:** a dot car drives across a dotted road under a blinking LOADING.
+  - **Tilt Breaker:** a dot ball bounces between a row of coloured bricks, which disappear in turn, and a paddle.
+- **Smoothness:** the loader now yields a frame every ~50 ms (was 100 ms), so the animations move smoothly. The old cyan bar is hidden.
+- **Dev:** `--loading-hold=N` keeps the loading screen up N s, for screenshots.
+- **Status:** Accepted

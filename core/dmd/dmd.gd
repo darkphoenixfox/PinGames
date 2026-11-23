@@ -165,6 +165,11 @@ func play(anim: Callable, duration: float) -> void:
 	_anim_len = duration
 
 
+## Ends the current animation now (D-238).
+func stop_anim() -> void:
+	_anim = Callable()
+
+
 func is_animating() -> bool:
 	return _anim.is_valid()
 

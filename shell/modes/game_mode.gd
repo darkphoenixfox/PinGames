@@ -27,6 +27,8 @@ var module: Node
 var _overlay: Control
 var _bar: ColorRect
 var _bar_w := 600.0
+const LoadingAnim = preload("res://shell/loading_anim.gd")
+var _anim: Control   # D-238: the loading screen's little scene
 
 
 func _init(p_game_id: String) -> void:
@@ -44,6 +46,7 @@ func enter() -> void:
 	add_child(module)
 	module.finished.connect(_on_finished)
 	Audio.sfx("start")
+	Dmd.stop_anim()   # D-238: the loading animation hands the DMD to the game
 	module.start(1)
 	print("Shell: started game '%s'" % game_id)
 	get_tree().node_added.connect(_on_node_added)
@@ -331,7 +334,8 @@ func _scan(dir: String, out: Array[String]) -> void:
 func _preload() -> void:
 	var paths := _asset_paths()
 	_build_overlay()
-	Dmd.show_text(tr("LOADING"), "", Dmd.YELLOW)
+	var info: Dictionary = Registry.info(game_id)
+	Dmd.play(LoadingAnim.dmd_anim(game_id, info.get("color", Dmd.YELLOW)), 3600.0)   # D-238
 	var kept: Array = []
 	var t0 := Time.get_ticks_msec()
 	for i in paths.size():
@@ -339,14 +343,18 @@ func _preload() -> void:
 		if r != null:
 			kept.append(r)
 		_bar.size.x = _bar_w * float(i + 1) / maxf(1.0, paths.size())
-		# Yield to draw the bar only every ~100 ms, not after every asset: a
+		_anim.progress = float(i + 1) / maxf(1.0, paths.size())
+		# Yield to draw the bar only every ~50 ms, not after every asset: a
 		# slow or throttled browser gives few frames, and waiting one per asset
-		# made loading take far longer than the loading itself.
-		if Time.get_ticks_msec() - t0 > 100:
+		# made loading take far longer than the loading itself. (D-238: 50 ms,
+		# was 100, so the loading animation moves smoothly enough.)
+		if Time.get_ticks_msec() - t0 > 50:
 			await get_tree().process_frame
 			if not is_inside_tree():
 				return
 			t0 = Time.get_ticks_msec()
+	if Config.cli.has("loading-hold"):   # dev: keep the loading screen up N s (D-238)
+		await get_tree().create_timer(float(str(Config.cli["loading-hold"]))).timeout
 	_cache[game_id] = kept
 	print("Shell: preloaded %d assets for '%s'" % [kept.size(), game_id])
 
@@ -358,13 +366,25 @@ func _build_overlay() -> void:
 	bg.color = Color.BLACK
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_overlay.add_child(bg)
+	# D-238: the game's logo, a little looping scene, LOADING and progress.
+	var info: Dictionary = Registry.info(game_id)
+	if info.has("logo") and ResourceLoader.exists(str(info.logo)):
+		var logo := TextureRect.new()
+		logo.texture = load(str(info.logo))
+		logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		logo.position = Vector2(140, 300)
+		logo.size = Vector2(800, 520)
+		_overlay.add_child(logo)
+	_anim = LoadingAnim.new(game_id, info.get("color", UI.CYAN))
+	_overlay.add_child(_anim)
 	var label := UI.label(tr("LOADING"), 72, UI.WHITE)
 	label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.offset_left = -400
 	label.offset_right = 400
-	label.offset_top = -120
-	label.offset_bottom = -40
+	label.offset_top = 560
+	label.offset_bottom = 640
 	_overlay.add_child(label)
 	var frame := ColorRect.new()
 	frame.color = Color(0.15, 0.15, 0.2)
@@ -376,6 +396,8 @@ func _build_overlay() -> void:
 	_bar.position = Vector2((1080.0 - _bar_w) * 0.5, 960.0)
 	_bar.size = Vector2(0, 32)
 	_overlay.add_child(_bar)
+	frame.visible = false   # D-238: the scene shows the progress itself
+	_bar.visible = false
 	_overlay.z_index = 100
 	add_table(_overlay)
 
