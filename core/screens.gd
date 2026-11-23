@@ -261,6 +261,8 @@ var _single_bar: Control
 ## fires when that shape changes; other games keep the fixed 9:16 TABLE.
 signal table_shape_changed
 var table_flex := false
+## D-262: a flexible game that wants the DMD above it, not over it (landscape).
+var dmd_above := false
 
 
 func set_flexible(on: bool) -> void:
@@ -272,6 +274,13 @@ func set_flexible(on: bool) -> void:
 		table_shape_changed.emit()
 
 
+## D-262: the DMD above the game area instead of over it (Tilt Breaker).
+func want_dmd_above(on: bool) -> void:
+	dmd_above = on
+	if current_layout == "single" and is_instance_valid(_single_page):
+		_place_single(Vector2(get_window().size))
+
+
 ## D-255: a game that needs the 9:16 TABLE (Tilt Breaker's portrait playfield).
 func want_portrait_table(on: bool) -> void:
 	if current_layout == "single":
@@ -280,7 +289,7 @@ func want_portrait_table(on: bool) -> void:
 
 ## D-255: how much of the TABLE's top the DMD covers (base px), 0 if it doesn't.
 func dmd_cover() -> float:
-	if current_layout != "single" or not table_flex:
+	if current_layout != "single" or not table_flex or dmd_above:
 		return 0.0
 	var b := Vector2(table_base())
 	if b.y >= b.x:
@@ -414,7 +423,7 @@ func _place_single(win: Vector2) -> void:
 		var dh := dw / ratio
 		d.position = Vector2((win.x - dw) * 0.5, 0)
 		d.size = Vector2(dw, dh)
-		if table_flex:   # the game fills the window, the DMD over its top (D-254)
+		if table_flex and not dmd_above:   # the game fills the window, the DMD over its top (D-254)
 			t.position = Vector2.ZERO
 			t.size = win
 		else:

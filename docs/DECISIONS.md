@@ -2609,3 +2609,10 @@
 - **Cause:** the loading overlay went into the mode's 1080×1920 frame (D-255), which in landscape covers only the centre.
 - **Fix:** a black backdrop over the whole TABLE, whatever its shape, sits under the loading content, which stays centred. It lasts through the warm-up and the reveal delay (D-259) and is freed with the overlay.
 - **Status:** Accepted
+
+### D-262 — Tilt Breaker on 16:9: the DMD on top, the game under it, full width
+- **Date:** 2026-11-23
+- **Decision (director):** adapt Tilt Breaker for 16:9 screens: the DMD on top, and the game area rendered under it.
+- **Screens:** `want_dmd_above(on)` keeps the flexible TABLE (D-255), but in landscape it takes the area under the DMD (full width) instead of the whole window with the DMD over it. `dmd_cover()` is 0 then. Tilt Breaker asks for this, instead of D-255's 9:16 TABLE, and gives it back on exit.
+- **Tilt Breaker:** its orthographic camera keeps the playfield's height (16 units), so on a wide area the playfield stays centred at the same size, and the starfield, planet and space fill the sides. The edge shields are invisible, so nothing marks the extra width. Gameplay (the field, 8.2 × 15.1) is unchanged. Its text is centre-anchored, so it fits as it is.
+- **Status:** Accepted

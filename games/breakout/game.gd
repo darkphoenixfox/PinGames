@@ -262,9 +262,11 @@ func get_info() -> Dictionary:
 
 
 func start(_players: int) -> void:
-	# D-255: the playfield is portrait: keep the 9:16 TABLE on a single screen.
+	# D-262: on a single screen the game area takes the space under the DMD;
+	# the orthographic camera keeps the playfield's height, so a wide screen
+	# shows more space at the sides.
 	_portrait_req = true
-	Screens.want_portrait_table(true)
+	Screens.want_dmd_above(true)
 	for s in SOUNDS:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
 	sim = Sim.new()
@@ -1618,5 +1620,5 @@ func _update_backglass_lights(delta: float) -> void:
 
 func _exit_tree() -> void:
 	if _portrait_req:
-		Screens.want_portrait_table(false)   # D-255
+		Screens.want_dmd_above(false)   # D-262
 	super._exit_tree()
