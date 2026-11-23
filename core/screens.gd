@@ -345,6 +345,10 @@ func _setup_single() -> void:
 		var want := Vector2i(1280, 720)
 		if Config.cli.has("single-portrait"):
 			want = Vector2i(450, 960)
+		if Config.cli.has("single-size"):   # dev: --single-size=547x780, any screen shape (D-280)
+			var wh := str(Config.cli["single-size"]).split("x")
+			if wh.size() == 2:
+				want = Vector2i(int(wh[0]), int(wh[1]))
 		root.size = Vector2i(mini(want.x, area.size.x - 40), mini(want.y, area.size.y - 80))
 		root.position = area.position + (area.size - root.size) / 2
 	_single_page = Control.new()
@@ -434,6 +438,7 @@ func _single_layout() -> void:
 		_single_page.add_child(bar)
 		_single_bar = bar
 		_single_page.add_child(_touch.toggle)
+		_single_page.add_child(_touch.exit_button)   # D-281: EXIT, top left
 	_place_single(win)
 
 

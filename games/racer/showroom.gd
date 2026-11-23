@@ -40,6 +40,9 @@ func _car_pos(i: int) -> Vector3:
 func _base() -> Vector2:
 	return Vector2(1920, 1080) if landscape else Vector2(1080, 1920)
 var _res := RES
+## D-280: the showroom is laid out for exactly _base(); this holds it, scaled
+## to fit the screen's shape and centred (the sky fills what's left).
+var _stage := Control.new()
 var _vp: SubViewport
 var _cam: Camera3D
 var _cars: Array = []
@@ -75,6 +78,11 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 	sky.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	sky.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(sky)
+	_stage.size = _base()
+	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_stage)
+	resized.connect(_fit_stage)
+	_fit_stage()
 	var root := Node3D.new()
 	_vp.add_child(root)
 	var env := WorldEnvironment.new()
@@ -148,15 +156,24 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 		if nes:
 			post.set_shader_parameter("low_res", Vector2(_res) * 0.75)
 		view.material = post
-	add_child(view)
+	_stage.add_child(view)
 	# Title + a stats card beside each car (fixed slots: nothing moves, D-096).
 	var title := UI.styled_label(tr("RC_CHOOSE_CAR"), title_font, 2)
 	title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	title.offset_top = 30 + (Screens.dmd_cover() if landscape else 0.0)   # D-255: clear of the DMD
-	add_child(title)
+	_stage.add_child(title)
 	for i in 3:
 		_boxes.append(_stats_box(i))
 	_refresh()
+
+
+func _fit_stage() -> void:
+	var b := _base()
+	var k := minf(size.x / b.x, size.y / b.y)
+	if k <= 0.0:
+		return
+	_stage.scale = Vector2(k, k)
+	_stage.position = (size - b * k) * 0.5
 
 
 func _ring_mat(c: Color, glow: float) -> StandardMaterial3D:
@@ -194,7 +211,7 @@ func _stats_box(i: int) -> Control:
 	_stat_row(box, tr("RC_STAT_SPEED"), speed_pips(i), tr("RC_STAT_MPH") % roundi(float(spec.top) * Sim.MPH), col)
 	_stat_row(box, tr("RC_STAT_CORNER"), corner_pips(i), "", col)
 	_stat_row(box, tr("RC_STAT_CLOCK"), time_pips(i), tr("RC_STAT_SECONDS") % roundi(float(spec.time)), col)
-	add_child(panel)
+	_stage.add_child(panel)
 	# Level with its turntable: centre the card on the car's row.
 	var mid := _cam.unproject_position(_car_pos(i)) * (_base().y / _res.y)
 	var h := panel.get_combined_minimum_size().y
