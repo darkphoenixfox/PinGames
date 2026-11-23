@@ -2987,3 +2987,14 @@
   - The lever now sits in a plain holder Control (the container sizes the holder, not the lever) at `GEAR_COMPACT` 0.4.
   - The gear column is as tall as the speedo + MPH + tach bar block and centres the lever on it (`SIZE_SHRINK_END`, `ALIGNMENT_CENTER`).
 - **Status:** Accepted
+
+### D-295 — Turbo Run 2P: the shifter beside the speedo, 50% bigger
+- **Date:** 2026-11-23
+- **Decision (director):** the 2P shifter goes right next to the speedo, 50% bigger (`GEAR_COMPACT` 0.4 → 0.6).
+- **The gap came from widths left over from the full-size HUD:**
+  - the row's 36 px separation (now 6);
+  - the gear column's 90 px minimum (now none);
+  - the nitro strip under the lever, 160 px wide (now the lever's width, with its fill scaled to the strip's width);
+  - the tach bar, 40 px wider than the speedo (now the speedo's width), which pushed the speedo right.
+- The lever sits hard against the speedo (`SIZE_SHRINK_END`).
+- **Status:** Accepted

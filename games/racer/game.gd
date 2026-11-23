@@ -1484,7 +1484,7 @@ func _start_p2(p1: Node) -> void:
 ## D-291 (director): 2P halves get the bottom gauges at half size; their
 ## numbers, RPM/MPH captions and the digital speed keep their text size.
 const COMPACT := 0.5
-const GEAR_COMPACT := 0.4   # D-293: the gears smaller still
+const GEAR_COMPACT := 0.6   # D-293, D-295: the 2P gears
 var _tach_bar: Control = null
 
 
@@ -1520,17 +1520,20 @@ func _hud_compact() -> void:
 	gbox.move_child(holder, at)
 	_gear_lever.position = Vector2.ZERO
 	_gear_lever.scale = Vector2.ONE * GEAR_COMPACT
-	gbox.custom_minimum_size.x = 90
+	gbox.custom_minimum_size.x = 0
+	holder.size_flags_horizontal = Control.SIZE_SHRINK_END   # hard against the speedo
+	(_nitro_strip.get_parent() as Control).custom_minimum_size.x = holder.custom_minimum_size.x   # (was 160 wide)
+	(_nitro_strip.get_parent() as Control).size_flags_horizontal = Control.SIZE_SHRINK_END
 	gbox.alignment = BoxContainer.ALIGNMENT_CENTER   # level with the speedo + tacho block
 	gbox.size_flags_vertical = Control.SIZE_SHRINK_END
 	# D-293 (director): the speedo in the player's bottom right corner with
 	# the gears beside it, and the tachometer as a bar under the speedo.
 	(_tacho.get_parent() as Control).visible = false
 	_hud_bottom.alignment = BoxContainer.ALIGNMENT_END
-	_hud_bottom.add_theme_constant_override("separation", 36)   # the gear letters clear of the speedo
+	_hud_bottom.add_theme_constant_override("separation", 6)   # the gears right beside the speedo
 	if _tach_bar == null:
 		_tach_bar = TachBar.new()
-		_tach_bar.custom_minimum_size = Vector2(_speedo.custom_minimum_size.x + 40.0, 18.0)
+		_tach_bar.custom_minimum_size = Vector2(_speedo.custom_minimum_size.x, 18.0)
 		_tach_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		_speedo.get_parent().add_child(_tach_bar)
 	# The gear column as tall as the speedo + tacho block, its lever centred on it.
@@ -3657,7 +3660,7 @@ func _update_hud(delta: float) -> void:
 		else:
 			_nag_lever.set_gear(true)
 	_nitro_label.modulate.a = 1.0 if sim.boosting else 0.0
-	_nitro_strip.size.x = roundf(160.0 * sim.boost_t / Sim.NITRO_TIME)
+	_nitro_strip.size.x = roundf((_nitro_strip.get_parent() as Control).custom_minimum_size.x * sim.boost_t / Sim.NITRO_TIME)
 	if sim.drifting:
 		_drift_label.text = tr("RC_DRIFT_POINTS") % ScoreTable.format_score(int(sim.drift_points / 10.0) * 10)
 		_drift_label.modulate.a = 1.0
