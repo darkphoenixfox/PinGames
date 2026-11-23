@@ -2219,3 +2219,16 @@
 - **Crossfade:** `Audio.crossfade_music(path, seconds, from)` overlaps two music players. The new song starts `from` s in and rises over `seconds` while the old one falls and stops (the old `play_music` faded out, then in). At each new pair of stages the next song comes in `MUSIC_SKIP` 7 s in, over `MUSIC_XFADE` 6 s. The race start plays its stage's song from the top: stage 1 carries on attract's song, and a later test start stage plays its own.
 - **Retired:** the CodeManu "8-bit Music Pack" loops are removed from the project, along with their DMD credit; the attract DMD credits Bogart VGM. Supersedes the music parts of D-093, D-105, D-106, D-111, D-129 and D-191.
 - **Status:** Accepted
+
+### D-227 — Turbo Run music: crossfades without quiet gaps
+- **Date:** 2026-11-23
+- **Bug (director):** the change from song 1 to song 2 had 1–2 s of silence. Skip further into the next song, and keep crossfades away from quiet parts.
+- **Cause:**
+  - D-226's fixed 7 s skip landed inside "One More Round"'s quiet build-up, which only reaches full strength at about 17 s.
+  - The crossfade was a linear tween in dB, so both songs sat around −20 dB at its midpoint.
+- **Per-song start** (`MUSIC_SKIP`, measured with ffmpeg as RMS per 0.25 s against each song's typical level): Maximum Overdrive 0.5 s, One More Round 16.5 s, Nightlife 5.5 s, Dreamstate 31 s (it swells at 34 s), Chillwave Nightdrive 1 s.
+- **Crossfade shape** (`Audio.crossfade_music`):
+  - The new song starts at −30 dB and reaches full volume in 2.5 s (sine ease-out).
+  - The old song holds full volume for 1.5 s, then falls to −60 dB over the rest of the 6 s (quadratic ease-in).
+  - An offline render of the 1→2 change with these curves stays at −11 to −14 dB throughout.
+- **Status:** Accepted

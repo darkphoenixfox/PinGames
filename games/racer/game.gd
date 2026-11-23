@@ -239,7 +239,10 @@ const MUSIC_RACE := [
 ]
 const MUSIC_STAGES := 2
 const MUSIC_XFADE := 6.0
-const MUSIC_SKIP := 7.0
+## Where each song comes in on a crossfade (D-227), measured: past each one's
+## quiet opening, to where it's at full strength (One More Round builds for
+## 17 s, Dreamstate swells at 34 s).
+const MUSIC_SKIP := [0.5, 16.5, 5.5, 31.0, 1.0]
 const PASSERS := 2          # traffic engine voices (D-134)
 ## Oncoming horns (D-213): a dual-tone electric car horn (low and high tones a
 ## dissonant interval apart, buzzy diaphragm harmonics with a nasal resonance,
@@ -1039,7 +1042,7 @@ func _handle_events() -> void:
 				# a little way into it.
 				var stage := int(e[1]) + 1
 				if _stage_music(stage) != Audio.current_music():
-					Audio.crossfade_music(_stage_music(stage), MUSIC_XFADE, MUSIC_SKIP)
+					Audio.crossfade_music(_stage_music(stage), MUSIC_XFADE, MUSIC_SKIP[MUSIC_RACE.find(_stage_music(stage))])
 				# Reached on momentum after TIME UP: the race goes on (D-103).
 				var saved: bool = e.size() > 3 and e[3]
 				# No CHECKPOINT notice mid-TABLE (D-142): the gate, DMD and sound

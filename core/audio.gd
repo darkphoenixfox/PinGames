@@ -165,14 +165,18 @@ func crossfade_music(path: String, seconds: float, from: float = 0.0) -> void:
 	_music = _music_b
 	_music_b = old
 	_music.stream = stream
-	_music.volume_db = -40.0
+	_music.volume_db = -30.0
 	_music.play(from)
+	# D-227: no dip in the middle: the new song comes up fast (eased out, so
+	# it's near full early), while the old one holds a moment, then eases away.
+	var rise := minf(seconds, 2.5)
 	var up := create_tween()
-	up.tween_property(_music, "volume_db", 0.0, maxf(seconds, 0.01))
+	up.tween_property(_music, "volume_db", 0.0, maxf(rise, 0.01)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_xfade_tweens.append(up)
 	if old.playing:
 		var down := create_tween()
-		down.tween_property(old, "volume_db", -60.0, maxf(seconds, 0.01))
+		down.tween_interval(minf(1.5, seconds * 0.3))
+		down.tween_property(old, "volume_db", -60.0, maxf(seconds - minf(1.5, seconds * 0.3), 0.01)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		down.tween_callback(old.stop)
 		_xfade_tweens.append(down)
 
