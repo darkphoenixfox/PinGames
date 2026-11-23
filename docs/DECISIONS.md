@@ -2297,3 +2297,16 @@
   - With more room: hard-edged dots.
   - Where even one pixel per bit would make the 5×7 oversized (cap under 6.3 target pixels: most 8-BIT labels), a new 3×5 pixel font (`DotText.MICRO`) is used, so the gauge numbers fit.
 - **Status:** Accepted
+
+### D-234 — Turbo Run: the race ends inside the village
+- **Date:** 2026-11-23
+- **Bug (director):** the race should finish inside the village, with buildings and people on both sides. The car drift-braked past it into an empty area.
+- **Fix:** the finish town (D-229) now goes on `TOWN_AFTER` 700 m past the line (was 120), and the spectators line the run-out for `CROWD_AFTER` 160 m (was 40). So the car stops, and the view ahead stays, among houses and people.
+- **Also:** the results screen removes the FINISH! centre banner when its own FINISH! title appears (both were showing).
+- **Status:** Accepted
+
+### D-235 — Turbo Run: attract mode is music only
+- **Date:** 2026-11-23
+- **Decision (director):** only music during the racing game's attract mode; no game sound effects.
+- **Change:** while the attract demo drives (attract, and the GRAPHICS and START STAGE menus over it), the engine, wind, skid, traffic, siren and horn loops are held at −80 dB. They fade in from there when the race starts. Menu feedback sounds (choosing, confirming) still play.
+- **Status:** Accepted

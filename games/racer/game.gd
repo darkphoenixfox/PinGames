@@ -1010,6 +1010,8 @@ func _finale(delta: float) -> void:
 	var before := _finale_t
 	_finale_t += delta
 	if before < FINALE_TEXT_AT and _finale_t >= FINALE_TEXT_AT:
+		if is_instance_valid(_center):   # D-234: the results title replaces the banner
+			_center.queue_free()
 		_finale_ui = UI.vstack(40)
 		var dim := UI.fill(Color(0, 0, 0, 0.55))
 		_add_ui(dim)
@@ -3290,3 +3292,8 @@ func _update_audio() -> void:
 	_wind.volume_db = -46.0 + clampf(sim.v / Sim.MAX_SPEED, 0.0, 1.3) * 28.0 - _pass_duck
 	var squeal := sim.drifting or (sim.state == Sim.State.OVER and sim.v > 3.0) 		or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
 	_skid.volume_db = lerpf(_skid.volume_db, -10.0 if squeal else -60.0, 0.2)
+	# D-235: the attract demo (and the menus over it) is music only.
+	if _phase in ["attract", "gfx", "stage"]:
+		for pl in [_engine, _engine_hi, _wind, _skid, _siren, _horn] + _passers:
+			if pl != null:
+				(pl as AudioStreamPlayer).volume_db = -80.0

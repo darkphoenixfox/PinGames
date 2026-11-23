@@ -34,9 +34,9 @@ const OBJ_RADIUS := {"palm": 0.6, "rock": 1.5, "chevron": 0.5, "lamp": 0.35, "ga
 ## spectators along both kerbs over the last CROWD_BEFORE m.
 const FINISH_STAGE := 10
 const TOWN_BEFORE := 600.0
-const TOWN_AFTER := 120.0
+const TOWN_AFTER := 700.0     # D-234: the village goes on well past the line (was 120)
 const CROWD_BEFORE := 260.0
-const CROWD_AFTER := 40.0
+const CROWD_AFTER := 160.0    # D-234: people line the run-out too (was 40)
 ## Areas (D-216; order D-225, director): the area of each stage 1..10; past the
 ## finish (stage 11 on) the last one goes on. The look cross-fades into the
 ## next area over the last AREA_BLEND m of a stage.
