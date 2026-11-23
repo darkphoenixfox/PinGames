@@ -1909,7 +1909,10 @@ func _build_chunk(k: int) -> Node3D:
 			f.basis = Basis(Vector3.UP, tr_.heading(o.s))
 			var h := fmod(absf(o.s * 7.13 + o.x * 3.1), 1.0)
 			match kind:
-				"palm_1", "palm_2", "pine_1", "pine_2", "pine_snow", "tree_oak", "tree_cypress", "cactus_1":
+				"pine_1", "pine_2":
+					# Forest lines (D-218): tall, taller in the back rows.
+					f.basis = Basis.from_scale(Vector3.ONE * (1.05 + h * 0.4 + 0.1 * clampf(float(o.dir) - 1.0, 0.0, 2.0)))
+				"palm_1", "palm_2", "pine_snow", "tree_oak", "tree_cypress", "cactus_1":
 					f.basis = Basis.from_scale(Vector3.ONE * (0.85 + h * 0.35))
 				"bush_1", "bush_2", "fern", "desert_bush", "cactus_2", "snow_rock":
 					f.basis = Basis.from_scale(Vector3.ONE * (0.8 + h * 0.5))

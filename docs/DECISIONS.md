@@ -2095,3 +2095,12 @@
 - **Gameplay:** no grip change; it is visual only.
 - **Tests:** the weather order, and that rain sets in gradually.
 - **Status:** Accepted
+
+### D-218 — Turbo Run forest: tall lines of trees on both sides
+- **Date:** 2026-11-23
+- **Decision (director):** the forest should have tall lines of trees on both sides.
+- **Placement:** `Track._place_forest` replaces the forest's scattered trees (D-216) with `FOREST_ROWS` 3 rows per side, at 3.6, 8.4 and 13.5 m past the kerb (±0.7 m). They repeat every `FOREST_STEP` 6 m, with odd rows staggered by half a step and ±1.2 m jitter. 10 % of trees are skipped, so the line isn't a fence.
+- **Size:** pines are drawn 1.05–1.45× (was 0.85–1.2×), +10 % per row further back, so the walls rise away from the road.
+- **Collisions:** the trees keep their normal radius, so leaving the road in the forest means hitting the tree line.
+- **Unchanged:** the snowy mountain keeps its scattered spruces.
+- **Status:** Accepted

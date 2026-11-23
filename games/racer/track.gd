@@ -222,8 +222,12 @@ func _place_props(s1: float) -> void:
 			_place_desert(s)
 			_next_obj_s += _rng.randf_range(20.0, 32.0)
 			continue
-		if ar == "forest" or ar == "snow":
-			_place_woods(s, ar == "snow")
+		if ar == "forest":
+			_place_forest(s)
+			_next_obj_s += FOREST_STEP
+			continue
+		if ar == "snow":
+			_place_woods(s, true)
 			_next_obj_s += _rng.randf_range(9.0, 15.0)
 			continue
 		for side in [-1.0, 1.0]:
@@ -311,7 +315,23 @@ func _place_desert(s: float) -> void:
 		_add_obj(s, side * _rng.randf_range(70.0, 130.0), "mesa")
 
 
-## Forest and snowy mountain (D-216): trees close and thick on both sides
+## Forest (D-218): tall lines of trees on both sides, a wall of pines in
+## FOREST_ROWS rows from just past the verge, staggered, every FOREST_STEP m.
+const FOREST_STEP := 6.0
+const FOREST_ROWS := [3.6, 8.4, 13.5]   # m past the kerb
+
+
+func _place_forest(s: float) -> void:
+	for side in [-1.0, 1.0]:
+		for r in FOREST_ROWS.size():
+			if _rng.randf() < 0.1:
+				continue   # the odd gap, so the line isn't a fence
+			var off: float = ROAD_HALF + RUMBLE + float(FOREST_ROWS[r]) + _rng.randf_range(-0.7, 0.7)
+			var at := s + (FOREST_STEP * 0.5 if r % 2 == 1 else 0.0) + _rng.randf_range(-1.2, 1.2)
+			_add_obj(at, side * off, "palm", 1.0 + r)   # dir = row (1 nearest), for the view's sizes
+
+
+## Snowy mountain (D-216): trees close and thick on both sides
 ## (pines; snow-laden spruces up the mountain), rocks now and then.
 func _place_woods(s: float, snow: bool) -> void:
 	for side in [-1.0, 1.0]:
