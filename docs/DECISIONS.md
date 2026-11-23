@@ -1892,3 +1892,11 @@
 - **Decision (director):** the easy car is blue, the normal car red and the hard car orange.
 - **Change:** the hue rotations in `Sim.CARS` (the cars are the red model recoloured) are 0.62 (blue), 0.0 (red, the model's own) and 0.08 (orange). Before, they were red, yellow and blue. The DMD's car icon colours (`CAR_COLS`) follow. The car-select cards keep their difficulty colours (green, yellow, red).
 - **Status:** Accepted (amends D-122)
+
+### D-203 — Police catch-up phase: flat out at 105 %, can't be lost
+- **Date:** 2026-11-23
+- **Problem (director):** after D-200/D-201 it was too easy to lose the cops; they went out of range almost at once. The police appears 140 m behind (`POLICE_BEHIND`), already past the 120 m escape gap, so the 4 s escape count started straight away, and at 95 % it couldn't close in.
+- **Decision (director):** a period at the start where they go flat out at 105 % of the player and can't be lost.
+- **Catch-up:** a new chase starts with the police capped at `POLICE_CATCH_TOP` (105 %) of the car's top speed, closing at up to 16 m/s over the player (`CHASE_CLOSE`), and the escape count held at 0. It ends (`police.caught`) the first time the police gets within `CAUGHT_GAP` (25 m), or after `CATCH_UP_MAX` (25 s) so a long nitro run can't make it unshakeable. After that D-201 applies: 95 % top speed, and 120 m held for 4 s loses it (D-200).
+- **Tests:** a fresh chase on a car flat out isn't lost in 8 s and the police gains more than 10 m. The escape test starts with a police car that has already caught up.
+- **Status:** Accepted (amends D-200, D-201)

@@ -952,6 +952,23 @@ func test_racer_sim() -> void:
 		close_cop.step(dt, false, false)
 	check(not close_cop.police.is_empty() and close_cop.police.state == "chase",
 		"a police car close behind never gives up, however long the chase")
+	# D-203: a fresh chase (it appears POLICE_BEHIND back) can't be lost, and
+	# the police closes in even on a car flat out.
+	var fresh = Sim.new()
+	fresh.setup(7)
+	fresh.state = Sim.State.RACE
+	fresh.freeze_time = true
+	fresh.grace_t = 999.0
+	fresh.gear = Sim.Gear.HIGH
+	fresh.v = fresh.top_speed()
+	fresh.police = {"s": fresh.s - Sim.POLICE_BEHIND, "x": 0.0, "v": fresh.v, "state": "chase", "t": 0.0, "side": 1.0}
+	var gap0: float = fresh.s - float(fresh.police.s)
+	for i in 60 * 8:
+		fresh.traffic.clear()
+		fresh.v = fresh.top_speed()
+		fresh.step(dt, false, false)
+	check(not fresh.police.is_empty() and fresh.police.state == "chase" and fresh.s - float(fresh.police.s) < gap0 - 10.0,
+		"a fresh chase can't be lost: the police closes in on a car flat out")
 	# D-201: flat out in H, every car slowly pulls away from the police.
 	for ci in Sim.CARS.size():
 		var flat = Sim.new()
@@ -973,7 +990,7 @@ func test_racer_sim() -> void:
 	run.setup(7)
 	run.state = Sim.State.RACE
 	run.freeze_time = true
-	run.police = {"s": run.s - Sim.ESCAPE_GAP - 30.0, "x": 0.0, "v": 0.0, "state": "chase", "t": 1.0}
+	run.police = {"s": run.s - Sim.ESCAPE_GAP - 30.0, "x": 0.0, "v": 0.0, "state": "chase", "t": 1.0, "caught": true}
 	run.v = 60.0
 	run.gear = Sim.Gear.HIGH
 	var esc := false

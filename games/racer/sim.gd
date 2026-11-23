@@ -124,6 +124,12 @@ const POLICE_BEHIND := 140.0    # m behind the player it appears
 const CHASE_CLOSE := 16.0       # m/s faster than the player while closing in (D-137)
 const RAM_WINDUP := 1.2         # s alongside before it swerves in
 const POLICE_TOP := 0.95        # x the player car's top speed (D-201: was 1.06): flat out you pull away
+## Catch-up (D-203): a new chase starts with the police flat out at
+## POLICE_CATCH_TOP x the car's top speed and no escape possible, until it
+## first gets within CAUGHT_GAP of the player (or CATCH_UP_MAX s pass).
+const POLICE_CATCH_TOP := 1.05
+const CAUGHT_GAP := 25.0
+const CATCH_UP_MAX := 25.0
 const POLICE_HITS := 3          # hits to stop the player
 const HIT_STREAK := 6.0         # D-198: s between rams before the count starts again
 const HIT_RESET_GAP := 40.0     # D-198: m ahead of the police that also clears the count
@@ -473,7 +479,10 @@ func _update_police(dt: float) -> void:
 					if police.ram_t > RAM_WINDUP + 0.6:
 						police.ram_t = 0.0       # missed: line up again
 						police.side = -side if absf(x) > 4.0 and signf(x) == side else side
-			_police_follow(dt, want_ds, CHASE_CLOSE)
+			if ds > -CAUGHT_GAP or police.t > CATCH_UP_MAX:
+				police.caught = true
+			var catching := not bool(police.get("caught", false))
+			_police_follow(dt, want_ds, CHASE_CLOSE, 40.0, 15.0, POLICE_CATCH_TOP if catching else POLICE_TOP)
 			police.x = move_toward(police.x, want_x, (9.0 if police.ram_t > RAM_WINDUP else 5.0) * dt)
 			police.hit_cd = maxf(0.0, float(police.get("hit_cd", 0.0)) - dt)
 			# The rams only count close together (D-198): a pause, or getting
@@ -490,7 +499,8 @@ func _update_police(dt: float) -> void:
 			if close and (spin_t > 0.0 or v < BUST_SPEED):
 				_bust()
 			else:
-				police.lose_t = float(police.get("lose_t", 0.0)) + dt if ds < -ESCAPE_GAP else 0.0
+				# Losing it (D-200): only once it has caught up (D-203).
+				police.lose_t = float(police.get("lose_t", 0.0)) + dt if ds < -ESCAPE_GAP and not catching else 0.0
 			if police.state == "chase" and float(police.get("lose_t", 0.0)) >= ESCAPE_TIME:
 				police.state = "giveup"   # D-145: falls back, lights off
 				_add_score(ESCAPE_BONUS)
@@ -539,12 +549,12 @@ func police_lights() -> bool:
 ## Speed control towards a spot `want_ds` metres from the player (negative =
 ## behind): match the player, plus a correction capped at `close` m/s ahead
 ## and 15 m/s back. Police can't get stuck far ahead or overshoot.
-func _police_follow(dt: float, want_ds: float, close: float, rate: float = 40.0, back: float = 15.0) -> void:
+func _police_follow(dt: float, want_ds: float, close: float, rate: float = 40.0, back: float = 15.0, top_k: float = POLICE_TOP) -> void:
 	var ds: float = police.s - s
 	var target := v + clampf((want_ds - ds) * 1.6, -back, close)
 	# Its top speed (D-142): a bit over the player car's own, below nitro, so
 	# a nitro burst gets away.
-	target = minf(target, top_speed() * POLICE_TOP)
+	target = minf(target, top_speed() * top_k)
 	police.v = move_toward(police.v, maxf(target, -back), rate * dt)
 
 
