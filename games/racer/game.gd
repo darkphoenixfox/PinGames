@@ -648,7 +648,7 @@ func start(_players: int) -> void:
 		_two = true
 		CabinetInput.set_two_player(true)
 		_p2_car = clampi(int(str(Config.cli.get("rc-car2", "2"))), 0, Sim.CARS.size() - 1)
-		_hues = [_car_hue(_chosen_car), _car_hue(_p2_car)]
+		_hues = [_car_hue(_chosen_car), _car_hue(_p2_car, 1)]
 		if _p2_car == _chosen_car:
 			_hues[1] = fposmod(_hues[0] + float(PAINTS[1]), 1.0)
 	if Config.cli.has("rc-skip-intro"):
@@ -799,6 +799,8 @@ func _process(delta: float) -> void:
 			sim.step_two(dt, [[false, false, false], [false, false, false]])
 			sim._use(_role)
 		_finale(delta)
+	if Config.cli.has("rc-burst") and _phase == "race" and fmod(_phase_t, 0.5) < delta:   # dev: collision FX (D-292)
+		_burst(sim.track.point(sim.s + 9.0, sim.x + 1.0, 0.6), int(_phase_t) % 2 == 0)
 	_update_chunks()
 	_animate(delta)
 	_update_audio()
@@ -911,16 +913,21 @@ func _stage_music(k: int) -> String:
 ## comes); kept for the session.
 const PAINTS := [0.0, 0.36, 0.62, 0.08, 0.13, 0.8, 0.5, 0.92]
 static var _car_paint := [0, 0, 0]
+## D-292 (director): player 2's paints, by default a different colour from
+## player 1's (the second paint); their magna buttons change their own.
+static var _car_paint_p2 := [1, 1, 1]
 
 
-func _car_hue(i: int) -> float:
-	return fposmod(float(Sim.CARS[i].hue) + float(PAINTS[int(_car_paint[i])]), 1.0)
+func _car_hue(i: int, player: int = 0) -> float:
+	var paint: Array = _car_paint_p2 if player == 1 else _car_paint
+	return fposmod(float(Sim.CARS[i].hue) + float(PAINTS[int(paint[i])]), 1.0)
 
 
 func _repaint(d: int) -> void:
 	var i: int = _showroom.selected
-	_car_paint[i] = posmod(int(_car_paint[i]) + d, PAINTS.size())
-	_showroom.set_hue(i, _car_hue(i))
+	var paint: Array = _car_paint_p2 if _select_p2 else _car_paint
+	paint[i] = posmod(int(paint[i]) + d, PAINTS.size())
+	_showroom.set_hue(i, _car_hue(i, 1 if _select_p2 else 0))
 	_phase_t = 0.0
 	Audio.sfx("rc_shift")
 
@@ -1194,7 +1201,7 @@ func _begin_select() -> void:
 		_showroom.add_child.call_deferred(who)
 	_showroom.build(func(_hue: float, i: int) -> Node3D:
 		var m: String = CAR_MODELS[i]
-		return _car_instance(_car_hue(i), m, MODEL_TEXTURES[m]), load(SKY_TEXTURE), TITLE_FONT)   # D-236
+		return _car_instance(_car_hue(i, 1 if _select_p2 else 0), m, MODEL_TEXTURES[m]), load(SKY_TEXTURE), TITLE_FONT)   # D-236
 	_select_hint = UI.label("", 36, UI.WHITE)
 	_select_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	_select_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1217,7 +1224,7 @@ func _confirm_car() -> void:
 		return
 	if _select_p2:
 		_p2_car = _showroom.selected
-		_hues[1] = _car_hue(_p2_car)
+		_hues[1] = _car_hue(_p2_car, 1)
 		if _p2_car == _chosen_car and is_equal_approx(_hues[1], _hues[0]):
 			_hues[1] = fposmod(_hues[0] + float(PAINTS[1]), 1.0)   # never two identical cars
 		_select_p2 = false
@@ -1644,10 +1651,131 @@ func _animate_rival(delta: float, cam_yaw: float) -> void:
 
 
 
+# --- collision effects (D-292) ------------------------------------------------------------
+## Dust and sparks where two vehicles touch: a player and traffic, the two
+## players, a player and the police. Crashes into a car or truck are bigger.
+func _collision_fx(e: Array, who: int) -> void:
+	if who < 0:
+		return
+	var ps: float = sim.player_get(who, "s")
+	var px: float = sim.player_get(who, "x")
+	var at := Vector2.INF   # (s, x) of the contact
+	var big := false
+	match e[0]:
+		"bump":
+			var id := int(e[1])
+			if id == -2:   # the two players
+				at = Vector2((ps + float(sim.player_get(1 - who, "s"))) * 0.5, (px + float(sim.player_get(1 - who, "x"))) * 0.5)
+			elif id >= 0:
+				for t in sim.traffic:
+					if int(t.id) == id:
+						at = Vector2((ps + float(t.s)) * 0.5, (px + float(t.x)) * 0.5)
+						break
+		"crash":
+			if str(e[1]) == "car" or str(e[1]) == "truck":
+				at = Vector2(ps + Sim.CAR_LEN * 0.5, px)
+				big = true
+		"police_ram", "police_bumped":
+			var pol: Dictionary = sim.player_get(who, "police")
+			if not pol.is_empty():
+				at = Vector2((ps + float(pol.s)) * 0.5, (px + float(pol.x)) * 0.5)
+	if at == Vector2.INF or absf(at.x - sim.s) > 300.0:
+		return
+	_burst(sim.track.point(at.x, at.y, 0.6), big)
+
+
+## One burst: hot sparks flying out and falling, and a puff of road dust.
+func _burst(pos: Vector3, big: bool) -> void:
+	var k := 1.6 if big else 1.0
+	var sparks := CPUParticles3D.new()   # (GPU particles don't move in our TABLE viewports)
+	sparks.one_shot = true
+	sparks.explosiveness = 1.0
+	sparks.amount = int(36 * k)
+	sparks.lifetime = 0.6
+	sparks.local_coords = false
+	sparks.direction = Vector3.UP
+	sparks.spread = 75.0
+	sparks.initial_velocity_min = 3.0 * k
+	sparks.initial_velocity_max = 7.0 * k
+	sparks.gravity = Vector3(0.0, -16.0, 0.0)
+	sparks.scale_amount_min = 0.5
+	sparks.scale_amount_max = 1.0
+	var sg := Gradient.new()
+	sg.offsets = PackedFloat32Array([0.0, 0.6, 1.0])
+	sg.colors = PackedColorArray([Color(1.0, 1.0, 0.8), Color(1.0, 0.65, 0.15), Color(1.0, 0.25, 0.05, 0.0)])
+	sparks.color_ramp = sg
+	var sq := QuadMesh.new()
+	sq.size = Vector2(0.28, 0.28)
+	sq.material = _fx_material(_spark_texture())
+	sparks.mesh = sq
+	var dust := CPUParticles3D.new()
+	dust.one_shot = true
+	dust.explosiveness = 1.0
+	dust.amount = int(10 * k)
+	dust.lifetime = 1.1
+	dust.local_coords = false
+	dust.direction = Vector3.UP
+	dust.spread = 85.0
+	dust.initial_velocity_min = 1.0
+	dust.initial_velocity_max = 3.0 * k
+	dust.gravity = Vector3(0.0, 0.6, 0.0)
+	dust.damping_min = 2.0
+	dust.damping_max = 3.0
+	dust.scale_amount_min = 0.5 * k
+	dust.scale_amount_max = 1.0 * k
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 0.5))
+	curve.add_point(Vector2(1.0, 1.4))
+	dust.scale_amount_curve = curve
+	var dg := Gradient.new()
+	dg.offsets = PackedFloat32Array([0.0, 1.0])
+	dg.colors = PackedColorArray([Color(0.72, 0.66, 0.58, 0.5), Color(0.6, 0.56, 0.5, 0.0)])
+	dust.color_ramp = dg
+	var dq := QuadMesh.new()
+	dq.size = Vector2(0.7, 0.7)
+	dq.material = _fx_material(_puff_texture())
+	dust.mesh = dq
+	for em in [dust, sparks]:
+		em.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_root.add_child(em)
+		em.global_position = pos
+		em.restart()   # (one-shot: fire once, from here)
+		get_tree().create_timer(em.lifetime + 0.3, false).timeout.connect(em.queue_free)
+
+
+var _fx_mats := {}
+
+
+func _spark_texture() -> Texture2D:
+	var img := Image.create(8, 8, false, Image.FORMAT_RGBA8)
+	for y in 8:
+		for x in 8:
+			var d := Vector2(x - 3.5, y - 3.5).length() / 4.0
+			img.set_pixel(x, y, Color(1, 1, 1, 1.0 if d < 0.6 else (0.5 if d < 1.0 else 0.0)))
+	return ImageTexture.create_from_image(img)
+
+
+func _fx_material(tex: Texture2D, key: String = "") -> StandardMaterial3D:
+	key = key if not key.is_empty() else str(tex.get_width())
+	if not _fx_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.vertex_color_use_as_albedo = true
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		if tex != null:
+			m.albedo_texture = tex
+		_fx_mats[key] = m
+	return _fx_mats[key]
+
+
 # --- events --------------------------------------------------------------------------
 func _handle_events() -> void:
 	for k in sim.events.size():
 		var e: Array = sim.events[k]
+		# D-292: every vehicle collision (either player's) throws dust and sparks.
+		_collision_fx(e, int(sim.event_player[k]) if _two and k < sim.event_player.size() else 0)
 		if _two:   # D-289: this view's player's events, and the shared ones
 			var who := int(sim.event_player[k]) if k < sim.event_player.size() else -1
 			if who != _role and who != -1:

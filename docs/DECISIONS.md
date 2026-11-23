@@ -2953,3 +2953,19 @@
   - **No radar lights** along the top (the DMD's radar and beeps are enough). The radar bar is hidden with `modulate.a` in 2P; 1P is unchanged.
   - **The bottom gauges at half size** (`_hud_compact`). `Dial.set_radius` halves the tachometer and speedometer, and their number labels keep their text size, with every other number shown so the smaller arc isn't crowded. The shift lamp scales down, and the gear lever is drawn at half size. The RPM/MPH captions and the digital speed keep their size.
 - **Status:** Accepted
+
+### D-292 — Turbo Run: player 2's own default colour; dust and sparks on vehicle collisions
+- **Date:** 2026-11-23
+- **Decision (director):**
+  - **Player 2's default colour differs from player 1's.**
+    - P2 has their own paints per car (`_car_paint_p2`, starting at the second paint), so their car comes in another colour by default.
+    - The car select and their magna repaint use P2's paints.
+    - D-289's rule still applies on top: the same car and paint as P1 gets the next paint.
+  - **Dust and sparks on every vehicle collision:** a player and traffic (bumps, side-swipes, crashes into a car or truck), the two players, and a player and the police (rams either way). Crashes into roadside objects don't count.
+    - Each view shows every collision near it, whichever player it was. The burst sits at the contact point (halfway between the two vehicles; ahead of the car for a crash) and stays in the world, so at speed the cars leave it behind.
+    - **Sparks:** small round dots, white-yellow to orange to red, flying up and falling under gravity.
+    - **Dust:** soft puffs in the road-dust colour that drift up and grow.
+    - Crashes give a bigger burst.
+- **Particles:** `CPUParticles3D` (GPU particles don't move in our TABLE viewports). Fired with `restart()` after placing them, with no shadows. Setting `emitting = true` left an inactive particle drawn as a black square at the emitter and could hide the sparks entirely.
+- **Dev:** `--rc-burst` fires a burst in front of the car every half second.
+- **Status:** Accepted
