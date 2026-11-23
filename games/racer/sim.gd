@@ -266,6 +266,150 @@ var over_t := 0.0
 var done := false
 
 
+## D-288: local 2-player (split screen). Each player's car state lives in
+## PLAYER_FIELDS, swapped in by _use(i), so the 1-player code runs unchanged
+## for whichever car is live. Shared: the track, traffic and the random stream.
+const PLAYER_FIELDS := ["state", "countdown", "manual", "shift_request", "autopilot", "s", "x", "v",
+	"lat_v", "steer", "throttle", "steer_axis", "gas_axis", "braking", "auto_braking", "offroad",
+	"drifting", "drift_dir", "drift_angle", "drift_points", "_drift_entry", "_drift_exit", "boost_t",
+	"boosting", "pickups", "_next_pickup_s", "_next_id_pickups", "car", "gear", "_launch_t",
+	"_rev_lock_l", "_rev_lock_r", "freeze_time", "perfect_t", "rpm", "shift_hold", "_shift_lock",
+	"police", "busted_t", "radar", "_trap_passed", "in_tunnel", "_scrape_t", "grace_t", "finished",
+	"sway", "time_bonus", "spin_t", "flipping", "crash_anim", "crash_slide", "flip_dir", "flip_turns",
+	"time_left", "next_checkpoint", "checkpoints", "score", "_score_f", "over_t", "done"]
+const P2_START_X := 1.9          # the two cars start side by side, either side of the line
+const RIVAL_SIDE_BOUNCE := 6.0   # m/s sideways when the two players swipe each other
+const WIN_WAIT := 8.0            # s the race goes on after the winner crosses the line
+var two_player := false
+var cur := 0                     # the player whose fields are live
+var _pl := [{}, {}]
+var event_player: Array = []     # 2P: the player each event of the last step belongs to
+var winner := -1                 # 2P: the first player across the finish line
+var race_over := false           # 2P: both done, or WIN_WAIT after the winner
+var _win_t := 0.0
+
+
+## Starts a 2-player race: both cars on the grid side by side (cars[i] =
+## each player's car), no clock (first to the end of the last stage wins).
+func setup_two(seed_in: int, cars: Array) -> void:
+	setup(seed_in)
+	two_player = true
+	for i in 2:
+		var d := {}
+		for f in PLAYER_FIELDS:
+			var val = get(f)
+			d[f] = val.duplicate(true) if (val is Array or val is Dictionary) else val
+		d.car = int(cars[i])
+		d.x = -P2_START_X if i == 0 else P2_START_X
+		d.freeze_time = true
+		d.time_left = 99.0
+		_pl[i] = d
+	cur = 0
+	for f in PLAYER_FIELDS:
+		set(f, _pl[0][f])
+
+
+## Makes player i's car state the live one (2P).
+func _use(i: int) -> void:
+	if not two_player or i == cur:
+		return
+	for f in PLAYER_FIELDS:
+		_pl[cur][f] = get(f)
+	for f in PLAYER_FIELDS:
+		set(f, _pl[i][f])
+	cur = i
+
+
+## A player's value of a car field, whichever is live.
+func player_get(i: int, f: String) -> Variant:
+	if not two_player or i == cur:
+		return get(f)
+	return _pl[i][f]
+
+
+func player_set(i: int, f: String, val: Variant) -> void:
+	if not two_player or i == cur:
+		set(f, val)
+	else:
+		_pl[i][f] = val
+
+
+## Puts every player at stage n's start (2P: side by side).
+func start_at_stage(n: int) -> void:
+	for i in (2 if two_player else 1):
+		_use(i)
+		checkpoints = n - 1
+		s = (n - 1) * CHECKPOINT_EVERY + 150.0
+		next_checkpoint = n * CHECKPOINT_EVERY
+	_use(0)
+	track.ensure(s + 1500.0)
+
+
+## 2-player step: inputs[i] = [left, right, brake] for each player.
+func step_two(dt: float, inputs: Array) -> void:
+	events.clear()
+	event_player.clear()
+	for i in 2:
+		_use(i)
+		var c: Array = inputs[i]
+		step(dt, c[0], c[1], false, c[2])
+		while event_player.size() < events.size():
+			event_player.append(i)
+	_use(0)
+	_rival_contact()
+	# The winner (first across the line); the race ends once both are done,
+	# or WIN_WAIT after the winner crossed.
+	for i in 2:
+		if winner < 0 and player_get(i, "finished"):
+			winner = i
+			events.append(["winner", i])
+			event_player.append(-1)
+	if winner >= 0 and not race_over:
+		_win_t += dt
+		if (player_get(0, "done") and player_get(1, "done")) or _win_t >= WIN_WAIT:
+			race_over = true
+
+
+## The two players' cars touching (2P): a side-swipe pushes both apart and
+## turns them away from each other; running into the other's back slows the
+## one behind to the other's speed and nudges the one in front.
+func _rival_contact() -> void:
+	var s0: float = player_get(0, "s")
+	var s1: float = player_get(1, "s")
+	var x0: float = player_get(0, "x")
+	var x1: float = player_get(1, "x")
+	var ds := s1 - s0
+	var dx := x1 - x0
+	if absf(ds) >= CAR_LEN or absf(dx) >= CAR_W:
+		return
+	if float(player_get(0, "spin_t")) > 0.0 or float(player_get(1, "spin_t")) > 0.0:
+		return
+	var away := signf(dx) if absf(dx) > 0.01 else 1.0   # player 1 is pushed this way
+	var along := (CAR_LEN - absf(ds)) / CAR_LEN
+	var across := (CAR_W - absf(dx)) / CAR_W
+	if across < along:
+		# Side by side: both bounce apart.
+		for i in 2:
+			var dir := away if i == 1 else -away
+			player_set(i, "lat_v", dir * RIVAL_SIDE_BOUNCE)
+			player_set(i, "x", float(player_get(i, "x")) + dir * across * CAR_W * 0.5)
+			player_set(i, "sway", -dir * SWAY)
+			player_set(i, "v", float(player_get(i, "v")) * SIDE_SLOW)
+			events.append(["bump", -2])
+			event_player.append(i)
+	else:
+		# Nose to tail: the one behind slows to the other's speed.
+		var back := 0 if ds > 0.0 else 1
+		var front := 1 - back
+		var vf: float = player_get(front, "v")
+		player_set(back, "v", minf(float(player_get(back, "v")), vf * 0.95))
+		player_set(front, "v", vf + 1.5)
+		player_set(back, "s", float(player_get(front, "s")) - CAR_LEN)
+		for i in [back, front]:
+			events.append(["bump", -2])
+			event_player.append(i)
+
+
 func setup(seed_in: int = 7) -> void:
 	_rng.seed = seed_in * 31 + 5
 	track.avoid_every = CHECKPOINT_EVERY
@@ -298,7 +442,8 @@ func start_time() -> float:
 ## left/right = flippers, brake = left magna save (4-button mode only). `_gas` is
 ## unused since D-189 (the throttle is automatic in both layouts).
 func step(dt: float, left: bool, right: bool, _gas: bool = false, brake: bool = false) -> void:
-	events.clear()
+	if not two_player:
+		events.clear()   # (2P: step_two clears them once for both players)
 	if autopilot:
 		var ap := _autopilot()
 		left = ap < -0.3
@@ -421,6 +566,8 @@ func _soft_bump(from_x: float) -> void:
 
 ## Across the finish line (D-221): the bonuses, then coasting out to a stop.
 func _finish() -> void:
+	if finished:
+		return
 	finished = true
 	_end_drift()
 	time_bonus = int(ceilf(time_left)) * TIME_BONUS_PER_S
@@ -981,65 +1128,27 @@ func traffic_target() -> int:
 
 
 func _update_traffic(dt: float) -> void:
+	# D-288: in 2P the traffic moves once (on player 1's pass), reacting to
+	# both players; each player's pass handles that player's contacts.
+	var move := not two_player or cur == 0
+	var pv := _players_view()
+	var lk := "last_ds" if cur == 0 else "last_ds1"
 	for i in range(traffic.size() - 1, -1, -1):
 		var t: Dictionary = traffic[i]
-		var prev_ds: float = t.last_ds
+		var prev_ds: float = t.get(lk, t.s - s)
 		var tlen: float = t.get("len", CAR_LEN)
 		var tw: float = t.get("w", CAR_W)
-		t.s += t.v * dt
-		t.weave += dt
-		# Shoved aside by a side bump (D-152): an offset that eases back to the lane.
-		t.shove = move_toward(float(t.get("shove", 0.0)), 0.0, 2.0 * dt)
-		# Yielding to the police (D-163): near its lights, traffic pulls over
-		# to its own right-hand edge, slows and indicates; then rejoins.
-		var lane_x: float = Track.LANES[t.lane]
-		var yielding: bool = police_lights() and t.s > float(police.s) - 40.0 and t.s < float(police.s) + YIELD_AHEAD
-		t.blink = yielding
-		var tw2: float = t.get("w", CAR_W)
-		var edge := signf(lane_x) * (Track.ROAD_HALF - tw2 * 0.5 - 0.2)
-		t.pull = move_toward(float(t.get("pull", 0.0)), (edge - lane_x) if yielding else 0.0, 2.2 * dt)
-		if not t.has("v0"):
-			t.v0 = t.v
-		var behind: float = s - t.s
-		if spin_t > 0.0 and t.v0 > 0.0 and behind > 0.0 and behind < WAIT_BEHIND \
-				and absf(float(t.get("x", lane_x)) - x) < (CAR_W + tw) * 0.5 + 0.8:
-			# We've crashed in its way (D-223): it brakes and waits behind us.
-			var room := behind - (CAR_LEN + tlen) * 0.5 - WAIT_GAP
-			t.v = move_toward(t.v, clampf(room * 0.9, 0.0, float(t.v0)), 16.0 * dt)
-			t.waiting = true
-		else:
-			t.waiting = false
-			t.v = move_toward(t.v, float(t.v0) * (YIELD_SLOW if yielding else 1.0), 6.0 * dt)
-		# D-271: oncoming traffic heading at us while we're crashed or stopped
-		# swerves round us (keeping clear by a margin), slowing as it passes;
-		# if there's no room either side, it stops short of us.
-		var dodge_to := 0.0
-		var ahead: float = t.s - s
-		if (spin_t > 0.0 or v < 4.0) and float(t.v0) < 0.0 and ahead > -2.0 and ahead < DODGE_AHEAD:
-			var need := (CAR_W + tw) * 0.5 + DODGE_CLEAR
-			var dx := lane_x - x
-			if absf(dx) < need:
-				var lim := Track.ROAD_HALF + Track.RUMBLE - tw * 0.5
-				var dir := signf(dx) if absf(dx) > 0.01 else -1.0
-				var want_x := x + dir * need
-				if absf(want_x) > lim:
-					want_x = x - dir * need
-				if absf(want_x) <= lim:
-					dodge_to = want_x - lane_x
-					t.v = move_toward(t.v, float(t.v0) * 0.6, 10.0 * dt)
-				else:
-					var room := ahead - (CAR_LEN + tlen) * 0.5 - WAIT_GAP
-					t.v = move_toward(t.v, -clampf(room * 0.9, 0.0, absf(float(t.v0))), 18.0 * dt)
-					t.waiting = true
-		t.dodge = move_toward(float(t.get("dodge", 0.0)), dodge_to, DODGE_RATE * dt)
-		t.x = lane_x + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6) * (0.0 if yielding else 1.0) 			+ t.shove + t.pull + float(t.dodge)
+		if move:
+			_move_traffic(t, dt, pv)
 		var ds: float = t.s - s
-		t.last_ds = ds
+		t[lk] = ds
 		# Oncoming drivers flash their high beams (and honk once) at a car
 		# coming at them in their lane (D-105).
-		t.flash = state == State.RACE and t.v < 0.0 and ds > 8.0 and ds < HIGHBEAM_RANGE 			and absf(t.x - x) < HIGHBEAM_DX
-		if t.flash and not t.get("flashed", false):
-			t.flashed = true
+		var fl: bool = state == State.RACE and t.v < 0.0 and ds > 8.0 and ds < HIGHBEAM_RANGE 			and absf(t.x - x) < HIGHBEAM_DX
+		t.flash = fl or (cur == 1 and bool(t.get("flash", false)))
+		var fk := "flashed" if cur == 0 else "flashed1"
+		if fl and not t.get(fk, false):
+			t[fk] = true
 			events.append(["high_beams", t.id])
 		if state == State.RACE and prev_ds > 0.0 and ds <= 0.0:
 			if absf(t.x - x) < NEAR_MISS_DX + (tw - CAR_W) * 0.5 and spin_t <= 0.0:
@@ -1089,12 +1198,99 @@ func _update_traffic(dt: float) -> void:
 				events.append(["bump", t.id])
 		t.swipe_cd = maxf(0.0, float(t.get("swipe_cd", 0.0)) - dt)
 		t.sway = move_toward(float(t.get("sway", 0.0)), 0.0, SWAY_BACK * dt)
-		if ds < -60.0 or ds > 900.0:
+		if (not two_player or cur == 1) and _far_from_all(t.s, pv):
 			traffic.remove_at(i)
 	if state == State.OVER:
 		return
-	if traffic.size() < traffic_target():
+	var near := 0
+	for t in traffic:
+		if t.s - s >= -60.0 and t.s - s <= 900.0:
+			near += 1
+	if near < traffic_target():
 		_spawn_traffic()
+
+
+## Moves one traffic car (its speed, lane, yielding, waiting and dodging),
+## reacting to every player (D-288; one player outside 2P).
+func _move_traffic(t: Dictionary, dt: float, pv: Array) -> void:
+	var tlen: float = t.get("len", CAR_LEN)
+	var tw: float = t.get("w", CAR_W)
+	t.s += t.v * dt
+	t.weave += dt
+	# Shoved aside by a side bump (D-152): an offset that eases back to the lane.
+	t.shove = move_toward(float(t.get("shove", 0.0)), 0.0, 2.0 * dt)
+	# Yielding to the police (D-163): near its lights, traffic pulls over
+	# to its own right-hand edge, slows and indicates; then rejoins.
+	var lane_x: float = Track.LANES[t.lane]
+	var yielding := false
+	for p in pv:
+		if p.lights and t.s > float(p.ps) - 40.0 and t.s < float(p.ps) + YIELD_AHEAD:
+			yielding = true
+	t.blink = yielding
+	var tw2: float = t.get("w", CAR_W)
+	var edge := signf(lane_x) * (Track.ROAD_HALF - tw2 * 0.5 - 0.2)
+	t.pull = move_toward(float(t.get("pull", 0.0)), (edge - lane_x) if yielding else 0.0, 2.2 * dt)
+	if not t.has("v0"):
+		t.v0 = t.v
+	var waited := false
+	for p in pv:
+		var behind: float = p.s - t.s
+		if p.spin > 0.0 and t.v0 > 0.0 and behind > 0.0 and behind < WAIT_BEHIND \
+				and absf(float(t.get("x", lane_x)) - p.x) < (CAR_W + tw) * 0.5 + 0.8:
+			# A player crashed in its way (D-223): it brakes and waits behind.
+			var room: float = behind - (CAR_LEN + tlen) * 0.5 - WAIT_GAP
+			t.v = move_toward(t.v, clampf(room * 0.9, 0.0, float(t.v0)), 16.0 * dt)
+			waited = true
+			break
+	t.waiting = waited
+	if not waited:
+		t.v = move_toward(t.v, float(t.v0) * (YIELD_SLOW if yielding else 1.0), 6.0 * dt)
+	# D-271: oncoming traffic heading at us while we're crashed or stopped
+	# swerves round us (keeping clear by a margin), slowing as it passes;
+	# if there's no room either side, it stops short of us.
+	var dodge_to := 0.0
+	for p in pv:
+		var ahead: float = t.s - p.s
+		if not ((p.spin > 0.0 or p.v < 4.0) and float(t.v0) < 0.0 and ahead > -2.0 and ahead < DODGE_AHEAD):
+			continue
+		var px: float = p.x
+		var need := (CAR_W + tw) * 0.5 + DODGE_CLEAR
+		var dx := lane_x - px
+		if absf(dx) < need:
+			var lim := Track.ROAD_HALF + Track.RUMBLE - tw * 0.5
+			var dir := signf(dx) if absf(dx) > 0.01 else -1.0
+			var want_x := px + dir * need
+			if absf(want_x) > lim:
+				want_x = px - dir * need
+			if absf(want_x) <= lim:
+				dodge_to = want_x - lane_x
+				t.v = move_toward(t.v, float(t.v0) * 0.6, 10.0 * dt)
+			else:
+				var room := ahead - (CAR_LEN + tlen) * 0.5 - WAIT_GAP
+				t.v = move_toward(t.v, -clampf(room * 0.9, 0.0, absf(float(t.v0))), 18.0 * dt)
+				t.waiting = true
+		break
+	t.dodge = move_toward(float(t.get("dodge", 0.0)), dodge_to, DODGE_RATE * dt)
+	t.x = lane_x + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6) * (0.0 if yielding else 1.0) 			+ t.shove + t.pull + float(t.dodge)
+
+
+## Each player's position and state as the traffic sees them.
+func _players_view() -> Array:
+	var out := []
+	for i in (2 if two_player else 1):
+		var pol: Dictionary = player_get(i, "police")
+		var lights: bool = not pol.is_empty() and (pol.state == "chase" or (pol.state == "bust" and not pol.get("fined", false)))
+		out.append({"s": float(player_get(i, "s")), "x": float(player_get(i, "x")), "v": float(player_get(i, "v")),
+			"spin": float(player_get(i, "spin_t")), "lights": lights, "ps": float(pol.get("s", 0.0))})
+	return out
+
+
+func _far_from_all(ts: float, pv: Array) -> bool:
+	for p in pv:
+		var d: float = ts - float(p.s)
+		if d >= -60.0 and d <= 900.0:
+			return false
+	return true
 
 
 func _spawn_traffic() -> void:
@@ -1117,6 +1313,11 @@ func _spawn_traffic() -> void:
 	var ahead := (560.0 if oncoming else 380.0) + _rng.randf() * 250.0
 	for t in traffic:  # keep spawns apart
 		if absf(t.s - (s + ahead)) < 40.0 and t.lane == lane:
+			return
+	if two_player:   # D-288: never pop up in sight of the other player
+		var other_s: float = player_get(1 - cur, "s")
+		var rel := s + ahead - other_s
+		if rel > -80.0 and rel < 400.0:
 			return
 	if s + ahead > FINISH_STAGE * CHECKPOINT_EVERY - 20.0:
 		return   # nothing appears past the finish line (D-223)

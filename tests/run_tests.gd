@@ -946,6 +946,35 @@ func test_racer_time_of_day() -> void:
 func test_racer_sim() -> void:
 	var Sim = load("res://games/racer/sim.gd")
 	var dt := 1.0 / 60.0
+	# D-288: 2-player Turbo Run.
+	var r2 = Sim.new()
+	r2.setup_two(7, [0, 2])
+	check(r2.player_get(0, "car") == 0 and r2.player_get(1, "car") == 2 		and float(r2.player_get(0, "x")) < 0.0 and float(r2.player_get(1, "x")) > 0.0,
+		"2P racer: each player's own car, side by side on the grid")
+	var idle := [false, false, false]
+	for k in 400:   # countdown, then player 2 steers right (after the launch lock)
+		r2.step_two(dt, [idle, [false, k > 300, false]])
+	check(float(r2.player_get(1, "x")) > float(r2.player_get(0, "x")) + 3.0 and float(r2.player_get(0, "s")) > 60.0,
+		"2P racer: each player steers only their own car; both drive")
+	check(float(r2.player_get(0, "time_left")) >= 98.9, "2P racer: no clock")
+	# Side by side and touching: both bounce apart.
+	r2._use(0)
+	r2.player_set(0, "x", 0.0)
+	r2.player_set(1, "x", 1.2)
+	r2.player_set(1, "s", float(r2.player_get(0, "s")))
+	r2.player_set(0, "spin_t", 0.0)
+	r2.player_set(1, "spin_t", 0.0)
+	r2._rival_contact()
+	check(float(r2.player_get(0, "lat_v")) < 0.0 and float(r2.player_get(1, "lat_v")) > 0.0, "2P racer: a side-swipe pushes both apart")
+	# The first across the last line wins.
+	r2.player_set(1, "checkpoints", Sim.FINISH_STAGE - 1)
+	r2.player_set(1, "next_checkpoint", float(r2.player_get(1, "s")) + 5.0)
+	for k in 60:
+		r2.step_two(dt, [idle, idle])
+	check(r2.winner == 1 and r2.player_get(1, "finished") and not r2.player_get(0, "finished"), "2P racer: the first to finish wins")
+	for k in int(Sim.WIN_WAIT * 60.0) + 10:
+		r2.step_two(dt, [idle, idle])
+	check(r2.race_over, "2P racer: the race ends a while after the winner crosses")
 	# D-183: the cars set the clock: the easy car gets the most time, the hard car the least.
 	var times: Array = []
 	var bonuses: Array = []

@@ -2891,3 +2891,25 @@
 - **Per player:** the bar hides for Lightspeed or Shield (as in 1P), and each player's LOW warning blinks in their own bar (`_low_power_t` is per ship).
 - **Drawing:** `_draw_bar` takes an optional cell width and right edge; 1P is unchanged.
 - **Status:** Accepted
+
+### D-288 — Turbo Run 2P, part 1: the simulation
+- **Date:** 2026-11-23
+- **Decision (director, D-284):** split-screen racing. Each player chooses a car; the first to the end of stage 10 wins, with no time limit. Traffic, police chases, weather and time of day stay, and the other player's car is visible and can be bumped.
+- **One shared simulation, as in Tilt Breaker (D-285):**
+  - Each player's car state (`PLAYER_FIELDS`: position, speed, gear, drift, nitro and canisters, police, crash, checkpoints, score, …) is swapped in with `_use(i)`, so the 1-player code runs unchanged for whichever car is live.
+  - `setup_two(seed, cars)` puts both cars side by side on the grid. `step_two(dt, inputs)` steps each player and tags each event with its player (`event_player`).
+  - `start_at_stage(n)` moves both cars to stage n's start.
+- **Shared:** the track, the traffic and the random stream.
+- **Per player:** police chases and nitro canisters.
+- **Traffic:**
+  - It moves once per step (`_move_traffic`), reacting to both players: it yields to either player's police, waits behind either one's crash, and dodges either one when they're stopped.
+  - Each player's pass handles that player's contacts, passes, near misses and high beams (their own `last_ds` / `flashed`).
+  - Cars are removed only when out of range of both players. Spawns count the cars near the current player, and never appear in sight of the other player (−80…400 m around them).
+- **Player-to-player contact (`_rival_contact`):** side by side, both bounce apart and turn away (as with traffic, D-239). Nose to tail, the car behind slows to the front car's speed and the front one gets a nudge.
+- **No clock:** each player's clock is frozen.
+- **The finish:**
+  - The first player across the line is the `winner` (event `winner`).
+  - The race is over (`race_over`) when both have stopped, or `WIN_WAIT` 8 s after the winner crossed.
+  - Crossing the line again does nothing.
+- **1P:** unchanged. All the existing tests pass, plus new tests for the grid, separate steering, no clock, the side-swipe, the winner and the race's end.
+- **Status:** Accepted (part 1; the split-screen view follows)
