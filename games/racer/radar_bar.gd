@@ -13,6 +13,12 @@ const RED := Color(1.0, 0.18, 0.15)
 
 var level := 0.0       # 0..1 radar closeness
 var flash := false     # a beep is sounding
+## HD graphics (D-212): smooth antialiased lamps instead of chunky pixels.
+var smooth := false:
+	set(v):
+		if v != smooth:
+			smooth = v
+			queue_redraw()
 
 
 func _init() -> void:
@@ -51,6 +57,9 @@ func _draw() -> void:
 ## glint top-left. On: a pixel glow halo spills round it, and the ball itself burns
 ## from a near-white core through the full colour to a hot rim, like a lamp.
 func _pixel_ball(p: Vector2, col: Color, on: bool) -> void:
+	if smooth:
+		_smooth_ball(p, col, on)
+		return
 	var n := int(R / PX)
 	if on:
 		var g := n + (5 if flash else 3)
@@ -83,6 +92,35 @@ func _pixel_ball(p: Vector2, col: Color, on: bool) -> void:
 				else:
 					c = col.lightened(0.15)      # hot rim instead of a dark outline
 			draw_rect(Rect2(p + Vector2(gx, gy) * PX, Vector2(PX, PX)), c)
+
+
+## The same lamp drawn smooth for HD (D-212): antialiased circles in layers.
+func _smooth_ball(p: Vector2, col: Color, on: bool) -> void:
+	if on:
+		var g := R + (20.0 if flash else 12.0)
+		var steps := 10
+		for i in steps:
+			var t := float(i) / steps
+			draw_circle(p, lerpf(g, R, t), Color(col, (0.07 if flash else 0.045) * (0.4 + t)), true, -1.0, true)
+		draw_circle(p, R, col.lightened(0.15), true, -1.0, true)
+		draw_circle(p, R * 0.86, col, true, -1.0, true)
+		var core := p + Vector2(-R * 0.2, -R * 0.25)
+		draw_circle(core, R * (0.7 if flash else 0.55), col.lightened(0.55), true, -1.0, true)
+		draw_circle(core, R * (0.45 if flash else 0.3), Color(1, 1, 1), true, -1.0, true)
+		return
+	# Off: bezel lit top-left, dark lip, pale tinted glass darker in the bowl, glint.
+	draw_circle(p, R, Color(0.2, 0.21, 0.23), true, -1.0, true)
+	draw_circle(p + Vector2(-1.5, -1.5), R - 1.5, Color(0.72, 0.74, 0.76), true, -1.0, true)
+	draw_circle(p, R - 2.5, Color(0.42, 0.44, 0.47), true, -1.0, true)
+	draw_circle(p, R * 0.86, Color(0.13, 0.14, 0.16), true, -1.0, true)
+	var glass := Color(0.6, 0.63, 0.67).lerp(col, 0.16)
+	draw_circle(p, R * 0.74, glass, true, -1.0, true)
+	for i in 6:
+		var t := float(i + 1) / 6.0
+		draw_circle(p, R * 0.74 * (1.0 - t * 0.85), Color(0, 0, 0, 0.05), true, -1.0, true)
+	var gl := p + Vector2(-R * 0.38, -R * 0.38) * 0.74 * 1.15
+	draw_circle(gl, R * 0.2, glass.lightened(0.35), true, -1.0, true)
+	draw_circle(gl, R * 0.11, Color(0.97, 0.98, 1.0), true, -1.0, true)
 
 
 ## One pixel of an unlit lamp (d: 0 centre .. 1 rim).

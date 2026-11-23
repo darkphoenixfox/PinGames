@@ -1990,3 +1990,15 @@
 - **Timing:** the view times it with its own timer, so it plays out whether the car is still sliding or already stopped.
 - **Steps:** it follows the graphics mode's animation steps (D-208): 20 frames/s in 8-BIT, 40 in 16-BIT, smooth in HD.
 - **Status:** Accepted
+
+### D-212 — Turbo Run: plates fitted on the hot hatch and supercar; smooth radar lamps in HD
+- **Date:** 2026-11-23
+- **Bug (director):** the number plates on the easy and hard cars were placed wrong.
+  - **Cause:** both used the red car's oversized plate (0.51 × 0.255 m), which is bigger than their real plates. On the supercar its top edge reached into the bulging bumper above (rear surface −2.25 m at 0.53 m up), so the paint stripes covered it. On the hot hatch it spilled over the bumper.
+  - **Fix:** `PLATES` now holds a centre and a size per model, fitted to the model's own plate (from renders), just in front of its rear surface (measured from the mesh). Hot hatch: 0.37 × 0.185 at y 0.415, z −2.025. Supercar: 0.34 × 0.17 at y 0.43, z −2.215. The red car is unchanged.
+- **Bug (director):** the radar lights looked pixelated in HD.
+  - **Fix:** `radar_bar.gd` gets `smooth`, set from the HD mode. It draws the same lamp in antialiased circle layers instead of 4 px blocks:
+    - **Off:** a bezel lit top-left, a dark lip, pale tinted glass darkening into the bowl, and a glint.
+    - **On:** a soft glow halo, a hot rim, the colour, and a white core.
+  - 8-BIT and 16-BIT keep the pixel lamps.
+- **Status:** Accepted

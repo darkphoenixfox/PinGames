@@ -119,11 +119,13 @@ const EXHAUSTS := {
 	SUPERCAR_MODEL: [Vector3(-0.64, 0.27, -2.2), Vector3(-0.52, 0.27, -2.2),
 		Vector3(0.52, 0.27, -2.2), Vector3(0.64, 0.27, -2.2)],
 }
-## Number plate centre per model (D-127 for the red car).
+## Number plate per model: [centre, size] (D-127 for the red car). D-212: the
+## hot hatch and supercar plates fit their own plate recess (measured from
+## renders and the mesh's rear surface), so they don't float or clip.
 const PLATES := {
-	CAR_MODEL: Vector3(0.0, PLATE_Y, PLATE_Z),
-	HOTHATCH_MODEL: Vector3(0.0, 0.43, -2.06),
-	SUPERCAR_MODEL: Vector3(0.0, 0.43, -2.21),
+	CAR_MODEL: [Vector3(0.0, PLATE_Y, PLATE_Z), PLATE_SIZE],
+	HOTHATCH_MODEL: [Vector3(0.0, 0.415, -2.025), Vector2(0.37, 0.185)],
+	SUPERCAR_MODEL: [Vector3(0.0, 0.43, -2.215), Vector2(0.34, 0.17)],
 }
 ## Puts a car's night tail glows on its lamps (D-198): onto the body mesh, in
 ## the model's own space, at the centre of the lamp area the car shader lights
@@ -1207,7 +1209,8 @@ func _build_body(model: String) -> void:
 	_car_body = _car_instance(0.0, model, MODEL_TEXTURES[model])
 	_player_lights = Night.add_car_lights(_car_body, "car", _puff_texture(), TAIL_AT[MODEL_LIGHTS[model]])
 	_place_tails(_car_body, _player_lights, model)
-	_add_plate(_car_body, PLATES.get(model, PLATES[CAR_MODEL]))
+	var plate: Array = PLATES.get(model, PLATES[CAR_MODEL])
+	_add_plate(_car_body, plate[0], plate[1])
 	_car.add_child(_car_body)
 	var pipes: Array = EXHAUSTS.get(model, EXHAUSTS[CAR_MODEL])
 	_exhaust_z = (pipes[0] as Vector3).z
@@ -1364,7 +1367,7 @@ func _add_headlights(node: Node3D, kind: String) -> void:
 ## The hero car's rear number plate, "TRN" (D-114, D-116): California style.
 ## A cream plate with a red state name, orange stripes and a setting sun, bold
 ## navy letters and an orange motto, drawn once into a small viewport texture.
-func _add_plate(body: Node3D, at := Vector3(0.0, PLATE_Y, PLATE_Z)) -> void:
+func _add_plate(body: Node3D, at := Vector3(0.0, PLATE_Y, PLATE_Z), size := PLATE_SIZE) -> void:
 	var plate := MeshInstance3D.new()
 	var vp := SubViewport.new()
 	vp.size = Vector2i(192, 96)
@@ -1401,7 +1404,7 @@ func _add_plate(body: Node3D, at := Vector3(0.0, PLATE_Y, PLATE_Z)) -> void:
 	var motto := _plate_label(tr("RC_PLATE_MOTTO"), 12, Color(0.85, 0.52, 0.1), 76, 0)
 	vp.add_child(motto)
 	var q := QuadMesh.new()
-	q.size = PLATE_SIZE
+	q.size = size
 	var m := StandardMaterial3D.new()
 	m.albedo_texture = vp.get_texture()
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
@@ -1611,6 +1614,7 @@ func _update_radar(delta: float) -> void:
 			_radar_led = minf(0.07, _radar_beep_t * 0.5)
 			Audio.sfx("rc_radar")
 	if is_instance_valid(_radar_bar):
+		_radar_bar.smooth = _gfx_hd   # D-212
 		_radar_bar.set_state(sim.radar if sim.state == Sim.State.RACE else 0.0, _radar_led > 0.0)
 
 
