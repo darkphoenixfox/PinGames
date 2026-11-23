@@ -119,8 +119,8 @@ func save() -> void:
 func layout() -> String:
 	if OS.has_feature("quest"):
 		return "vr"   # the Quest build is the VR cabinet (D-170, D-180)
-	if OS.has_feature("android") or cli.has("single-preview"):
-		return "single"   # D-251: Android is the single-screen version
+	if OS.has_feature("android") or OS.has_feature("web") or cli.has("single-preview"):
+		return "single"   # D-251: Android; D-270: the browser too
 	if OS.has_feature("web") or cli.has("web-preview"):
 		# The browser and the flat Android build tile all screens on one canvas (D-173, D-180)
 		return "web"

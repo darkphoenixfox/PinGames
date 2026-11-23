@@ -335,7 +335,7 @@ func _setup_single() -> void:
 	table.size = TABLE_BASE
 	table_flex = true   # D-255: every screen takes the area's shape; 9:16 games ask
 	var root := get_window()
-	if not OS.has_feature("android"):
+	if not OS.has_feature("android") and not OS.has_feature("web"):   # the page owns the canvas (D-270)
 		root.mode = Window.MODE_WINDOWED
 		root.title = "PinGames"
 		var mon := _clamp_monitor(int(Config.get_value("display", "windowed_monitor")))
@@ -369,7 +369,7 @@ func _single_layout() -> void:
 		return
 	var win := Vector2(get_window().size)
 	var portrait := 1 if win.y > win.x else 0
-	var touch := TouchControls.wanted() and Input.get_connected_joypads().is_empty()
+	var touch := TouchControls.wanted() and (Input.get_connected_joypads().is_empty() or Config.cli.has("touch"))
 	if portrait == _single_portrait and touch == _single_touch_on:
 		_place_single(win)
 		return

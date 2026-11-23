@@ -2679,3 +2679,13 @@
 - **Decision (director):** make the barriers 10 % visible instead of 5 % (D-263), and include it in the tester build (D-268).
 - **Change:** `EDGE_IDLE` 0.05 → 0.10.
 - **Status:** Accepted
+
+### D-270 — Proper Windows release build; the web uses the single-screen layouts; touch overlay check
+- **Date:** 2026-11-23
+- **Decision (director):** download the export templates as needed. The web version should also use the new layouts. The Android touch overlay seemed not to be added. Leave the Android and Quest APKs out of the workflow for now; build those only on request.
+- **Templates:** the official Godot 4.7.2 Windows x86_64 templates (debug and release, from the engine's GitHub release, `version.txt` checked) are installed in `%APPDATA%\Godot\export_templates\4.7.2.stable`.
+- **Windows build:** the "Windows" preset exports a release build: `PinGames.exe`, the `.pck` and `PinGames.console.exe`, product name PinGames. The tester zip (D-268) is rebuilt from it, with no "(DEBUG)" title, 233 MB.
+- **Web:** the browser build uses the `single` layout (D-251–D-267) instead of D-173's `web` page: the game takes the page's shape, with the DMD on top or in Tilt Breaker's side panel, and the translucent touch overlay on touch screens. The page owns the canvas, so there's no window sizing there.
+- **Touch overlay:** it was built in D-251 (translucent buttons along the bottom, over the game: EXIT/BRAKE/LEFT and START/LAUNCH/SHIFT/RIGHT, a HIDE toggle). It's hidden while a gamepad is connected, which is why it never showed in test runs here. `--touch` now forces it on even with a pad connected.
+- **APKs:** Android and Quest builds are ad hoc, only when asked.
+- **Status:** Accepted
