@@ -2016,3 +2016,14 @@
   - **Volume:** falls 6 dB per doubling of distance past 15 m.
 - **Test:** the three patterns synthesise in under 1.5 s and are audible.
 - **Status:** Accepted
+
+### D-214 — Turbo Run horns: a clear BEEP BEEP, audible from afar
+- **Date:** 2026-11-23
+- **Bug (director):** with the D-213 horns you couldn't tell when a driver was honking at you. It should be BEEP BEEP.
+- **Cause:** honks start up to 170 m away (`HIGHBEAM_RANGE`), where D-213's 6 dB-per-doubling falloff left them at about −24 dB, under the engine. The random patterns (one long blast, a triple) didn't read as a honk at you either.
+- **Fix:**
+  - **Pattern:** always two equal 0.3 s presses with a 0.15 s gap.
+  - **Falloff:** about 2.4 dB per doubling past 15 m, so a honk is about −9 dB at 170 m and 0 dB close.
+  - **Ducking:** while it sounds, the engine and wind dip by `HORN_DUCK_DB` 6 dB.
+  - The tone, Doppler and synthesis are unchanged.
+- **Status:** Accepted

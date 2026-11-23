@@ -231,8 +231,10 @@ const HORN_TONES := [415.0, 500.0]
 const HORN_FORMANT := 2000.0
 const HORN_SOUND_SPEED := 300.0    # game m/s (real ~400 here; a touch exaggerated)
 const HORN_RANGE := 260.0          # m where it fades out
-## Honk patterns (s): [start, length] presses.
-const HORN_PATTERNS := [[[0.0, 0.13], [0.21, 0.5]], [[0.0, 0.75]], [[0.0, 0.12], [0.19, 0.12], [0.38, 0.4]]]
+## Honk pattern (s): [start, length] presses. D-214: always a clear BEEP BEEP,
+## two equal presses with a gap, so it reads as "they're honking at me".
+const HORN_PATTERNS := [[[0.0, 0.3], [0.45, 0.3]]]
+const HORN_DUCK_DB := 6.0    # engine and wind dip while a horn sounds (D-214)
 const PASS_RANGE := 70.0    # m: how far a car can be heard (D-192: was 45)
 const SOUND_SPEED := 85.0   # m/s, exaggerated so the Doppler shift is obvious (D-192: was 110)
 const ENGINE_GAIN_DB := -0.92   # D-192: the hero car's engine 10% lower (0.9x)
@@ -2794,6 +2796,7 @@ func _honk(id: int) -> void:
 func _update_horn() -> void:
 	if _horn != null and _horn.playing:
 		_horn_volume_pitch(false)
+		_pass_duck = maxf(_pass_duck, HORN_DUCK_DB)   # make room for it (D-214)
 
 
 func _horn_volume_pitch(snap: bool) -> void:
@@ -2809,8 +2812,9 @@ func _horn_volume_pitch(snap: bool) -> void:
 	var d := Vector2(ds, float(t.x) - sim.x).length()
 	var closing: float = (sim.v - float(t.v)) * signf(ds if absf(ds) > 0.5 else 1.0)
 	var pitch := clampf(HORN_SOUND_SPEED / maxf(HORN_SOUND_SPEED - closing, 60.0), 0.7, 1.5)
-	# Inverse-distance falloff (6 dB per doubling past 15 m), quieter past HORN_RANGE.
-	var vol := -3.0 - 20.0 * log(maxf(d, 15.0) / 15.0) / log(10.0) - 20.0 * clampf((d - HORN_RANGE) / 60.0, 0.0, 1.0)
+	# D-214: a gentle falloff (about 2.4 dB per doubling past 15 m), so a honk
+	# from 170 m away still cuts through the engine (was 6 dB: about -24 dB there).
+	var vol := 0.0 - 8.0 * log(maxf(d, 15.0) / 15.0) / log(10.0) - 20.0 * clampf((d - HORN_RANGE) / 60.0, 0.0, 1.0)
 	if snap:
 		_horn.pitch_scale = pitch
 		_horn.volume_db = vol
