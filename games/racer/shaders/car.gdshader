@@ -33,8 +33,6 @@ INST uniform float overhead = 0.0;
 INST uniform float spin = 0.0;       // 1 = hero car
 INST uniform float wheel_phase = 0.0;
 INST uniform float wheel_blur = 0.0; // 0 still .. 1 fast
-uniform vec2 axle_yz = vec2(0.33, 1.2);  // axle height, |z| of front/rear axle
-uniform float wheel_r = 0.32;
 uniform vec3 tail_min = vec3(0.2, 0.7, -9.0);
 uniform vec3 tail_max = vec3(0.7, 0.9, -1.95);
 uniform vec3 head_min = vec3(0.45, 0.55, 1.85);
@@ -44,28 +42,18 @@ uniform bool tail_red_only = false;
 
 varying vec3 mp;
 
-uniform float wheel_x = 0.66;   // D-249: |x| from which the wheel's vertices start
+// D-250: turning wheels. Each wheel's rim (centre z, y and radius, model
+// space, measured per axle) gets a rim picture drawn over it, turned by
+// wheel_phase; the model's own tyre stays. Only outward-facing surfaces at the
+// sides take it.
+uniform vec3 wheels[6];
+uniform int wheel_n = 0;
+uniform sampler2D rim_tex : source_color, filter_linear_mipmap;
+varying vec3 mn;
 
 void vertex() {
 	mp = VERTEX;
-	// D-249: the wheels really turn. Every vertex inside a wheel's cylinder
-	// (outer side, within wheel_r of its axle) rotates about the axle by
-	// wheel_phase, so the model's own rims and tyres spin, texture and all.
-	if (spin > 0.5 && abs(VERTEX.x) > wheel_x) {
-		float az = sign(VERTEX.z) * axle_yz.y;
-		vec2 d = vec2(VERTEX.z - az, VERTEX.y - axle_yz.x);
-		if (length(d) < wheel_r * 1.04) {
-			float ca = cos(wheel_phase);
-			float sa = sin(wheel_phase);
-			// Rolling forward (nose +Z): the top of the wheel moves to +Z.
-			vec2 r = vec2(d.x * ca + d.y * sa, -d.x * sa + d.y * ca);
-			VERTEX.z = az + r.x;
-			VERTEX.y = axle_yz.x + r.y;
-			vec2 n = vec2(NORMAL.z * ca + NORMAL.y * sa, -NORMAL.z * sa + NORMAL.y * ca);
-			NORMAL.z = n.x;
-			NORMAL.y = n.y;
-		}
-	}
+	mn = NORMAL;
 }
 
 // D-198: a box with soft edges (fading over `f` metres), so lamp light has
@@ -92,7 +80,25 @@ void fragment() {
 	vec3 c = hd ? texture(tex_hd, UV).rgb : texture(tex, UV).rgb;
 	ALBEDO = hue_rotate(c, hue * 6.2831853) * bright;
 	float lum = dot(c, vec3(0.3, 0.59, 0.11));
-	// (D-143's painted spoke streaks are gone: the wheels turn for real, D-249.)
+	if (spin > 0.5 && wheel_n > 0 && abs(mp.x) > 0.5 && mn.x * sign(mp.x) > 0.3) {
+		for (int i = 0; i < 6; i++) {
+			if (i >= wheel_n) {
+				break;
+			}
+			vec2 d = vec2(mp.z - wheels[i].x, mp.y - wheels[i].y);
+			float rr = wheels[i].z;
+			if (dot(d, d) < rr * rr) {
+				// Seen from its own side; rolling forward turns the top to +Z.
+				float ca = cos(wheel_phase);
+				float sa = sin(wheel_phase);
+				vec2 q = vec2(d.x * ca - d.y * sa, d.x * sa + d.y * ca);
+				vec2 uv = vec2(-q.x * sign(mp.x), -q.y) / (2.0 * rr) + 0.5;
+				vec4 rim = texture(rim_tex, uv);
+				ALBEDO = mix(ALBEDO, rim.rgb, rim.a);
+				break;
+			}
+		}
+	}
 	float redness = (c.r > 0.3 && c.r > c.g * 1.8 && c.r > c.b * 1.8) ? 1.0 : 0.0;
 	// Tail lamps (D-198): a dim running glow at night, full brightness braking
 	// (with a hot core), instead of one flat level.

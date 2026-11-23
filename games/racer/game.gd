@@ -186,24 +186,33 @@ const BLINKERS := {
 	"truck2": [Vector3(-1.4, 0.9, -4.95), Vector3(-1.3, 1.1, 4.95)],
 }
 const DRY_BUS := "SFXDry"   # D-215: effects that stay dry in tunnels
+## Turning wheels (D-250): [rim picture, [Vector3(z, y, rim radius) per
+## axle]], model space, measured from side renders of each model.
+const RIMS := "res://assets/textures/racer/"
+const WHEELS := {
+	"res://assets/models/racer/red_car.glb": [RIMS + "rim_5spoke.png", [Vector3(1.204, 0.334, 0.25), Vector3(-1.189, 0.333, 0.25)]],
+	"res://assets/models/racer/supercar.glb": [RIMS + "rim_9spoke.png", [Vector3(1.247, 0.341, 0.25), Vector3(-1.294, 0.339, 0.255)]],
+	"res://assets/models/racer/hothatch.glb": [RIMS + "rim_9spoke.png", [Vector3(1.202, 0.325, 0.243), Vector3(-1.298, 0.324, 0.243)]],
+	"res://assets/models/racer/hatchback.glb": [RIMS + "rim_5spoke.png", [Vector3(1.186, 0.309, 0.24), Vector3(-1.181, 0.298, 0.24)]],
+	"res://assets/models/racer/police2.glb": [RIMS + "rim_police.png", [Vector3(1.289, 0.359, 0.29), Vector3(-1.375, 0.364, 0.29)]],
+	"res://assets/models/racer/truck.glb": [RIMS + "rim_truck.png", [Vector3(3.78, 0.44, 0.25), Vector3(1.05, 0.44, 0.25),
+		Vector3(-2.54, 0.45, 0.25), Vector3(-3.55, 0.45, 0.25)]],
+	"res://assets/models/racer/truck2.glb": [RIMS + "rim_truck2.png", [Vector3(4.45, 0.45, 0.24), Vector3(1.04, 0.43, 0.22),
+		Vector3(0.23, 0.43, 0.22), Vector3(-3.02, 0.43, 0.22), Vector3(-3.97, 0.43, 0.22)]],
+}
 ## Lamp areas per model for car.gdshader (model space, |x|; D-144). The red
 ## car uses the shader defaults.
 const LAMP_BOXES := {
 	"res://assets/models/racer/supercar.glb": {   # D-210, from its renders
-		"axle_yz": Vector2(0.36, 1.29), "wheel_r": 0.35,   # D-246: measured wheels (spin effect)
 		"tail_min": Vector3(0.45, 0.66, -9.0), "tail_max": Vector3(0.85, 0.9, -1.95),
 		"tail_red_only": true,
 		"head_min": Vector3(0.45, 0.52, 1.9), "head_max": Vector3(0.75, 0.7, 9.0),
 	},
 	# Measured from orthographic renders of the model (D-205).
 	"res://assets/models/racer/hothatch.glb": {
-		"axle_yz": Vector2(0.37, 1.30), "wheel_r": 0.35,   # D-246
 		"tail_min": Vector3(0.55, 0.68, -9.0), "tail_max": Vector3(0.86, 0.92, -1.88),
 		"tail_red_only": true,
 		"head_min": Vector3(0.42, 0.6, 1.8), "head_max": Vector3(0.86, 0.77, 9.0),
-	},
-	"res://assets/models/racer/police2.glb": {   # D-246: its wheels (axles 1.35 / 1.45 m; the shader takes one)
-		"axle_yz": Vector2(0.38, 1.40), "wheel_r": 0.36,
 	},
 	"res://assets/models/racer/hatchback.glb": {
 		"tail_min": Vector3(0.0, 0.35, -9.0), "tail_max": Vector3(0.95, 1.3, -1.6),
@@ -1445,6 +1454,11 @@ func _car_instance(hue: float, model: String = CAR_MODEL, texture: String = CAR_
 		mat.set_shader_parameter("tex_hd", load(HD_TEXTURES.get(texture, texture)))   # D-195
 		mat.set_shader_parameter("hd", _gfx_hd)
 		mat.set_shader_parameter("toon", Toon.enabled)
+		if WHEELS.has(model):   # D-250: each wheel's rim, and the rim picture
+			var wd: Array = WHEELS[model]
+			mat.set_shader_parameter("wheels", PackedVector3Array(wd[1]))
+			mat.set_shader_parameter("wheel_n", (wd[1] as Array).size())
+			mat.set_shader_parameter("rim_tex", load(wd[0]))
 		if LAMP_BOXES.has(model):   # where this model's lamps are (D-144)
 			var lb: Dictionary = LAMP_BOXES[model]
 			for k in lb:
@@ -2408,6 +2422,12 @@ func _animate(delta: float) -> void:
 				InstParam.set_param((m as MeshInstance3D), "hue", t.hue)
 				InstParam.set_param((m as MeshInstance3D), "overhead", _overhead(t.s))
 				InstParam.set_param((m as MeshInstance3D), "lamps", maxf(_night, 1.0 if sim.track.in_tunnel(t.s) else 0.0))
+		# D-250: their wheels turn too (rate capped like the player's).
+		var tph := fposmod(_phase_t * minf(absf(float(t.v)) / 0.4, WHEEL_MAX) + float(t.id) * 1.3, TAU * 100.0)
+		for m in node.find_children("*", "MeshInstance3D", true, false):
+			if (m as MeshInstance3D).material_override != null:
+				InstParam.set_param((m as MeshInstance3D), "spin", 1.0)
+				InstParam.set_param((m as MeshInstance3D), "wheel_phase", tph)
 		(node.get_meta("night") as Node3D).visible = _lamps > 0.0
 		var blink_on: bool = t.get("blink", false) and fmod(_phase_t + t.id * 0.17, 0.7) < 0.35
 		for bl in node.get_meta("blinkers", []):

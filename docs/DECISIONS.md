@@ -2448,3 +2448,16 @@
 - **Rate:** the turning is capped at `WHEEL_MAX` 25 rad/s, about 4 turns a second and under half a spoke per frame at 60 fps. Faster would strobe, so the wheels are always seen turning forwards. This applies to the player's car and the police car (replacing D-248's cap).
 - **Dev:** `--rc-wheeltest` spins the wheels on the car-select turntables, to check them side-on.
 - **Status:** Accepted
+
+### D-250 — Turbo Run: turning rim pictures at each car's measured wheel centres (all cars and trucks)
+- **Date:** 2026-11-23
+- **Bug (director):** the turning wheels did weird things, as if not centred. Use a wheel texture from the side pictures of the cars; the fix is needed for all cars, and trucks.
+- **Cause:** D-249 rotated mesh vertices about one shared axle setting per model. The real wheels sit at different places front and rear (the police car's are 1.29 and 1.38 m from the centre), and the cylinder caught non-wheel geometry, so wheels wobbled off-centre.
+- **Fix:**
+  - **Measured centres:** each model is rendered side-on (`render_car_side.py`), and every wheel's rim centre and radius is measured per axle from the bright rim. The cars were checked against overlays, and the trucks found as separate rim blobs, with the false hits (a fuel tank and two body panels) dropped. They're stored in `WHEELS` as up to 6 wheels per model.
+  - **Rim pictures** (`gen_rims.py`):
+    - from the director's pictures: the yellow car's 9-spoke (supercar, hot hatch), the red car's 5-spoke (sports car, traffic hatchback) and the director's wheel picture (police car);
+    - for each truck, its own rim cropped from its render.
+  - **Shader:** `car.gdshader` draws the rim picture over each wheel's rim circle on the outward-facing sides, turned by `wheel_phase`. The model's own tyre, wheel arch and body stay untouched. The D-249 vertex rotation is removed, along with the old axle uniforms.
+  - **Who turns:** the player's car, the police car (D-246/248 rate) and now every traffic car and truck, each at its own speed (capped by `WHEEL_MAX`).
+- **Status:** Accepted
