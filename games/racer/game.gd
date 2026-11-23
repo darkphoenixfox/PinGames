@@ -492,6 +492,13 @@ var _engine_hi: AudioStreamPlayer
 var _wind: AudioStreamPlayer
 var _passers: Array = []    # AudioStreamPlayers for nearby traffic (D-134)
 var _hud: Control
+## D-254: HUD pieces that move between the portrait and landscape layouts.
+var _hud_top: HBoxContainer
+var _hud_left: VBoxContainer
+var _hud_mid: VBoxContainer
+var _hud_bottom: HBoxContainer
+var _hud_gap: Control
+var _flex_req := false
 var _time_label: Label
 var _score_label: Label
 var _stage_label: Label
@@ -536,6 +543,11 @@ func get_info() -> Dictionary:
 
 
 func start(_players: int) -> void:
+	# D-254: in the single-screen layout the TABLE takes the screen's shape.
+	if not Screens.table_shape_changed.is_connected(_on_table_shape):
+		Screens.table_shape_changed.connect(_on_table_shape)
+	_flex_req = true
+	Screens.set_flexible.call_deferred(true)
 	# Touch buttons (D-219): the magna saves are the brake and the shifter here.
 	get_tree().call_group("touch_controls", "set_labels", {&"magna_l": tr("TOUCH_BRAKE"), &"magna_r": tr("TOUCH_SHIFT")})
 	for s in SOUNDS:
@@ -842,7 +854,7 @@ func _apply_gfx(mode: String) -> void:
 	_set_ui_res.call_deferred()   # D-233
 	var on := mode == "hd"
 	_gfx_hd = on
-	var low := NES_RES if mode == "nes" else PIXEL_RES
+	var low := _low_res(mode)   # D-254: at the TABLE's shape
 	_retro_post.set_shader_parameter("low_res", Vector2(low))
 	_retro_post.set_shader_parameter("nes", mode == "nes")
 	_pix_vp.size = Vector2i(Screens.table.size) if on else low
@@ -1016,6 +1028,7 @@ func _confirm_stage() -> void:
 
 
 func _begin_select() -> void:
+	_set_ui_res.call_deferred()   # D-254: a portrait panel in landscape
 	if is_instance_valid(_attract_ui):
 		_attract_ui.queue_free()
 	_phase = "select"
@@ -1044,6 +1057,7 @@ func _confirm_car() -> void:
 		return
 	_chosen_car = _showroom.selected
 	_showroom.queue_free()
+	_set_ui_res.call_deferred()   # D-254: back to the HUD's layout
 	_showroom = null
 	_world_view.visible = true
 	_begin_race()
@@ -1251,6 +1265,71 @@ func _handle_events() -> void:
 
 
 # --- world ---------------------------------------------------------------------------
+## D-254: the TABLE's shape (base size): 1080x1920 normally, or the screen's
+## own shape in the single-screen layout.
+func _table_base() -> Vector2i:
+	return Screens.table_base()
+
+
+func _landscape() -> bool:
+	var b := _table_base()
+	return b.x > b.y
+
+
+## The 3D view's low resolution for the pixel modes, at the TABLE's shape: the
+## short side 480 (16-BIT) or 270 (8-BIT) pixels, as in portrait.
+func _low_res(mode: String) -> Vector2i:
+	var short := 270.0 if mode == "nes" else 480.0
+	var b := Vector2(_table_base())
+	var k := short / minf(b.x, b.y)
+	return Vector2i(roundi(b.x * k), roundi(b.y * k))
+
+
+## The UI layer's base and where it sits on the TABLE (D-254): portrait = the
+## whole TABLE; landscape = a 1920x1080 area, centred (16:9 at most); car select
+## = a 1080x1920 panel, centred (its art is portrait).
+func _ui_base() -> Vector2i:
+	if _phase == "select" and _landscape():
+		return Vector2i(1080, 1920)
+	if _landscape():
+		return Vector2i(1920, 1080)
+	return _table_base()
+
+
+## D-254: the HUD for the TABLE's shape. Landscape: the clock joins the score on
+## the left (the DMD sits over the top centre), the tacho at the bottom left,
+## gear and speedo at the bottom right, the radar lights out to the sides.
+func _hud_layout() -> void:
+	if _hud_top == null:
+		return
+	var land := _landscape()
+	var in_left := _hud_mid.get_parent() == _hud_left
+	if land and not in_left:
+		_hud_top.remove_child(_hud_mid)
+		_hud_left.add_child(_hud_mid)
+		_hud_left.move_child(_hud_mid, 2)
+	elif not land and in_left:
+		_hud_left.remove_child(_hud_mid)
+		_hud_top.add_child(_hud_mid)
+		_hud_top.move_child(_hud_mid, 1)
+	_hud_mid.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_hud_gap.visible = land
+	# Landscape: the left column hugs the left edge, clear of the DMD.
+	for l in _hud_left.find_children("*", "Label", true, false):
+		(l as Label).horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if land else HORIZONTAL_ALIGNMENT_CENTER
+	if is_instance_valid(_radar_bar):
+		var w := float(_ui_base().x)
+		_radar_bar.size = Vector2(w, _radar_bar.custom_minimum_size.y)
+		_radar_bar.center_gap = 520.0 if land else 0.0
+		_radar_bar.queue_redraw()
+
+
+func _on_table_shape() -> void:
+	_apply_gfx(_gfx_mode)
+	_cam.keep_aspect = Camera3D.KEEP_HEIGHT if _landscape() else Camera3D.KEEP_WIDTH
+	_hud_layout()
+
+
 ## The UI layer (D-233): a transparent viewport laid out in TABLE base
 ## coordinates, shown over the 3D view (and the police wash).
 func _build_ui_layer() -> void:
@@ -1271,7 +1350,7 @@ func _build_ui_layer() -> void:
 	_ui_view = TextureRect.new()
 	_ui_view.texture = _ui_vp.get_texture()
 	_ui_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_ui_view.stretch_mode = TextureRect.STRETCH_SCALE
+	_ui_view.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED   # D-254
 	_ui_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_ui_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_to_table(_ui_view)
@@ -1294,16 +1373,26 @@ func _set_ui_res() -> void:
 	if _ui_vp == null:
 		return
 	var low := _gfx_mode != "hd"
-	var res: Vector2i = Screens.TABLE_BASE
+	var base := _ui_base()   # D-254
+	_ui_vp.size_2d_override = base
+	_ui_root.size = Vector2(base)
+	var res: Vector2i = base
 	if low:
-		res = NES_RES if _gfx_mode == "nes" else PIXEL_RES
+		var short := 270.0 if _gfx_mode == "nes" else 480.0
+		var k := short / float(mini(base.x, base.y))
+		res = Vector2i(roundi(base.x * k), roundi(base.y * k))
+	else:
+		# Full resolution: the TABLE's own pixels for the area the UI covers.
+		var tb := Vector2(_table_base())
+		var px := Vector2(Screens.table.size) / tb
+		res = Vector2i(roundi(base.x * px.x), roundi(base.y * px.y))
 	_ui_vp.size = res
 	_ui_vp.snap_2d_transforms_to_pixel = low
 	_ui_vp.snap_2d_vertices_to_pixel = low
 	_ui_vp.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST if low \
 		else Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR
 	_ui_view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if low else CanvasItem.TEXTURE_FILTER_LINEAR
-	_ui_px = float(res.x) / float(Screens.TABLE_BASE.x)
+	_ui_px = float(res.x) / float(base.x)
 	for n in _ui_root.find_children("*", "Label", true, false):
 		_refont(n as Label)
 
@@ -2572,6 +2661,8 @@ func _build_hud() -> void:
 	left.add_child(_drift_label)
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(left)
+	_hud_top = top
+	_hud_left = left
 	var mid := UI.vstack(0)
 	mid.alignment = BoxContainer.ALIGNMENT_BEGIN
 	mid.add_child(UI.label(tr("RC_TIME"), 36, UI.YELLOW))
@@ -2579,6 +2670,7 @@ func _build_hud() -> void:
 	mid.add_child(_time_label)
 	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(mid)
+	_hud_mid = mid
 	var right := UI.vstack(4)
 	right.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_stage_label = UI.label("", 36, UI.CYAN)
@@ -2622,6 +2714,13 @@ func _build_hud() -> void:
 	rpm_l.custom_minimum_size.x = _tacho.custom_minimum_size.x
 	tbox.add_child(rpm_l)
 	bottom.add_child(tbox)
+	_hud_bottom = bottom
+	# D-254: in landscape a gap pushes the gear and speedo to the right side.
+	_hud_gap = Control.new()
+	_hud_gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_hud_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hud_gap.visible = false
+	bottom.add_child(_hud_gap)
 	# Gear indicator + shift light + nitro timer.
 	var gbox := UI.vstack(6)
 	gbox.alignment = BoxContainer.ALIGNMENT_END
@@ -3147,6 +3246,10 @@ func _radar_beep() -> void:
 
 func _exit_tree() -> void:
 	get_tree().call_group("touch_controls", "set_labels", {})   # D-219
+	if Screens.table_shape_changed.is_connected(_on_table_shape):
+		Screens.table_shape_changed.disconnect(_on_table_shape)
+	if _flex_req:   # only the module that asked (others are made just for get_info)
+		Screens.set_flexible(false)   # D-254: the next game gets the 9:16 TABLE
 	# Take the tunnel reverb off the shared effects bus (D-127).
 	var bus := AudioServer.get_bus_index("SFX")
 	if _reverb != null and bus >= 0:

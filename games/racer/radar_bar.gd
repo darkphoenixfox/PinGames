@@ -13,6 +13,8 @@ const RED := Color(1.0, 0.18, 0.15)
 
 var level := 0.0       # 0..1 radar closeness
 var flash := false     # a beep is sounding
+## D-254: half the clear space in the middle (landscape keeps the DMD's spot free).
+var center_gap := 0.0
 ## HD graphics (D-212): smooth antialiased lamps instead of chunky pixels.
 var smooth := false:
 	set(v):
@@ -39,7 +41,7 @@ func set_state(lvl: float, fl: bool) -> void:
 func _draw() -> void:
 	var c := size * 0.5
 	# D-215: no black block in the middle any more; the balls keep their spacing.
-	var inner := BLOCK.x * 0.5 + R + 14.0
+	var inner := maxf(BLOCK.x * 0.5 + R + 14.0, center_gap + R)
 	var outer := size.x * 0.5 - R - 10.0
 	var lit := ceili(level * BALLS) if level > 0.0 else 0
 	for i in BALLS:

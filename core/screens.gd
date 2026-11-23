@@ -255,6 +255,26 @@ var _single_touch_on := false
 var _single_table: Control
 var _single_dmd: Control
 var _single_bar: Control
+## D-254: a game that can draw at any shape (Turbo Run) asks for a flexible
+## TABLE: in the single layout it then takes the exact shape of its area
+## (landscape: the whole window, the DMD over its top). `table_shape_changed`
+## fires when that shape changes; other games keep the fixed 9:16 TABLE.
+signal table_shape_changed
+var table_flex := false
+
+
+func set_flexible(on: bool) -> void:
+	table_flex = on
+	if current_layout == "single" and is_instance_valid(_single_page):
+		_place_single(Vector2(get_window().size))
+	elif not on:
+		table.size_2d_override = TABLE_BASE
+		table_shape_changed.emit()
+
+
+## The TABLE's base size (its 2D coordinates): TABLE_BASE, or the flexible shape.
+func table_base() -> Vector2i:
+	return table.size_2d_override
 
 
 func _setup_single() -> void:
@@ -339,6 +359,25 @@ func _single_layout() -> void:
 	_place_single(win)
 
 
+## D-254: the flexible TABLE takes its area's shape: base 1080 wide in portrait,
+## 1080 high in landscape; rendered at the area's own pixels (at most 2x base).
+func _shape_table(area: Vector2) -> void:
+	var base := TABLE_BASE
+	if table_flex and area.x > 1.0 and area.y > 1.0:
+		if area.y >= area.x:
+			base = Vector2i(1080, roundi(1080.0 * area.y / area.x))
+		else:
+			base = Vector2i(roundi(1080.0 * area.x / area.y), 1080)
+		table.size = Vector2i(mini(roundi(area.x), base.x * 2), mini(roundi(area.y), base.y * 2))
+	else:
+		table.size = TABLE_BASE
+	if table.size_2d_override != base:
+		table.size_2d_override = base
+		table_shape_changed.emit()
+	if is_instance_valid(_single_table):
+		_single_table.queue_redraw()   # draw the TABLE at its new shape
+
+
 ## Positions the DMD, the TABLE and the touch overlay for the window size.
 func _place_single(win: Vector2) -> void:
 	var d := _single_dmd
@@ -358,8 +397,13 @@ func _place_single(win: Vector2) -> void:
 		var dh := dw / ratio
 		d.position = Vector2((win.x - dw) * 0.5, 0)
 		d.size = Vector2(dw, dh)
-		t.position = Vector2(0, dh)
-		t.size = Vector2(win.x, win.y - dh)
+		if table_flex:   # the game fills the window, the DMD over its top (D-254)
+			t.position = Vector2.ZERO
+			t.size = win
+		else:
+			t.position = Vector2(0, dh)
+			t.size = Vector2(win.x, win.y - dh)
+	_shape_table(t.size)
 	var bar := _single_bar
 	if is_instance_valid(bar) and is_instance_valid(_touch):
 		_touch.fit(win)

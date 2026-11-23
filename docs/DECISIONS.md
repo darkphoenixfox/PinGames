@@ -2509,3 +2509,27 @@
   - **Strength:** `shadow_opacity` follows the light: full by day (`SHADOW_STRENGTH` 0.75), a quarter by moonlight, none in tunnels, and weaker in rain, snow and fog.
 - **Blob shadows:** flat sprite props (trees, palms, bushes, houses, spectators, signs) don't cast real shadows, since billboards would throw shadows that spin with the camera. Each gets a soft dark disc flat on the ground under it instead (`_add_blobs`), sized from its height (0.8–7 m across), one MultiMesh per kind per chunk. Its darkness follows the same light. Distant buttes get none.
 - **Status:** Accepted
+
+### D-254 — Single-screen version, slice 2: Turbo Run fills the screen
+- **Date:** 2026-11-23
+- **Decision (director):** the game area fills the screen.
+  - **Portrait:** the DMD across the top, the game in the rest, no black bars.
+  - **Landscape:** the game fills the monitor, the DMD centred at the top, the HUD (timer, radar...) at the sides.
+  - **32:9:** the game fills the monitor but the UI stays within 16:9.
+- **Flexible TABLE** (`Screens.set_flexible`):
+  - In the single layout, a game that asks (Turbo Run) gets a TABLE in the exact shape of its area. Portrait: base 1080 wide, below the DMD. Landscape: base 1080 high, the whole window, with the DMD over its top centre. It renders at the area's own pixels (at most 2× base).
+  - `table_shape_changed` tells the game. The TABLE's view redraws at the new shape (it only redrew on its own resize).
+  - Only the module that asked releases it (a copy made just for `get_info` used to turn it off).
+  - The shell and Tilt Breaker keep the 9:16 TABLE.
+- **Turbo Run:**
+  - **3D view:** renders at the TABLE's shape. HD is native; 16-BIT and 8-BIT keep 480 and 270 pixels on the short side. In landscape the camera keeps its vertical field of view, so wider screens show more to the sides.
+  - **UI layer** (`_ui_base`), shown centred with its aspect kept:
+    - portrait: the whole TABLE;
+    - landscape: a 1920×1080 area, so at most 16:9 and centred on 21:9 and 32:9;
+    - car select in landscape: a 1080×1920 panel, since its art is portrait.
+  - **Landscape HUD** (`_hud_layout`):
+    - the clock moves under the score, left-aligned on the left;
+    - stage and buttons stay right-aligned on the right;
+    - the tacho goes bottom left, gear and speedo bottom right;
+    - the radar lights spread out to the sides, leaving the DMD's spot (the centre 1,040 px) clear.
+- **Status:** Accepted (slice 2 of 4)
