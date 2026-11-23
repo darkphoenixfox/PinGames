@@ -456,6 +456,10 @@ var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
 var _bg_dark := 0.0     # s of crash flicker left
 var _wheel_phase := 0.0
 var _police_wheel := 0.0       # D-246
+const SHADOW_DISTANCE := 140.0   # m of real shadows ahead of the camera (D-253)
+const SHADOW_STRENGTH := 0.75
+var _blob_mat: StandardMaterial3D   # soft round ground shadows under sprites (D-253)
+var _blob_mesh: QuadMesh
 var _used_gas := false          # D-252: R2 has been pressed this race
 var _pad_brake := false
 const WHEEL_MAX := 25.0   # rad/s the wheels are seen to turn at most (~4 turns a second, D-249)
@@ -1402,6 +1406,14 @@ func _build_world() -> void:
 	_sun.light_color = Color(1.0, 0.85, 0.7)
 	_sun.light_energy = 1.1
 	_sun.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY   # the sky shader draws its own sun
+	# D-253: sun shadows from the 3D models (cars, buildings, lamps, rocks)
+	# over the nearby road; flat sprites get blob shadows instead.
+	_sun.shadow_enabled = true
+	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	_sun.directional_shadow_max_distance = SHADOW_DISTANCE
+	_sun.shadow_blur = 1.5
+	_sun.shadow_bias = 0.08
+	_sun.shadow_normal_bias = 1.5
 	_root.add_child(_sun)
 
 	_cam = Camera3D.new()
@@ -2029,6 +2041,48 @@ func _finish_line(parent: Node3D, s: float) -> void:
 	parent.add_child(mi)
 
 
+## Blob shadows (D-253): a soft dark disc flat on the ground under each sprite
+## prop, sized from the sprite's height, a little towards the side away from
+## the sun's usual direction.
+func _add_blobs(node: Node3D, list: Array, kind: String) -> void:
+	if _blob_mat == null:
+		var n := 64
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		for y in n:
+			for x in n:
+				var d := Vector2(x - n * 0.5 + 0.5, y - n * 0.5 + 0.5).length() / (n * 0.5)
+				var a := clampf(1.0 - d, 0.0, 1.0)
+				img.set_pixel(x, y, Color(1, 1, 1, a * a * (3.0 - 2.0 * a)))
+		_blob_mat = StandardMaterial3D.new()
+		_blob_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_blob_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_blob_mat.albedo_texture = ImageTexture.create_from_image(img)
+		_blob_mat.albedo_color = Color(0, 0, 0, 0.45)
+		_blob_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		_blob_mesh = QuadMesh.new()
+		_blob_mesh.size = Vector2.ONE
+		_blob_mesh.orientation = PlaneMesh.FACE_Y
+		_blob_mesh.material = _blob_mat
+	var h: float = float(Sprites.KINDS[kind][1]) if Sprites.KINDS.has(kind) else 3.0
+	if h > 30.0:
+		return   # distant buttes: no shadow
+	var w := clampf(h * 0.45, 0.8, 7.0)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = _blob_mesh
+	mm.instance_count = list.size()
+	var tr_ := sim.track
+	for i in list.size():
+		var o: Dictionary = list[i]
+		var f := tr_.frame(o.s, o.x, 0.06)
+		f.basis = Basis(Vector3.UP, tr_.heading(o.s)).scaled(Vector3(w, 1.0, w * 0.7))
+		mm.set_instance_transform(i, f)
+	var mi := MultiMeshInstance3D.new()
+	mi.multimesh = mm
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.add_child(mi)
+
+
 ## Round pixel puff (16 px, hard steps) for tyre smoke and dust.
 func _puff_texture() -> Texture2D:
 	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
@@ -2162,6 +2216,10 @@ func _build_chunk(k: int) -> Node3D:
 			mm.set_instance_transform(i, f)
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
+		# D-253: 3D props cast real shadows; flat sprites a blob on the ground.
+		if Sprites.has(kind):
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_add_blobs(node, list, kind)
 		node.add_child(mmi)
 		if kind == "lamp":
 			_add_lamp_lights(node, list)
@@ -3045,6 +3103,11 @@ func _update_night(delta: float) -> void:
 	_sun.basis = Basis.looking_at(-from, Vector3.UP)
 	_sun.light_color = pal.light
 	_sun.light_energy = float(pal.light_e) * dim
+	# Shadows (D-253): full by day, faint by moonlight, none in tunnels.
+	_sun.shadow_opacity = clampf(1.0 - _night * 0.75, 0.0, 1.0) * (1.0 - _tunnel_k) * SHADOW_STRENGTH * \
+		(1.0 - 0.6 * float(_wx.get("rain", 0.0)) - 0.6 * float(_wx.get("snow", 0.0)) - 0.8 * float(_wx.get("fog", 0.0)))
+	if _blob_mat != null:
+		_blob_mat.albedo_color = Color(0, 0, 0, 0.45 * _sun.shadow_opacity / SHADOW_STRENGTH + 0.12)
 
 
 ## Race progress for the time of day: stages played plus how far into this one.

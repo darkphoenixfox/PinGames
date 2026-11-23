@@ -77,7 +77,7 @@ static func build_buildings(parent: Node3D, tr_, list: Array) -> void:
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	mmi.material_override = building_material()
-	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON   # D-253
 	parent.add_child(mmi)
 
 

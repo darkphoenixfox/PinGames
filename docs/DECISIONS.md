@@ -2499,3 +2499,13 @@
 - **Unchanged:** all buttons (L1/R1 flippers, Cross, Circle, Square) stay as mapped (D-019).
 - **Test:** half stick steers less than full stick.
 - **Status:** Accepted (slice 3 of 4)
+
+### D-253 — Turbo Run: shadows for the cars and scenery
+- **Date:** 2026-11-23
+- **Decision (director):** add shadows for the cars and the scenery.
+- **Sun shadows:** the sun (and the moon at night, which is the same light) casts shadows: `shadow_enabled`, 2 PSSM splits over `SHADOW_DISTANCE` 140 m, soft blur, bias tuned against acne on the road.
+  - **Casters:** the 3D models, meaning the player's car, police, traffic, trucks, the city's buildings (`city.gd` now casts), lamps, rocks, gantries and gates.
+  - **Receivers:** the road and ground; the car shader takes shadow through its own `light()` (ATTENUATION).
+  - **Strength:** `shadow_opacity` follows the light: full by day (`SHADOW_STRENGTH` 0.75), a quarter by moonlight, none in tunnels, and weaker in rain, snow and fog.
+- **Blob shadows:** flat sprite props (trees, palms, bushes, houses, spectators, signs) don't cast real shadows, since billboards would throw shadows that spin with the camera. Each gets a soft dark disc flat on the ground under it instead (`_add_blobs`), sized from its height (0.8–7 m across), one MultiMesh per kind per chunk. Its darkness follows the same light. Distant buttes get none.
+- **Status:** Accepted
