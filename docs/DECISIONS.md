@@ -2942,3 +2942,14 @@
   - The tag is a billboarded Label3D and Sprite3D (the triangle is drawn at runtime). Both are fixed-size on screen and pixel-crisp, with the triangle's tip 2.3 m above the road over the car.
   - They're drawn with the depth test, so hills, tunnels, buildings and traffic in the way hide the tag: that gives the line of sight without ray casts.
 - **Status:** Accepted
+
+### D-291 — Turbo Run 2P: a DMD per player, no radar lights, half-size gauges
+- **Date:** 2026-11-23
+- **Decision (director):** in a 2-player race:
+  - **A DMD for each player.** The single screen's shared DMD box is hidden (`Screens.show_single_dmd(false)`; shown again on leaving). Each half shows its own DMD at its top centre, 480 base px wide (half a half: the single screen's DMD is a quarter of 16:9).
+  - Player 1's DMD is the `Dmd` autoload. Player 2's view makes its own instance of `core/dmd/dmd.gd`. Each shows the full 1P content for its player: REV UP, the dash, police chase, radar, and the crash/nitro/shift animations with that player's car sprite.
+  - Custom DMD frames draw from their view's player (`_dmd_custom` makes that car live first). D-289's quiet stand-in and shared two-player frame are gone.
+  - "PLAYER n WINS" shows on both DMDs.
+  - **No radar lights** along the top (the DMD's radar and beeps are enough). The radar bar is hidden with `modulate.a` in 2P; 1P is unchanged.
+  - **The bottom gauges at half size** (`_hud_compact`). `Dial.set_radius` halves the tachometer and speedometer, and their number labels keep their text size, with every other number shown so the smaller arc isn't crowded. The shift lamp scales down, and the gear lever is drawn at half size. The RPM/MPH captions and the digital speed keep their size.
+- **Status:** Accepted

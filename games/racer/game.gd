@@ -386,7 +386,7 @@ var _two := false           # a 2-player game
 var _main := true           # owns the DMD, backglass, music, reverb, shared lamp levels
 var _p2: Node = null        # player 2's view (on player 1's)
 var _host: Control = null   # 2P: this view's half of the TABLE
-var _dmd: Object            # Dmd, or a quiet stand-in in 2P (the DMD shows both players)
+var _dmd: Node              # this view's DMD: Dmd, or player 2's own (2P, D-291)
 var _players_sel := 0       # 0 = 1 player, 1 = 2 players
 var _players_ui: Control
 var _players_rows: Array = []
@@ -399,22 +399,16 @@ var _rival_tag: Node3D = null   # "P1"/"P2" and a down triangle over the other c
 var _time_caption: Label    # TIME, or POSITION in 2P
 
 
-## Stands in for the DMD in 2P views: every call does nothing.
-class QuietDmd extends RefCounted:
-	func show_text(_a = null, _b = null, _c = null, _d = null) -> void:
-		pass
-
-	func show_image(_a = null) -> void:
-		pass
-
-	func show_custom(_a = null) -> void:
-		pass
-
-	func flash(_a = null, _b = null, _c = null) -> void:
-		pass
-
-	func play(_a = null, _b = null) -> void:
-		pass
+## A custom DMD frame: in 2P drawn from this view's player (the DMD draws
+## between frames, when either player's car may be the live one).
+func _dmd_custom(fn: Callable) -> void:
+	if not _two:
+		_dmd.show_custom(fn)
+		return
+	_dmd.show_custom(func(p) -> void:
+		if sim != null:
+			sim._use(_role)
+		fn.call(p))
 
 
 func _music(path: String) -> void:
@@ -1207,7 +1201,7 @@ func _begin_select() -> void:
 	_select_hint.offset_top = -90
 	_select_hint.offset_bottom = -40
 	_showroom.add_child(_select_hint)
-	_dmd.show_custom(_draw_dmd_select)
+	_dmd_custom(_draw_dmd_select)
 
 
 func _confirm_car() -> void:
@@ -1282,10 +1276,8 @@ func _begin_race() -> void:
 	_show_mode()
 	_center_message("3", 1.0)
 	Audio.sfx("rc_count")
-	_dmd.show_custom(_draw_dmd_revup)   # REV UP! with a live tacho (D-154)
+	_dmd_custom(_draw_dmd_revup)   # REV UP! with a live tacho (D-154)
 	_last_tick = -1
-	if _two:
-		Dmd.show_custom(_draw_dmd_two)
 
 
 ## The hero car in the chosen car's colour (D-122; 2P: each player's, D-289).
@@ -1315,8 +1307,7 @@ func _finale(delta: float) -> void:
 			var won: bool = sim.winner == _role
 			_finale_ui.add_child(UI.styled_label(tr("RC_WINNER") if won else tr("RC_SECOND"), TITLE_FONT, 3))
 			_finale_ui.add_child(UI.styled_label(tr("RC_PLAYER_N") % (_role + 1), TITLE_FONT, 2))
-			if _main:
-				Dmd.show_text(tr("RC_P_WINS") % (maxi(sim.winner, 0) + 1), "", Dmd.YELLOW, Dmd.WHITE)
+			_dmd.show_text(tr("RC_P_WINS") % (maxi(sim.winner, 0) + 1), "", Dmd.YELLOW, Dmd.WHITE)
 		else:
 			_finale_ui.add_child(UI.styled_label(tr("RC_FINISH") if sim.finished else tr("DMD_GAME_OVER"), TITLE_FONT, 3))
 		_finale_ui.add_child(UI.spacer(30))
@@ -1385,7 +1376,6 @@ func _confirm_players() -> void:
 ## Splits the TABLE in two halves (once): this view moves into the left one,
 ## player 2's view is built in the right one, both following the shared race.
 func _go_split() -> void:
-	_dmd = QuietDmd.new()
 	if _host == null:
 		var split := Control.new()
 		split.name = "SplitScreen"
@@ -1421,6 +1411,9 @@ func _go_split() -> void:
 			if is_instance_valid(n) and n != split and n.get_parent() == Screens.table:
 				n.reparent(_host, false)
 		_on_table_shape()
+		Screens.show_single_dmd(false)   # D-291: a DMD in each half instead
+		_build_dmd_panel(Dmd)
+		_hud_compact()
 		_p2 = get_script().new()
 		_p2._role = 1
 		_p2._two = true
@@ -1437,7 +1430,10 @@ func _go_split() -> void:
 ## Player 2's view (D-289): built like the module's own, then straight into
 ## the race that player 1's view has just set up.
 func _start_p2(p1: Node) -> void:
-	_dmd = QuietDmd.new()
+	if _dmd == null:   # D-291: player 2's own DMD, shown at the top of their half
+		_dmd = load("res://core/dmd/dmd.gd").new()
+		_dmd.name = "Player2Dmd"
+		add_child(_dmd)
 	sim = p1.sim
 	_chosen_car = p1._p2_car
 	_hues = p1._hues.duplicate()
@@ -1451,6 +1447,8 @@ func _start_p2(p1: Node) -> void:
 		_build_hud()
 		_build_audio_loops()
 		_on_table_shape.call_deferred()
+		_build_dmd_panel(_dmd)
+		_hud_compact()
 	_build_body(CAR_MODELS[_chosen_car])
 	_phase = "race"
 	_phase_t = 0.0
@@ -1470,6 +1468,73 @@ func _start_p2(p1: Node) -> void:
 	_center_message("3", 1.0)
 	_last_tick = -1
 	_build_rival(p1._chosen_car, _hues[0])
+	if _anims.police_sprite == null:   # its DMD's pictures, as player 1's (D-243, D-245)
+		_anims.police_sprite = _dmd_image("res://assets/textures/racer/dmd_car_police.png")
+	_anims.player_sprite = _painted(_dmd_sprite(CAR_MODELS[_chosen_car]), _hues[1])
+	_dmd_custom(_draw_dmd_revup)
+
+
+## D-291 (director): 2P halves get the bottom gauges at half size; their
+## numbers, RPM/MPH captions and the digital speed keep their text size.
+const COMPACT := 0.5
+
+
+func _hud_compact() -> void:
+	var r := DIAL_R * COMPACT
+	for d in [_tacho, _speedo]:
+		d.set_radius(r)
+		var k := 0
+		for c in d.get_children():   # every other number, so the smaller arc isn't crowded
+			if c.has_meta("dial_f"):
+				(c as Control).modulate.a = 1.0 if k % 2 == 0 else 0.0
+				k += 1
+		for c in d.get_parent().get_children():   # the RPM / MPH captions under each dial
+			if c is Label:
+				(c as Label).custom_minimum_size.x = d.custom_minimum_size.x
+	_tacho.lamp_at = (_tacho.hub() + _tacho.label_pos(4.0 / 8.0) + _tacho.label_pos(6.0 / 8.0)) / 3.0
+	_speed_label.position = _speedo.hub() + Vector2(-80, 6)
+	_nitro_pop.position = _speedo.hub() + Vector2(-160, -r - 70.0)
+	var full := _gear_lever.custom_minimum_size
+	_gear_lever.scale = Vector2.ONE * COMPACT
+	_gear_lever.custom_minimum_size = full * COMPACT
+	_gear_lever.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	(_gear_lever.get_parent() as Control).custom_minimum_size.x = 140
+
+
+## D-291: a view's DMD at the top centre of its half, as the single screen
+## shows the DMD (a quarter of a 16:9 screen's width: half of a half).
+const DMD_PANEL_W := 480.0
+
+
+func _build_dmd_panel(d: Node) -> void:
+	var w := DMD_PANEL_W
+	var h := w * float(d.size.y) / float(d.size.x)
+	var frame := ColorRect.new()
+	frame.color = Color.BLACK
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var view := TextureRect.new()
+	view.texture = d.texture()
+	view.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	view.stretch_mode = TextureRect.STRETCH_SCALE
+	view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	mat.shader = Screens.DMD_SHADER
+	mat.set_shader_parameter("dots", Vector2(d.size))
+	mat.set_shader_parameter("tint", d.color)
+	mat.set_shader_parameter("mono", d.mono)
+	view.material = mat
+	frame.add_child(view)
+	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_to_table(frame)
+	frame.anchor_left = 0.5
+	frame.anchor_right = 0.5
+	frame.anchor_top = 0.0
+	frame.anchor_bottom = 0.0
+	frame.offset_left = -w * 0.5
+	frame.offset_right = w * 0.5
+	frame.offset_top = 0.0
+	frame.offset_bottom = h
 
 
 ## The other player's car (D-289): the model and colour they chose.
@@ -1578,29 +1643,6 @@ func _animate_rival(delta: float, cam_yaw: float) -> void:
 	(_rival.get_meta("night") as Node3D).visible = _lamps > 0.0
 
 
-## The DMD in a 2-player race (D-289): each player's stage and speed, and a
-## strip with both cars along the whole race (P1 yellow, P2 cyan).
-func _draw_dmd_two(p) -> void:
-	if sim == null or not sim.two_player:
-		return
-	var cols := [Dmd.YELLOW, Dmd.CYAN]
-	for i in 2:
-		var x0 := 2 + i * 64
-		var tag := tr("RC_DMD_P") % (i + 1)
-		p.text(tag, x0, 2, 1, cols[i])
-		var spd := str(roundi(float(sim.player_get(i, "v")) * Sim.MPH))
-		p.text(spd, x0 + 60 - p.text_width(spd), 2, 1, Dmd.WHITE)
-		var st: String = tr("RC_FINISH") if sim.player_get(i, "finished") else tr("RC_STAGE") % (int(sim.player_get(i, "checkpoints")) + 1)
-		p.text(st, x0, 12, 1, Dmd.DIM)
-	var total := float(Sim.FINISH_STAGE) * Sim.CHECKPOINT_EVERY
-	p.line(2, 27, 125, 27, Color(0.2, 0.22, 0.26))
-	for k in range(1, Sim.FINISH_STAGE):
-		var gx := 2.0 + 123.0 * k / Sim.FINISH_STAGE
-		p.line(gx, 26, gx, 28, Color(0.3, 0.32, 0.36))
-	for i in 2:
-		var fx := 2.0 + 123.0 * clampf(float(sim.player_get(i, "s")) / total, 0.0, 1.0)
-		p.block(roundi(fx) - 1, 24 + i * 4 - 1, 3, 3, cols[i])
-
 
 # --- events --------------------------------------------------------------------------
 func _handle_events() -> void:
@@ -1614,12 +1656,11 @@ func _handle_events() -> void:
 			"winner":
 				if int(e[1]) != _role:
 					_center_message(tr("RC_P_WINS") % (int(e[1]) + 1), 3.0)
-				if _main:
-					Dmd.flash(tr("RC_P_WINS") % (int(e[1]) + 1), 3.0, Dmd.YELLOW)
+				_dmd.flash(tr("RC_P_WINS") % (int(e[1]) + 1), 3.0, Dmd.YELLOW)
 			"count":
 				_center_message(str(e[1]), 1.0)
 				Audio.sfx("rc_count")
-				_dmd.show_custom(_draw_dmd_revup)
+				_dmd_custom(_draw_dmd_revup)
 			"go":
 				if Config.cli.has("rc-police") and sim.police.is_empty():   # dev: a chase straight away (D-246)
 					sim.call_police()
@@ -2563,6 +2604,7 @@ func _update_radar(delta: float) -> void:
 			_radar_led = minf(0.07, _radar_beep_t * 0.5)
 			_radar_beep()
 	if is_instance_valid(_radar_bar):
+		_radar_bar.modulate.a = 0.0 if _two else 1.0   # D-291: 2P: the DMD's radar is enough
 		_radar_bar.smooth = _gfx_hd   # D-212
 		_radar_bar.set_state(sim.radar if sim.state == Sim.State.RACE else 0.0, _radar_led > 0.0)
 
@@ -3441,7 +3483,7 @@ func _update_hud(delta: float) -> void:
 	_dmd_t -= delta
 	if _dmd_t <= 0.0 and sim.state != Sim.State.COUNTDOWN:
 		_dmd_t = 0.12
-		_dmd.show_custom(_draw_dmd_dash)
+		_dmd_custom(_draw_dmd_dash)
 	if not _two:
 		score_changed.emit(0, sim.score)
 
@@ -3780,6 +3822,7 @@ func _radar_beep() -> void:
 func _exit_tree() -> void:
 	if _two and _main:
 		CabinetInput.set_two_player(false)   # D-289: player 2's keys go back to 1P
+		Screens.show_single_dmd(true)        # D-291
 	get_tree().call_group("touch_controls", "set_labels", {})   # D-219
 	if Screens.table_shape_changed.is_connected(_on_table_shape):
 		Screens.table_shape_changed.disconnect(_on_table_shape)

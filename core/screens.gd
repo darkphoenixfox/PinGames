@@ -306,6 +306,12 @@ func set_play_half_width(k: float) -> void:
 		_place_single(Vector2(get_window().size))
 
 
+## D-291: hides the single screen's DMD box (a 2-player game shows its own).
+func show_single_dmd(on: bool) -> void:
+	if is_instance_valid(_single_dmd):
+		_single_dmd.visible = on
+
+
 func want_dmd_above(on: bool) -> void:
 	dmd_above = on
 	if current_layout == "single" and is_instance_valid(_single_page):

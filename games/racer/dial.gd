@@ -41,7 +41,7 @@ var lamp_on := false:
 		if v != lamp_on:
 			lamp_on = v
 			queue_redraw()
-const LAMP_R := 18.0
+const LAMP_RADIUS := 18.0
 var _hub := Vector2.ZERO
 
 
@@ -60,7 +60,20 @@ func setup(r: float, segs: int, label_list: Array, red: float = 2.0, colour: Col
 		var a := _angle(float(l[0]))
 		var p := _hub + Vector2(cos(a), sin(a)) * (r * 0.64)
 		lab.position = p - Vector2(40, 12)
+		lab.set_meta("dial_f", float(l[0]))
 		add_child(lab)
+
+
+## D-291: a smaller (or bigger) dial; its number labels keep their text size.
+func set_radius(r: float) -> void:
+	radius = r
+	_hub = Vector2(r + 6.0, r + 6.0)
+	custom_minimum_size = Vector2(r * 2.0 + 12.0, r + 6.0 + r * sin(PI - SWEEP_FROM) + 30.0)
+	size = custom_minimum_size
+	for c in get_children():
+		if c.has_meta("dial_f"):
+			(c as Control).position = label_pos(float(c.get_meta("dial_f"))) - Vector2(40, 12)
+	queue_redraw()
 
 
 func hub() -> Vector2:
@@ -117,15 +130,16 @@ func _draw() -> void:
 	# Shift lamp (D-197): a chrome ring, dark red glass when off; burning red
 	# with a glow when on.
 	if lamp_at != Vector2.INF:
-		draw_circle(lamp_at, LAMP_R + 3.0, Color(0.55, 0.57, 0.62), true, -1.0, false)
-		draw_circle(lamp_at, LAMP_R, Color(0.08, 0.02, 0.03), true, -1.0, false)
+		var lamp_r := LAMP_RADIUS * clampf(radius / 150.0, 0.6, 1.0)   # (smaller dials, D-291)
+		draw_circle(lamp_at, lamp_r + 3.0, Color(0.55, 0.57, 0.62), true, -1.0, false)
+		draw_circle(lamp_at, lamp_r, Color(0.08, 0.02, 0.03), true, -1.0, false)
 		if lamp_on:
-			draw_circle(lamp_at, LAMP_R * 1.9, Color(1.0, 0.15, 0.1, 0.25), true, -1.0, false)
-			draw_circle(lamp_at, LAMP_R, Color("ff2a2a"), true, -1.0, false)
-			draw_circle(lamp_at + Vector2(-5, -5), LAMP_R * 0.45, Color(1.0, 0.75, 0.7), true, -1.0, false)
+			draw_circle(lamp_at, lamp_r * 1.9, Color(1.0, 0.15, 0.1, 0.25), true, -1.0, false)
+			draw_circle(lamp_at, lamp_r, Color("ff2a2a"), true, -1.0, false)
+			draw_circle(lamp_at + Vector2(-5, -5), lamp_r * 0.45, Color(1.0, 0.75, 0.7), true, -1.0, false)
 		else:
-			draw_circle(lamp_at, LAMP_R - 2.0, Color(0.32, 0.05, 0.06), true, -1.0, false)
-			draw_circle(lamp_at + Vector2(-5, -5), LAMP_R * 0.3, Color(0.6, 0.3, 0.32), true, -1.0, false)
+			draw_circle(lamp_at, lamp_r - 2.0, Color(0.32, 0.05, 0.06), true, -1.0, false)
+			draw_circle(lamp_at + Vector2(-5, -5), lamp_r * 0.3, Color(0.6, 0.3, 0.32), true, -1.0, false)
 	# Needle: a tapered blade from the hub, plus the ring hub.
 	var a := _angle(value)
 	var dir := Vector2(cos(a), sin(a))
