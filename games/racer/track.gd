@@ -27,12 +27,23 @@ const MAX_TURN := deg_to_rad(110.0)      # per curve section
 const MAX_HEADING := deg_to_rad(80.0)    # overall, from the start direction
 ## Roadside objects: [kind, collision radius]. Kinds are drawn by the view.
 const OBJ_RADIUS := {"palm": 0.6, "rock": 1.5, "chevron": 0.5, "lamp": 0.35, "gate": 0.0,
-	"bush": 0.0, "sign": 2.5, "gantry": 0.0, "speedtrap": 0.4, "house": 0.0, "lifeguard": 0.0}
+	"bush": 0.0, "sign": 2.5, "gantry": 0.0, "speedtrap": 0.4, "house": 0.0, "lifeguard": 0.0,
+	"building": 0.0, "tlight": 0.4, "cactus": 0.5, "mesa": 0.0}
+## Areas (D-216): stage 1 is the beach, stage 2 the fields, then each area lasts
+## two stages: city, desert, forest, snowy mountain, and round again. The look
+## cross-fades into the next area over the last AREA_BLEND m of a stage.
+const AREA_CYCLE := ["city", "desert", "forest", "snow"]
+const AREA_BLEND := 200.0
+## City (D-216): buildings stand behind a sidewalk; the car is held off it by
+## a barrier at CITY_WALL (it scrapes along, like a tunnel wall). Junctions
+## cross the road every so often.
+const CITY_WALL := ROAD_HALF + RUMBLE + 2.6
+const SIDEWALK := 5.0                          # m from the kerb to the building line
+const JUNCTION_HALF := 7.0                     # half width of a cross street
+const JUNCTION_GAP := Vector2(260.0, 420.0)
 ## Beach stage (D-204): sand and sea on the left (with waves), a flat-ish road,
-## small buildings on the right, palms. Blends in and out over BEACH_BLEND m at
+## small buildings on the right, palms. Blends out over AREA_BLEND m at
 ## the stage's ends.
-const BEACH_STAGES := [1]   # the race starts on the beach (director, D-204)
-const BEACH_BLEND := 200.0
 const SHORE := ROAD_HALF + RUMBLE + 22.0   # m left of the centre line where the sea starts
 const SEA_LEVEL := -1.6                    # m below the road   # bushes are scenery: off-road stays as it was
 ## Roadside dressing (D-107): bushes line the road densely, green direction
@@ -59,6 +70,10 @@ var _next_sign_s := 300.0
 var _next_trap_s := -1.0
 var _next_gantry_s := 700.0
 var _next_bush_s := 20.0
+## City junctions (D-216): s of each cross street's centre line, in order.
+var junctions: Array = []
+var _next_junction_s := -1.0
+var _next_bld := [0.0, 0.0]   # next free s for a building, left and right
 
 
 func setup(seed_in: int = 1) -> void:
@@ -75,6 +90,9 @@ func setup(seed_in: int = 1) -> void:
 	_next_trap_s = -1.0
 	_next_gantry_s = 700.0
 	_next_bush_s = 20.0
+	junctions.clear()
+	_next_junction_s = -1.0
+	_next_bld = [0.0, 0.0]
 	_add_section(START_STRAIGHT, 0.0, 0.0)
 
 
@@ -121,8 +139,16 @@ func _random_section() -> void:
 			len = maxf(60.0, (MAX_HEADING - absf(y)) / (absf(c) * 0.7))
 	var dh := 0.0
 	var hill := _rng.randf()
-	if beach_w(_built_to) > 0.0 or beach_w(_built_to + len) > 0.0:
-		dh = _rng.randf_range(-1.0, 1.0) * len * 0.015   # flat-ish along the beach (D-204)
+	var here := area_at(_built_to)
+	var there := area_at(_built_to + len)
+	if beach_w(_built_to) > 0.0 or beach_w(_built_to + len) > 0.0 or here == "city" or there == "city":
+		dh = _rng.randf_range(-1.0, 1.0) * len * 0.015   # flat-ish on the beach and in town (D-204, D-216)
+	elif here == "desert":
+		dh = _rng.randf_range(-1.0, 1.0) * len * 0.05    # long gentle rises (D-216)
+	elif here == "snow" and hill < 0.45 and _built_to > START_STRAIGHT + 300.0:
+		# Mountain road (D-216): climbs and drops more often.
+		len = minf(len, 300.0)
+		dh = (1.0 if _rng.randf() < 0.5 else -1.0) * len * _rng.randf_range(0.1, STEEP_GRADE)
 	elif hill < STEEP_CHANCE and _built_to > START_STRAIGHT + 300.0:
 		# Steep climb or drop (D-143): up to STEEP_GRADE average over a
 		# shorter section, so it reads as a proper hill.
@@ -153,7 +179,8 @@ func _add_section(len: float, c: float, dh: float) -> void:
 		curv.append(ck)
 	var s0 := _built_to
 	_built_to = (pos.size() - 1) * SAMPLE
-	if absf(dh) <= (_built_to - s0) * TUNNEL_MAX_GRADE and beach_w(s0) <= 0.0 and beach_w(_built_to) <= 0.0:
+	if absf(dh) <= (_built_to - s0) * TUNNEL_MAX_GRADE and beach_w(s0) <= 0.0 and beach_w(_built_to) <= 0.0 \
+			and area_w(s0, "city") <= 0.0 and area_w(_built_to, "city") <= 0.0:
 		_maybe_tunnel(s0, _built_to, c)
 	_place_objects(s0, _built_to)
 
@@ -178,13 +205,26 @@ func _place_props(s1: float) -> void:
 			# Chevrons on the outside of the curve, pointing the way it turns.
 			var side := 1.0 if c > 0.0 else -1.0   # left turn -> outside is +x
 			_add_obj(s, side * (ROAD_HALF + 3.0), "chevron", -side)
-			if _rng.randf() < 0.5:
+			if _rng.randf() < 0.5 and area_at(s) != "city":   # no trees among the buildings (D-216)
 				_add_obj(s + 6.0, -side * (ROAD_HALF + _rng.randf_range(5.0, 14.0)), "palm")
 			_next_obj_s += 18.0
 			continue
 		if beach_w(s) > 0.5:
 			_place_beach(s)
 			_next_obj_s += _rng.randf_range(22.0, 34.0)
+			continue
+		var ar := area_at(s)
+		if ar == "city":
+			_place_city(s)
+			_next_obj_s += 30.0
+			continue
+		if ar == "desert":
+			_place_desert(s)
+			_next_obj_s += _rng.randf_range(20.0, 32.0)
+			continue
+		if ar == "forest" or ar == "snow":
+			_place_woods(s, ar == "snow")
+			_next_obj_s += _rng.randf_range(9.0, 15.0)
 			continue
 		for side in [-1.0, 1.0]:
 			var r := _rng.randf()
@@ -215,14 +255,88 @@ func _place_beach(s: float) -> void:
 		_add_obj(s, ROAD_HALF + 2.5, "lamp")
 
 
+## City (D-216): street lamps on the sidewalk, buildings in a row on each side
+## (gaps at junctions), traffic lights at each junction.
+func _place_city(s: float) -> void:
+	for side in [-1.0, 1.0]:
+		_add_obj(s + (0.0 if side < 0.0 else 15.0), side * (ROAD_HALF + RUMBLE + 1.4), "lamp")
+	if _next_junction_s < 0.0:
+		_next_junction_s = s + 120.0
+	while _next_junction_s < s + 30.0:
+		var js := _next_junction_s
+		if absf(curvature(js)) < 1.0 / 300.0 and area_at(js) == "city" and not in_tunnel(js):
+			junctions.append(js)
+			for side in [-1.0, 1.0]:
+				_add_obj(js - side * (JUNCTION_HALF + 2.0), side * (ROAD_HALF + RUMBLE + 1.0), "tlight", side)
+			_next_junction_s += _rng.randf_range(JUNCTION_GAP.x, JUNCTION_GAP.y)
+		else:
+			_next_junction_s += 40.0
+	for si in 2:
+		var side := -1.0 if si == 0 else 1.0
+		while float(_next_bld[si]) < s + 30.0:
+			var b0: float = maxf(float(_next_bld[si]), s - 30.0)
+			var w := _rng.randf_range(12.0, 26.0)
+			var j := near_junction(b0 + w * 0.5, w * 0.5 + JUNCTION_HALF + 1.0)
+			if j >= 0.0:
+				_next_bld[si] = maxf(b0 + 1.0, j + JUNCTION_HALF + 1.0)   # leave the cross street open
+				continue
+			var o := {"s": b0 + w * 0.5, "x": side * (ROAD_HALF + RUMBLE + SIDEWALK), "kind": "building",
+				"r": 0.0, "dir": side, "w": w, "d": _rng.randf_range(14.0, 24.0),
+				"h": _rng.randf_range(16.0, 70.0) * (1.6 if _rng.randf() < 0.15 else 1.0),
+				"style": _rng.randi() % 6}
+			if not in_tunnel(o.s):
+				objects.append(o)
+			_next_bld[si] = b0 + w + _rng.randf_range(0.5, 2.5)
+
+
+## The junction within `reach` m of s, or -1.
+func near_junction(s: float, reach: float) -> float:
+	for j in junctions:
+		if absf(float(j) - s) <= reach:
+			return j
+	return -1.0
+
+
+## Desert (D-216): cacti and dry shrubs, rocks, and big buttes far off.
+func _place_desert(s: float) -> void:
+	for side in [-1.0, 1.0]:
+		var r := _rng.randf()
+		var off := ROAD_HALF + _rng.randf_range(4.0, 20.0)
+		if r < 0.45:
+			_add_obj(s + _rng.randf_range(0.0, 8.0), side * off, "cactus")
+		elif r < 0.6:
+			_add_obj(s + _rng.randf_range(0.0, 8.0), side * (off + 2.0), "rock")
+	if _rng.randf() < 0.22:
+		var side := -1.0 if _rng.randf() < 0.5 else 1.0
+		_add_obj(s, side * _rng.randf_range(70.0, 130.0), "mesa")
+
+
+## Forest and snowy mountain (D-216): trees close and thick on both sides
+## (pines; snow-laden spruces up the mountain), rocks now and then.
+func _place_woods(s: float, snow: bool) -> void:
+	for side in [-1.0, 1.0]:
+		var r := _rng.randf()
+		var off := ROAD_HALF + RUMBLE + _rng.randf_range(3.0, 22.0)
+		if r < (0.6 if snow else 0.75):
+			_add_obj(s + _rng.randf_range(0.0, 6.0), side * off, "palm")
+		elif r < 0.85:
+			_add_obj(s + _rng.randf_range(0.0, 6.0), side * (off + 1.0), "rock")
+
+
 ## Bushes, signs and gantries (D-107); _place_objects re-sorts afterwards.
 func _place_dressing(s1: float) -> void:
 	while _next_bush_s < s1:
 		var s := _next_bush_s
 		var bw := beach_w(s)
+		var ar := area_at(s)
 		for side in [-1.0, 1.0]:
 			# On the beach (D-204): no bushes on the sand, fewer on the right.
+			# None in town; sparse in the desert and on the snow (D-216).
 			var chance := 0.7 * (1.0 - bw) if side < 0.0 else 0.7 * (1.0 - bw * 0.6)
+			if ar == "city":
+				chance = 0.0
+			elif ar == "desert" or ar == "snow":
+				chance *= 0.35
 			if _rng.randf() < chance:
 				_add_obj(s + _rng.randf_range(0.0, 6.0),
 					side * (ROAD_HALF + RUMBLE + _rng.randf_range(2.2, 6.5)), "bush")
@@ -362,34 +476,94 @@ func point(s: float, x: float, up: float = 0.0) -> Vector3:
 
 ## 0..1: how much of the beach stage's look applies at s (D-204).
 func beach_w(s: float) -> float:
+	return area_w(s, "beach")
+
+
+## The area of stage k (1-based), D-216.
+static func stage_area(k: int) -> String:
+	if k <= 1:
+		return "beach"
+	if k == 2:
+		return "fields"
+	return AREA_CYCLE[((k - 3) / 2) % AREA_CYCLE.size()]
+
+
+## The stage (1-based) at distance s.
+func stage_at(s: float) -> int:
+	return 1 if avoid_every <= 0.0 else int(floor(maxf(s, 0.0) / avoid_every)) + 1
+
+
+## The area whose look dominates at s.
+func area_at(s: float) -> String:
+	var a := areas(s)
+	var best := ""
+	var bw := -1.0
+	for k in a:
+		if float(a[k]) > bw:
+			bw = a[k]
+			best = k
+	return best
+
+
+## Area weights at s (they sum to 1): the stage's own area, cross-fading into
+## the next stage's over the last AREA_BLEND m when it differs (D-216).
+func areas(s: float) -> Dictionary:
 	if avoid_every <= 0.0:
-		return 0.0
-	var w := 0.0
-	for st in BEACH_STAGES:
-		var a: float = (st - 1) * avoid_every
-		var b: float = st * avoid_every
-		# The first stage starts fully on the beach (no blend in from s = 0).
-		var into := 1.0 if a <= 0.0 else clampf((s - a) / BEACH_BLEND, 0.0, 1.0)
-		var k := into * clampf((b - s) / BEACH_BLEND, 0.0, 1.0)
-		w = maxf(w, k * k * (3.0 - 2.0 * k))
-	return w
+		return {"fields": 1.0}
+	var k := stage_at(s)
+	var cur := stage_area(k)
+	var nxt := stage_area(k + 1)
+	if nxt == cur:
+		return {cur: 1.0}
+	var t := clampf((s - (k * avoid_every - AREA_BLEND)) / AREA_BLEND, 0.0, 1.0)
+	t = t * t * (3.0 - 2.0 * t)
+	if t <= 0.0:
+		return {cur: 1.0}
+	return {cur: 1.0 - t, nxt: t}
+
+
+func area_w(s: float, name: String) -> float:
+	return float(areas(s).get(name, 0.0))
+
+
+## Where the car is held at the side of the road at s (D-216): the sidewalk
+## barrier in town, else 0 (Sim's open-country wall).
+func side_wall(s: float) -> float:
+	return CITY_WALL if area_w(s, "city") > 0.5 else 0.0
 
 
 ## Ground height beside the road at s: the embankments, or on the beach the sand
 ## dipping to the sea on the left and a gentle rise on the right (D-204).
+## D-216: each area has its own profile, blended by the area weights: flat in
+## town, low dunes in the desert, steep mountainsides on the snow.
 func ground_rise(s: float, x: float) -> float:
 	var base := terrain_rise(x)
-	var w := beach_w(s)
-	if w <= 0.0:
+	var a := areas(s)
+	if a.size() == 1 and a.has("fields"):
 		return base
-	var beach := 0.0
+	var h := 0.0
+	for name in a:
+		h += _area_rise(name, s, x, base) * float(a[name])
+	return h
+
+
+func _area_rise(name: String, s: float, x: float, base: float) -> float:
 	var d := absf(x) - (ROAD_HALF + RUMBLE)
-	if x < 0.0:
-		if d > 0.0:
-			beach = SEA_LEVEL * clampf(d / (SHORE - ROAD_HALF - RUMBLE), 0.0, 1.0)
-	else:
-		beach = base * 0.25
-	return lerpf(base, beach, w)
+	match name:
+		"beach":
+			if x < 0.0:
+				return SEA_LEVEL * clampf(d / (SHORE - ROAD_HALF - RUMBLE), 0.0, 1.0) if d > 0.0 else 0.0
+			return base * 0.25
+		"city":
+			return 0.0
+		"desert":
+			var dunes := 1.6 * sin(x * 0.09 + s * 0.013) * sin(s * 0.0045 + x * 0.02)
+			return base * 0.5 + dunes * clampf((d - 3.0) / 12.0, 0.0, 1.0)
+		"forest":
+			return base * 1.3
+		"snow":
+			return base * 3.2
+	return base
 
 
 ## Ground rises gently away from the road (embankments), 0 on the road.

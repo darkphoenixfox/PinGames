@@ -17,6 +17,7 @@ const InstParam = preload("res://core/util/inst_param.gd")
 const Sim = preload("res://games/racer/sim.gd")
 const Track = preload("res://games/racer/track.gd")
 const Scenery = preload("res://games/racer/scenery.gd")
+const City = preload("res://games/racer/city.gd")   # D-216
 const Toon = preload("res://games/racer/toon.gd")
 const Sprites = preload("res://games/racer/sprites.gd")
 const Night = preload("res://games/racer/night.gd")
@@ -380,6 +381,12 @@ var _anim_mult := 2.0
 var _retro_post: ShaderMaterial  # the 16-bit palette/dither pass, kept for switching back
 var _hd_flipped := {}            # materials HD switched from nearest to smooth filtering
 var _gfx_ui: Control
+## Start stage (D-216, for testing): picked on its own screen after GRAPHICS.
+var _start_stage := 1
+var _stage_ui: Control
+var _stage_num: Label
+var _stage_area: Label
+var _stage_hint: Label
 var _gfx_rows: Array = []
 var _gfx_index := 0
 var _gfx_hint: Label
@@ -530,6 +537,15 @@ func on_action(action: StringName, pressed: bool) -> void:
 		if action == &"start" or action == &"launch":
 			_begin_gfx()
 		return
+	if _phase == "stage":
+		match action:
+			&"flip_l", &"magna_l":
+				_move_stage(-1)
+			&"flip_r", &"magna_r":
+				_move_stage(1)
+			&"launch", &"start":
+				_confirm_stage()
+		return
 	if _phase == "gfx":
 		match action:
 			&"flip_l", &"magna_l":
@@ -575,6 +591,12 @@ func _process(delta: float) -> void:
 		sim.time_left = 99.0
 		sim.step(dt, false, false)
 		_attract_tick()
+	elif _phase == "stage":
+		sim.time_left = 99.0
+		sim.step(dt, false, false)
+		_stage_hint.text = tr("RC_GFX_HINT") % maxi(ceili(SELECT_TIME - _phase_t), 0)
+		if _phase_t >= SELECT_TIME:
+			_confirm_stage()
 	elif _phase == "gfx":
 		sim.time_left = 99.0
 		sim.step(dt, false, false)   # the attract demo keeps driving behind the menu
@@ -614,8 +636,10 @@ func _new_sim() -> void:
 	sim.time_left = sim.start_time()   # the car sets the clock (D-183)
 	sim.manual = _manual_locked or _seen_magna   # once detected, the next races keep it (D-189)
 	sim.autopilot = Config.cli.has("rc-autopilot")
+	var n := _start_stage
 	if Config.cli.has("rc-stage"):  # dev: start at the beginning of stage N (D-204)
-		var n := maxi(1, int(str(Config.cli["rc-stage"])))
+		n = maxi(1, int(str(Config.cli["rc-stage"])))
+	if n > 1:   # the start-stage screen (D-216) or the dev flag
 		sim.checkpoints = n - 1
 		sim.s = (n - 1) * Sim.CHECKPOINT_EVERY + 150.0
 		sim.next_checkpoint = n * Sim.CHECKPOINT_EVERY
@@ -814,6 +838,58 @@ func _confirm_gfx() -> void:
 		Config.save()
 	if is_instance_valid(_gfx_ui):
 		_gfx_ui.queue_free()
+	_begin_stage_select()
+
+
+# --- start stage (D-216, for testing) ------------------------------------------------
+## Flippers pick the stage the race starts at (1..STAGE_PICK_MAX), with its
+## area's name; Launch confirms. Not saved: every game starts the picker at 1.
+const STAGE_PICK_MAX := 10
+const AREA_NAMES := {"beach": "RC_AREA_BEACH", "fields": "RC_AREA_FIELDS", "city": "RC_AREA_CITY",
+	"desert": "RC_AREA_DESERT", "forest": "RC_AREA_FOREST", "snow": "RC_AREA_SNOW"}
+
+
+func _begin_stage_select() -> void:
+	_phase = "stage"
+	_phase_t = 0.0
+	_start_stage = 1
+	_stage_ui = Control.new()
+	_stage_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_stage_ui.add_child(UI.fill(Color(0, 0, 0, 0.35)))
+	var col := UI.vstack(40)
+	col.add_child(UI.styled_label(tr("RC_STAGE_TITLE"), TITLE_FONT, 2))
+	_stage_num = UI.label("", 96, ACCENT)
+	col.add_child(_stage_num)
+	_stage_area = UI.label("", 48, UI.WHITE)
+	col.add_child(_stage_area)
+	_stage_hint = UI.label("", 36, UI.WHITE)
+	col.add_child(_stage_hint)
+	_stage_ui.add_child(col)
+	add_to_table(_stage_ui)
+	_refresh_stage()
+
+
+func _move_stage(d: int) -> void:
+	_phase_t = 0.0
+	var n := clampi(_start_stage + d, 1, STAGE_PICK_MAX)
+	if n == _start_stage:
+		return
+	_start_stage = n
+	Audio.sfx("rc_shift")
+	_refresh_stage()
+
+
+func _refresh_stage() -> void:
+	_stage_num.text = "< %s >" % (tr("RC_STAGE") % _start_stage)
+	_stage_area.text = tr(AREA_NAMES[Track.stage_area(_start_stage)])
+	Dmd.show_text(tr("RC_STAGE_TITLE"), tr("RC_STAGE") % _start_stage, Dmd.CYAN, Dmd.YELLOW)
+
+
+func _confirm_stage() -> void:
+	if _phase != "stage":
+		return
+	if is_instance_valid(_stage_ui):
+		_stage_ui.queue_free()
 	_begin_select()
 
 
@@ -1471,14 +1547,31 @@ func _prop_kind(o: Dictionary) -> String:
 	var h := int(absf(o.s * 7.13 + o.x * 3.1) * 10.0)
 	match o.kind:
 		"palm":
-			# Stage 2's grass fields have their own trees (D-204), mixing in over
-			# its first 300 m.
-			var into2: float = o.s - Sim.CHECKPOINT_EVERY
-			if into2 >= 0.0 and o.s < 2.0 * Sim.CHECKPOINT_EVERY and (h % 100) < into2 / 3.0:
-				return "tree_oak" if h % 3 != 0 else "tree_cypress"
+			# Each area has its own trees (D-204, D-216); during a cross-fade
+			# they mix by the area weights.
+			match _obj_area(o, h):
+				"fields":
+					return "tree_oak" if h % 3 != 0 else "tree_cypress"
+				"desert":
+					return "cactus_1"
+				"forest":
+					return "pine_1" if h % 3 != 0 else "pine_2"
+				"snow":
+					return "pine_snow"
 			return "palm_1" if h % 3 != 0 else "palm_2"
 		"bush":
+			match _obj_area(o, h):
+				"desert":
+					return "desert_bush"
+				"forest":
+					return "fern"
+				"snow":
+					return "snow_rock"
 			return "bush_1" if h % 2 == 0 else "bush_2"
+		"rock":
+			return "snow_rock" if _obj_area(o, h) == "snow" else "rock"
+		"cactus":
+			return "cactus_1" if h % 3 == 0 else "cactus_2"
 		"chevron":   # curve warning: the arrow turns the way the road does.
 			# Track: dir = -1 on a left turn (curvature > 0); the sprite's arrow
 			# turns right as drawn.
@@ -1488,6 +1581,20 @@ func _prop_kind(o: Dictionary) -> String:
 		"house":   # beach stage (D-204): two beach houses and a surf shop
 			return ["house_1", "house_2", "house_3"][h % 3]
 	return o.kind
+
+
+## The area an object belongs to (D-216): during a cross-fade, picked by the
+## area weights with the object's own hash, so the change is gradual.
+func _obj_area(o: Dictionary, h: int) -> String:
+	var a: Dictionary = sim.track.areas(o.s)
+	if a.size() == 1:
+		return a.keys()[0]
+	var r := float(h % 100) / 100.0
+	for k in a:
+		r -= float(a[k])
+		if r < 0.0:
+			return k
+	return a.keys()[a.size() - 1]
 
 
 ## Police car (D-135): the director's model with a light bar of flashing red
@@ -1722,9 +1829,12 @@ func _build_chunk(k: int) -> Node3D:
 		# Skirts (D-197): the ground strip's outer edges hang a steep slope far
 		# down into the fog, so on hills the edge never shows sky under it.
 		for j in cols:
-			# D-204: UV2.x carries the beach stage's weight to the road shader.
-			var bw := tr_.beach_w(s)
-			st.set_uv2(Vector2(bw, 0.0))
+			# D-204/D-216: the area weights for the road shader: UV2 = (beach,
+			# city), COLOR = (desert, forest, snow).
+			var aw := tr_.areas(s)
+			var bw := float(aw.get("beach", 0.0))
+			st.set_uv2(Vector2(bw, float(aw.get("city", 0.0))))
+			st.set_color(Color(float(aw.get("desert", 0.0)), float(aw.get("forest", 0.0)), float(aw.get("snow", 0.0)), 1.0))
 			if j == 0 or j == cols - 1:
 				var edge: float = xs[0] if j == 0 else xs[xs.size() - 1]
 				var side := signf(edge)
@@ -1761,6 +1871,12 @@ func _build_chunk(k: int) -> Node3D:
 		if not by_kind.has(key):
 			by_kind[key] = []
 		by_kind[key].append(o)
+	# City (D-216): buildings, traffic lights and cross streets are built apart.
+	City.build_buildings(node, tr_, by_kind.get("building", []))
+	City.build_lights(node, tr_, by_kind.get("tlight", []))
+	City.build_junctions(node, tr_, s0, s0 + CHUNK)
+	by_kind.erase("building")
+	by_kind.erase("tlight")
 	for kind in by_kind:
 		var list: Array = by_kind[kind]
 		var mm := MultiMesh.new()
@@ -1773,10 +1889,13 @@ func _build_chunk(k: int) -> Node3D:
 			f.basis = Basis(Vector3.UP, tr_.heading(o.s))
 			var h := fmod(absf(o.s * 7.13 + o.x * 3.1), 1.0)
 			match kind:
-				"palm_1", "palm_2":
+				"palm_1", "palm_2", "pine_1", "pine_2", "pine_snow", "tree_oak", "tree_cypress", "cactus_1":
 					f.basis = Basis.from_scale(Vector3.ONE * (0.85 + h * 0.35))
-				"bush_1", "bush_2":
+				"bush_1", "bush_2", "fern", "desert_bush", "cactus_2", "snow_rock":
 					f.basis = Basis.from_scale(Vector3.ONE * (0.8 + h * 0.5))
+				"mesa":
+					f.basis = Basis.from_scale(Vector3.ONE * (0.7 + h * 0.6))
+					f.origin.y -= 2.0   # sunk a little into the dunes
 				"sign_curve", "sign_curve_l", "sign_green":
 					f.basis = Basis.IDENTITY
 				"rock":
@@ -1884,6 +2003,7 @@ func _sprite_yaw(world_yaw: float, cam_yaw: float) -> float:
 
 func _animate(delta: float) -> void:
 	var tr_ := sim.track
+	City.update(Night.level, _gfx_hd, _phase_t)   # D-216
 	# Player car on the road frame, yawed by drift/steer, spinning on a crash.
 	var f := tr_.frame(sim.s, sim.x)
 	_car.transform = f

@@ -2034,3 +2034,39 @@
 - **Bar:** the black block between the blue and red balls is gone (supersedes that part of D-137/D-139). The balls keep their spacing, leaving a gap in the middle.
 - **Beep:** it plays on its own player on an `SFXDry` bus, which sends straight to Master and copies the SFX bus's volume and mute at each beep. The tunnel reverb sits on the SFX bus (D-127), so it no longer touches the beep. `Audio.sfx` isn't used for it, so the shared player pool keeps its buses.
 - **Status:** Accepted
+
+### D-216 — Turbo Run areas: city, desert, forest, snowy mountain; start-stage picker
+- **Date:** 2026-11-23
+- **Decision (director):** after the beach and fields, new areas change every 2 stages: a city with tall buildings and junctions to drive through, a desert, a forest and a snowy mountain, each with its own scenery. (Weather is in a later slice.) The director also asked for stage selection at the game start, for testing.
+- **Schedule:** `Track.stage_area(k)`: stage 1 beach, 2 fields, 3–4 city, 5–6 desert, 7–8 forest, 9–10 snow, then the four repeat from the city.
+  - `areas(s)` gives weights that cross-fade into the next stage's area over its last `AREA_BLEND` 200 m.
+  - The beach (D-204) now runs through this; `beach_w` is the beach's weight.
+- **Ground:** `ground_rise` blends a profile per area:
+  - city: flat;
+  - desert: half the embankment plus low dunes;
+  - forest: ×1.3;
+  - snow: ×3.2, steep mountainsides.
+- **Road:** sections touching the city are flat-ish (±1.5 %), the desert has long gentle grades (±5 %), and the snowy mountain climbs and drops more often (45 % of sections, grade 10–22 %). There are no tunnels in the city.
+- **Ground shader:** `road.gdshader` gets the area weights per vertex (UV2 = beach, city; COLOR = desert, forest, snow).
+  - City: grey kerbs, a paved sidewalk with 1.5 m slabs, darker plazas.
+  - Desert: orange sand with wind ripples.
+  - Forest: dark grass with needle patches.
+  - Snow: white and blue, with dusted road edges.
+- **City** (`city.gd`):
+  - **Buildings:** one MultiMesh of unit boxes per chunk, scaled per building: 12–26 m wide, 14–24 m deep, 16–70 m tall, and 15 % are 1.6× taller. They stand in a row each side at 5 m behind the kerb. `building.gdshader` draws 6 facade styles procedurally: glass tower, sandstone, brick, concrete strip windows, white, dark glass. Each has floors of windows, a shopfront ground floor, a parapet and a flat roof. Windows are lit at random at night (`night` = `Night.level`).
+  - **Junctions:** every 260–420 m on straight-ish road. The buildings leave a gap, and a cross-street strip (`junction.gdshader`) draws asphalt with a dashed centre line and zebra crossings over the main road.
+  - **Traffic lights:** one each side, on a pole with an arm over the road. Their lamps cycle green 7 s, amber 1.6 s, red 5 s (visual only).
+  - **Street lamps:** both sides every 30 m.
+  - **No trees or bushes.**
+  - **Sidewalk barrier:** `Track.side_wall` / `CITY_WALL` (2.6 m past the kerb). The sim holds the car there and it scrapes along, like a tunnel wall but with no portal crash.
+- **Props per area:** the view maps the track's generic kinds by area. During a cross-fade it picks by area weight per object, so the change is gradual.
+  - Trees: beach palms, field oaks/cypresses, desert saguaros, forest pines/spruces, snow spruces.
+  - Bushes: desert shrubs, forest ferns, snowy boulders.
+  - Rocks: snowy boulders on the snow.
+  - Desert: cacti (saguaro / prickly pear), and buttes 70–130 m out.
+  - Forest and snow: trees close and thick (every 9–15 m both sides).
+  - Bushes: none in the city, sparse in the desert and on the snow.
+- **Art:** 9 sprites from Qwen-Image 2.1 in the D-196 painted style (two candidates each, one picked), cut by `prepare_racer_sprites.py --hd`.
+- **Start stage (testing):** after GRAPHICS, a START STAGE (TEST) screen. Flippers pick 1–10, the area's name shows, Launch confirms (or the timer). It isn't saved, and every game starts the picker at 1. The race starts at that stage's beginning, with its clock and checkpoint count (as `--rc-stage`).
+- **Tests:** the area order, the city barrier, and that the city has buildings and junctions.
+- **Status:** Accepted

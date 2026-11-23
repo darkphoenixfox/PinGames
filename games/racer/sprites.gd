@@ -28,6 +28,16 @@ const KINDS := {
 	# Grass fields, stage 2 (D-204): trees instead of palms.
 	"tree_oak": ["tree_oak", 10.0, true, false, 240],
 	"tree_cypress": ["tree_cypress", 12.0, true, false, 288],
+	# Areas (D-216): desert, forest, snowy mountain.
+	"cactus_1": ["cactus_1", 5.5, true, false, 120],
+	"cactus_2": ["cactus_2", 2.2, true, false, 70],
+	"desert_bush": ["desert_bush", 1.6, true, false, 60],
+	"mesa": ["mesa", 45.0, true, false, 300],
+	"pine_1": ["pine_1", 17.0, true, false, 300],
+	"pine_2": ["pine_2", 13.0, true, false, 260],
+	"fern": ["fern", 1.4, true, false, 60],
+	"pine_snow": ["pine_snow", 13.0, true, false, 260],
+	"snow_rock": ["snow_rock", 3.0, true, false, 90],
 }
 
 static var _meshes := {}

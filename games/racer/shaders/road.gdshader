@@ -17,9 +17,23 @@ uniform vec3 deep : source_color = vec3(0.05, 0.3, 0.62);
 uniform vec3 foam : source_color = vec3(0.95, 0.98, 1.0);
 uniform vec3 dune_grass : source_color = vec3(0.62, 0.66, 0.35);
 varying float beach;
+// D-216 areas: UV2.y = city, COLOR.rgb = (desert, forest, snow) weights.
+varying float city;
+varying vec3 area3;
+uniform float sidewalk = 5.0;
+uniform vec3 concrete : source_color = vec3(0.66, 0.65, 0.62);
+uniform vec3 plaza : source_color = vec3(0.4, 0.4, 0.43);
+uniform vec3 desert_a : source_color = vec3(0.89, 0.67, 0.42);
+uniform vec3 desert_b : source_color = vec3(0.8, 0.56, 0.34);
+uniform vec3 forest_a : source_color = vec3(0.17, 0.38, 0.15);
+uniform vec3 forest_b : source_color = vec3(0.36, 0.27, 0.16);
+uniform vec3 snow_a : source_color = vec3(0.92, 0.95, 0.99);
+uniform vec3 snow_b : source_color = vec3(0.76, 0.83, 0.93);
 
 void vertex() {
 	beach = UV2.x;
+	city = UV2.y;
+	area3 = COLOR.rgb;
 }
 uniform float rumble = 1.2;
 uniform vec3 asphalt_a : source_color = vec3(0.36, 0.36, 0.4);
@@ -85,6 +99,42 @@ void fragment() {
 			b = x < road_half + rumble + 3.0 ? mix(sand_a, sand_b, band) : mix(dune_grass, grass_b, 0.25 + 0.2 * band);
 		}
 		col = mix(col, b, beach);
+	}
+	vec2 cell = floor(m * 0.5);
+	if (city > 0.001 && x >= road_half) {
+		// Grey kerb, paved sidewalk (slab joints every 1.5 m), then darker plazas.
+		vec3 c;
+		if (x < road_half + rumble) {
+			c = concrete * 0.85;
+		} else if (x < road_half + rumble + sidewalk) {
+			bool joint = mod(sv, 1.5) < 0.12 || mod(x - road_half - rumble, 1.5) < 0.12;
+			c = concrete * (joint ? 0.82 : 0.97 + 0.05 * hash(floor(m / 1.5)));
+		} else {
+			c = plaza * (0.94 + 0.06 * hash(cell));
+		}
+		col = mix(col, c, city);
+	}
+	if (area3.r > 0.001 && x >= road_half + rumble) {
+		// Desert: sand with wind ripples.
+		float rip = 0.5 + 0.5 * sin(sv * 0.9 + x * 0.35 + sin(x * 0.07) * 4.0);
+		vec3 c = mix(desert_a, desert_b, rip * 0.6 + 0.2 * hash(cell));
+		col = mix(col, c, area3.r);
+	}
+	if (area3.g > 0.001 && x >= road_half + rumble + 1.0) {
+		// Forest floor: dark grass with patches of brown needles.
+		float patchy = step(0.62, hash(floor(m / 3.0)));
+		vec3 c = mix(forest_a * (0.9 + 0.2 * hash(cell)), forest_b, patchy * 0.8);
+		col = mix(col, c, area3.g);
+	}
+	if (area3.b > 0.001) {
+		// Snow: white off the road, blue in the hollows; dusted road edges.
+		float shade = 0.5 + 0.5 * sin(sv * 0.05 + x * 0.12);
+		vec3 c = mix(snow_a, snow_b, shade * 0.6 + 0.15 * hash(cell));
+		if (x >= road_half + rumble) {
+			col = mix(col, c, area3.b);
+		} else if (x >= road_half - 1.2) {
+			col = mix(col, snow_a, area3.b * 0.55 * smoothstep(road_half - 1.2, road_half + rumble, x));
+		}
 	}
 	ALBEDO = col;
 	ROUGHNESS = 0.92;

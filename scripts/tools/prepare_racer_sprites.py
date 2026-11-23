@@ -37,6 +37,9 @@ SPRITES = {
     # D-204: beach stage buildings and tower, stage 2 trees (HD cut-outs only)
     "house_1": 132, "house_2": 192, "house_3": 120, "lifeguard": 156,
     "tree_oak": 240, "tree_cypress": 288,
+    # D-216: desert, forest and snowy mountain
+    "cactus_1": 120, "cactus_2": 70, "desert_bush": 60, "mesa": 300,
+    "pine_1": 300, "pine_2": 260, "fern": 60, "pine_snow": 260, "snow_rock": 90,
 }
 
 
@@ -105,7 +108,7 @@ def sprite_hd(name):
     img = cutout(Image.open(src))
     if name in HOLES:
         img = remove_grey_framed_holes(img)
-    if name.startswith(("bush", "palm", "tree")):
+    if name.startswith(("bush", "palm", "tree", "pine", "fern", "cactus", "desert")):
         # Plants: drop the pale grey-white ground halo some generations leave
         # (low saturation, very light); signs keep their white arrows.
         px = img.load()

@@ -802,10 +802,15 @@ func _update_drift(dt: float, want: float, c: float, brake: bool) -> void:
 ## the portal; inside, the car is held between the walls and scrapes along them.
 func _tunnel_walls(dt: float, was_in: bool) -> void:
 	in_tunnel = track.in_tunnel(s)
-	if not in_tunnel:
-		return
 	var limit := Track.TUNNEL_HALF - CAR_W * 0.5
-	if not was_in and absf(x) > limit + 0.8 and spin_t <= 0.0 and state == State.RACE:
+	if not in_tunnel:
+		# Town (D-216): the sidewalk barrier holds the car the same way, but it
+		# is always there, so there's no portal to hit.
+		var wall := track.side_wall(s)
+		if wall <= 0.0:
+			return
+		limit = wall - CAR_W * 0.5
+	elif not was_in and absf(x) > limit + 0.8 and spin_t <= 0.0 and state == State.RACE:
 		_crash("portal", -x)   # rolls away from... the wall it hit
 	if absf(x) > limit:
 		var side := signf(x)

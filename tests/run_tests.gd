@@ -687,6 +687,28 @@ func test_racer_hd_assets() -> void:
 			hw.save_to_wav(OS.get_environment("PG_HORN_OUT") + "/horn_%d.wav" % i)
 	hg.free()
 	check(h_ok and h_ms < 1500, "oncoming horns synthesise (%d ms) and are audible" % h_ms)
+	# D-216: areas per stage, and the city's sidewalk barrier.
+	var TrackA = load("res://games/racer/track.gd")
+	var seq: Array = []
+	for k in range(1, 12):
+		seq.append(TrackA.stage_area(k))
+	check(seq == ["beach", "fields", "city", "city", "desert", "desert", "forest", "forest", "snow", "snow", "city"],
+		"areas change every two stages after the beach and fields (%s)" % ", ".join(seq))
+	var SimA = load("res://games/racer/sim.gd")
+	var cs = SimA.new()
+	cs.setup(5)
+	cs.state = SimA.State.RACE
+	cs.s = 2.0 * SimA.CHECKPOINT_EVERY + 500.0
+	cs.track.ensure(cs.s + 600.0)
+	cs.x = 20.0
+	cs.v = 30.0
+	cs.step(1.0 / 60.0, false, false)
+	check(cs.track.area_at(cs.s) == "city" and cs.x <= TrackA.CITY_WALL, "in town the car is held off the sidewalk (x %.1f)" % cs.x)
+	var nb := 0
+	for o in cs.track.objects_between(cs.s - 200.0, cs.s + 400.0):
+		if o.kind == "building":
+			nb += 1
+	check(nb > 10 and not cs.track.junctions.is_empty(), "the city has buildings (%d) and junctions (%d)" % [nb, cs.track.junctions.size()])
 
 
 func test_racer_time_of_day() -> void:

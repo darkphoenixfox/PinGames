@@ -38,6 +38,16 @@ PROPS = {
     # Grass-fields stage 2 trees (D-204): instead of palms.
     "tree_oak": ("a big round leafy green deciduous oak tree with a thick brown trunk and a full rounded crown", 768, 1024),
     "tree_cypress": ("a tall slim dark green italian cypress tree, narrow and pointed, with a short trunk", 768, 1024),
+    # Areas (D-216): desert, forest, snowy mountain.
+    "cactus_1": ("a tall green saguaro cactus with two upturned arms", 768, 1024),
+    "cactus_2": ("a wide clump of prickly pear cactus with flat round green pads and a few yellow flowers", 1024, 768),
+    "desert_bush": ("a dry round desert shrub, tangled pale brown twigs with a few grey-green leaves", 1024, 768),
+    "mesa": ("a tall red sandstone desert butte rock formation with flat top and steep layered cliffs", 1024, 1024),
+    "pine_1": ("a tall slender dark green pine tree with a straight brown trunk, branches only on the upper half", 768, 1024),
+    "pine_2": ("a full dense conical dark green spruce fir tree reaching the ground", 768, 1024),
+    "fern": ("a lush low clump of green forest ferns", 1024, 768),
+    "pine_snow": ("a conical dark green spruce tree heavily covered with white snow on its branches", 768, 1024),
+    "snow_rock": ("a large grey granite boulder with thick white snow on top", 1024, 768),
     "gantry": ("an overhead highway sign gantry: a grey steel truss beam on two tall steel posts holding two "
                "square green highway signs, each with a white arrow pointing up, no text", 1024, 768),
 }
