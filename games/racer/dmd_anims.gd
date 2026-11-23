@@ -35,7 +35,32 @@ const CAR := [
 ]
 
 
+## D-243: the player's own car as a dot sprite (from the director's pictures,
+## nose right), set by the game for the chosen car; null = the 13x5 dot car.
+var player_sprite: Image
+
+
 # --- helpers ------------------------------------------------------------------------
+## The player's car at the 13x5 car's spot (x, y = its top-left): the sprite,
+## standing on the same ground row and centred on the same spot.
+func _player(p, x: float, y: float, flip: bool = false, upside_down: bool = false) -> void:
+	if player_sprite == null:
+		_car(p, x, y, RED, flip)
+		return
+	var w := player_sprite.get_width()
+	var h := player_sprite.get_height()
+	var x0 := x + 6.5 - w * 0.5
+	var y0 := y + 5 - h
+	for r in h:
+		for c in w:
+			var px := player_sprite.get_pixel(c, r)
+			if px.a < 0.5:
+				continue
+			var dc := (w - 1 - c) if flip else c
+			var dr := (h - 1 - r) if upside_down else r
+			p.dot(x0 + dc, y0 + dr, Color(px.r, px.g, px.b))
+
+
 func _car(p, x: float, y: float, body: Color, flip: bool = false) -> void:
 	for r in CAR.size():
 		for c in CAR[r].length():
@@ -84,7 +109,7 @@ func _blink(t: float, rate: float = 0.25) -> bool:
 func near_miss(p, t: float, title: String, bonus: String) -> void:
 	var k := t / DURATIONS.near_miss
 	_speed_lines(p, t, 1.0)
-	_car(p, 24, 24, RED)
+	_player(p, 24, 24)
 	var ox := lerpf(132.0, -20.0, clampf(k / 0.45, 0.0, 1.0))
 	_car(p, ox, 18, WHITE * 0.85, true)
 	if k > 0.15 and k < 0.5:   # sparks where they nearly touched
@@ -107,7 +132,7 @@ func nitro(p, t: float, title: String) -> void:
 		var h := 2.0 * (1.0 - float(i) / flen)
 		var c := WHITE if i < 3 else (CYAN if i < flen * 0.5 else ORANGE)
 		p.line(x - 1 - i, 26 - h, x - 1 - i, 26 + h * 0.5, c)
-	_car(p, x, 23, RED)
+	_player(p, x, 23)
 	if k > 0.2:
 		var c2 := CYAN if _blink(t, 0.16) else WHITE
 		p.text(title, 126 - p.text_width(title, 2), 2, 2, c2)
@@ -152,8 +177,11 @@ func _car_pose(p, pose: int, x: float, y: float) -> void:
 	# 0 upright, 1 nose down (vertical), 2 on its roof, 3 nose up (vertical)
 	match pose:
 		0:
-			_car(p, x, y, RED)
+			_player(p, x, y)
 		2:
+			if player_sprite != null:
+				_player(p, x, y, false, true)
+				return
 			for r in CAR.size():
 				for c in CAR[r].length():
 					var k: String = CAR[r][c]
@@ -191,7 +219,7 @@ func crash(p, t: float, title: String) -> void:
 		for i in 5:
 			var ly := 22.0 + i
 			p.line(x - 10 - (i * 7) % 12, ly, x - 2, ly, DIM)
-		_car(p, x, 23, RED)
+		_player(p, x, 23)
 		return
 	var tt := t - HIT
 	_burst(p, rock_x, 24, clampf(tt / 0.5, 0.0, 1.0), 30, 40.0)
@@ -270,9 +298,9 @@ func perfect(p, t: float, title: String) -> void:
 ## flashing, then a ticket slides out with the fine.
 func fine(p, t: float, title: String, label: String, amount: String) -> void:
 	p.line(0, 29, 127, 29, DARK.lightened(0.1))
-	_car(p, 10, 24, RED)
+	_player(p, 10, 24)
 	# Police car rolls in from the left and stops behind ours.
-	var px := lerpf(-16.0, 26.0, clampf(t / 0.6, 0.0, 1.0))
+	var px := lerpf(-16.0, 30.0, clampf(t / 0.6, 0.0, 1.0))   # D-243: clear of the bigger player sprite
 	for r in CAR.size():
 		for c in CAR[r].length():
 			var k: String = CAR[r][c]

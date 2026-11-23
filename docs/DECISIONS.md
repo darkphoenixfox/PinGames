@@ -2383,3 +2383,11 @@
 - **Decision (director):** the car was huge next to the person. Supercars are lower than a person, so make the car smaller or the person taller.
 - **Change:** the driver is redrawn at 9×19 dots (was 5×9). A person is about 1.8 m and a supercar about 1.25 m, and the car is 14 dots tall. He has two walk frames (legs apart with arms swinging, then passing), his feet are on the kerb line, and he walks to the door.
 - **Status:** Accepted
+
+### D-243 — Turbo Run DMD animations draw the player's own car
+- **Date:** 2026-11-23
+- **Decision (director):** the cars in the DMD animations (police chases, crashes, etc.) should look like the player cars (the director's yellow supercar and red sports car pictures).
+- **Sprites:** `gen_loading_car.py` now takes `src out width [--flip]`. The yellow supercar becomes a 22×7 dot sprite (`dmd_car_supercar.png`); 16 dots was too few to read.
+- **Animations:** `DmdAnims.player_sprite`, set by the game at race start for the chosen car (`DMD_SPRITES`, by model), is drawn by `_player()`. It stands on the same ground row and is centred where the 13×5 dot car was. It's used in near miss, nitro, the crash approach, upright and upside-down crash poses, and the police fine; the police car stops a little further on, clear of it. The police car and other traffic keep their dot patterns.
+- **Pending:** the red sports car picture (for Normal and Easy) didn't reach disk. Until the director saves it, those cars keep the 13×5 dot car. Adding it is one `DMD_SPRITES` line plus the converter (with `--flip`, since it faces left).
+- **Status:** Accepted

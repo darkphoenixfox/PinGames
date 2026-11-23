@@ -674,6 +674,22 @@ func _new_sim() -> void:
 	_cam_ready = false
 
 
+## The player car's DMD dot sprite (D-243), or null for the plain dot car.
+const DMD_SPRITES := {SUPERCAR_MODEL: "res://assets/textures/racer/dmd_car_supercar.png"}
+static var _dmd_sprites := {}
+
+
+func _dmd_sprite(model: String) -> Image:
+	if not DMD_SPRITES.has(model):
+		return null
+	if not _dmd_sprites.has(model):
+		var img := (load(DMD_SPRITES[model]) as Texture2D).get_image()
+		if img.is_compressed():
+			img.decompress()
+		_dmd_sprites[model] = img
+	return _dmd_sprites[model]
+
+
 ## The song for stage k (D-226): one per MUSIC_STAGES stages; the last one goes
 ## on past the finish.
 func _stage_music(k: int) -> String:
@@ -1002,6 +1018,7 @@ func _begin_race() -> void:
 	if is_instance_valid(_attract_ui):
 		_attract_ui.queue_free()
 	_build_body(CAR_MODELS[_chosen_car])   # the hot hatch for the easy car (D-205)
+	_anims.player_sprite = _dmd_sprite(CAR_MODELS[_chosen_car])   # D-243
 	_phase = "race"
 	_phase_t = 0.0
 	_new_sim()

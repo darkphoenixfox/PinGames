@@ -3,8 +3,11 @@ a small DMD dot sprite. Masks out the white background and the grey ground
 shadow, crops to the car, and shrinks it to WIDTH dots with an area filter so
 each dot is the average colour of its patch; dots that are mostly background
 stay off. Writes assets/textures/racer/loading_car_dmd.png (transparent).
-Usage: python scripts/tools/gen_loading_car.py
+Usage: python scripts/tools/gen_loading_car.py [src out width [--flip]]
+  (no arguments: the loading screen's car; D-243: also the small DMD sprites of
+  the player cars, e.g. 16 dots wide, --flip for a picture facing left)
 """
+import sys
 import os
 import numpy as np
 from PIL import Image
@@ -13,6 +16,12 @@ ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SRC = os.path.join(ROOT, "assets", "source", "racer", "loading_car.png")
 OUT = os.path.join(ROOT, "assets", "textures", "racer", "loading_car_dmd.png")
 WIDTH = 46
+FLIP = "--flip" in sys.argv
+_args = [a for a in sys.argv[1:] if not a.startswith("--")]
+if len(_args) >= 3:
+    SRC = os.path.join(ROOT, _args[0])
+    OUT = os.path.join(ROOT, _args[1])
+    WIDTH = int(_args[2])
 
 im = np.asarray(Image.open(SRC).convert("RGB")).astype(float) / 255.0
 mx = im.max(axis=2)
@@ -42,5 +51,8 @@ out = np.zeros((h, WIDTH, 4))
 on = cov > 0.45
 out[..., :3] = np.clip(col * 1.15, 0, 1)   # LEDs: a little brighter
 out[..., 3] = on.astype(float)
-Image.fromarray((out * 255).astype(np.uint8), "RGBA").save(OUT)
+img = Image.fromarray((out * 255).astype(np.uint8), "RGBA")
+if FLIP:
+    img = img.transpose(Image.FLIP_LEFT_RIGHT)   # nose to the right, like the others
+img.save(OUT)
 print(OUT, WIDTH, "x", h)
