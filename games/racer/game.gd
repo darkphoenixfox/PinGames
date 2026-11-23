@@ -190,15 +190,20 @@ const DRY_BUS := "SFXDry"   # D-215: effects that stay dry in tunnels
 ## car uses the shader defaults.
 const LAMP_BOXES := {
 	"res://assets/models/racer/supercar.glb": {   # D-210, from its renders
+		"axle_yz": Vector2(0.36, 1.29), "wheel_r": 0.35,   # D-246: measured wheels (spin effect)
 		"tail_min": Vector3(0.45, 0.66, -9.0), "tail_max": Vector3(0.85, 0.9, -1.95),
 		"tail_red_only": true,
 		"head_min": Vector3(0.45, 0.52, 1.9), "head_max": Vector3(0.75, 0.7, 9.0),
 	},
 	# Measured from orthographic renders of the model (D-205).
 	"res://assets/models/racer/hothatch.glb": {
+		"axle_yz": Vector2(0.37, 1.30), "wheel_r": 0.35,   # D-246
 		"tail_min": Vector3(0.55, 0.68, -9.0), "tail_max": Vector3(0.86, 0.92, -1.88),
 		"tail_red_only": true,
 		"head_min": Vector3(0.42, 0.6, 1.8), "head_max": Vector3(0.86, 0.77, 9.0),
+	},
+	"res://assets/models/racer/police2.glb": {   # D-246: its wheels (axles 1.35 / 1.45 m; the shader takes one)
+		"axle_yz": Vector2(0.38, 1.40), "wheel_r": 0.36,
 	},
 	"res://assets/models/racer/hatchback.glb": {
 		"tail_min": Vector3(0.0, 0.35, -9.0), "tail_max": Vector3(0.95, 1.3, -1.6),
@@ -441,6 +446,7 @@ var _shift_flame_t := 0.0   # upshift exhaust flame left
 var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
 var _bg_dark := 0.0     # s of crash flicker left
 var _wheel_phase := 0.0
+var _police_wheel := 0.0       # D-246
 var _travel := 0.0         # eased nose angle from sideways travel (D-128)
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
@@ -1108,6 +1114,8 @@ func _handle_events() -> void:
 				Audio.sfx("rc_count")
 				Dmd.show_custom(_draw_dmd_revup)
 			"go":
+				if Config.cli.has("rc-police") and sim.police.is_empty():   # dev: a chase straight away (D-246)
+					sim.call_police()
 				_center_message(tr("RC_GO"), 1.0)
 				Audio.sfx("rc_go")
 				Dmd.flash(tr("RC_GO"), 1.0, Dmd.GREEN)
@@ -1866,6 +1874,15 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 	var side: float = pd.get("swing", 1.0)
 	lean += roundf(_police_swing * 4.0) / 4.0 * PI * 0.5 * side
 	_police.basis = _police.basis * Basis(Vector3.UP, _sprite_yaw(h - lean + float(pd.get("sway", 0.0)), cam_yaw) - h) * MODEL_TURN
+	# Its wheels turn with its own speed (D-246), stepped like the player's.
+	_police_wheel = fmod(_police_wheel + absf(float(pd.v)) / 0.37 * delta, TAU * 100.0)
+	var pstep := _police_wheel if _anim_mult <= 0.0 else floorf(_police_wheel * 3.0 * _anim_mult) / (3.0 * _anim_mult)
+	for m in _police.find_children("*", "MeshInstance3D", true, false):
+		var pmi := m as MeshInstance3D
+		if pmi.material_override != null:
+			InstParam.set_param(pmi, "spin", 1.0)
+			InstParam.set_param(pmi, "wheel_phase", pstep)
+			InstParam.set_param(pmi, "wheel_blur", clampf((absf(float(pd.v)) - 6.0) / 20.0, 0.0, 1.0))
 	var ph := fmod(_phase_t, 0.5)
 	var lights := sim.police_lights()   # off once it has given up or is driving off (D-145)
 	var red_on := lights and ph < 0.25 and (ph < 0.08 or ph > 0.15)

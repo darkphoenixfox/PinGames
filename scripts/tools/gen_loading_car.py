@@ -28,7 +28,8 @@ im = np.asarray(_src.convert("RGB")).astype(float) / 255.0
 mx = im.max(axis=2)
 mn = im.min(axis=2)
 sat = (mx - mn) / np.maximum(mx, 1e-6)
-if _src.mode == "RGBA" and np.asarray(_src)[..., 3].min() < 128:
+has_alpha = _src.mode == "RGBA" and np.asarray(_src)[..., 3].min() < 128
+if has_alpha:
     # D-245: a render with a transparent background (white car panels survive).
     mask = np.asarray(_src)[..., 3] > 128
 else:
@@ -40,7 +41,8 @@ y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
 # The ground shadow under the car: unsaturated mid greys in the bottom strip.
 rows = np.arange(im.shape[0])[:, None]
 strip = rows > y1 - (y1 - y0) * 0.14
-mask &= ~(strip & (sat < 0.18) & (mx > 0.2))
+if not has_alpha:   # a render has no ground shadow; its grey tyres must stay (D-246)
+    mask &= ~(strip & (sat < 0.18) & (mx > 0.2))
 ys, xs = np.nonzero(mask)
 y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
 crop = im[y0:y1, x0:x1]
@@ -65,6 +67,20 @@ if "--contrast" in sys.argv:
     c3[grey & (lum <= 0.74)] = [0.32, 0.32, 0.37]   # dark, but visible on the black DMD
     out[..., :3] = c3
 out[..., 3] = on.astype(float)
+if "--wheels" in sys.argv:
+    # D-246: wheels that read on the black DMD: each run of tyre dots on the
+    # bottom row in mid grey, a bright rim dot above its centre.
+    last = out[-1]
+    c = 0
+    while c < WIDTH:
+        if last[c, 3] > 0.5:
+            c0 = c
+            while c < WIDTH and last[c, 3] > 0.5:
+                c += 1
+            out[-1, c0:c, :3] = [0.58, 0.58, 0.63]
+            out[-2, (c0 + c - 1) // 2, :3] = [0.85, 0.85, 0.9]
+            out[-2, (c0 + c - 1) // 2, 3] = 1.0
+        c += 1
 img = Image.fromarray((out * 255).astype(np.uint8), "RGBA")
 if FLIP:
     img = img.transpose(Image.FLIP_LEFT_RIGHT)   # nose to the right, like the others

@@ -506,8 +506,13 @@ func _update_traps() -> void:
 		var caught := v * MPH > TRAP_MPH   # D-156: over 100 mph on the speedometer
 		events.append(["trap", caught])
 		if caught and police.is_empty() and busted_t <= 0.0:
-			police = {"s": s - POLICE_BEHIND, "x": x, "v": v, "state": "chase", "t": 0.0}
-			events.append(["police_spawn"])
+			call_police()
+
+
+## Calls a police car from behind (D-156; public for the --rc-police dev flag).
+func call_police() -> void:
+	police = {"s": s - POLICE_BEHIND, "x": x, "v": v, "state": "chase", "t": 0.0}
+	events.append(["police_spawn"])
 
 
 func _update_police(dt: float) -> void:

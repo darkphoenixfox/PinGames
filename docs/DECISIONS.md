@@ -2409,3 +2409,16 @@
 - **Chase indicator** (D-162): the player's own painted sprite (D-243/244) on the right, the police sprite behind at a gap that follows the real distance (up to 150 m), and speed lines behind it.
 - **BUSTED:** the police car that rolls in is the sprite (it was a 13×5 dot pattern).
 - **Status:** Accepted
+
+### D-246 — Turbo Run: police wheels turn; DMD police sprite has wheels
+- **Date:** 2026-11-23
+- **Bugs (director):** the cop car's wheels don't turn (very noticeable), and the DMD cop car sprite has no wheels.
+- **3D wheels:** the D-143 spin effect (spoke streaks blurring into a disc) needs each model's axle height, axle distance and wheel radius. Those were shader defaults sized for the red car, and the police car never had `spin` on.
+  - **Measurements** (`measure_racer_car.gd`), now in `LAMP_BOXES`:
+    - police: 0.38 m up, axles at 1.35 and 1.45 m (the shader takes one, 1.40), radius 0.36;
+    - supercar: 0.36 / 1.29 / 0.35;
+    - hot hatch: 0.37 / 1.30 / 0.35. D-205 had removed the hot hatch's values as unused, but they are these uniforms, so the player's hot hatch and supercar wheels now spin on their real axles too.
+  - **Police spin:** the police car's own wheel phase follows its speed, stepped like the player's (D-208), with the same blur.
+- **DMD sprite:** the converter's ground-shadow filter had removed the grey tyres from the transparent render, so it is skipped for pictures with their own transparency. A new `--wheels` option draws each run of tyre dots in light grey with a bright hub dot above its centre.
+- **Dev:** `--rc-police` calls a police car right after GO (`Sim.call_police`).
+- **Status:** Accepted
