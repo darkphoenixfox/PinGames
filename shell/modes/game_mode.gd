@@ -29,6 +29,7 @@ var _bar: ColorRect
 var _bar_w := 600.0
 const LoadingAnim = preload("res://shell/loading_anim.gd")
 var _anim: Control   # D-238: the loading screen's little scene
+const REVEAL_DELAY := 2.0   # s the loading screen stays after loading (D-259)
 
 
 func _init(p_game_id: String) -> void:
@@ -71,7 +72,13 @@ func enter() -> void:
 		for n in warm:
 			if is_instance_valid(n):
 				n.queue_free()
-		_overlay.queue_free()
+		# D-259: the warm-up copies go first; the loading screen stays up a
+		# little longer, so their last frame never shows and the game starts clean.
+		await get_tree().create_timer(REVEAL_DELAY).timeout
+		if not is_inside_tree():
+			return
+		if is_instance_valid(_overlay):
+			_overlay.queue_free()
 
 
 ## Draws everything the game loaded once, hidden behind the loading bar (D-178):
@@ -416,6 +423,8 @@ func on_action(action: StringName, pressed: bool) -> void:
 	if action == &"exit" and pressed:
 		shell.abort_game()
 		return
+	if is_instance_valid(_overlay) and not _overlay.is_queued_for_deletion():
+		return   # D-259: still behind the loading screen
 	module.on_action(action, pressed)
 
 

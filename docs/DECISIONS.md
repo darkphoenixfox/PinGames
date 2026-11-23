@@ -2582,3 +2582,10 @@
 - **Fix:** in the countdown, the accelerator (`gas_axis`, R2 once pressed, D-252) revs the engine in proportion: the revs rise to the trigger's position and fall when it's let off. So the needle can be held in the perfect-start window with the trigger (D-118). The flippers or D-pad still rev fully, as before.
 - **Test:** 60 % R2 holds the needle near 0.6 on the grid.
 - **Status:** Accepted
+
+### D-259 — The loading screen stays 2 s after loading
+- **Date:** 2026-11-23
+- **Bug (director):** after a game loaded, two cars appeared in the air for a second. Delay showing the game by 2 seconds before changing from the loading screen.
+- **Cause:** the shader warm-up (D-178) draws copies of the game's objects (cars included) behind the loading screen. The screen and the copies were freed in the same frame, so their last frame could show.
+- **Fix:** the copies are freed first, then the loading screen stays `REVEAL_DELAY` 2 s more (with its animation, D-238) before the game shows. Game input waits until it's gone; EXIT still leaves.
+- **Status:** Accepted
