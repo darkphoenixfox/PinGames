@@ -1913,3 +1913,17 @@
 - **Art:** the 4 beach sprites and 2 trees, from Qwen-Image 2.1 in the D-196 painted style (two candidates each, picks copied to `gen_hd/<name>.png`), cut by `prepare_racer_sprites.py --hd` and drawn by `sprite.gdshader` (HD, or RETRO pixelated).
 - **Dev:** `--rc-stage=N` starts the race at the beginning of stage N.
 - **Status:** Accepted
+
+### D-205 — Turbo Run: the hot hatch is the easy car, and in traffic
+- **Date:** 2026-11-23
+- **Decision (director):** the new `hothatch.glb` replaces the easy car's model and joins the traffic. It has two exhausts together on its left side, and its lights sit differently from the red car's.
+- **Model:** run through `prepare_racer_car.py` like the others: full 39k-tri mesh, 4.1 m long, 256 px albedo for RETRO, and the original texture for HD (`HD_TEXTURES`, now six models). Nose +Z like the red car.
+- **Per-model settings:** `scripts/tools/measure_racer_car.gd` reports a model's lamp texels, low rear geometry and wheel areas, and orthographic Blender renders check them.
+  - `CAR_MODELS` gives the player's model per car (easy = hot hatch).
+  - `EXHAUSTS` places the nitro and backfire flames per model: the hot hatch's are at x +0.42 / +0.53, 0.26 m up, which is its left.
+  - `PLATES` places the TRN plate over its own plate (0.43 m up).
+  - `LAMP_BOXES` and `TAIL_AT` hold its tail and head lamps, for the night glow spots and lamp shading.
+- **Build:** `_build_body(model)` builds the player's body (model, night lights, tail glows, plate, flames). It runs at race start for the chosen car, and rebuilds only when the model changes. The showroom shows each car's own model.
+- **Colour:** it keeps the easy car's blue (D-202) through the usual hue recolour; its texture is red like the red car's.
+- **Traffic:** one in five cars is a hot hatch (`id % 5 == 4`), from a pool of 6, with the same per-car hue and night lights as the others.
+- **Status:** Accepted

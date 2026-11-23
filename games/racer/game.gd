@@ -86,6 +86,23 @@ const TRUCK2_MODEL := "res://assets/models/racer/truck2.glb"
 const HATCH_MODEL := "res://assets/models/racer/hatchback.glb"
 const HATCH_TEXTURE := "res://assets/models/racer/hatchback_albedo.png"
 const HATCH_POOL := 8
+## Director's hot hatch (D-205): the easy car, and in the traffic mix.
+const HOTHATCH_MODEL := "res://assets/models/racer/hothatch.glb"
+const HOTHATCH_TEXTURE := "res://assets/models/racer/hothatch_albedo.png"
+const HOTHATCH_POOL := 6
+## The player's model per car (Sim.CARS order: easy, normal, hard).
+const CAR_MODELS := [HOTHATCH_MODEL, CAR_MODEL, CAR_MODEL]
+## Exhaust tips per model (model space, rear is -Z): where the nitro and
+## backfire flames come out. The hot hatch has two pipes together on its left.
+const EXHAUSTS := {
+	CAR_MODEL: [Vector3(-0.57, 0.28, -2.2), Vector3(0.57, 0.28, -2.2)],
+	HOTHATCH_MODEL: [Vector3(0.42, 0.26, -2.05), Vector3(0.53, 0.26, -2.05)],
+}
+## Number plate centre per model (D-127 for the red car).
+const PLATES := {
+	CAR_MODEL: Vector3(0.0, PLATE_Y, PLATE_Z),
+	HOTHATCH_MODEL: Vector3(0.0, 0.43, -2.06),
+}
 ## Puts a car's night tail glows on its lamps (D-198): onto the body mesh, in
 ## the model's own space, at the centre of the lamp area the car shader lights
 ## (LAMP_BOXES, else the shader's defaults), just behind the rear surface.
@@ -121,18 +138,26 @@ func _place_tails(car: Node3D, holder: Node3D, model: String) -> void:
 const TAIL_AT := {
 	"car": Vector3(0.62, 0.72, -2.2),
 	"hatch": Vector3(0.62, 0.85, -2.0),
+	"hothatch": Vector3(0.7, 0.8, -2.05),
 	"police": Vector3(0.62, 0.75, -2.35),
 }
 ## Indicator spots per model, on its own right side (D-163).
 const BLINKERS := {
 	"car": [Vector3(-0.85, 0.65, -2.15), Vector3(-0.8, 0.6, 2.15)],
 	"hatch": [Vector3(-0.8, 0.85, -1.95), Vector3(-0.78, 0.65, 1.95)],
+	"hothatch": [Vector3(-0.8, 0.88, -2.0), Vector3(-0.8, 0.5, 2.0)],
 	"truck": [Vector3(-1.3, 0.9, -4.95), Vector3(-1.2, 1.1, 4.95)],
 	"truck2": [Vector3(-1.4, 0.9, -4.95), Vector3(-1.3, 1.1, 4.95)],
 }
 ## Lamp areas per model for car.gdshader (model space, |x|; D-144). The red
 ## car uses the shader defaults.
 const LAMP_BOXES := {
+	# Measured from orthographic renders of the model (D-205).
+	"res://assets/models/racer/hothatch.glb": {
+		"tail_min": Vector3(0.55, 0.68, -9.0), "tail_max": Vector3(0.86, 0.92, -1.88),
+		"tail_red_only": true,
+		"head_min": Vector3(0.42, 0.6, 1.8), "head_max": Vector3(0.86, 0.77, 9.0),
+	},
 	"res://assets/models/racer/hatchback.glb": {
 		"tail_min": Vector3(0.0, 0.35, -9.0), "tail_max": Vector3(0.95, 1.3, -1.6),
 		"tail_red_only": true,
@@ -150,6 +175,7 @@ const HD_TEXTURES := {
 	TRUCK2_TEXTURE: "res://assets/models/racer/truck2_truck2_albedo.jpg",
 	HATCH_TEXTURE: "res://assets/models/racer/hatchback_hatchback_albedo.jpg",
 	POLICE_TEXTURE: "res://assets/models/racer/police2_albedo_hd.png",
+	HOTHATCH_TEXTURE: "res://assets/models/racer/hothatch_hothatch_albedo.jpg",
 }
 const GFX_OPTIONS := ["retro", "hd"]
 const GFX_NAMES := {"retro": "RC_GFX_RETRO", "hd": "RC_GFX_HD"}
@@ -348,7 +374,7 @@ var _travel := 0.0         # eased nose angle from sideways travel (D-128)
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_dir := 0.0
 var _music_i := FIRST_TRACK    # current race song index
-var _traffic_pool := {"car": [], "hatch": [], "truck": [], "truck2": []}   # pools of Node3D per model
+var _traffic_pool := {"car": [], "hatch": [], "hothatch": [], "truck": [], "truck2": []}   # pools of Node3D per model
 ## Tyre smoke / dust (D-100): our own pooled billboard puffs in one MultiMesh.
 ## CPUParticles3D drew a stray pure-black puff at the emitter when toggled.
 const PUFF_MAX := 192
@@ -358,6 +384,8 @@ var _puffs: MultiMesh
 var _puff_list: Array = []       # {pos, vel, age, size, col}
 var _puff_t := 0.0
 var _flames: Array = []          # nitro flame meshes
+var _body_model := ""            # the player's car model built (D-205)
+var _exhaust_z := -2.2           # its exhaust tips' z (model space)
 var _cam_pos := Vector3.ZERO
 var _cam_ready := false
 var _cam_x := 0.0
@@ -739,7 +767,9 @@ func _begin_select() -> void:
 	_showroom.hd = _gfx_hd
 	add_to_table(_showroom)
 	_showroom.selected = _chosen_car
-	_showroom.build(func(hue: float) -> Node3D: return _car_instance(hue), load(SKY_TEXTURE), TITLE_FONT)
+	_showroom.build(func(hue: float, i: int) -> Node3D:
+		var m: String = CAR_MODELS[i]
+		return _car_instance(hue, m, HOTHATCH_TEXTURE if m == HOTHATCH_MODEL else CAR_TEXTURE), load(SKY_TEXTURE), TITLE_FONT)
 	_select_hint = UI.label("", 36, UI.WHITE)
 	_select_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	_select_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -785,6 +815,7 @@ func _draw_dmd_select(p) -> void:
 func _begin_race() -> void:
 	if is_instance_valid(_attract_ui):
 		_attract_ui.queue_free()
+	_build_body(CAR_MODELS[_chosen_car])   # the hot hatch for the easy car (D-205)
 	_phase = "race"
 	_phase_t = 0.0
 	_new_sim()
@@ -1117,17 +1148,26 @@ func _car_instance(hue: float, model: String = CAR_MODEL, texture: String = CAR_
 	return node
 
 
-func _build_cars() -> void:
-	_car = Node3D.new()
-	_root.add_child(_car)
-	_car_body = _car_instance(0.0)
-	_player_lights = Night.add_car_lights(_car_body, "car", _puff_texture(), TAIL_AT["car"])
-	_place_tails(_car_body, _player_lights, CAR_MODEL)
-	_add_plate(_car_body)
+## The player's car body for a model (D-205): the model with its night lights,
+## tail glows, number plate and the nitro/backfire flames on its exhausts.
+## Rebuilt when the chosen car uses a different model.
+func _build_body(model: String) -> void:
+	if _body_model == model and is_instance_valid(_car_body):
+		return
+	if is_instance_valid(_car_body):
+		_car_body.queue_free()
+	_flames.clear()
+	_flame_mats.clear()
+	_body_model = model
+	var tex: String = HOTHATCH_TEXTURE if model == HOTHATCH_MODEL else CAR_TEXTURE
+	_car_body = _car_instance(0.0, model, tex)
+	_player_lights = Night.add_car_lights(_car_body, "car", _puff_texture(), TAIL_AT["hothatch" if model == HOTHATCH_MODEL else "car"])
+	_place_tails(_car_body, _player_lights, model)
+	_add_plate(_car_body, PLATES.get(model, PLATES[CAR_MODEL]))
 	_car.add_child(_car_body)
-	_build_puffs()
-	# Nitro flames.
-	for side in [-0.75, 0.75]:
+	var pipes: Array = EXHAUSTS.get(model, EXHAUSTS[CAR_MODEL])
+	_exhaust_z = (pipes[0] as Vector3).z
+	for pipe in pipes:
 		var flame := MeshInstance3D.new()
 		var cone := CylinderMesh.new()
 		cone.top_radius = 0.0
@@ -1143,28 +1183,38 @@ func _build_cars() -> void:
 		fm.emission_energy_multiplier = 3.0
 		cone.material = fm
 		flame.mesh = cone
-		# On the model's exhaust pipes (model space: rear is -Z, pipes at
-		# x +-0.57, 0.28 m up), so they follow the body's yaw (D-097).
+		# On the model's exhaust pipes, so they follow the body's yaw (D-097).
 		flame.rotation_degrees = Vector3(-90, 0, 0)  # tip points out the back
-		flame.position = Vector3(signf(side) * 0.57, 0.28, -2.2 - 0.5)
+		var pv: Vector3 = pipe
+		flame.position = Vector3(pv.x, pv.y, pv.z - 0.5)
 		flame.visible = false
 		_car_body.add_child(flame)
 		_flames.append(flame)
+
+
+func _build_cars() -> void:
+	_car = Node3D.new()
+	_root.add_child(_car)
+	_build_body(CAR_MODELS[_chosen_car])
+	_build_puffs()
 	for kind in _traffic_pool:
-		var count: int = TRAFFIC_POOL if kind == "car" else (HATCH_POOL if kind == "hatch" else Sim.MAX_TRUCKS)
+		var count: int = TRAFFIC_POOL if kind == "car" else (HATCH_POOL if kind == "hatch"
+			else (HOTHATCH_POOL if kind == "hothatch" else Sim.MAX_TRUCKS))
 		for i in count:
 			var t: Node3D
 			match kind:
 				"car": t = _car_instance(0.0)
 				"hatch": t = _car_instance(0.0, HATCH_MODEL, HATCH_TEXTURE)
+				"hothatch": t = _car_instance(0.0, HOTHATCH_MODEL, HOTHATCH_TEXTURE)
 				"truck": t = _car_instance(0.0, TRUCK_MODEL, TRUCK_TEXTURE)
 				_: t = _car_instance(0.0, TRUCK2_MODEL, TRUCK2_TEXTURE)
 			var light_kind := "truck" if kind.begins_with("truck") else "car"
 			_add_headlights(t, light_kind)
 			_add_blinkers(t, kind)
 			t.set_meta("night", Night.add_car_lights(t, light_kind, _puff_texture(), TAIL_AT.get(kind, Vector3.ZERO)))
-			if kind == "car" or kind == "hatch":
-				_place_tails(t, t.get_meta("night"), HATCH_MODEL if kind == "hatch" else CAR_MODEL)
+			if kind == "car" or kind == "hatch" or kind == "hothatch":
+				_place_tails(t, t.get_meta("night"),
+					{"hatch": HATCH_MODEL, "hothatch": HOTHATCH_MODEL}.get(kind, CAR_MODEL))
 			t.visible = false
 			_root.add_child(t)
 			_traffic_pool[kind].append(t)
@@ -1270,7 +1320,7 @@ func _add_headlights(node: Node3D, kind: String) -> void:
 ## The hero car's rear number plate, "TRN" (D-114, D-116): California style.
 ## A cream plate with a red state name, orange stripes and a setting sun, bold
 ## navy letters and an orange motto, drawn once into a small viewport texture.
-func _add_plate(body: Node3D) -> void:
+func _add_plate(body: Node3D, at := Vector3(0.0, PLATE_Y, PLATE_Z)) -> void:
 	var plate := MeshInstance3D.new()
 	var vp := SubViewport.new()
 	vp.size = Vector2i(192, 96)
@@ -1314,7 +1364,7 @@ func _add_plate(body: Node3D) -> void:
 	m.roughness = 0.6
 	q.material = m
 	plate.mesh = q
-	plate.position = Vector3(0.0, PLATE_Y, PLATE_Z)
+	plate.position = at
 	plate.rotation_degrees = Vector3(0, 180, 0)   # face backwards
 	body.add_child(plate)
 
@@ -1871,15 +1921,17 @@ func _animate(delta: float) -> void:
 			var short := 0.32 if pop else 1.0
 			var sy := (0.8 + randf() * 0.7) * short
 			fl.scale = Vector3(1.0, sy, 1.0)
-			fl.position.z = -2.2 - 0.5 * sy   # keep the cone's base on the pipe
+			fl.position.z = _exhaust_z - 0.5 * sy   # keep the cone's base on the pipe
 	# Traffic
-	var used := {"car": 0, "hatch": 0, "truck": 0, "truck2": 0}
+	var used := {"car": 0, "hatch": 0, "hothatch": 0, "truck": 0, "truck2": 0}
 	for t in sim.traffic:
 		var kind: String = t.get("kind", "car")
 		if kind == "truck" and int(t.id) % 2 == 1:
 			kind = "truck2"   # two truck models, fixed per vehicle (D-121)
 		elif kind == "car" and int(t.id) % 5 in [1, 3]:
 			kind = "hatch"    # the hatchback in the mix (D-136)
+		elif kind == "car" and int(t.id) % 5 == 4:
+			kind = "hothatch"   # the hot hatch too (D-205)
 		var pool: Array = _traffic_pool[kind]
 		if used[kind] >= pool.size():
 			continue
@@ -1890,7 +1942,7 @@ func _animate(delta: float) -> void:
 		var h := tr_.heading(t.s)
 		var wy := h + (PI if t.v < 0.0 else 0.0)     # oncoming faces us (D-099)
 		node.basis = node.basis * Basis(Vector3.UP, _sprite_yaw(wy, cam_yaw) - h) * MODEL_TURN
-		if kind == "car" or kind == "hatch":
+		if kind == "car" or kind == "hatch" or kind == "hothatch":
 			for m in node.find_children("*", "MeshInstance3D", true, false):
 				InstParam.set_param((m as MeshInstance3D), "hue", t.hue)
 				InstParam.set_param((m as MeshInstance3D), "overhead", _overhead(t.s))

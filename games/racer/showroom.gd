@@ -101,7 +101,7 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 		ring.position = Vector3(CAR_X, y - 0.16, 0)
 		root.add_child(ring)
 		_rings.append(ring)
-		var car: Node3D = make_car.call(float(Sim.CARS[i].hue))
+		var car: Node3D = make_car.call(float(Sim.CARS[i].hue), i)   # each car's own model (D-205)
 		car.position = Vector3(CAR_X, y, 0)
 		root.add_child(car)
 		_cars.append(car)
