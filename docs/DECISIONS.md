@@ -2232,3 +2232,10 @@
   - The old song holds full volume for 1.5 s, then falls to −60 dB over the rest of the 6 s (quadratic ease-in).
   - An offline render of the 1→2 change with these curves stays at −11 to −14 dB throughout.
 - **Status:** Accepted
+
+### D-228 — Turbo Run city: building windows no longer flicker
+- **Date:** 2026-11-23
+- **Bug (director):** the city buildings' textures flickered (speckled noise inside the windows and shopfronts).
+- **Cause:** `building.gdshader` passed each building's seed and size through ordinary interpolated varyings. They arrived with tiny per-pixel differences, and the `sin()`-based hash, fed large arguments (about 40,000), turned those into random per-pixel values that changed from frame to frame.
+- **Fix:** the per-building varyings (`cust`, `bsize`) are `flat`, and the hash is a sin-free one (Dave Hoskins' hash12), stable on every GPU. Windows, rooms, blinds and shopfronts are now solid and steady.
+- **Status:** Accepted

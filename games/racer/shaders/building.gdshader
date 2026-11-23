@@ -10,11 +10,16 @@ uniform bool hd = false;
 
 varying vec3 lp;      // metres from the box centre
 varying vec3 ln;      // local normal
-varying vec3 bsize;   // building size (m)
-varying vec4 cust;
+// D-228: per building, so not interpolated: blended values came out with tiny
+// per-pixel differences that the hash turned into flickering speckle.
+varying flat vec3 bsize;   // building size (m)
+varying flat vec4 cust;
 
+// A sin-free hash (stable on every GPU for the large inputs used here).
 float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
 }
 
 void vertex() {
