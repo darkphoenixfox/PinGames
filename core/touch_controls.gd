@@ -17,15 +17,19 @@ extends Node
 const UI = preload("res://core/ui/ui.gd")
 
 ## Top to bottom: [action, label key, stretch ratio]
+## D-220: both columns have the same slots and ratios, so the flippers match
+## in size and the two magna buttons line up; an empty slot on the left sits
+## level with LAUNCH ("" = no button).
 const LEFT_COLUMN := [
 	[&"exit", "TOUCH_EXIT", 1.0],
+	[&"", "", 1.3],
 	[&"magna_l", "TOUCH_MAGNA_L", 1.3],
 	[&"flip_l", "TOUCH_LEFT", 3.0],
 ]
 const RIGHT_COLUMN := [
 	[&"start", "TOUCH_START", 1.0],
-	[&"magna_r", "TOUCH_MAGNA_R", 1.3],
 	[&"launch", "TOUCH_LAUNCH", 1.3],
+	[&"magna_r", "TOUCH_MAGNA_R", 1.3],
 	[&"flip_r", "TOUCH_RIGHT", 3.0],
 ]
 const COLORS := {
@@ -40,6 +44,7 @@ var left := VBoxContainer.new()
 var right := VBoxContainer.new()
 var toggle := Button.new()
 var _toggle_space := Control.new()
+var _left_space := Control.new()   # the same height on the left (D-220)
 var table_view: Control  # touches on its halves work the flippers
 var _buttons := {}        # action -> Panel
 var _fingers := {}        # pointer index -> action held by it
@@ -59,8 +64,9 @@ func _init() -> void:
 	for col in [left, right]:
 		col.add_theme_constant_override("separation", 6)
 		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	left.add_child(_left_space)
 	for b in LEFT_COLUMN:
-		left.add_child(_make_button(b))
+		left.add_child(_make_button(b) if b[0] != &"" else _make_blank(b))
 	right.add_child(_toggle_space)   # the corner toggle sits over this
 	for b in RIGHT_COLUMN:
 		right.add_child(_make_button(b))
@@ -72,6 +78,14 @@ func _ready() -> void:
 	# it never sees the "just released" frame (and the picker acts on release).
 	process_priority = -100
 	set_shown(bool(Config.get_value("display", "touch_controls")))
+
+
+func _make_blank(b: Array) -> Control:
+	var c := Control.new()
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	c.size_flags_stretch_ratio = b[2]
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return c
 
 
 func _make_button(b: Array) -> Panel:
@@ -114,6 +128,8 @@ func _make_toggle() -> void:
 ## default labels (D-219).
 func set_labels(labels: Dictionary) -> void:
 	for b in LEFT_COLUMN + RIGHT_COLUMN:
+		if not _buttons.has(b[0]):
+			continue
 		var panel: Panel = _buttons[b[0]]
 		(panel.get_child(0) as Label).text = str(labels.get(b[0], tr(b[1])))
 
@@ -136,6 +152,7 @@ func fit(win: Vector2) -> void:
 	toggle.offset_right = -6
 	toggle.offset_top = 6
 	_toggle_space.custom_minimum_size.y = px + 16 + 8
+	_left_space.custom_minimum_size.y = _toggle_space.custom_minimum_size.y
 	if px != _font_px:
 		_font_px = px
 		for panel in _buttons.values():

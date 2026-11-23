@@ -2122,3 +2122,12 @@
   - Their default label is MAGNA. A game renames them through the `touch_controls` group (`set_labels`): the racer shows BRAKE and SHIFT, and restores the defaults when it exits.
   - Pressing either one switches the racer into its 4-button mode on the spot (D-189).
 - **Status:** Accepted
+
+### D-220 — Touch controls: matching columns
+- **Date:** 2026-11-23
+- **Decision (director):** the LEFT and RIGHT buttons should be the same size, and the two magna buttons the same size and position as each other.
+- **Fix:** both columns now have the same slots with the same stretch ratios:
+  - left: top space (as tall as the HIDE toggle's), EXIT 1, empty 1.3, MAGNA/BRAKE 1.3, LEFT 3;
+  - right: toggle space, START 1, LAUNCH 1.3, MAGNA/SHIFT 1.3, RIGHT 3.
+  - LAUNCH and the right magna swapped places, so the magnas sit level directly above the flippers.
+- **Status:** Accepted
