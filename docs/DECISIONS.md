@@ -2728,3 +2728,13 @@
 - **Power-ups:** drops pick from every kind except the active one (`random_powerup_kind`). With none active, all six can drop.
 - **Test:** covers both.
 - **Status:** Accepted
+
+### D-276 — Bezel on the side-panel frames
+- **Date:** 2026-11-23
+- **Decision (director):** add a bezel effect to the DMD and backglass frames (D-266).
+- **Shader:** `core/ui/bezel_frame.gdshader` draws each frame: the frame texture tiled (a tile is 3× the frame's thickness) and darkened slightly, with a raised bezel.
+  - **Outer edge:** a third of the band lit along the top and left, shaded along the bottom and right.
+  - **Inner lip:** the reverse, as if the screen sits recessed.
+  - **Seam:** dark where the frame meets the screen.
+- **Thickness:** the frame is 2.6 % of the window height (was 1.8 %), so the bevel reads.
+- **Status:** Accepted

@@ -14,6 +14,7 @@ extends Node
 const UI = preload("res://core/ui/ui.gd")
 const TouchControls = preload("res://core/touch_controls.gd")
 const ScreenView = preload("res://core/screen_view.gd")
+const BEZEL_SHADER = preload("res://core/ui/bezel_frame.gdshader")   # D-276
 const VrCabinet = preload("res://core/vr_cabinet.gd")
 const DMD_SHADER = preload("res://core/shaders/dmd_dots.gdshader")
 
@@ -392,7 +393,11 @@ func _single_layout() -> void:
 	_single_table = t
 	for i in 2:   # D-266: frames, behind the panels
 		var fr := TextureRect.new()
-		fr.stretch_mode = TextureRect.STRETCH_TILE
+		fr.stretch_mode = TextureRect.STRETCH_SCALE   # D-276: the bezel shader tiles it
+		fr.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+		var fm := ShaderMaterial.new()
+		fm.shader = BEZEL_SHADER
+		fr.material = fm
 		fr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		fr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		fr.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -482,7 +487,7 @@ func _place_single(win: Vector2) -> void:
 			# less a gap; each panel and its frame fit inside it.
 			var half := win.x * play_half_w if play_half_w > 0.0 else win.y * 9.0 / 32.0
 			var gap := win.x * 0.025
-			var th := maxf(6.0, win.y * 0.018)
+			var th := maxf(8.0, win.y * 0.026)   # D-276: thicker, for the bezel
 			var side_w := maxf(win.x * 0.5 - half - gap, 1.0)
 			var room := maxf(side_w - th * 2.0 - win.x * 0.02, 1.0)
 			var mid_y := win.y * 0.4
@@ -505,6 +510,10 @@ func _place_single(win: Vector2) -> void:
 					fr.position = r.position - Vector2(th, th)
 					fr.size = r.size + Vector2(th, th) * 2.0
 					fr.visible = true
+					var fmat := fr.material as ShaderMaterial
+					fmat.set_shader_parameter("rect_size", fr.size)
+					fmat.set_shader_parameter("thickness", th)
+					fmat.set_shader_parameter("tile_px", th * 3.0)
 		elif table_flex and not dmd_above:   # the game fills the window, the DMD over its top (D-254)
 			t.position = Vector2.ZERO
 			t.size = win
