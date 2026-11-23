@@ -15,6 +15,13 @@
 extends Node
 
 const UI = preload("res://core/ui/ui.gd")
+const Face = preload("res://core/ui/touch_button.gd")
+
+## D-279: each button's icon in the overlay (a game can swap them, set_labels).
+const ICONS := {
+	&"flip_l": "left", &"flip_r": "right", &"launch": "launch", &"start": "start",
+	&"exit": "exit", &"magna_l": "magna", &"magna_r": "magna",
+}
 
 ## Top to bottom: [action, label key, stretch ratio]
 ## D-220: both columns have the same slots and ratios, so the flippers match
@@ -51,8 +58,11 @@ var overlay := false:
 	set(v):
 		overlay = v
 		for act in _buttons:
+			(_faces[act] as Control).visible = v
 			_style(act, false)
 var _buttons := {}        # action -> Panel
+var _labels := {}         # action -> Label
+var _faces := {}          # action -> Face (the overlay's look, D-279)
 var _fingers := {}        # pointer index -> action held by it
 var _font_px := 24
 var _down_frame := {}     # action -> frame it was pressed
@@ -104,8 +114,13 @@ func _make_button(b: Array) -> Panel:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var face := Face.new(COLORS[b[0]], ICONS[b[0]])
+	face.visible = overlay
+	panel.add_child(face)
 	panel.add_child(label)
 	_buttons[b[0]] = panel
+	_labels[b[0]] = label
+	_faces[b[0]] = face
 	_style(b[0], false)
 	return panel
 
@@ -131,13 +146,14 @@ func _make_toggle() -> void:
 
 
 ## Renames buttons for the current game ({action: text}); {} restores the
-## default labels (D-219).
-func set_labels(labels: Dictionary) -> void:
+## default labels (D-219). `icons` ({action: icon name}, D-279) swaps their
+## overlay icons the same way.
+func set_labels(labels: Dictionary, icons: Dictionary = {}) -> void:
 	for b in LEFT_COLUMN + RIGHT_COLUMN:
 		if not _buttons.has(b[0]):
 			continue
-		var panel: Panel = _buttons[b[0]]
-		(panel.get_child(0) as Label).text = str(labels.get(b[0], tr(b[1])))
+		(_labels[b[0]] as Label).text = str(labels.get(b[0], tr(b[1])))
+		_faces[b[0]].icon = str(icons.get(b[0], ICONS[b[0]]))
 
 
 func set_shown(on: bool) -> void:
@@ -164,8 +180,8 @@ func fit(win: Vector2) -> void:
 	_left_space.custom_minimum_size.y = _toggle_space.custom_minimum_size.y
 	if px != _font_px:
 		_font_px = px
-		for panel in _buttons.values():
-			(panel.get_child(0) as Label).add_theme_font_size_override("font_size", px)
+		for l in _labels.values():
+			(l as Label).add_theme_font_size_override("font_size", px)
 
 
 ## D-273: the overlay's buttons: round, all one size, four to a column in the
@@ -175,19 +191,28 @@ var _round_d := 0.0
 
 func _fit_round(win: Vector2) -> void:
 	var bar_h := win.y * (0.42 if win.y > win.x else 0.6)
-	var sep := 10.0
-	var d := floorf(minf((bar_h - sep * 3.0) / 4.0, minf(win.x, win.y) * 0.17))
+	# D-279: a margin from the screen's edges (rounded corners, gesture areas,
+	# and room for each button's shadow and glow) and wider gaps between them.
+	var edge := roundf(minf(win.x, win.y) * 0.035)
+	var sep := roundf(maxf(10.0, minf(win.x, win.y) * 0.022))
+	var d := floorf(minf((bar_h - edge - sep * 3.0) / 4.0, minf(win.x, win.y) * 0.17))
 	d = maxf(d, 44.0)
 	_toggle_space.custom_minimum_size.y = 0
 	_left_space.custom_minimum_size.y = 0
 	for col in [left, right]:
 		col.alignment = BoxContainer.ALIGNMENT_END
 		col.add_theme_constant_override("separation", int(sep))
-		col.custom_minimum_size.x = d
+		col.custom_minimum_size.x = d + edge
+		if not _edge_space.has(col):   # the gap under the lowest button
+			_edge_space[col] = Control.new()
+			(_edge_space[col] as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+			col.add_child(_edge_space[col])
+		(_edge_space[col] as Control).custom_minimum_size.y = maxf(0.0, edge - sep)
 		for c in col.get_children():
-			if c == _toggle_space or c == _left_space:
+			if c == _toggle_space or c == _left_space or c == _edge_space[col]:
 				continue
 			(c as Control).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			(c as Control).size_flags_horizontal = Control.SIZE_SHRINK_END if col == left else Control.SIZE_SHRINK_BEGIN
 			(c as Control).custom_minimum_size = Vector2(d, d)
 	var px := maxi(12, int(d * 0.2 / 12.0) * 12)
 	toggle.add_theme_font_size_override("font_size", maxi(12, int(minf(win.x, win.y) * 0.04 / 12.0) * 12))
@@ -196,34 +221,42 @@ func _fit_round(win: Vector2) -> void:
 	if d != _round_d or px != _font_px:
 		_round_d = d
 		_font_px = px
-		# D-273: the dot font sized so the longest label (6 letters, 6 bits a
-		# letter) fits across the circle.
-		var bit := maxi(2, int(d * 0.8 / 36.0))
+		# D-273 / D-279: the dot font sized so the longest label (6 letters,
+		# 6 bits a letter) fits across the button under its icon.
+		var bit := maxi(2, int(d * LABEL_W / 36.0))
 		var size := int(ceilf(bit * 7.0 / 0.72))
 		var f := UI.DotText.font(size)
 		for act in _buttons:
-			var l := (_buttons[act] as Panel).get_child(0) as Label
+			var l := _labels[act] as Label
 			l.add_theme_font_override("font", f)
 			l.add_theme_font_size_override("font_size", size)
-			# Tiny circles: scale the label down so it still fits.
-			var k := minf(1.0, d * 0.85 / (36.0 * bit))
-			l.pivot_offset = Vector2(d, d) * 0.5
+			# Small buttons: scale the label down so it still fits.
+			var k := minf(1.0, d * LABEL_W / (36.0 * bit))
+			# In the lower part of the button, under the icon.
+			l.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+			l.size = Vector2(d, d * 0.3)
+			l.position = Vector2(0.0, d * 0.56)
+			l.pivot_offset = l.size * 0.5
 			l.scale = Vector2(k, k)
 			_style(act, false)
 
 
+const LABEL_W := 0.6   # the label's width as a share of the button's (D-279)
+var _edge_space := {}  # column -> the spacer under its lowest button
+
+
 func _style(action: StringName, down: bool) -> void:
+	if overlay:   # D-279: the face draws the button; the panel only takes touches
+		(_buttons[action] as Panel).add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+		_faces[action].set_down(down)
+		(_labels[action] as Label).modulate = Color(1, 1, 1, 1.0 if down else 0.92)
+		return
 	var c: Color = COLORS[action]
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(c, 0.75) if down else Color(c.darkened(0.6), 0.55)
 	sb.border_color = c.lightened(0.3) if down else Color(c, 0.8)
 	sb.set_border_width_all(3)
 	sb.set_corner_radius_all(18)
-	if overlay:   # D-273: round, a little more visible than D-251
-		sb.bg_color = Color(c, 0.55) if down else Color(c.darkened(0.35), 0.32)
-		sb.border_color = Color(c.lightened(0.3), 0.95) if down else Color(c, 0.7)
-		sb.set_border_width_all(4)
-		sb.set_corner_radius_all(int(maxf(_round_d, 48.0) * 0.5) + 1)
 	(_buttons[action] as Panel).add_theme_stylebox_override("panel", sb)
 
 
@@ -267,6 +300,8 @@ func _finger(index: int, pos: Vector2) -> void:
 		Input.action_press(now)
 		_down_frame[now] = Engine.get_process_frames()
 		_style(now, true)
+		if index != MOUSE and _buttons.has(now):
+			Input.vibrate_handheld(12)   # D-279: a tick under the finger
 	get_viewport().set_input_as_handled()
 
 

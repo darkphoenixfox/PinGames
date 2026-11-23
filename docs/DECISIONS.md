@@ -2766,3 +2766,14 @@
 - **Tools:** `--log-perf` (`?log-perf`) prints the frame rate, worst frame, draw calls, primitives and video memory every 2 s. `scripts/tools/measure_load.gd <game>` times each file a loading screen loads. The shell log now gives the load, start, warm-up and shown times.
 - **Test:** sounds made in a batch are the ones `Synth.make` returns.
 - **Status:** Accepted
+
+### D-279 — Touch overlay: game-quality buttons
+- **Date:** 2026-11-23
+- **Decision (director):** make the web touchscreen buttons proper Google Play store game UI level, not simple unappealing circles.
+- **Look** (`core/ui/touch_button.gd` + `touch_button.gdshader`, the overlay of the single layout: web and Android): each button is a shaded glass disc in its colour with a bevelled rim (bright at the top, deep below), a gloss highlight, a soft drop shadow and a glow. It's drawn by a shader, so it stays smooth at any size.
+- **Icons**, in white over the glass, with the label small underneath: double arrowheads for LEFT / RIGHT, an arrow off a base line for LAUNCH, a play triangle for START, a cross for EXIT, a spark for the magna saves. A game can swap icons with the labels (`set_labels(labels, icons)`): Turbo Run shows the brake-lamp sign for BRAKE and a gear lever for SHIFT.
+- **Feel:** a held button sinks (7 % smaller), fills with its colour and its glow flares, easing in over 0.05 s and out over 0.16 s. A touch gives a 12 ms vibration where the device supports it.
+- **Placement:** the buttons keep D-273's one size and D-220's slots, but stand off the screen's edges (3.5 % of the short side) with wider gaps, so nothing sits against a rounded corner and the shadows have room.
+- **Unchanged:** the side-column style of the old `web` page layout, and the HIDE toggle.
+- **Checked:** landscape (Turbo Run) and portrait (Tilt Breaker) previews, the latter under the Compatibility renderer the browser uses. Not checked on a real phone.
+- **Status:** Accepted

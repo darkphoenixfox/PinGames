@@ -549,7 +549,8 @@ func start(_players: int) -> void:
 	_on_table_shape.call_deferred()   # D-255: the TABLE may already have its shape
 
 	# Touch buttons (D-219): the magna saves are the brake and the shifter here.
-	get_tree().call_group("touch_controls", "set_labels", {&"magna_l": tr("TOUCH_BRAKE"), &"magna_r": tr("TOUCH_SHIFT")})
+	get_tree().call_group("touch_controls", "set_labels", {&"magna_l": tr("TOUCH_BRAKE"), &"magna_r": tr("TOUCH_SHIFT")},
+		{&"magna_l": "brake", &"magna_r": "shift"})   # D-279: their icons
 	for s in SOUNDS:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
 	_manual_locked = str(Config.get_value("operator", "cabinet_buttons")) == "4"
