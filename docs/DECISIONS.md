@@ -2934,3 +2934,11 @@
 - **Dev:** `--rc-2p` (`--rc-car2=N`) starts straight in 2P. `--rc-autopilot` drives both cars.
 - **1P:** unchanged.
 - **Status:** Accepted
+
+### D-290 — Turbo Run 2P: a tag over the other player's car when it's ahead
+- **Date:** 2026-11-23
+- **Decision (director):** each half shows the other player's tag (`P1` / `P2` in red, outlined) over a red down-pointing triangle above their car. It shows only while that car is ahead (3–600 m) and in line of sight.
+- **How:**
+  - The tag is a billboarded Label3D and Sprite3D (the triangle is drawn at runtime). Both are fixed-size on screen and pixel-crisp, with the triangle's tip 2.3 m above the road over the car.
+  - They're drawn with the depth test, so hills, tunnels, buildings and traffic in the way hide the tag: that gives the line of sight without ray casts.
+- **Status:** Accepted

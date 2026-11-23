@@ -395,6 +395,7 @@ var _p2_car := Sim.DEFAULT_CAR
 var _hues := [-1.0, -1.0]   # each player's car colour (2P)
 var _rival: Node3D = null   # the other player's car
 var _rival_wheel := 0.0
+var _rival_tag: Node3D = null   # "P1"/"P2" and a down triangle over the other car while it's ahead
 var _time_caption: Label    # TIME, or POSITION in 2P
 
 
@@ -1481,6 +1482,58 @@ func _build_rival(car_i: int, hue: float) -> void:
 	_rival.set_meta("night", Night.add_car_lights(_rival, "car", _puff_texture(), TAIL_AT[MODEL_LIGHTS[m]]))
 	_place_tails(_rival, _rival.get_meta("night"), m)
 	_root.add_child(_rival)
+	_build_rival_tag()
+
+
+## The other player's tag (director): "P1"/"P2" in red over a red triangle
+## pointing down at their car. Constant size on screen, and drawn with depth,
+## so hills, tunnels and traffic in the way hide it (line of sight).
+const TAG_RED := Color(1.0, 0.16, 0.12)
+const TAG_HEIGHT := 2.3      # m above the road (the triangle's tip)
+const TAG_AHEAD_MAX := 600.0  # m: further ahead it isn't shown
+const CAR_TAG_MIN := 3.0      # m ahead before it shows (not when side by side)
+
+
+func _build_rival_tag() -> void:
+	if is_instance_valid(_rival_tag):
+		_rival_tag.queue_free()
+	_rival_tag = Node3D.new()
+	var lab := Label3D.new()
+	lab.text = tr("RC_DMD_P") % (2 - _role)
+	lab.font = load("res://assets/fonts/pinpixel.ttf")
+	lab.font_size = 48
+	lab.outline_size = 12
+	lab.outline_modulate = Color(0.1, 0.0, 0.0)
+	lab.modulate = TAG_RED
+	lab.pixel_size = 0.0011
+	lab.fixed_size = true
+	lab.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lab.shaded = false
+	lab.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	lab.alpha_cut = Label3D.ALPHA_CUT_DISCARD
+	lab.offset = Vector2(0, 62)     # above the triangle (in label pixels)
+	_rival_tag.add_child(lab)
+	# The triangle: a small picture drawn here, pointing down.
+	var img := Image.create(15, 9, false, Image.FORMAT_RGBA8)
+	for y in 9:
+		for x in 15:
+			var inside := absf(x - 7.0) <= 7.0 - y * 7.0 / 8.0
+			if inside:
+				var edge := absf(x - 7.0) > 6.0 - y * 7.0 / 8.0 or y == 0
+				img.set_pixel(x, y, Color(0.1, 0.0, 0.0) if edge else TAG_RED)
+	var tri := Sprite3D.new()
+	tri.texture = ImageTexture.create_from_image(img)
+	tri.pixel_size = 0.0042
+	tri.fixed_size = true
+	tri.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	tri.shaded = false
+	tri.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	tri.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	tri.centered = true
+	tri.offset = Vector2(0, 5)      # tip at the node's position
+	_rival_tag.add_child(tri)
+	_rival_tag.visible = false
+	_root.add_child(_rival_tag)
 
 
 ## Draws the other player's car where the shared race has it: yawed by its
@@ -1493,6 +1546,11 @@ func _animate_rival(delta: float, cam_yaw: float) -> void:
 	var rs: float = sim.player_get(o, "s")
 	var rx: float = sim.player_get(o, "x")
 	_rival.visible = absf(rs - sim.s) < VIEW_AHEAD
+	if is_instance_valid(_rival_tag):   # only while they're ahead (director)
+		var ahead := rs - sim.s
+		_rival_tag.visible = _rival.visible and ahead > CAR_TAG_MIN and ahead < TAG_AHEAD_MAX
+		if _rival_tag.visible:
+			_rival_tag.position = tr_.point(rs, rx, TAG_HEIGHT)
 	if not _rival.visible:
 		return
 	_rival.transform = tr_.frame(rs, rx)
