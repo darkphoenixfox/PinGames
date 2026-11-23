@@ -261,9 +261,15 @@ func player_get(i: int, f: String) -> Variant:
 	return _pl[i][f]
 
 
+## D-286: in 2P, the ship each event of the last step came from (by index;
+## missing = not a ship's own event).
+var event_ship: Array = []
+
+
 ## 2-player step (D-285): each player's controls as [left, right, launch, dash].
 func step_two(dt: float, a: Array, b: Array) -> void:
 	events.clear()
+	event_ship.clear()
 	if state == State.OVER or state == State.LEVEL_CLEAR:
 		return
 	_time += dt
@@ -273,6 +279,8 @@ func step_two(dt: float, a: Array, b: Array) -> void:
 		var c: Array = inp[i]
 		_update_power_and_blast(dt, (c[0] and c[1]) or charge_held)
 		_move_paddle(dt, c[0], c[1], c[3])
+		while event_ship.size() < events.size():
+			event_ship.append(i)
 	_use(0)
 	_update_enemies(dt)
 	if state == State.OVER:
@@ -392,6 +400,14 @@ func bricks_alive() -> int:
 
 func paddle_rect() -> Rect2:
 	return Rect2(paddle_x - PADDLE_W * 0.5, paddle_y - PADDLE_H * 0.5, PADDLE_W, PADDLE_H)
+
+
+## A player's ship field, set whichever ship is live (2P, D-286).
+func player_set(i: int, f: String, v: Variant) -> void:
+	if not two_player or i == cur:
+		set(f, v)
+	else:
+		_pl[i][f] = v
 
 
 ## Advances the simulation. left/right: flipper buttons held. launch: pressed this

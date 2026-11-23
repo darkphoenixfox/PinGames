@@ -152,6 +152,13 @@ Rules:
 - **Level-change boost (D-076):** "LEVEL CLEAR!" shows first, then the ship glides to the centre and levels out, and lifts off as the DMD plays the pixel ship boosting away (D-085).
 - **Game over (D-044):** when the last charge is lost, the explosion grows until it fills the whole screen, with a bigger, longer blast. The screen fades to black, then **GAME OVER** and the **final score** show on the TABLE, DMD and backglass. After about 4 s (or Launch/Start to skip) the game goes to high-score entry or back to the picker.
 
+**2 players (D-285, D-286).** Available only on a single landscape screen with a keyboard or gamepads (D-284). After PRESS START, players choose 1 PLAYER or 2 PLAYERS, then the difficulty.
+- **Field:** wider, with 19-column levels (`levels/level2p_*.txt`).
+- **Ships:** two, P2's flying slightly higher, so they pass each other. Each has its own power-up and energy bar (shown at the bottom corners).
+- **Shared:** one ball, the lives and the score. A drain costs a shared life and passes the serve to the other player.
+- **Controls:** P1 uses the arrows, Space and Ctrl, or their own pad. P2 uses A/D (move), W (launch) and Q/E (dash), or their own pad.
+
+
 ### 5.2 SKY STRIKER — vertical shmup (TATE) (M3)
 
 *Hidden from the picker, attract and operator menu until it has something to show (D-184); `--game=shmup` still opens it.*

@@ -2868,3 +2868,17 @@
 - **1P:** unchanged. All the existing tests pass.
 - **Tests:** a wider field and levels, the offset ships, each player moving only their own ship, per-ship power-ups, and a drain costing a shared life and passing the serve.
 - **Status:** Accepted (part 1; the view and the 1P/2P choice follow)
+
+### D-286 — Tilt Breaker 2P, part 2: the view and the 1P/2P choice
+- **Date:** 2026-11-23
+- **Decision:** completes D-285 on screen.
+- **The choice:** when `CabinetInput.two_player_possible()` (single landscape screen, keyboard or pads, D-284), PRESS START opens 1 PLAYER / 2 PLAYERS (flippers choose, Launch confirms), then the difficulty as before. Otherwise the choice is skipped.
+- **Going 2P:** choosing 2 PLAYERS turns on player 2's controls and starts the 2P simulation on the wide field. It rebuilds the bricks, the edge shields and the shield barrier for the wide field, and builds a second ship (warm key light).
+- **The view's ship state:** like the simulation's, one ship's nodes and view state (`VIEW_FIELDS`) are live at a time, swapped by `_view_use(i)`, which also swaps the simulation. `_animate_ship` (position, banking, engines, blinking, shield flash, recoil, charge glow, Lightspeed ghosts, recharge flash) runs once per ship. Each event is shown on its own ship (`Sim.event_ship`, the ship named in `paddle`/`powerup_collect`, the server for `serve`).
+- **Intro and outro:** both ships fly in together; at a level's end each settles in the middle of its half and lifts off.
+- **The HUD:** each player's energy bar shows at the bottom corners of the TABLE (P1 blue, P2 orange), coloured by their power-up and labelled with its letter. The DMD shows the shared score and lives; at the start it reads "2 PLAYERS".
+- **P2 controls:** `p2_flip_l` / `p2_flip_r` move, `p2_launch` fires and charges, and `p2_magna_*` dash. P2's stick steers (`steer_axis(1)`).
+- **Leaving the game:** turns 2P input off again.
+- **Dev:** `--tb-2p` starts straight in 2P. `--screenshot-delay` counts frames, not seconds.
+- **1P:** unchanged.
+- **Status:** Accepted

@@ -221,6 +221,13 @@ var _charge_level_shown := 0
 var _charge_sound: AudioStreamPlayer  # the rising charge sfx (cut on release)
 var _charge_sound_name := ""
 var _launch := false
+var _launch2 := false   # D-286: player 2
+var _dash2 := 0
+var _charge_btn2 := false
+var _players_sel := 0   # 0 = 1 player, 1 = 2 players
+var _players_ui: Control
+var _players_rows: Array = []
+var _p2_bars: Array = []   # [[root, fill, label], ...] per player (TABLE energy bars)
 var _charge_btn := false   # D-264
 var _dash := 0
 var _dash_glow := 0.0
@@ -283,6 +290,8 @@ func start(_players: int) -> void:
 	_build_hud()
 	_build_backglass()
 	DebugTools.debug_action.connect(_on_debug_action)
+	if Config.cli.has("tb-2p"):   # dev: a 2-player game (D-286)
+		_go_two()
 	if Config.cli.has("tb-skip-intro"):  # dev: straight into play
 		Audio.play_music(MUSIC)
 		_enter_play()
@@ -295,11 +304,25 @@ func on_action(action: StringName, pressed: bool) -> void:
 	# like both flippers; only a press made while the ball is in play counts.
 	if action == &"launch":
 		_charge_btn = pressed and Screens.current_layout == "single" and sim != null and sim.state == Sim.State.PLAY
+	if action == &"p2_launch":   # D-286
+		_charge_btn2 = pressed and sim != null and sim.state == Sim.State.PLAY
 	if not pressed:
 		return
 	if _phase == "attract":
 		if action == &"start" or action == &"launch":
-			_enter_select()
+			if CabinetInput.two_player_possible():
+				_enter_players()   # D-286: 1 PLAYER / 2 PLAYERS first
+			else:
+				_enter_select()
+		return
+	if _phase == "players":
+		match action:
+			&"flip_l", &"flip_r", &"magna_l", &"magna_r":
+				_players_sel = 1 - _players_sel
+				Audio.sfx("move")
+				_refresh_players()
+			&"launch", &"start":
+				_confirm_players()
 		return
 	if _phase == "select":
 		match action:
@@ -315,6 +338,16 @@ func on_action(action: StringName, pressed: bool) -> void:
 	if _finale_t >= FINALE_SKIP_AT and (action == &"launch" or action == &"start"):
 		_finale_t = FINALE_END_AT
 		return
+	match action:
+		&"p2_launch":   # D-286
+			_launch2 = true
+			return
+		&"p2_magna_l":
+			_dash2 = -1
+			return
+		&"p2_magna_r":
+			_dash2 = 1
+			return
 	match action:
 		&"launch", &"start":
 			_launch = true
@@ -352,20 +385,43 @@ func _process(delta: float) -> void:
 		return
 	if Config.cli.has("tb-dmd-anim") and not Dmd.is_animating():  # dev: loop one DMD animation
 		_dmd_anim(str(Config.cli["tb-dmd-anim"]))
-	sim.paddle_axis = CabinetInput.steer_axis()   # D-252
-	sim.charge_held = _charge_btn and CabinetInput.is_down(&"launch")   # D-264
-	sim.step(minf(delta, 0.05), CabinetInput.is_down(&"flip_l"), CabinetInput.is_down(&"flip_r"), _launch, _dash)
+	if _two:   # D-286: each player's controls and stick
+		sim.player_set(0, "paddle_axis", CabinetInput.steer_axis(0))
+		sim.player_set(1, "paddle_axis", CabinetInput.steer_axis(1))
+		sim.player_set(0, "charge_held", _charge_btn and CabinetInput.is_down(&"launch"))
+		sim.player_set(1, "charge_held", _charge_btn2 and CabinetInput.is_down(&"p2_launch"))
+		sim.step_two(minf(delta, 0.05),
+			[CabinetInput.is_down(&"flip_l"), CabinetInput.is_down(&"flip_r"), _launch, _dash],
+			[CabinetInput.is_down(&"p2_flip_l"), CabinetInput.is_down(&"p2_flip_r"), _launch2, _dash2])
+	else:
+		sim.paddle_axis = CabinetInput.steer_axis()   # D-252
+		sim.charge_held = _charge_btn and CabinetInput.is_down(&"launch")   # D-264
+		sim.step(minf(delta, 0.05), CabinetInput.is_down(&"flip_l"), CabinetInput.is_down(&"flip_r"), _launch, _dash)
 	_launch = false
+	_launch2 = false
 	_dash = 0
+	_dash2 = 0
 	_handle_events()
 	_animate(delta)
 
 
 # --- events ------------------------------------------------------------------------
 func _handle_events() -> void:
-	for e in sim.events:
+	for k in sim.events.size():
+		var e: Array = sim.events[k]
 		if e[0] != "paddle" and e[0] != "wall":
 			DebugTools.mark(str(e[0]))
+		if _two:   # D-286: this event's ship visuals
+			var who := 0
+			if e[0] == "paddle" and e[1] != null:
+				who = int(e[1])
+			elif e[0] == "powerup_collect" and (e[1] as Array).size() > 2:
+				who = int(e[1][2])
+			elif e[0] == "serve":
+				who = sim.server
+			elif k < sim.event_ship.size():
+				who = int(sim.event_ship[k])
+			_view_use(who)
 		match e[0]:
 			"paddle":
 				Audio.sfx("tb_shield")
@@ -437,7 +493,7 @@ func _handle_events() -> void:
 			"shield_used":
 				Audio.sfx("tb_shield_break")
 				_shield_flash = 0.0
-				_shield_bar_mat.set_shader_parameter("hit_x", clampf(e[1] / (Sim.FIELD.size.x * 0.5), -1.0, 1.0))
+				_shield_bar_mat.set_shader_parameter("hit_x", clampf(e[1] / (sim.field.size.x * 0.5), -1.0, 1.0))
 				_lights.pulse(BackglassLights.ENGINES + BackglassLights.SHOTS, 0.6, 12.0)
 			"extra_lost":
 				Audio.sfx("tb_explode")
@@ -497,6 +553,10 @@ func _handle_events() -> void:
 
 
 ## Score, lives (plasma dots) and blast power are shown only on the DMD (D-051).
+	if _two:
+		_view_use(0)
+
+
 func _refresh_status() -> void:
 	if _shown_score != sim.score:
 		_shown_score = sim.score
@@ -544,19 +604,7 @@ func _animate(delta: float) -> void:
 	# The camera is orthographic, 16 units high: half width / TABLE width.
 	if Screens.side_panels:
 		var b := Vector2(Screens.table_base())
-		Screens.set_play_half_width((Sim.FIELD.size.x * 0.5 + PLAY_MARGIN) / (16.0 * b.x / b.y))
-	_paddle.position = Vector3(sim.paddle_x, 0.0, Sim.PADDLE_Y)
-	# Bank into the movement (visual only).
-	var target_bank := -sim.paddle_vx / Sim.PADDLE_MAX_SPEED * deg_to_rad(MAX_BANK_DEG)
-	target_bank = clampf(target_bank, -deg_to_rad(MAX_BANK_DEG) * 1.4, deg_to_rad(MAX_BANK_DEG) * 1.4)
-	_ship.rotation.z = lerp_angle(_ship.rotation.z, target_bank, 1.0 - exp(-BANK_RESPONSE * delta))
-	# Afterburners (D-042): off at rest; only the trailing engine burns while moving
-	# (moving right = left engine), harder with speed, flaring on a dash.
-	_dash_glow = maxf(0.0, _dash_glow - delta * 4.0)
-	var push := sim.paddle_vx / Sim.PADDLE_MAX_SPEED
-	var burn := absf(push) + _dash_glow * 0.6
-	_engines[0].set_thrust(burn if push > 0.0 else 0.0)
-	_engines[1].set_thrust(burn if push < 0.0 else 0.0)
+		Screens.set_play_half_width((sim.field.size.x * 0.5 + PLAY_MARGIN) / (16.0 * b.x / b.y))
 	_refresh_status()  # DMD power bar changes continuously
 	_update_backglass_lights(delta)
 	# "PLASMA CANNON READY" blinks while waiting to fire (D-059).
@@ -567,17 +615,7 @@ func _animate(delta: float) -> void:
 	_animate_blasts(delta)
 	_animate_enemies(delta)
 	_animate_powerups(delta)
-	_animate_recharge_flash(delta)
-	# Ship respawn: hidden briefly after being destroyed, then blinks while invulnerable.
-	if _phase == "attract" or _phase == "select":
-		_paddle.visible = false
-	elif _phase == "intro":
-		pass  # positioned and shown by _intro()
-	elif sim.ship_invulnerable > 0.0:
-		var since := Sim.SHIP_INVULNERABLE - sim.ship_invulnerable
-		_paddle.visible = since > 0.6 and fmod(Time.get_ticks_msec() / 1000.0, 0.2) < 0.13
-	else:
-		_paddle.visible = true
+	_animate_ships(delta)   # D-286: each ship's own visuals
 	# Edge shields (dev: --tb-show-shields keeps them lit mid-ripple for checks)
 	for side in _edge_shields:
 		var sh: Dictionary = _edge_shields[side]
@@ -592,15 +630,6 @@ func _animate(delta: float) -> void:
 	_star_spin = lerpf(_star_spin, target_spin, 1.0 - exp(-STAR_SPIN_RESPONSE * delta))
 	_star_angle += (_star_spin + STAR_DRIFT) * delta
 	_star_mat.set_shader_parameter("angle", _star_angle)
-	# Shield flash
-	_shield_age += delta
-	_shield_mat.set_shader_parameter("age", _shield_age)
-	_shield_mat.set_shader_parameter("strength", clampf(1.0 - _shield_age / SHIELD_FADE, 0.0, 1.0))
-	# Firing recoil: kick back towards the player + decaying shake.
-	_recoil = maxf(0.0, _recoil - delta / RECOIL_SECONDS)
-	var r := _recoil * _recoil
-	_ship.position = Vector3(randf_range(-1.0, 1.0) * RECOIL_SHAKE * r, 0.0,
-		RECOIL_KICK * r + randf_range(-1.0, 1.0) * RECOIL_SHAKE * r)
 	# Plasma: only exists once fired (hidden while waiting), flies with a trail.
 	var flying := sim.state == Sim.State.PLAY
 	_ball.visible = flying
@@ -611,6 +640,230 @@ func _animate(delta: float) -> void:
 	_halo.scale = Vector3.ONE * (1.0 + _fire_flash * 1.5)
 	if flying:
 		_trail.update(pos)
+
+
+## D-286: one ship's visuals, for the ship whose state and nodes are live
+## (sim._use / _view_use): position, banking, engines, blinking, its shield
+## flash and recoil, the charge glow, Lightspeed ghosts, the recharge flash.
+func _animate_ship(delta: float) -> void:
+	_paddle.position = Vector3(sim.paddle_x, 0.0, sim.paddle_y)
+	# Bank into the movement (visual only).
+	var target_bank := -sim.paddle_vx / Sim.PADDLE_MAX_SPEED * deg_to_rad(MAX_BANK_DEG)
+	target_bank = clampf(target_bank, -deg_to_rad(MAX_BANK_DEG) * 1.4, deg_to_rad(MAX_BANK_DEG) * 1.4)
+	_ship.rotation.z = lerp_angle(_ship.rotation.z, target_bank, 1.0 - exp(-BANK_RESPONSE * delta))
+	# Afterburners (D-042): off at rest; only the trailing engine burns while moving
+	# (moving right = left engine), harder with speed, flaring on a dash.
+	_dash_glow = maxf(0.0, _dash_glow - delta * 4.0)
+	var push := sim.paddle_vx / Sim.PADDLE_MAX_SPEED
+	var burn := absf(push) + _dash_glow * 0.6
+	_engines[0].set_thrust(burn if push > 0.0 else 0.0)
+	_engines[1].set_thrust(burn if push < 0.0 else 0.0)
+	# Ship respawn: hidden briefly after being destroyed, then blinks while invulnerable.
+	if _phase == "attract" or _phase == "select" or _phase == "players":
+		_paddle.visible = false
+	elif _phase == "intro":
+		pass  # positioned and shown by _intro()
+	elif sim.ship_invulnerable > 0.0:
+		var since := Sim.SHIP_INVULNERABLE - sim.ship_invulnerable
+		_paddle.visible = since > 0.6 and fmod(Time.get_ticks_msec() / 1000.0, 0.2) < 0.13
+	else:
+		_paddle.visible = true
+	# Shield flash
+	_shield_age += delta
+	_shield_mat.set_shader_parameter("age", _shield_age)
+	_shield_mat.set_shader_parameter("strength", clampf(1.0 - _shield_age / SHIELD_FADE, 0.0, 1.0))
+	# Firing recoil: kick back towards the player + decaying shake.
+	_recoil = maxf(0.0, _recoil - delta / RECOIL_SECONDS)
+	var r := _recoil * _recoil
+	_ship.position = Vector3(randf_range(-1.0, 1.0) * RECOIL_SHAKE * r, 0.0,
+		RECOIL_KICK * r + randf_range(-1.0, 1.0) * RECOIL_SHAKE * r)
+	# Lightspeed afterimages
+	var gx: Array = sim.ghost_xs() if _phase == "play" else []
+	while _ghost_nodes.size() < 2:
+		var g := _make_ghost_ship()
+		_root.add_child(g)
+		_ghost_nodes.append(g)
+	for i in _ghost_nodes.size():
+		var on := i < gx.size()
+		_ghost_nodes[i].visible = on
+		if on:
+			_ghost_nodes[i].position = Vector3(gx[i], 0.0, sim.paddle_y)
+	# Charging (D-053, D-054): particles in the colour of the level being charged
+	# converge in front of the nose; the sphere shows the level already reached
+	# (small blue, medium yellow, full-size red).
+	var reached := int(floor(sim.blast_charge + 0.0001))
+	var charging := sim.blast_charge > 0.0 or (sim.state == Sim.State.PLAY and CabinetInput.is_down(CabinetInput.for_player(&"flip_l", _vship)) \
+		and CabinetInput.is_down(CabinetInput.for_player(&"flip_r", _vship))) or (sim.state == Sim.State.PLAY and sim.charge_held)
+	charging = charging and reached < mini(sim.affordable_level(), Sim.BLAST_MAX_LEVEL)
+	if _charge_particles.emitting != charging:
+		if charging:
+			_charge_particles.restart()  # no leftovers from a previous charge
+			_charge_particles.visible = true
+		else:
+			_charge_particles.visible = false  # vanish at once on release (D-067)
+		_charge_particles.emitting = charging
+	if sim.blast_charge <= 0.0 and not charging:
+		_stop_charge_sound()
+	if charging:
+		# Power laser goes straight to level 3: red particles only (D-076).
+		_charge_particles.color = LEVEL_COLORS[2] if sim.powerup == "P" else LEVEL_COLORS[reached]
+	_charge_glow.visible = reached >= 1 and sim.powerup != "P"
+	if reached >= 1:
+		if _charge_level_shown != reached:
+			_charge_level_shown = reached
+			Fx.tint_plasma(_charge_glow, LEVEL_COLORS[reached - 1])
+		var pulse := 1.0 + 0.12 * sin(Time.get_ticks_msec() * 0.03)
+		_charge_glow.scale = Vector3.ONE * LEVEL_SPHERE_SCALE[reached - 1] * pulse
+	else:
+		_charge_level_shown = 0
+
+	_animate_recharge_flash(delta)
+
+
+# --- 2 players (D-286) ------------------------------------------------------------------
+func _enter_players() -> void:
+	_phase = "players"
+	_phase_t = 0.0
+	if is_instance_valid(_attract_ui):
+		_attract_ui.queue_free()
+	Audio.sfx("select")
+	Dmd.play(Callable(), 0.0)
+	_players_ui = UI.vstack(70)
+	_players_rows.clear()
+	for k in ["TB_ONE_PLAYER", "TB_TWO_PLAYERS"]:
+		var l := UI.label(tr(k), 96, UI.WHITE)
+		_players_ui.add_child(l)
+		_players_rows.append(l)
+	_players_ui.add_child(UI.label(tr("TB_SELECT_HINT"), 36, UI.CYAN))
+	add_to_table(_players_ui)
+	_refresh_players()
+
+
+func _refresh_players() -> void:
+	for i in _players_rows.size():
+		var l: Label = _players_rows[i]
+		var on := i == _players_sel
+		var t := tr(["TB_ONE_PLAYER", "TB_TWO_PLAYERS"][i])
+		l.text = ("> %s <" % t) if on else t
+		l.add_theme_color_override("font_color", UI.YELLOW if on else UI.WHITE)
+		l.modulate.a = 1.0 if on else 0.45
+	Dmd.show_text(tr(["TB_ONE_PLAYER", "TB_TWO_PLAYERS"][_players_sel]), "", Dmd.YELLOW, Dmd.WHITE)
+
+
+func _confirm_players() -> void:
+	if is_instance_valid(_players_ui):
+		_players_ui.queue_free()
+	if _players_sel == 1:
+		_go_two()
+	_enter_select()
+
+
+## Switches to a 2-player game: player 2's controls, the 2P simulation on the
+## wide field, its bricks and edge shields, a second ship and the energy bars.
+func _go_two() -> void:
+	if _two:
+		return
+	CabinetInput.set_two_player(true)
+	sim = Sim.new()
+	sim.setup_two(int(Config.get_value("operator", "balls_per_game")), _start_difficulty())
+	_build_bricks()
+	for n in _root.get_children():
+		if n.has_meta("edge_shield"):
+			n.queue_free()
+	_edge_shields.clear()
+	_build_edge_shields()
+	if is_instance_valid(_shield_node):
+		_shield_node.queue_free()
+	_shield_node = null
+	# Player 2's ship: the same build, into its own set of view fields.
+	_two = true
+	for f in VIEW_FIELDS:
+		_vs[0][f] = get(f)
+	_vs[1] = _vs[0].duplicate()
+	_vship = 1
+	_engines = []
+	_belly_engines = []
+	_ghost_nodes = []
+	_recharge_flash = 0.0
+	_last_power_step = -1
+	_charge_level_shown = 0
+	_dash_glow = 0.0
+	_recoil = 0.0
+	_shield_age = 99.0
+	_build_ship(StandardMaterial3D.new())
+	for l in _paddle.find_children("*", "OmniLight3D", true, false):
+		(l as OmniLight3D).light_color = Color(1.0, 0.6, 0.3)   # player 2's warm key light
+	for f in VIEW_FIELDS:
+		_vs[1][f] = get(f)
+	_vship = 0
+	for f in VIEW_FIELDS:
+		set(f, _vs[0][f])
+	_build_p2_bars()
+
+
+## Each player's energy bar on the TABLE, at the bottom corners (2P).
+func _build_p2_bars() -> void:
+	_p2_bars.clear()
+	for i in 2:
+		var box := VBoxContainer.new()
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var l := UI.label(tr("TB_P%d" % (i + 1)), 36, [Color(0.5, 0.8, 1.0), Color(1.0, 0.65, 0.35)][i])
+		box.add_child(l)
+		var bg := ColorRect.new()
+		bg.custom_minimum_size = Vector2(240, 22)
+		bg.color = Color(0.1, 0.1, 0.15, 0.8)
+		var fill := ColorRect.new()
+		fill.size = Vector2(0, 22)
+		bg.add_child(fill)
+		box.add_child(bg)
+		box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT if i == 0 else Control.PRESET_BOTTOM_RIGHT)
+		box.offset_left = 30.0 if i == 0 else -270.0
+		box.offset_right = 270.0 if i == 0 else -30.0
+		box.offset_top = -100.0
+		box.offset_bottom = -30.0
+		add_to_table(box)
+		_p2_bars.append([box, fill, l])
+
+
+func _update_p2_bars() -> void:
+	for i in _p2_bars.size():
+		var fill: ColorRect = _p2_bars[i][1]
+		var pw: float = sim.player_get(i, "power")
+		var pu: String = sim.player_get(i, "powerup")
+		fill.size.x = 240.0 * pw
+		fill.color = POWERUP_COLORS.get(pu, Color(0.4, 0.75, 1.0) if i == 0 else Color(1.0, 0.6, 0.3))
+		(_p2_bars[i][2] as Label).text = tr("TB_P%d" % (i + 1)) + ("  " + pu if not pu.is_empty() else "")
+		(_p2_bars[i][0] as Control).visible = _phase == "play"
+
+
+## Runs _animate_ship for each ship (2P: both, D-286).
+func _animate_ships(delta: float) -> void:
+	for i in (2 if _two else 1):
+		_view_use(i)
+		_animate_ship(delta)
+	_view_use(0)
+	if _two:
+		_update_p2_bars()
+
+
+## D-286: makes ship i's nodes and view state live (and its sim state).
+const VIEW_FIELDS := ["_paddle", "_ship", "_recharge_mat", "_engines", "_shield_mat", "_belly_engines",
+	"_charge_particles", "_charge_glow", "_dash_glow", "_recoil", "_shield_age", "_ghost_nodes",
+	"_recharge_flash", "_last_power_step", "_charge_level_shown"]
+var _two := false
+var _vship := 0
+var _vs := [{}, {}]
+
+
+func _view_use(i: int) -> void:
+	sim._use(i)
+	if not _two or i == _vship:
+		return
+	for f in VIEW_FIELDS:
+		_vs[_vship][f] = get(f)
+	for f in VIEW_FIELDS:
+		set(f, _vs[i][f])
+	_vship = i
 
 
 # --- construction ----------------------------------------------------------------------
@@ -701,7 +954,7 @@ const PLAY_MARGIN := 0.9   # units beyond the field the panels keep clear of (D-
 
 
 func _build_edge_shields() -> void:
-	var f := Sim.FIELD
+	var f := sim.field
 	var side_len := Sim.DRAIN_Y - f.position.y
 	var side_cz := f.position.y + side_len * 0.5
 	# side: [length, position, rotation_y_degrees]
@@ -724,6 +977,7 @@ func _build_edge_shields() -> void:
 		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		m.position = spec[1]
 		m.rotation_degrees = Vector3(0.0, spec[2], 0.0)
+		m.set_meta("edge_shield", true)
 		_root.add_child(m)
 		_edge_shields[side] = {"mat": mat, "age": 99.0, "center": spec[1], "half": spec[0] * 0.5}
 
@@ -839,7 +1093,7 @@ func _build_bricks() -> void:
 	for i in sim.bricks.size():
 		var b: Dictionary = sim.bricks[i]
 		var r: Rect2 = b.rect
-		var col: int = b.get("col", i % Sim.BRICK_COLS)
+		var col: int = b.get("col", i % sim.cols)
 		var size := Vector3(r.size.x, 0.3, r.size.y)
 		var colour: String = LETTER_COLOUR.get(b.get("colour", "B"), "blue")  # X uses blue art, shown as metal
 		var n := _box(size, Vector3(r.get_center().x, 0, r.get_center().y), _brick_material(colour, size))
@@ -864,7 +1118,7 @@ func _randomize_crop(n: MeshInstance3D) -> void:
 ## frees the returned nodes when the warm-up ends.
 func warmup_nodes() -> Array[Node]:
 	var out: Array[Node] = []
-	var c := Vector3(0.0, 0.3, (Sim.FIELD.position.y + Sim.PADDLE_Y) * 0.5)
+	var c := Vector3(0.0, 0.3, (sim.field.position.y + Sim.PADDLE_Y) * 0.5)
 	_explode_brick(c, Color(1.0, 0.5, 0.2))   # blast + debris; frees itself
 	var cap := Fx.PowerupCapsule.new("T", POWERUP_COLORS["T"], Sim.POWERUP_R)
 	cap.position = c + Vector3(-2.0, 0.0, 0.0)
@@ -1175,7 +1429,7 @@ func _begin_intro() -> void:
 	Dmd.play(Callable(), 0.0)
 	# Level 1 says GET READY; later levels announce their number (D-068).
 	var title: String = tr("TB_GET_READY") if sim.level == 1 else tr("TB_LEVEL") % sim.level
-	Dmd.show_text(title, tr("TB_GET_READY") if sim.level > 1 else tr("DMD_PLAYER_1"), Dmd.YELLOW, Dmd.WHITE)
+	Dmd.show_text(title, tr("TB_GET_READY") if sim.level > 1 else tr("TB_TWO_PLAYERS" if _two else "DMD_PLAYER_1"), Dmd.YELLOW, Dmd.WHITE)
 	_ready_label = UI.styled_label(title, TITLE_FONT, 3)
 	_ready_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_ready_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -1207,16 +1461,22 @@ func _intro() -> void:
 			Audio.sfx("tb_brick_land")
 	var bricks_done := (_brick_nodes.size() - 1) * INTRO_BRICK_STAGGER + INTRO_BRICK_FALL
 	var st := (t - bricks_done) / INTRO_SHIP_TIME
+	for ship in (2 if _two else 1):   # D-286: both ships fly in together
+		_view_use(ship)
+		if st < 0.0:
+			_paddle.visible = false
+			_set_belly_thrust(0.0)
+			continue
+		if not _paddle.visible:
+			_paddle.visible = true
+			if ship == 0:
+				Audio.sfx("tb_ship_arrive")
+		var e := 1.0 - pow(1.0 - clampf(st, 0.0, 1.0), 3.0)  # ease out
+		_paddle.position = Vector3(sim.paddle_x, 0.0, lerpf(INTRO_SHIP_FROM_Z, sim.paddle_y, e))
+		_set_belly_thrust(1.5 * (1.0 - e) + 0.1 if st < 1.0 else 0.0)
+	_view_use(0)
 	if st < 0.0:
-		_paddle.visible = false
-		_set_belly_thrust(0.0)
 		return
-	if not _paddle.visible:
-		_paddle.visible = true
-		Audio.sfx("tb_ship_arrive")
-	var e := 1.0 - pow(1.0 - clampf(st, 0.0, 1.0), 3.0)  # ease out
-	_paddle.position = Vector3(sim.paddle_x, 0.0, lerpf(INTRO_SHIP_FROM_Z, Sim.PADDLE_Y, e))
-	_set_belly_thrust(1.5 * (1.0 - e) + 0.1 if st < 1.0 else 0.0)
 	if st >= 1.0 + INTRO_SETTLE / INTRO_SHIP_TIME:
 		_enter_play()
 
@@ -1229,9 +1489,12 @@ func _enter_play() -> void:
 		_brick_nodes[i].visible = sim.bricks[i].alive
 		_brick_nodes[i].position = Vector3(r.get_center().x, 0.0, r.get_center().y)
 		_brick_nodes[i].rotation = Vector3.ZERO
-	_set_belly_thrust(0.0)
-	_paddle.scale = Vector3.ONE
-	_paddle.rotation = Vector3.ZERO
+	for ship in (2 if _two else 1):
+		_view_use(ship)
+		_set_belly_thrust(0.0)
+		_paddle.scale = Vector3.ONE
+		_paddle.rotation = Vector3.ZERO
+	_view_use(0)
 	if is_instance_valid(_ready_label):
 		_ready_label.queue_free()
 	if is_instance_valid(_attract_ui):
@@ -1249,6 +1512,7 @@ const OUTRO_FADE_TIME := 0.6
 const OUTRO_NEXT_AT := 2.7     # next level loads (behind the black)
 var _outro_black: ColorRect
 var _outro_lifted := false
+var _outro_x0s: Array = []   # D-286: each ship's x at the level's end
 
 
 ## Level complete: remaining enemies already exploded (sim); the ship flies off
@@ -1258,13 +1522,18 @@ func _begin_outro() -> void:
 	_phase = "outro"
 	_phase_t = 0.0
 	_outro_lifted = false
-	_outro_x0 = sim.paddle_x
 	_hint.visible = false
 	# Settle the ship before lift-off (D-085): the sim is paused now, so clear its
 	# last speed (the per-frame banking/thrusters read it) and cut the thrusters.
-	sim.paddle_vx = 0.0
-	for eng in _engines:
-		eng.set_thrust(0.0)
+	_outro_x0s.clear()
+	for ship in (2 if _two else 1):
+		_view_use(ship)
+		_outro_x0s.append(sim.paddle_x)
+		sim.paddle_vx = 0.0
+		for eng in _engines:
+			eng.set_thrust(0.0)
+	_view_use(0)
+	_outro_x0 = _outro_x0s[0]
 
 
 func _outro() -> void:
@@ -1280,12 +1549,16 @@ func _outro() -> void:
 	var e := k * k
 	# Before lift-off the ship glides to the centre and levels out (D-085).
 	var settle := smoothstep(0.0, OUTRO_LIFT_AT * 0.9, t)
-	var x := lerpf(_outro_x0, Sim.FIELD.get_center().x, settle)
-	_paddle.visible = true
-	_paddle.position = Vector3(x, 7.0 * e, Sim.PADDLE_Y - 13.0 * e)
-	_paddle.scale = Vector3.ONE * (1.0 + 2.2 * e)
-	_paddle.rotation = Vector3(-0.5 * k, 0.0, 0.0)
-	_set_belly_thrust(1.5 if k > 0.0 and k < 1.0 else 0.0)
+	for ship in (2 if _two else 1):   # D-286: 2P: each ship to the middle of its half
+		_view_use(ship)
+		var to_x: float = sim._start_x(ship) if _two else sim.field.get_center().x
+		var x := lerpf(_outro_x0s[ship], to_x, settle)
+		_paddle.visible = true
+		_paddle.position = Vector3(x, 7.0 * e, sim.paddle_y - 13.0 * e)
+		_paddle.scale = Vector3.ONE * (1.0 + 2.2 * e)
+		_paddle.rotation = Vector3(-0.5 * k, 0.0, 0.0)
+		_set_belly_thrust(1.5 if k > 0.0 and k < 1.0 else 0.0)
+	_view_use(0)
 	if t >= OUTRO_FADE_AT and _outro_black == null:
 		DebugTools.mark("outro_fade")
 		_outro_black = UI.fill(Color(0, 0, 0, 0))
@@ -1301,9 +1574,12 @@ func _load_next_level() -> void:
 	_build_bricks()
 	for n in _brick_nodes:
 		n.visible = false
-	_paddle.visible = false
-	_paddle.scale = Vector3.ONE
-	_paddle.rotation = Vector3.ZERO
+	for ship in (2 if _two else 1):
+		_view_use(ship)
+		_paddle.visible = false
+		_paddle.scale = Vector3.ONE
+		_paddle.rotation = Vector3.ZERO
+	_view_use(0)
 	_set_belly_thrust(0.0)
 	for id in _enemy_nodes.keys():
 		_remove_enemy_node(id)
@@ -1380,14 +1656,14 @@ func _fire_ion_beam(x: float) -> void:
 	_lights.pulse(BackglassLights.SHOTS + BackglassLights.IMPACTS, 1.0, 14.0)
 	var m := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
-	var length := Sim.PADDLE_Y - Sim.FIELD.position.y
+	var length := Sim.PADDLE_Y - sim.field.position.y
 	plane.size = Vector2(Sim.ION_BEAM_W * 1.8, length)
 	m.mesh = plane
 	var mat := ShaderMaterial.new()
 	mat.shader = ION_SHADER
 	m.material_override = mat
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	m.position = Vector3(x, 0.15, Sim.FIELD.position.y + length * 0.5)
+	m.position = Vector3(x, 0.15, sim.field.position.y + length * 0.5)
 	_root.add_child(m)
 	var tw := m.create_tween()
 	tw.tween_method(func(f: float): InstParam.set_param(m, "fade", f), 1.0, 0.0, 0.55)
@@ -1422,29 +1698,18 @@ func _animate_powerups(delta: float) -> void:
 		var pos := Vector3(ep.x, 0.05, ep.y)
 		_extra_ball_nodes[i][0].position = pos
 		_extra_ball_nodes[i][1].update(pos)
-	# Lightspeed afterimages
-	var gx: Array = sim.ghost_xs() if _phase == "play" else []
-	while _ghost_nodes.size() < 2:
-		var g := _make_ghost_ship()
-		_root.add_child(g)
-		_ghost_nodes.append(g)
-	for i in _ghost_nodes.size():
-		var on := i < gx.size()
-		_ghost_nodes[i].visible = on
-		if on:
-			_ghost_nodes[i].position = Vector3(gx[i], 0.0, Sim.PADDLE_Y)
 	# Shield barrier: steady while active, flashes and fades when it saves a ball.
 	if _shield_node == null:
 		_shield_node = MeshInstance3D.new()
 		var plane := PlaneMesh.new()
-		plane.size = Vector2(Sim.FIELD.size.x, 0.5)
+		plane.size = Vector2(sim.field.size.x, 0.5)
 		_shield_node.mesh = plane
 		_shield_bar_mat = ShaderMaterial.new()
 		_shield_bar_mat.shader = SHIELD_SHADER
 		_shield_bar_mat.set_shader_parameter("shield_color", POWERUP_COLORS["S"])
 		_shield_node.material_override = _shield_bar_mat
 		_shield_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_shield_node.position = Vector3(Sim.FIELD.get_center().x, 0.06, Sim.SHIELD_Y + 0.12)
+		_shield_node.position = Vector3(sim.field.get_center().x, 0.06, Sim.SHIELD_Y + 0.12)
 		_root.add_child(_shield_node)
 	_shield_flash += delta
 	var flashing := _shield_flash < SHIELD_FADE
@@ -1582,35 +1847,6 @@ func _animate_blasts(_delta: float) -> void:
 		# Nose leads: shift the drawn bolt so its tail trails behind the hitbox.
 		var off := -d * Sim.BLAST_H * 0.55
 		_blast_nodes[i].position = Vector3(p.x + off.x, 0.12, p.y + off.y)
-	# Charging (D-053, D-054): particles in the colour of the level being charged
-	# converge in front of the nose; the sphere shows the level already reached
-	# (small blue, medium yellow, full-size red).
-	var reached := int(floor(sim.blast_charge + 0.0001))
-	var charging := sim.blast_charge > 0.0 or (sim.state == Sim.State.PLAY and CabinetInput.is_down(&"flip_l") \
-		and CabinetInput.is_down(&"flip_r")) or (sim.state == Sim.State.PLAY and sim.charge_held)
-	charging = charging and reached < mini(sim.affordable_level(), Sim.BLAST_MAX_LEVEL)
-	if _charge_particles.emitting != charging:
-		if charging:
-			_charge_particles.restart()  # no leftovers from a previous charge
-			_charge_particles.visible = true
-		else:
-			_charge_particles.visible = false  # vanish at once on release (D-067)
-		_charge_particles.emitting = charging
-	if sim.blast_charge <= 0.0 and not charging:
-		_stop_charge_sound()
-	if charging:
-		# Power laser goes straight to level 3: red particles only (D-076).
-		_charge_particles.color = LEVEL_COLORS[2] if sim.powerup == "P" else LEVEL_COLORS[reached]
-	_charge_glow.visible = reached >= 1 and sim.powerup != "P"
-	if reached >= 1:
-		if _charge_level_shown != reached:
-			_charge_level_shown = reached
-			Fx.tint_plasma(_charge_glow, LEVEL_COLORS[reached - 1])
-		var pulse := 1.0 + 0.12 * sin(Time.get_ticks_msec() * 0.03)
-		_charge_glow.scale = Vector3.ONE * LEVEL_SPHERE_SCALE[reached - 1] * pulse
-	else:
-		_charge_level_shown = 0
-
 
 ## Backglass (D-058): the director's art; three light groups (engines, shots,
 ## impacts) blink with game events. Status stays on the DMD (D-051).
@@ -1646,6 +1882,8 @@ func _update_backglass_lights(delta: float) -> void:
 
 
 func _exit_tree() -> void:
+	if _two:
+		CabinetInput.set_two_player(false)   # D-286: player 2's keys go back to 1P
 	if _portrait_req:
 		Screens.want_side_panels(false)   # D-265
 	super._exit_tree()
