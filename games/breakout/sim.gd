@@ -103,10 +103,11 @@ const SHIP_INVULNERABLE := 2.0       # after the ship is destroyed and respawns
 const ENEMY_TIER_SPEED := 0.4        # +40% movement per tier
 const ENEMY_TIER_RATE := 0.5         # spawn interval / (1 + 0.5 * tier)
 # --- power-ups (D-072) ----------------------------------------------------------------
-const POWERUP_EVERY := 10            # every 10th brick destroyed...
+const POWERUP_EVERY := 8             # every 8th brick destroyed (D-329, was 10)...
 const POWERUP_CHANCE := 0.7          # ...has a 70% chance to drop one
 const POWERUP_FALL := 2.2
 const POWERUP_R := 0.28
+const POWERUP_REACH_UP := 0.55       # D-329: the catch hitbox reaches this far above the capsule
 const POWERUP_KINDS := ["T", "P", "B", "I", "W", "H", "L", "S", "K", "U", "N"]
 ## D-327: two slots. Blaster upgrades (atom capsules) replace the plasma cannon:
 ## they charge to level 1 only (one BLAST_CHARGE_TIME) and each shot uses
@@ -129,10 +130,10 @@ const MISSILE_R := 0.15
 const MISSILE_AREA := Vector2(3.0, 3.0)   # in bricks (columns x rows)
 const MISSILE_HITS := 3
 ## D-326: instant power-ups, used on the catch (never held): U = 1UP (an extra
-## charge), N = Nuclear (every brick on screen goes). Rarer: RARE_WEIGHT of a
-## normal kind's chance each.
+## charge), N = Nuclear (every brick on screen goes). Rarer: INSTANT_CHANCE of all drops
+## between them (D-329).
 const INSTANT_KINDS := ["U", "N"]
-const RARE_WEIGHT := 0.35
+const INSTANT_CHANCE := 0.08         # D-329: of drops, 1UP or Nuclear (4% each)
 const TRIPLE_ANGLE := 20.0           # T: side bolts at +-20 degrees (D-078)
 const ION_BEAM_W := 0.7              # I: width of the beam
 const LIGHTSPEED_MULT := 1.3         # L: ship speed (assumption, D-072)
@@ -146,7 +147,8 @@ var state := State.SERVE
 var score := 0
 var balls_left := 3
 var balls_total := 3   # lives at the start of the game (DMD status dots)
-var _nuking := false   # D-326: no capsules from the bricks a nuke destroys
+var _nuking := false
+var _last_drop_group := "" if randf() < 0.5 else "blaster"   # D-329: "blaster" / "paddle"; the next drop is the other   # D-326: no capsules from the bricks a nuke destroys
 ## D-321: an extra life at each of these scores (once each, per game).
 const EXTRA_LIFE_AT := [20000, 50000]
 var extra_lives_given := 0
@@ -955,15 +957,18 @@ func random_powerup_kind() -> String:
 	var held := [powerup, padup] if not two_player else [player_get(0, "powerup"), player_get(1, "powerup"),
 		player_get(0, "padup"), player_get(1, "padup")]
 	var kinds: Array = POWERUP_KINDS.filter(func(k): return not (k in held))
-	var total := 0.0
-	for k in kinds:
-		total += RARE_WEIGHT if k in INSTANT_KINDS else 1.0
-	var r := randf() * total
-	for k in kinds:
-		r -= RARE_WEIGHT if k in INSTANT_KINDS else 1.0
-		if r < 0.0:
-			return k
-	return kinds[-1]
+	# D-329: a rare instant one now and then (it doesn't break the alternation)...
+	var instants: Array = kinds.filter(func(k): return k in INSTANT_KINDS)
+	if not instants.is_empty() and randf() < INSTANT_CHANCE:
+		return instants[randi() % instants.size()]
+	# ...otherwise blaster and paddle upgrades take turns, caught or not.
+	var group: Array = PADDLE_KINDS if _last_drop_group == "blaster" else BLASTER_KINDS
+	var pick: Array = kinds.filter(func(k): return k in group)
+	if pick.is_empty():   # (every one of the group held)
+		pick = kinds.filter(func(k): return not (k in INSTANT_KINDS))
+	var k: String = pick[randi() % pick.size()]
+	_last_drop_group = "paddle" if k in PADDLE_KINDS else "blaster"
+	return k
 
 
 func spawn_powerup(kind: String, pos: Vector2) -> int:
@@ -982,7 +987,9 @@ func _update_powerups(dt: float) -> void:
 		var caught := -1
 		for ship in (2 if two_player else 1):   # D-285: whichever ship catches it
 			_use(ship)
-			if not BP.collide_circle_rect(p.pos, POWERUP_R, catch_rect()).is_empty() and state != State.OVER:
+			var hit := Rect2(p.pos.x - POWERUP_R, p.pos.y - POWERUP_R - POWERUP_REACH_UP, POWERUP_R * 2.0,
+				POWERUP_R * 2.0 + POWERUP_REACH_UP)   # D-329: caught even just under the ship
+			if hit.intersects(catch_rect()) and state != State.OVER:
 				caught = ship
 				break
 		if caught >= 0:

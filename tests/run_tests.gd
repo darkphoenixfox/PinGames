@@ -374,6 +374,27 @@ func test_breakout_difficulty(Sim) -> void:
 	cube_low = ag.enemies[1].pos.y > ag.enemies[0].pos.y
 	check(kinds_ok and dist[1] < dist[0] * 0.85 and cube_low,
 		"cube enemy: nearer the ship (%.0f vs %.0f) and lower than a tetra" % [dist[1], dist[0]])
+	# D-329: blaster and paddle drops take turns; capsules caught just under the ship.
+	var al = Sim.new()
+	al.setup(3)
+	var groups := []
+	for i in 400:
+		var kk: String = al.random_powerup_kind()
+		if kk in Sim.INSTANT_KINDS:
+			continue
+		groups.append("p" if kk in Sim.PADDLE_KINDS else "b")
+	var alternates := true
+	for i in range(1, groups.size()):
+		alternates = alternates and groups[i] != groups[i - 1]
+	var cu = Sim.new()
+	cu.setup(3)
+	cu.spawn_powerup("T", Vector2(cu.paddle_x, Sim.PADDLE_Y + Sim.PADDLE_H * 0.5 + Sim.POWERUP_R + 0.3))
+	var caught_under := false
+	cu.step(1.0 / 60.0, false, false, false, 0)
+	for ev in cu.events:
+		caught_under = caught_under or ev[0] == "powerup_collect"
+	check(alternates and groups.size() > 300 and caught_under,
+		"drops alternate blaster/paddle (%d in a row checked); a capsule just under the ship is caught" % groups.size())
 	# D-327: two slots; upgrades charge one level and use their cost per shot.
 	var sl = Sim.new()
 	sl.setup(3)

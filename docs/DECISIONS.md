@@ -3300,3 +3300,12 @@
 - **Scenes:** T, three bolts fanning out twice; P, a red charge-up and a thick bolt; B, a second ball bouncing with a trail; I, a crackling column burning a brick stack; W, a snaking shot; H, a missile curving onto a tetra that bursts; L, the ship darting with two afterimages and speed lines; S, a green barrier bouncing a ball; K, two mini ships flying up and docking; U, a big "1UP" with sparkles, then "EXTRA CHARGE!" (its separate text flash is skipped); N, a white flash, a shock ring and a mushroom cloud (the level-clear clip is skipped for a nuke).
 - Code in `dmd_anims.gd` (`pu_*`), played through `_dmd_pu_anim(kind)`. `--tb-dmd-anim=pu_W` loops one for checks.
 - **Status:** Accepted
+
+### D-329 — Tilt Breaker: more drops, blaster and paddle drops alternate, taller catch hitbox
+- **Date:** 2026-11-24
+- **Decision (director):** power-ups drop a bit more often; never two blaster or two paddle upgrades in a row (after a blaster drop comes a paddle drop, caught or not); the capsule's hitbox reaches further above it so it can still be caught just under the ship.
+- **More often:** every 8th destroyed brick (was 10th) with the same 70% chance, about 25% more drops.
+- **Alternation:** `_last_drop_group` remembers the last drop's group; the next upgrade comes from the other group (random within it, never one held). The first group of a game is random. 1UP and Nuclear are outside the turn-taking: 8% of drops are one of them (4% each, `INSTANT_CHANCE`, replacing D-326's weights) and they don't change whose turn it is. If every upgrade of the due group is held (2P), the drop comes from the other group.
+- **Hitbox:** catching uses a rect from the capsule's bottom to 0.55 m above its top (`POWERUP_REACH_UP`) against the ship's catch rect, so a capsule that has slipped just below the ship is still caught.
+- **Test:** 300+ non-instant draws in a row alternate; a capsule 0.3 m under the ship's bottom is caught.
+- **Status:** Accepted
