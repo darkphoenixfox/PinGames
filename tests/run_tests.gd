@@ -422,6 +422,16 @@ func test_breakout_difficulty(Sim) -> void:
 	bl._hurt_boss(Sim.BOSS_HP)
 	check(none_on_1 and stays_up and b_fired and b_through and ship_hit and b_blocked and b_waits and bl.state == Sim.State.LEVEL_CLEAR,
 		"boss: level 10 only, stays up, fires through bricks, hits the ship, the ball stops rays, level ends with it")
+	# D-339: every 4 damage to the boss drops a capsule.
+	var bd = Sim.new()
+	bd.setup(3)
+	bd.level = 10
+	bd.build_rack()
+	var caps0: int = bd.powerups.size()
+	for i in 8:
+		bd._hurt_boss(1)
+	check(bd.powerups.size() == caps0 + 2 and float(bd.powerups[-1].pos.y) > bd.boss_pos.y,
+		"boss: every 4 hits shake a capsule loose (%d)" % (bd.powerups.size() - caps0))
 	# D-333: never more than 15 bricks in a row without a drop.
 	var pt = Sim.new()
 	pt.setup(3)

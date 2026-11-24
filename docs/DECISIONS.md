@@ -3384,3 +3384,10 @@
 - Rays: 4.25 m/s (was 3.4), 0.88 m long (was 1.1), 0.128 m half-thickness (was 0.16); the drawn bolt scales with them.
 - **Dev:** `--tb-boss-hp=N` sets its health.
 - **Status:** Accepted
+
+### D-339 — Tilt Breaker: hitting the boss drops power-ups
+- **Date:** 2026-11-24
+- **Decision (director):** hitting the boss a few times spawns power-ups, like breaking bricks.
+- Every 4 points of damage to the boss (`BOSS_DROP_EVERY`; a ball hit is 1, a missile 3, and so on) drop a capsule from just under it, chosen by the normal rules (blaster/paddle turns, rare 1UP/Nuclear, D-329). It also resets the brick drop counter (D-333). No drop from the killing blow (the level may be ending).
+- **Test:** 8 single hits drop 2 capsules, below the boss.
+- **Status:** Accepted

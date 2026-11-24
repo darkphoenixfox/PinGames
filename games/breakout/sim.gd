@@ -130,6 +130,7 @@ const BOSS_CHARGE := 1.5
 const RAY_SPEED := 4.25              # m/s: slow enough to see coming (D-338: +25%)
 const RAY_LEN := 0.88                # m, head to tail (D-338: -20%)
 const RAY_R := 0.128                 # half its thickness (D-338: -20%)
+const BOSS_DROP_EVERY := 4           # D-339: every 4 damage to the boss drops a capsule
 const BOSS_HITS := {"ball": 1, "missile": 3, "ion": 3, "wave": 2}
 
 ## D-327: two slots. Blaster upgrades (atom capsules) replace the plasma cannon:
@@ -229,7 +230,8 @@ var boss_t := 0.0
 var boss_fire_in := 0.0
 var boss_charging := false
 var rays: Array = []
-var _boss_aim := 0   # 2P: the ship the next ray goes for (alternates)   # D-333: bricks destroyed since the last capsule drop
+var _boss_aim := 0
+var _boss_drop_count := 0   # D-339: damage since its last capsule   # 2P: the ship the next ray goes for (alternates)   # D-333: bricks destroyed since the last capsule drop
 var _time := 0.0
 var _paddle_hist: Array = []  # [time, x], newest last
 var _held_time := 0.0
@@ -1153,6 +1155,7 @@ func _setup_boss() -> void:
 	boss_t = 0.0
 	boss_pos = _boss_path(0.0)
 	boss_fire_in = randf_range(BOSS_FIRE.x, BOSS_FIRE.y)
+	_boss_drop_count = 0
 
 
 ## A slow Lissajous over the top of the field, never below BOSS_Y.y.
@@ -1233,6 +1236,12 @@ func _hurt_boss(n: int) -> bool:
 	boss_hp = maxi(0, boss_hp - n)
 	events.append(["boss_hit", boss_hp])
 	if boss_hp > 0:
+		# D-339: hurting it shakes capsules loose, like breaking bricks.
+		_boss_drop_count += n
+		if _boss_drop_count >= BOSS_DROP_EVERY:
+			_boss_drop_count = 0
+			_since_drop = 0
+			spawn_powerup(random_powerup_kind(), boss_pos + Vector2(0.0, BOSS_R * 0.8))
 		return false
 	score += BOSS_POINTS
 	rays.clear()
