@@ -3172,3 +3172,10 @@
   - The DMD hangs that much lower so the housing shows all round.
 - **When:** on a landscape single screen, whenever its shared DMD shows at the top centre (every game). Not with Tilt Breaker's side panels (their own frames, D-266), not in portrait (the DMD spans the width), and not in a 2P race (each half has its own DMD, D-291).
 - **Status:** Accepted
+
+### D-315 — Turbo Run: "Start Your Engines" for attract and the menus
+- **Date:** 2026-11-24
+- **Decision (director):** the director's new track "Start Your Engines" (`start_your_engines.mp3`, 2:12) is Turbo Run's attract and menu music.
+- It is `MUSIC_ATTRACT` (was the Turbo Run theme, D-308). The 1/2-player, graphics, start-stage and car select screens carry it on. The radio still plays the station being tuned (D-301), and the Turbo Run theme stays radio station 1.
+- Converted to `assets/audio/music/racer/start_your_engines.ogg` (Vorbis q5). Recorded in `assets/CREDITS.md`.
+- **Status:** Accepted

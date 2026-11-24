@@ -294,7 +294,7 @@ const PASS_DUCK_RANGE := 15.0   # m
 ## past the finish line (2P: when the winner crosses), and at time up.
 const JINGLE_GOAL := "res://assets/audio/music/racer/racing_goal.ogg"
 const JINGLE_TIME_OVER := "res://assets/audio/music/racer/time_over.ogg"
-const MUSIC_ATTRACT := "res://assets/audio/music/racer/turbo_run_original.ogg"   # D-308: the main tune
+const MUSIC_ATTRACT := "res://assets/audio/music/racer/start_your_engines.ogg"   # D-315: the director's attract and menu track
 const CHUNK := 100.0             # metres of road per mesh chunk
 const VIEW_AHEAD := 900.0
 const VIEW_BEHIND := 60.0
