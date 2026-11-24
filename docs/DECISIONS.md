@@ -3335,3 +3335,11 @@
 - **Reach:** `SIDEKICK_W` is now a third of the ship (0.5 m, was 0.55) so the catch width matches what's drawn.
 - **Shield:** the ball-hit shield plane stretches across the sidekicks as they dock, and the hit point is measured against the full catch width.
 - **Status:** Accepted
+
+### D-333 — Tilt Breaker: a guaranteed drop after 15 bricks without one
+- **Date:** 2026-11-24
+- **Decision (director):** after the director cleared all of level 2 without a single drop: if 15 bricks have been destroyed with no drop, the next brick always drops a capsule.
+- `_since_drop` counts destroyed bricks since the last drop (any cause but a nuke, which never drops, D-326); when it passes `DROP_PITY` (15) the brick drops one, and every drop resets it. The normal rule (every 8th brick at 70%, D-329) is unchanged, so the longest possible gap is 15 bricks.
+- No bug was found in the drop code; with D-329's rule, a whole level without a drop needed every one of its 8th bricks to miss (about 0.3% for a 40-brick level), so it was very bad luck (or a build from before D-329).
+- **Test:** destroying a whole level brick by brick never goes more than 15 bricks between drops.
+- **Status:** Accepted

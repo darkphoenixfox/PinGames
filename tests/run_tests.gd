@@ -374,6 +374,25 @@ func test_breakout_difficulty(Sim) -> void:
 	cube_low = ag.enemies[1].pos.y > ag.enemies[0].pos.y
 	check(kinds_ok and dist[1] < dist[0] * 0.85 and cube_low,
 		"cube enemy: nearer the ship (%.0f vs %.0f) and lower than a tetra" % [dist[1], dist[0]])
+	# D-333: never more than 15 bricks in a row without a drop.
+	var pt = Sim.new()
+	pt.setup(3)
+	var gap := 0
+	var worst := 0
+	var drops := 0
+	for j in pt.bricks.size():
+		if not pt.bricks[j].alive or pt.bricks[j].get("metal", false) or pt.bricks_alive() <= 1:
+			continue
+		var before_n: int = pt.powerups.size()
+		pt.bricks[j].hp = 1
+		pt._damage_brick(j)
+		if pt.powerups.size() > before_n:
+			drops += 1
+			gap = 0
+		else:
+			gap += 1
+			worst = maxi(worst, gap)
+	check(worst <= Sim.DROP_PITY and drops >= 2, "a capsule drops at least every 16 bricks (longest gap %d, %d drops)" % [worst, drops])
 	# D-330: brick hits +2%, ship hits +5% of the bar.
 	var eg = Sim.new()
 	eg.setup(3)

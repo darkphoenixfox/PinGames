@@ -109,6 +109,7 @@ const ENEMY_TIER_RATE := 0.5         # spawn interval / (1 + 0.5 * tier)
 # --- power-ups (D-072) ----------------------------------------------------------------
 const POWERUP_EVERY := 8             # every 8th brick destroyed (D-329, was 10)...
 const POWERUP_CHANCE := 0.7          # ...has a 70% chance to drop one
+const DROP_PITY := 15                # D-333: 15 bricks with no drop: the 16th drops one
 const POWERUP_FALL := 2.2
 const POWERUP_R := 0.28
 const POWERUP_REACH_UP := 0.55       # D-329: the catch hitbox reaches this far above the capsule
@@ -202,6 +203,7 @@ var _next_shot_id := 1
 var shield_active := false
 var _next_powerup_id := 1
 var _broken_count := 0
+var _since_drop := 0   # D-333: bricks destroyed since the last capsule drop
 var _time := 0.0
 var _paddle_hist: Array = []  # [time, x], newest last
 var _held_time := 0.0
@@ -750,7 +752,11 @@ func _damage_brick(i: int) -> bool:
 	score += b.points
 	events.append(["brick", i])
 	_broken_count += 1
-	if not _nuking and _broken_count % POWERUP_EVERY == 0 and randf() < POWERUP_CHANCE and bricks_alive() > 0:
+	_since_drop += 1
+	# D-333: after DROP_PITY bricks without a drop, the next one always drops.
+	var due := _broken_count % POWERUP_EVERY == 0 and randf() < POWERUP_CHANCE
+	if not _nuking and (due or _since_drop > DROP_PITY) and bricks_alive() > 0:
+		_since_drop = 0
 		spawn_powerup(random_powerup_kind(), b.rect.get_center())
 	if bricks_alive() == 0:
 		score += RACK_BONUS
