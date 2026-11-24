@@ -3215,3 +3215,10 @@
 - **Fix:** `Screens.want_side_panels(on, frame, owner)` remembers who asked, and a request to turn them off from anyone else is ignored. Tilt Breaker passes itself.
 - **Checked:** reproduced with a new `--tb-over-at=N` dev flag (game over at N s); the same run with the fix keeps the panels.
 - **Status:** Accepted
+
+### D-320 — Tilt Breaker: "Earth's End" after the last life
+- **Date:** 2026-11-24
+- **Decision (director):** the director's "Earth's End" (`earths_end.mp3`, 15 s) plays after losing all lives in Tilt Breaker.
+- It plays once (`loop` false, D-311), starting as the game-over finale begins, in place of the gameplay music.
+- Converted to `assets/audio/music/breakout/earths_end.ogg`. Recorded in `assets/CREDITS.md`.
+- **Status:** Accepted

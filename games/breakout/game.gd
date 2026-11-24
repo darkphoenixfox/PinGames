@@ -61,6 +61,7 @@ const POWERUP_COLORS := {"T": Color(0.3, 0.55, 1.0), "P": Color(1.0, 0.25, 0.2),
 	"I": Color(0.72, 0.3, 1.0), "L": Color(1.0, 1.0, 1.0), "S": Color(0.3, 1.0, 0.4)}
 const MUSIC := "res://assets/audio/music/breakout/tilt_breaker_original.ogg"   # D-318: the director's own (was n-Dimensions)
 const MUSIC_ATTRACT := "res://assets/audio/music/breakout/dead_ship_attract.ogg"  # D-082
+const MUSIC_GAME_OVER := "res://assets/audio/music/breakout/earths_end.ogg"   # D-320: the director's, after the last life
 const ION_SHADER = preload("res://games/breakout/shaders/ion_beam.gdshader")
 const LEVEL_SPHERE_SCALE := [0.5, 0.75, 1.0]
 ## Ship banking (visual only; the hitbox is always the sim's rectangle).
@@ -565,6 +566,7 @@ func _handle_events() -> void:
 				_refresh_status()
 			"over":
 				_finale_t = 0.0
+				Audio.play_music(MUSIC_GAME_OVER, 0.5, true, false)   # D-320: once, over the finale
 				_hint.visible = false
 	if sim.score != _shown_score:
 		_refresh_status()
