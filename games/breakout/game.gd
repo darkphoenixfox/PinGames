@@ -400,7 +400,11 @@ func _process(delta: float) -> void:
 		_animate(delta)
 		return
 	if Config.cli.has("tb-dmd-anim") and not Dmd.is_animating():  # dev: loop one DMD animation
-		_dmd_anim(str(Config.cli["tb-dmd-anim"]))
+		var an := str(Config.cli["tb-dmd-anim"])
+		if an.begins_with("pu_"):
+			_dmd_pu_anim(an.trim_prefix("pu_"))
+		else:
+			_dmd_anim(an)
 	if Config.cli.has("tb-enemy-low") and _phase == "play" and not has_meta("dev_enemy"):   # dev: an enemy at the bottom (D-322)
 		set_meta("dev_enemy", true)
 		var eid: int = sim.spawn_enemy(-3.0, "cube" if Config.cli.has("tb-cube") else "tetra")
@@ -473,6 +477,7 @@ func _sfx(sound_name: String) -> AudioStreamPlayer:
 func _handle_events() -> void:
 	# D-326: a nuke's bricks share one big blast sound, not one each.
 	var nuked := sim.events.any(func(ev): return ev[0] == "nuke")
+	var from_1up := sim.events.any(func(ev): return ev[0] == "powerup_collect" and ev[1][1] == "U")
 	for k in sim.events.size():
 		var e: Array = sim.events[k]
 		if e[0] != "paddle" and e[0] != "wall":
@@ -566,8 +571,7 @@ func _handle_events() -> void:
 				if (e[1] as Array).size() > 3:
 					_pickup_popup(tr("TB_PU_%s" % kind), e[1][3], POWERUP_COLORS[kind])
 				_sfx("tb_pu_get")
-				if kind != "U":   # 1UP: its EXTRA CHARGE! callout comes with the charge (D-326)
-					Dmd.flash(tr("TB_PU_%s" % kind), 1.4, POWERUP_COLORS[kind])
+				_dmd_pu_anim(kind)   # D-328 (was a text flash)
 				_lights.pulse(BackglassLights.ALL, 0.8, 10.0)
 				_recoil = 0.4
 			"powerup_lost":
@@ -586,7 +590,8 @@ func _handle_events() -> void:
 				_lights.pulse(BackglassLights.ENGINES + BackglassLights.SHOTS, 0.6, 12.0)
 			"extra_life":   # D-321
 				_sfx("tb_extra_life")
-				Dmd.flash(tr("TB_EXTRA_CHARGE"), 1.8, Dmd.CYAN)
+				if not from_1up:   # a 1UP's own DMD clip says it (D-328)
+					Dmd.flash(tr("TB_EXTRA_CHARGE"), 1.8, Dmd.CYAN)
 				_lights.chase(1.2)
 				_refresh_status()
 			"extra_lost":
@@ -626,7 +631,8 @@ func _handle_events() -> void:
 			"rack_clear":
 				_sfx("tb_rack")
 				_lights.chase(1.8)
-				_dmd_anim("rack_clear")
+				if not nuked:   # a nuke's own DMD clip plays instead (D-328)
+					_dmd_anim("rack_clear")
 				_trail.clear()
 				_begin_outro()
 			"lost":
@@ -1942,8 +1948,17 @@ func _dmd_anim(name: String) -> void:
 		"ship_destroyed": tr("TB_SHIP_DESTROYED"),
 		"rack_clear": tr("TB_LEVEL_CLEAR"),
 		"plus_rack": "" if _phase == "attract" else "+%d" % Sim.RACK_BONUS,
+		"pu_name": _dmd_anims.texts.get("pu_name", ""),   # D-328: set by _dmd_pu_anim
+		"extra_charge": tr("TB_EXTRA_CHARGE"),
 	}
 	Dmd.play(Callable(_dmd_anims, name), DmdAnims.DURATIONS[name])
+
+
+## D-328: a power-up's pickup clip on the DMD, in its colour, with its name.
+func _dmd_pu_anim(kind: String) -> void:
+	_dmd_anims.pu_color = POWERUP_COLORS.get(kind, Dmd.YELLOW)
+	_dmd_anims.texts["pu_name"] = tr("TB_PU_%s" % kind)
+	_dmd_anim("pu_" + kind)
 
 
 func _stop_charge_sound() -> void:

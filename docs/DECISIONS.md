@@ -3292,3 +3292,11 @@
 - **Tests:** two slots coexist; T's 3 bolts at level 1 use one cell; W uses the full bar and damages several bricks once; H's one blast takes out at least 5 bricks; K widens the catch. Old P, I, S and 2P tests updated to the new rules.
 - **Dev:** `--tb-give=H,K` starts play holding those; `--tb-autofire` serves and keeps charging.
 - **Status:** Accepted
+
+### D-328 — Tilt Breaker: a DMD clip for each power-up
+- **Date:** 2026-11-24
+- **Decision (director):** a DMD animation for each power-up.
+- Catching a capsule plays its clip (1.6 s; 1UP and Nuclear 1.8 s) in place of the plain text flash (D-072). The left 40 dots show a little scene; the name drops into the right panel in the power-up's colour, flashing white as it lands, with a line sweeping out under it.
+- **Scenes:** T, three bolts fanning out twice; P, a red charge-up and a thick bolt; B, a second ball bouncing with a trail; I, a crackling column burning a brick stack; W, a snaking shot; H, a missile curving onto a tetra that bursts; L, the ship darting with two afterimages and speed lines; S, a green barrier bouncing a ball; K, two mini ships flying up and docking; U, a big "1UP" with sparkles, then "EXTRA CHARGE!" (its separate text flash is skipped); N, a white flash, a shock ring and a mushroom cloud (the level-clear clip is skipped for a nuke).
+- Code in `dmd_anims.gd` (`pu_*`), played through `_dmd_pu_anim(kind)`. `--tb-dmd-anim=pu_W` loops one for checks.
+- **Status:** Accepted
