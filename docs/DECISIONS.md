@@ -3124,3 +3124,12 @@
   - They're built from flat segments about 0.6 m long in a world-space ring of 900 (a MultiMesh), drawn over the road and its puddles. They stay on the road as the car leaves them; the oldest are reused, and a new race clears them.
 - **Dev:** `--rc-skid` lays the marks all the time.
 - **Status:** Accepted
+
+### D-310 — Turbo Run: smaller, brighter sparks; skid marks on crashes
+- **Date:** 2026-11-24
+- **Decision (director):**
+  - **Contact sparks** (D-303) are smaller (0.06 m, was 0.1) and bright yellow (white-yellow, yellow, then a fading amber).
+  - **Crashes** mark the road too: a spin-out lays the rear tyres' skid marks (D-309) while the car still slides, so it leaves the curling tyre trail of the spin.
+  - A roll-over doesn't mark the road (its wheels are in the air), and neither does a car stopped after a crash.
+- **Dev:** `--rc-crash-at=N` makes the car spin out N s into the race.
+- **Status:** Accepted

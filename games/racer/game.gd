@@ -850,6 +850,10 @@ func _process(delta: float) -> void:
 			sim.step_two(dt, [[false, false, false], [false, false, false]])
 			sim._use(_role)
 		_finale(delta)
+	if Config.cli.has("rc-crash-at") and _phase == "race" and sim.state == Sim.State.RACE and sim.spin_t <= 0.0 			and _phase_t >= float(str(Config.cli["rc-crash-at"])) and not has_meta("dev_crashed"):   # dev: a spin-out at N s (D-310)
+		set_meta("dev_crashed", true)
+		sim._crash("car", 1.0)
+		_handle_events()
 	if Config.cli.has("rc-burst") and _phase == "race" and fmod(_phase_t, 0.5) < delta:   # dev: collision FX (D-292)
 		_burst(sim.track.point(sim.s, sim.x + Sim.CAR_W * 0.5, 0.45), int(_phase_t) % 2 == 0, _role, sim.v)
 	_update_chunks()
@@ -1957,10 +1961,10 @@ func _burst(pos: Vector3, big: bool, who: int = -1, car_v: float = 0.0) -> void:
 	sparks.scale_amount_max = 1.0
 	var sg := Gradient.new()
 	sg.offsets = PackedFloat32Array([0.0, 0.6, 1.0])
-	sg.colors = PackedColorArray([Color(1.0, 1.0, 0.8), Color(1.0, 0.65, 0.15), Color(1.0, 0.25, 0.05, 0.0)])
+	sg.colors = PackedColorArray([Color(1.0, 1.0, 0.7), Color(1.0, 0.95, 0.2), Color(1.0, 0.75, 0.05, 0.0)])   # D-310: bright yellow
 	sparks.color_ramp = sg
 	var sq := QuadMesh.new()
-	sq.size = Vector2(0.1, 0.1)   # D-303: small hot specks
+	sq.size = Vector2(0.06, 0.06)   # D-303: small hot specks; D-310: smaller
 	sq.material = _fx_material(_spark_texture())
 	sparks.mesh = sq
 	var dust := CPUParticles3D.new()
@@ -3530,7 +3534,8 @@ func _animate(delta: float) -> void:
 		and sim.spin_t <= 0.0 and not sim.offroad
 	var smoking := sim.drifting or sliding_out or launching or _shift_smoke_t > 0.0 or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
 	_update_puffs(delta, smoking, launching and not (sim.drifting or sliding_out or sim.spin_t > 0.0))
-	_update_skids(sim.drifting or sliding_out or Config.cli.has("rc-skid"), yaw)   # (--rc-skid: dev, always)
+	# D-310: a crash (spin-out or roll, while it still moves) marks the road too.
+	_update_skids(sim.drifting or sliding_out or (sim.spin_t > 0.0 and not sim.stalled() and not sim.flipping) or Config.cli.has("rc-skid"), yaw)   # (--rc-skid: dev, always)
 	# Revving on the grid spits fire (D-116): pops while held high, and one as
 	# the revs drop.
 	if sim.state == Sim.State.COUNTDOWN:
