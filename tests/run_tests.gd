@@ -589,7 +589,65 @@ func test_breakout_difficulty(Sim) -> void:
 	check(n.balls_left == 2 and n.balls_total == 2 and n.ball_speed == 10.0 and n.level == 1, "picking later keeps the level")
 
 
+## D-334: every destructible brick of every level can be reached by the ball:
+## from the open space below (and, once a way through opens, above), the ball
+## passes through empty cells (an empty cell is wider and taller than it), and
+## breaking a reachable brick opens its cell. Metal never breaks. Returns the
+## unreachable bricks as "row,col".
+func _trapped_bricks(rows: Array, cols: int) -> Array:
+	var h := rows.size()
+	var grid := []   # "" empty, "X" metal, "b" destructible
+	for r in h:
+		var line: String = rows[r]
+		var row := []
+		for c in cols:
+			var ch := line[c] if c < line.length() else "."
+			row.append("" if ch == "." else ("X" if ch.to_upper() == "X" else "b"))
+		grid.append(row)
+	var changed := true
+	while changed:
+		changed = false
+		# Flood from the space below (row h) and, if reached, the space above (row -1);
+		# rows -1 and h are open space.
+		var stack := []
+		for c in cols:
+			stack.append(Vector2i(h, c))
+		var seen := {}
+		var top_reached := false
+		while not stack.is_empty():
+			var v: Vector2i = stack.pop_back()
+			var k := "%d,%d" % [v.x, v.y]
+			if seen.has(k):
+				continue
+			seen[k] = true
+			if v.x == -1 and not top_reached:
+				top_reached = true
+				for c in cols:
+					stack.append(Vector2i(-1, c))
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var n: Vector2i = v + d
+				if n.y < 0 or n.y >= cols or n.x < -1 or n.x > h:
+					continue
+				if n.x == -1 or n.x == h or grid[n.x][n.y] == "":
+					stack.append(n)
+				elif grid[n.x][n.y] == "b":   # touching it: the ball breaks it
+					grid[n.x][n.y] = ""
+					changed = true
+	var out := []
+	for r in h:
+		for c in cols:
+			if grid[r][c] == "b":
+				out.append("%d,%d" % [r, c])
+	return out
+
+
 func test_breakout_levels(Sim) -> void:
+	# D-334: no level hides a brick the ball can never reach.
+	for wide in [false, true]:
+		var files: Array = Sim.LEVEL_FILES_2P if wide else Sim.LEVEL_FILES
+		for n in files.size():
+			var trapped := _trapped_bricks(Sim.level_layout(n + 1, wide), Sim.BRICK_COLS_2P if wide else Sim.BRICK_COLS)
+			check(trapped.is_empty(), "%s: every brick reachable %s" % [String(files[n]).get_file(), trapped])
 	var lv = Sim.new()
 	lv.setup(3)
 	lv.spawn_enemy(0.0)

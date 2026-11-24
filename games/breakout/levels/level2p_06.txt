@@ -4,7 +4,7 @@
 r.......rYr.......r
 Yr.....rYXYr.....rY
 XYr...rYXgXYr...rYX
-Yr.....rYXYr.....rY
+Yr.....rYyYr.....rY
 r.......rYr.......r
 .........r.........
 RRRRRRRRRRRRRRRRRRR

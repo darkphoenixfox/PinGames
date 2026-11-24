@@ -3343,3 +3343,10 @@
 - No bug was found in the drop code; with D-329's rule, a whole level without a drop needed every one of its 8th bricks to miss (about 0.3% for a 40-brick level), so it was very bad luck (or a build from before D-329).
 - **Test:** destroying a whole level brick by brick never goes more than 15 bricks between drops.
 - **Status:** Accepted
+
+### D-334 — Tilt Breaker: no level may hide an unreachable brick
+- **Date:** 2026-11-24
+- **Bug (director):** level 6's heart (an armoured green brick) was walled in by metal on all four sides, so only Ion, Wave, Missile or Nuclear could reach it, and a player without them could never clear the level.
+- **Audit:** a new test (`_trapped_bricks`) checks every level, 1-player and 2-player. From the open space below (and above, once a way opens) the ball passes through empty cells (an empty cell, 0.75×0.4 m, is wider and taller than the 0.32 m ball; the 0.05 m gaps between bricks are not), and any destructible brick it touches breaks and opens its cell, repeated until nothing changes. Metal never breaks. Any destructible brick left is reported. Only level 6 and its 2-player version failed.
+- **Fix:** the metal brick under the heart is now an armoured yellow brick (`y`), in both versions. The metal crown (top and sides) stays; you break in from below.
+- **Status:** Accepted
