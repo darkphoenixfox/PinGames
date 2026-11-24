@@ -3471,3 +3471,9 @@
 - **Decision (director):** the director's `GAME_OVER.png` and `PRESS_START.png` replace the GAME OVER and blinking PRESS START text on the TABLE.
 - GAME OVER (up to 720 px wide) heads the finale above FINAL SCORE; PRESS START (up to 520 px) blinks under the logo in attract as before. The DMD keeps its dot text. Both trimmed and scaled to 1200 px by `scripts/tools/prepare_breakout_titles.py` (which now also makes `ready.png`); recorded in `assets/CREDITS.md`.
 - **Status:** Accepted
+
+### D-350 — Tilt Breaker: EASY / NORMAL / HARD art on the difficulty screen
+- **Date:** 2026-11-24
+- **Decision (director):** the director's EASY, NORMAL and HARD images replace the difficulty names on the difficulty screen.
+- Each row shows its art (up to 620 px wide, within the field on the single screen) above its speed and lives line. The chosen one is full size and bright; the others are 70% size and dimmed. The DMD keeps its dot text. Prepared by `scripts/tools/prepare_breakout_titles.py`; recorded in `assets/CREDITS.md`.
+- **Status:** Accepted

@@ -2093,7 +2093,7 @@ func _enter_select() -> void:
 	for d in Sim.DIFFICULTY_ORDER:
 		var row := VBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
-		var name_l := UI.label("", 96, UI.WHITE)
+		var name_l := _title_art(d, 620.0)   # D-350: the director's art (was text)
 		var info_l := UI.label(tr("TB_DIFF_INFO") % [tr(DIFF_SPEED[d]), _lives_for(d)], 36, UI.WHITE)
 		row.add_child(name_l)
 		row.add_child(info_l)
@@ -2119,10 +2119,12 @@ func _refresh_select() -> void:
 	for i in _select_rows.size():
 		var d: String = Sim.DIFFICULTY_ORDER[i]
 		var on := i == _select_index
-		var name_l: Label = _select_rows[i][0]
-		name_l.text = ("> %s <" % tr(DIFF_NAME[d])) if on else tr(DIFF_NAME[d])
-		name_l.add_theme_color_override("font_color", UI.YELLOW if on else UI.WHITE)
-		(_select_rows[i][2] as Control).modulate.a = 1.0 if on else 0.4
+		var name_l: TextureRect = _select_rows[i][0]
+		# D-350: the chosen one full size and bright; the others smaller and dim.
+		if not name_l.has_meta("full"):
+			name_l.set_meta("full", name_l.custom_minimum_size)
+		name_l.custom_minimum_size = name_l.get_meta("full") * (1.0 if on else 0.7)
+		(_select_rows[i][2] as Control).modulate = Color.WHITE if on else Color(0.55, 0.55, 0.6, 0.6)
 	var cur: String = Sim.DIFFICULTY_ORDER[_select_index]
 	# The DMD line is short: the lives only (the speed is on the TABLE).
 	Dmd.show_text(tr(DIFF_NAME[cur]), tr("TB_DIFF_DMD") % _lives_for(cur), Dmd.YELLOW, Dmd.WHITE)
