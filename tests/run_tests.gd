@@ -558,7 +558,7 @@ func test_breakout_difficulty(Sim) -> void:
 	for i in 6000:
 		var kk: String = rp.random_powerup_kind()
 		counts[kk] = int(counts.get(kk, 0)) + 1
-	var rare_ok: bool = counts.get("U", 0) > 200 and counts.get("N", 0) > 200 		and counts.get("U", 0) < counts.get("T", 0) * 0.6 and counts.get("N", 0) < counts.get("T", 0) * 0.6
+	var rare_ok: bool = counts.get("U", 0) > 70 and counts.get("N", 0) > 70 		and counts.get("U", 0) < counts.get("T", 0) * 0.4 and counts.get("N", 0) < counts.get("T", 0) * 0.4
 	var up = Sim.new()
 	up.setup(3)
 	var lives0: int = up.balls_left

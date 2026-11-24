@@ -3396,3 +3396,8 @@
 - **Date:** 2026-11-24
 - **Decision (director):** the boss's life is 150% of what it was: 45 HP (was 30, D-335). The eye's colour steps (D-338) and the drop every 4 damage (D-339) scale with it, so a fight now drops about 11 capsules.
 - **Status:** Accepted
+
+### D-341 — Tilt Breaker: 1UP and Nuclear half as often
+- **Date:** 2026-11-24
+- **Decision (director):** extra lives (1UP) and Nuclear appear half as often: 4% of drops between them, 2% each (was 8%, D-329).
+- **Status:** Accepted

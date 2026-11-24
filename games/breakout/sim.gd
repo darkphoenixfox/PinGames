@@ -157,7 +157,7 @@ const MISSILE_HITS := 3
 ## charge), N = Nuclear (every brick on screen goes). Rarer: INSTANT_CHANCE of all drops
 ## between them (D-329).
 const INSTANT_KINDS := ["U", "N"]
-const INSTANT_CHANCE := 0.08         # D-329: of drops, 1UP or Nuclear (4% each)
+const INSTANT_CHANCE := 0.04         # D-341: of drops, 1UP or Nuclear (2% each; was 8%, D-329)
 const TRIPLE_ANGLE := 20.0           # T: side bolts at +-20 degrees (D-078)
 const ION_BEAM_W := 0.7              # I: width of the beam
 const LIGHTSPEED_MULT := 1.3         # L: ship speed (assumption, D-072)
