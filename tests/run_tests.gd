@@ -514,6 +514,22 @@ func test_breakout_difficulty(Sim) -> void:
 		bounce.step(1.0 / 60.0, false, false, false, 0)
 	check(bands_ok and alive9 and dead10 and dead5 and bounce.ball_vel.y > 0.0 and int(bounce.darks[0].hp) == Sim.DARK_HP - 1,
 		"corrupted paddle: levels 15-19 leave its band clear; blocks the ball; 10 ball hits or 5 weapon hits")
+	# D-346: it chases the ball, slower than the ship can move.
+	var ch = Sim.new()
+	ch.setup(3)
+	ch.level = 15
+	ch.build_rack()
+	ch.step(1.0 / 60.0, false, false, true, 0)
+	ch.freeze_ball = true
+	ch.ball_pos = Vector2(2.5, 3.0)
+	ch.spawn_dark(-2.5)
+	ch.darks[0].state = "live"
+	var fastest := 0.0
+	for i in 120:
+		ch.step(1.0 / 60.0, false, false, false, 0)
+		fastest = maxf(fastest, absf(float(ch.darks[0].vx)))
+	check(absf(float(ch.darks[0].pos.x) - 2.5) < 0.3 and fastest <= Sim.DARK_SPEED * ch.enemy_speed_mult() + 0.01 and fastest < Sim.PADDLE_MAX_SPEED,
+		"corrupted paddle chases the ball (x %.2f), slower than the ship" % float(ch.darks[0].pos.x))
 	var dd = Sim.new()
 	dd.setup(3)
 	dd.level = 20

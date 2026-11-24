@@ -109,7 +109,8 @@ const MINI_CHARGE := 0.9
 const DARK_FROM_LEVEL := 15
 const DARK_Y_FRAC := 0.35
 const DARK_HP := 10
-const DARK_SPEED := 2.2
+const DARK_SPEED := 4.5               # D-346: top speed chasing the ball (the player's is 11)
+const DARK_ACCEL := 25.0
 const DARK_WARP := 0.8
 const DARK_POINTS := 1500
 const DARK_INTERVAL := Vector2(18.0, 28.0)
@@ -1055,7 +1056,7 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 			vel = BP.reflect(vel, dc.normal)
 			b.pos = pos
 			b.vel = vel
-			_hurt_dark(k, 1)
+			_hurt_dark(k, 1, (pos.x - float(dkk.pos.x)) / (PADDLE_W * 0.5), signf(pos.y - float(dkk.pos.y)))
 			break
 	for k in range(rays.size() - 1, -1, -1):
 		if _ray_touches(rays[k], pos, BALL_R):
@@ -1285,11 +1286,24 @@ func _update_darks(dt: float) -> void:
 				d.state = "live"
 				events.append(["dark_ready", d.id])
 			continue
+		# D-346: it chases the plasma like a player would (the nearest ball;
+		# the middle while none is in play), but slower.
 		var p: Vector2 = d.pos
-		p.x += float(d.vx) * enemy_speed_mult() * dt
+		var tx := 0.0
+		if state == State.PLAY:
+			tx = ball_pos.x
+			var best := absf(ball_pos.y - p.y)
+			for e in extra_balls:
+				if absf(float(e.pos.y) - p.y) < best:
+					best = absf(float(e.pos.y) - p.y)
+					tx = e.pos.x
+		var top := DARK_SPEED * enemy_speed_mult()
+		var want := clampf((tx - p.x) * 4.0, -top, top)
+		d.vx = move_toward(float(d.vx), want, DARK_ACCEL * dt)
+		p.x += float(d.vx) * dt
 		if absf(p.x) > lim:
 			p.x = clampf(p.x, -lim, lim)
-			d.vx = -float(d.vx)
+			d.vx = 0.0
 		d.pos = p
 
 
@@ -1300,10 +1314,11 @@ func _dark_hit_by_rect(rect: Rect2) -> int:
 	return -1
 
 
-func _hurt_dark(k: int, n: int) -> void:
+## `rel_x` -1..1 across it and `side` (+1 below, -1 above) place its shield's flash.
+func _hurt_dark(k: int, n: int, rel_x: float = 0.0, side: float = 1.0) -> void:
 	var d: Dictionary = darks[k]
 	d.hp = int(d.hp) - n
-	events.append(["dark_hit", [d.id, d.hp]])
+	events.append(["dark_hit", [d.id, d.hp, clampf(rel_x, -1.0, 1.0), side if side != 0.0 else 1.0]])
 	if d.hp <= 0:
 		score += DARK_POINTS
 		events.append(["dark_dead", [d.id, d.pos]])

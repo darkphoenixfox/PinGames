@@ -3440,3 +3440,12 @@
 - **Fly-bys:** 35% of an enemy's size, 72% transparent, 0.5–1 m/s, 40–60 units deep, so they pass behind the Earth and the moon (which hide them) as well as everything in play; thinner, slower thruster trails. One every 8–16 s (was 5–11; they stay on screen longer).
 - **Moon parallax:** it swings sideways with the starfield (which turns with the ship's movement, D-049) at 8% of the near stars' swing, along the same arc around the stars' pivot, and eases back to its spot (1/0.6 s), on top of its slow orbit (D-343).
 - **Status:** Accepted
+
+### D-346 — Tilt Breaker: corrupted paddles chase the ball and shield red; level-20 boss shape fixed
+- **Date:** 2026-11-24
+- **Decision (director):** corrupted paddles chase the ball like the player does, but slower, and show a red shield when they hit the ball, instead of moving aimlessly. The level-20 boss model wasn't a dodecahedron.
+- **Chasing:** each frame a corrupted paddle steers towards the x of the nearest ball in play (vertically nearest: main or extra), the middle while none is in play: top speed 4.5 m/s (the player's is 11) times the enemy tier's speed, 25 m/s² acceleration; it stops at the walls. Replaces D-342's constant side-to-side slide.
+- **Red shield:** a red copy of the ship's shield (`shield.gdshader`, red) on the side the ball hit (above or below), flashing and rippling from the hit point (`dark_hit` now carries where), fading like the ship's.
+- **Dodecahedron:** `Fx.make_dodecahedron` paired its face directions' coordinates the wrong way round ((0, ±1, ±φ) instead of (0, ±φ, ±1)), so each "face" took the wrong 5 corners. Fixed (checked numerically: all 12 faces now have 5 equidistant corners) and on screen; no Blender model needed.
+- **Test:** a corrupted paddle ends up under a ball 5 m away within 2 s, never faster than its top speed.
+- **Status:** Accepted

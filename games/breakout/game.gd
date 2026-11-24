@@ -626,9 +626,18 @@ func _handle_events() -> void:
 				_spawn_dark_node(e[1][0], e[1][1])
 				_sfx("tb_wormhole")
 			"dark_hit":
-				_sfx("tb_armour")
+				_sfx("tb_shield")
 				if _dark_nodes.has(e[1][0]):
-					_dark_nodes[e[1][0]].flash = 1.0
+					var dn: Dictionary = _dark_nodes[e[1][0]]
+					dn.flash = 1.0
+					# D-346: its red shield lights where the hit landed, on that side.
+					var side: float = e[1][3] if (e[1] as Array).size() > 3 else 1.0
+					var rel: float = e[1][2] if (e[1] as Array).size() > 2 else 0.0
+					var sh: MeshInstance3D = dn.shield
+					sh.position = Vector3(0.0, 0.08, side * (Sim.PADDLE_H * 0.5 + 0.2))
+					sh.rotation.y = PI if side > 0.0 else 0.0   # its front faces the hit
+					(dn.shield_mat as ShaderMaterial).set_shader_parameter("hit_x", -rel if side > 0.0 else rel)
+					dn.shield_age = 0.0
 			"dark_dead":
 				var dp: Vector2 = e[1][1]
 				_sfx("tb_explode")
@@ -2640,10 +2649,22 @@ func _spawn_dark_node(id: int, pos: Vector2) -> void:
 	glow.light_energy = 1.2
 	glow.position = Vector3(0.0, 0.4, 0.0)
 	root.add_child(glow)
+	# D-346: a red copy of the ship's shield, shown when the plasma hits it.
+	var shield := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(Sim.PADDLE_W * 1.25, 0.55)
+	shield.mesh = plane
+	var smat := ShaderMaterial.new()
+	smat.shader = SHIELD_SHADER
+	smat.set_shader_parameter("shield_color", Color(1.0, 0.18, 0.12))
+	shield.material_override = smat
+	shield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(shield)
 	root.scale = Vector3(0.01, 1.0, 0.01)
 	_root.add_child(root)
 	_explode_brick(Vector3(pos.x, 0.3, pos.y), Color(1.0, 0.15, 0.2), 1.2)   # the warp flash
-	_dark_nodes[id] = {"root": root, "mats": mats, "eye": em, "flash": 0.0}
+	_dark_nodes[id] = {"root": root, "mats": mats, "eye": em, "flash": 0.0,
+		"shield": shield, "shield_mat": smat, "shield_age": 9.0}
 
 
 func _animate_darks(delta: float) -> void:
@@ -2657,6 +2678,9 @@ func _animate_darks(delta: float) -> void:
 		var w: float = clampf(float(d.t) / Sim.DARK_WARP, 0.0, 1.0) if d.state == "warp" else 1.0
 		root.scale = Vector3(maxf(0.01, w * w), 1.0, maxf(0.01, w))
 		n.flash = maxf(0.0, float(n.flash) - delta * 5.0)
+		n.shield_age = float(n.shield_age) + delta
+		(n.shield_mat as ShaderMaterial).set_shader_parameter("age", n.shield_age)
+		(n.shield_mat as ShaderMaterial).set_shader_parameter("strength", clampf(1.0 - n.shield_age / SHIELD_FADE, 0.0, 1.0))
 		for m in n.mats:
 			(m as ShaderMaterial).set_shader_parameter("tint", Color(0.22, 0.17, 0.22).lerp(Color(1.0, 0.5, 0.5), n.flash))
 		(n.eye as ShaderMaterial).set_shader_parameter("glow", 0.6 + 0.4 * sin(Time.get_ticks_msec() * 0.006) + n.flash)

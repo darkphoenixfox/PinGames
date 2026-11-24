@@ -249,13 +249,15 @@ static func make_dodecahedron(radius: float, texture: Texture2D, edge_color: Col
 	var v := []
 	for p in raw:
 		v.append((p as Vector3).normalized() * radius)
-	# Face normals = the icosahedron's vertices; each face = the 5 nearest corners.
+	# Face normals = the dual icosahedron's vertices (0, +-phi, +-1) and cyclic;
+	# each face = the 5 nearest corners. (D-346: the order was swapped before,
+	# which picked the wrong corners and broke the shape.)
 	var normals := []
 	for a in [-1.0, 1.0]:
 		for b in [-phi, phi]:
-			normals.append(Vector3(0, a, b).normalized())
-			normals.append(Vector3(a, b, 0).normalized())
-			normals.append(Vector3(b, 0, a).normalized())
+			normals.append(Vector3(0, b, a).normalized())
+			normals.append(Vector3(b, a, 0).normalized())
+			normals.append(Vector3(a, 0, b).normalized())
 	var m := StandardMaterial3D.new()
 	m.albedo_texture = texture
 	m.albedo_color = Color(1, 1, 1, alpha)
