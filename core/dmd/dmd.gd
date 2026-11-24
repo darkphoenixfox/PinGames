@@ -121,7 +121,8 @@ func show_image(tex: Texture2D, bottom: String = "", bottom_color: Variant = nul
 ## hides the bar; `warn` makes the bar area blink "LOW" in red.
 func show_status(score: int, lives: int, max_lives: int, power: float, segments: int = 3,
 		score_color: Variant = null, power_color: Variant = null, level: int = 0,
-		badge: String = "", badge_color: Variant = null, bar: bool = true, warn: bool = false) -> void:
+		badge: String = "", badge_color: Variant = null, bar: bool = true, warn: bool = false,
+		badge2: String = "", badge2_color: Variant = null) -> void:
 	show_score(score, "", "", score_color)
 	var y := size.y - 7 * _unit
 	_elements.append({"type": "lives", "y": y, "lives": lives, "max": max_lives,
@@ -133,7 +134,8 @@ func show_status(score: int, lives: int, max_lives: int, power: float, segments:
 	_elements.append({"type": "bar", "y": y + _unit, "value": clampf(power, 0.0, 1.0),
 		"segments": segments, "color": power_color if power_color != null else YELLOW,
 		"hidden": not bar, "warn": warn, "badge": badge,
-		"badge_color": badge_color if badge_color != null else WHITE})
+		"badge_color": badge_color if badge_color != null else WHITE,
+		"badge2": badge2, "badge2_color": badge2_color if badge2_color != null else WHITE})
 
 
 ## D-287: the status line for two players: shared score, lives and level, and
@@ -365,6 +367,14 @@ func _draw_bar(el: Dictionary) -> void:
 		var by: float = el.y - 2 * u
 		_canvas.draw_rect(Rect2(bx, by, 8 * u, 9 * u), bc * 0.35)
 		DotFont.draw(_canvas, badge, Vector2(bx + 1.5 * u, by + u), u, bc)
+	# D-327: a second badge (Tilt Breaker's paddle upgrade) further left.
+	var badge2: String = el.get("badge2", "")
+	if not badge2.is_empty():
+		var bc2: Color = el.badge2_color
+		var bx2 := x0 - 20 * u
+		var by2: float = el.y - 2 * u
+		_canvas.draw_rect(Rect2(bx2, by2, 8 * u, 9 * u), bc2 * 0.35)
+		DotFont.draw(_canvas, badge2, Vector2(bx2 + 1.5 * u, by2 + u), u, bc2)
 	if el.get("hidden", false):
 		return
 	if el.get("warn", false):  # LOW POWER: only the bar area blinks (D-072)

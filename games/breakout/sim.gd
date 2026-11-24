@@ -107,14 +107,33 @@ const POWERUP_EVERY := 10            # every 10th brick destroyed...
 const POWERUP_CHANCE := 0.7          # ...has a 70% chance to drop one
 const POWERUP_FALL := 2.2
 const POWERUP_R := 0.28
-const POWERUP_KINDS := ["T", "P", "B", "I", "L", "S", "U", "N"]
+const POWERUP_KINDS := ["T", "P", "B", "I", "W", "H", "L", "S", "K", "U", "N"]
+## D-327: two slots. Blaster upgrades (atom capsules) replace the plasma cannon:
+## they charge to level 1 only (one BLAST_CHARGE_TIME) and each shot uses
+## UPGRADE_COST of the 3-cell power bar. Paddle upgrades (pill capsules) change
+## the ship and use no energy. One of each can be held at once.
+const BLASTER_KINDS := ["T", "P", "B", "I", "W", "H"]
+const PADDLE_KINDS := ["S", "L", "K"]
+const UPGRADE_COST := {"T": 1.0 / 3.0, "P": 1.0 / 3.0, "B": 1.0, "I": 1.0, "W": 1.0, "H": 1.0}
+const SIDEKICK_W := 0.55             # K: each sidekick adds this much reach per side
+## W: a wave shot that snakes up, hitting each brick in its way once, never stopped.
+const WAVE_SPEED := 10.0
+const WAVE_AMP := 1.1                # m either side of where it was fired
+const WAVE_RATE := 6.0               # rad/s of its side-to-side swing
+const WAVE_SIZE := Vector2(0.7, 0.5)
+## H: a homing missile at the nearest enemy or brick; its blast hits everything
+## in a 3x3-brick area three times.
+const MISSILE_SPEED := 11.0
+const MISSILE_TURN := 7.0            # rad/s
+const MISSILE_R := 0.15
+const MISSILE_AREA := Vector2(3.0, 3.0)   # in bricks (columns x rows)
+const MISSILE_HITS := 3
 ## D-326: instant power-ups, used on the catch (never held): U = 1UP (an extra
 ## charge), N = Nuclear (every brick on screen goes). Rarer: RARE_WEIGHT of a
 ## normal kind's chance each.
 const INSTANT_KINDS := ["U", "N"]
 const RARE_WEIGHT := 0.35
 const TRIPLE_ANGLE := 20.0           # T: side bolts at +-20 degrees (D-078)
-const POWER_CHARGE_MULT := 3.0       # P: charges 3x faster (one phase)
 const ION_BEAM_W := 0.7              # I: width of the beam
 const LIGHTSPEED_MULT := 1.3         # L: ship speed (assumption, D-072)
 const GHOST_DELAYS := [0.09, 0.18]   # L: afterimages trail by these delays
@@ -146,7 +165,7 @@ var server := 0        # the player whose ship holds the ball before a serve
 var cur := 0           # the player whose fields are live
 var _pl := [{}, {}]
 const PLAYER_FIELDS := ["paddle_x", "paddle_vx", "paddle_y", "_dash_time", "_dash_cd", "_dash_dir",
-	"powerup", "shield_active", "_paddle_hist", "power", "blast_charge", "_since_blast", "_both_held",
+	"powerup", "padup", "shield_active", "_paddle_hist", "power", "blast_charge", "_since_blast", "_both_held",
 	"_await_release", "_both_hold_t", "_fail_reported", "ship_invulnerable", "charge_held", "paddle_axis"]
 
 var paddle_x := 0.0
@@ -165,8 +184,14 @@ var extra_balls: Array = []
 
 ## Power-ups (D-072): current one ("" = none), falling capsules {id, pos, kind},
 ## the Shield barrier, and the ship's position history (Lightspeed afterimages).
-var powerup := ""
+var powerup := ""     # the blaster slot (D-327)
+var padup := ""       # the paddle slot (D-327)
 var powerups: Array = []
+## D-327: live wave shots {id, x0, pos, t, hit: {brick index: true}} and
+## missiles {id, pos, vel, target: ["enemy", id] | ["brick", index]}.
+var waves: Array = []
+var missiles: Array = []
+var _next_shot_id := 1
 var shield_active := false
 var _next_powerup_id := 1
 var _broken_count := 0
@@ -240,6 +265,7 @@ func setup_two(balls: int, diff: String = "normal") -> void:
 		d._paddle_hist = []
 		d.power = 1.0
 		d.powerup = ""
+		d.padup = ""
 		d.shield_active = false
 		_pl[i] = d
 	cur = 0
@@ -295,6 +321,9 @@ func step_two(dt: float, a: Array, b: Array) -> void:
 		while event_ship.size() < events.size():
 			event_ship.append(i)
 	_use(0)
+	_update_shots(dt)   # D-327
+	if state == State.OVER or state == State.LEVEL_CLEAR:
+		return
 	_update_enemies(dt)
 	if state == State.OVER:
 		return
@@ -370,6 +399,7 @@ func next_level() -> void:
 	build_rack()
 	enemies.clear()
 	blasts.clear()
+	_clear_shots()   # D-327
 	blast_charge = 0.0
 	_enemy_timer = ENEMY_FIRST_SPAWN / (1.0 + ENEMY_TIER_RATE * enemy_tier())
 	power = 1.0  # full power bar at the start of each level (D-076)
@@ -415,6 +445,17 @@ func paddle_rect() -> Rect2:
 	return Rect2(paddle_x - PADDLE_W * 0.5, paddle_y - PADDLE_H * 0.5, PADDLE_W, PADDLE_H)
 
 
+## D-327: half the ship's catching width: wider with the Sidekicks.
+func catch_half_w() -> float:
+	return PADDLE_W * 0.5 + (SIDEKICK_W if padup == "K" else 0.0)
+
+
+## D-327: what bounces the plasma and catches capsules (the ship plus any sidekicks).
+func catch_rect() -> Rect2:
+	var h := catch_half_w()
+	return Rect2(paddle_x - h, paddle_y - PADDLE_H * 0.5, h * 2.0, PADDLE_H)
+
+
 ## A player's ship field, set whichever ship is live (2P, D-286).
 func player_set(i: int, f: String, v: Variant) -> void:
 	if not two_player or i == cur:
@@ -433,6 +474,9 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 	_time += dt
 	_update_power_and_blast(dt, (left and right) or charge_held)
 	_move_paddle(dt, left, right, dash)
+	_update_shots(dt)   # D-327
+	if state == State.OVER or state == State.LEVEL_CLEAR:
+		return
 	_update_enemies(dt)
 	if state == State.OVER:
 		return
@@ -492,24 +536,24 @@ func _step_balls(dt: float) -> void:
 ## change it (D-072): Bounce = 1 level for a full bar, Ion = only level 3 with a
 ## full bar, Lightspeed/Shield = no charged shot at all.
 func affordable_level() -> int:
-	match powerup:
-		"L", "S":
-			return 0
-		"B":
-			return 1 if power >= 1.0 - 0.0001 else 0
-		"I":
-			return BLAST_MAX_LEVEL if power >= 1.0 - 0.0001 else 0
+	if UPGRADE_COST.has(powerup):   # D-327: a blaster upgrade: level 1 if its cost is there
+		return 1 if power >= float(UPGRADE_COST[powerup]) - 0.0001 else 0
 	return clampi(int(floor(power / BLAST_COST + 0.0001)), 0, BLAST_MAX_LEVEL)
 
 
-## The highest level the current mode can reach (Bounce = 1, otherwise 3).
+## The highest level the current blaster can reach: 1 with an upgrade (D-327).
 func max_level() -> int:
-	return 1 if powerup == "B" else BLAST_MAX_LEVEL
+	return 1 if UPGRADE_COST.has(powerup) else BLAST_MAX_LEVEL
 
 
-## Whether the current power-up allows charging at all.
+## D-327: what one shot of the current blaster uses (the plain cannon: per level).
+func shot_cost() -> float:
+	return float(UPGRADE_COST.get(powerup, BLAST_COST))
+
+
+## Whether charging is allowed: always, since paddle upgrades are a separate slot (D-327).
 func blasts_enabled() -> bool:
-	return powerup != "L" and powerup != "S"
+	return true
 
 
 ## Holding both flippers charges level by level (BLAST_CHARGE_TIME each, up to
@@ -536,13 +580,11 @@ func _update_power_and_blast(dt: float, both: bool) -> void:
 				_fail_reported = true
 				events.append(["blast_fail", null])
 		elif not _both_held:
-			# Power laser charges straight to level 3: only its effects (D-076).
-			events.append(["charge_start", BLAST_MAX_LEVEL if powerup == "P" else 1])
+			events.append(["charge_start", 1])
 		var before := blast_charge
-		var rate := POWER_CHARGE_MULT if powerup == "P" else 1.0
-		blast_charge = minf(blast_charge + rate * dt / BLAST_CHARGE_TIME, float(cap))
+		blast_charge = minf(blast_charge + dt / BLAST_CHARGE_TIME, float(cap))
 		var reached := int(floor(blast_charge + 0.0001))
-		if reached > int(floor(before + 0.0001)) and (powerup != "P" or reached >= max_level()):
+		if reached > int(floor(before + 0.0001)):
 			events.append(["charged", reached])
 			if reached >= max_level():
 				# Maximum charge fires automatically (D-074).
@@ -553,7 +595,7 @@ func _update_power_and_blast(dt: float, both: bool) -> void:
 				events.append(["charge_start", reached + 1])
 	elif _both_held:
 		var lvl := int(floor(blast_charge + 0.0001))
-		if can_charge and lvl >= (BLAST_MAX_LEVEL if powerup == "I" else 1):
+		if can_charge and lvl >= 1:
 			_fire(lvl)
 		blast_charge = 0.0
 	if not can_charge:
@@ -604,20 +646,35 @@ func _blast_out(pos: Vector2) -> bool:
 func _fire(lvl: int) -> void:
 	_since_blast = 0.0
 	var start := Vector2(paddle_x, paddle_y - PADDLE_H * 0.5 - BLAST_H * 0.5)
+	if UPGRADE_COST.has(powerup):   # D-327: an upgrade's shot uses its cost
+		power = maxf(0.0, power - float(UPGRADE_COST[powerup]))
 	match powerup:
 		"I":  # Ion cannon: instant beam that fries the whole column
-			power = 0.0
 			events.append(["ion_beam", paddle_x])
 			_ion_beam(paddle_x)
+		"W":  # D-327: wave beam
+			var wid := _next_shot_id
+			_next_shot_id += 1
+			waves.append({"id": wid, "x0": paddle_x, "pos": start, "t": 0.0, "hit": {}})
+			events.append(["wave_fire", start])
+		"H":  # D-327: homing missile
+			var mid := _next_shot_id
+			_next_shot_id += 1
+			missiles.append({"id": mid, "pos": start, "vel": Vector2.UP * MISSILE_SPEED,
+				"target": _missile_target(start)})
+			events.append(["missile_fire", start])
+		"P":  # D-327: Power laser: a level-3 bolt for one cell
+			blasts.append({"pos": start, "level": 3, "hits_left": 3, "dir": Vector2.UP})
+			events.append(["blast", [start, 3, Vector2.UP]])
 		"B":  # Bounce plasma: an extra plasma ball
-			power = 0.0
 			var nose := Vector2(paddle_x, paddle_y - PADDLE_H * 0.5 - BALL_R - 0.05)
 			var ang := deg_to_rad(randf_range(-12.0, 12.0))
 			extra_balls.append({"pos": nose, "vel": Vector2(sin(ang), -cos(ang)) * ball_start_speed,
 				"speed": ball_start_speed})
 			events.append(["bounce_ball", nose])
 		_:
-			power = maxf(0.0, power - BLAST_COST * lvl)
+			if not UPGRADE_COST.has(powerup):
+				power = maxf(0.0, power - BLAST_COST * lvl)
 			var dirs := [Vector2.UP]
 			if powerup == "T":  # Triple laser: + two bolts at +-45 degrees
 				var a := deg_to_rad(TRIPLE_ANGLE)
@@ -695,6 +752,7 @@ func _damage_brick(i: int) -> bool:
 		while not enemies.is_empty():
 			_destroy_enemy(0, false)
 		blasts.clear()
+		_clear_shots()   # D-327
 		powerups.clear()
 		extra_balls.clear()
 		blast_charge = 0.0
@@ -721,7 +779,7 @@ func _move_paddle(dt: float, left: bool, right: bool, dash: int) -> void:
 		_dash_time -= dt
 		paddle_vx = _dash_dir * DASH_SPEED
 	else:
-		var boost := LIGHTSPEED_MULT if powerup == "L" else 1.0
+		var boost := LIGHTSPEED_MULT if padup == "L" else 1.0
 		var dir := float(right) - float(left)
 		if paddle_axis != 0.0:
 			dir = clampf(paddle_axis, -1.0, 1.0)   # D-252: the stick, proportional
@@ -732,7 +790,7 @@ func _move_paddle(dt: float, left: bool, right: bool, dash: int) -> void:
 			var rate := PADDLE_REVERSE if signf(target) != signf(paddle_vx) and paddle_vx != 0.0 else PADDLE_ACCEL
 			paddle_vx = move_toward(paddle_vx, target, rate * boost * dt)
 	paddle_x += paddle_vx * dt
-	var limit := field.size.x * 0.5 - PADDLE_W * 0.5
+	var limit := field.size.x * 0.5 - catch_half_w()
 	if absf(paddle_x) > limit:
 		paddle_x = clampf(paddle_x, -limit, limit)
 		paddle_vx = 0.0
@@ -745,7 +803,7 @@ func _move_paddle(dt: float, left: bool, right: bool, dash: int) -> void:
 ## moving (each must be at least GHOST_MIN_GAP away from the ship).
 func ghost_xs() -> Array:
 	var out := []
-	if powerup != "L" or _paddle_hist.is_empty():
+	if padup != "L" or _paddle_hist.is_empty():
 		return out
 	for d in GHOST_DELAYS:
 		var gx: float = _paddle_hist[0][1]
@@ -851,10 +909,10 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 		_use(ship)
 		if not (vel.y > 0.0 and pos.y < paddle_y):
 			continue
-		var pr := paddle_rect()
+		var pr := catch_rect()
 		if not BP.collide_circle_rect(pos, BALL_R, pr).is_empty():
 			speed = minf(speed + SPEEDUP_PER_PADDLE_HIT, ball_max_speed)
-			vel = BP.paddle_bounce(pos.x, paddle_x, PADDLE_W * 0.5, speed, paddle_vx)
+			vel = BP.paddle_bounce(pos.x, paddle_x, catch_half_w(), speed, paddle_vx)
 			pos.y = pr.position.y - BALL_R
 			events.append(["paddle", ship])
 			break
@@ -877,7 +935,7 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 			pos.y = SHIELD_Y - BALL_R
 			vel.y = -absf(vel.y)
 			events.append(["shield_used", pos.x])
-			_end_powerup()  # back to the normal plasma cannon (D-084)
+			_end_padup()  # the shield's slot empties (D-084, D-327)
 			break
 	_use(keep)
 	vel = BP.enforce_min_vertical(vel, speed, MIN_VERTICAL)
@@ -894,7 +952,8 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 ## Spawns a falling power-up capsule (public for tests / debug).
 ## D-275: any power-up but the one the ship already has.
 func random_powerup_kind() -> String:
-	var held := [powerup] if not two_player else [player_get(0, "powerup"), player_get(1, "powerup")]
+	var held := [powerup, padup] if not two_player else [player_get(0, "powerup"), player_get(1, "powerup"),
+		player_get(0, "padup"), player_get(1, "padup")]
 	var kinds: Array = POWERUP_KINDS.filter(func(k): return not (k in held))
 	var total := 0.0
 	for k in kinds:
@@ -923,13 +982,13 @@ func _update_powerups(dt: float) -> void:
 		var caught := -1
 		for ship in (2 if two_player else 1):   # D-285: whichever ship catches it
 			_use(ship)
-			if not BP.collide_circle_rect(p.pos, POWERUP_R, paddle_rect()).is_empty() and state != State.OVER:
+			if not BP.collide_circle_rect(p.pos, POWERUP_R, catch_rect()).is_empty() and state != State.OVER:
 				caught = ship
 				break
 		if caught >= 0:
 			powerups.remove_at(i)
 			power = minf(1.0, power + 1.0 / BLAST_MAX_LEVEL)  # +1 bar level (D-078)
-			events.append(["powerup_collect", [p.id, p.kind, caught]])
+			events.append(["powerup_collect", [p.id, p.kind, caught, p.pos]])
 			if p.kind in INSTANT_KINDS:   # D-326
 				_use_instant(p.kind)
 				if state != State.PLAY and state != State.SERVE:
@@ -961,22 +1020,145 @@ func _use_instant(kind: String) -> void:
 
 
 ## Only one power-up at a time: a new one replaces the current one.
+## D-327: a blaster upgrade replaces the blaster slot's, a paddle upgrade the
+## paddle slot's; the other slot is kept.
 func apply_powerup(kind: String) -> void:
-	if not powerup.is_empty():
-		_end_powerup()
-	powerup = kind
-	shield_active = kind == "S"
-	if not blasts_enabled():
+	if kind in PADDLE_KINDS:
+		_end_padup()
+		padup = kind
+		shield_active = kind == "S"
+	else:
+		_end_blaster()
+		powerup = kind
 		blast_charge = 0.0
 
 
-## Power-ups last until the end of the level or death.
+## Power-ups last until the end of the level or death: both slots end.
 func _end_powerup() -> void:
+	_end_blaster()
+	_end_padup()
+
+
+func _end_blaster() -> void:
 	if powerup.is_empty():
 		return
 	events.append(["powerup_end", powerup])
 	powerup = ""
+
+
+func _end_padup() -> void:
+	if padup.is_empty():
+		return
+	events.append(["powerup_end", padup])
+	padup = ""
 	shield_active = false
+
+
+# --- wave beam and homing missiles (D-327) --------------------------------------------
+func _clear_shots() -> void:
+	waves.clear()
+	missiles.clear()
+
+
+func _brick_w() -> float:
+	return field.size.x / float(cols)
+
+
+## Moves the wave shots and missiles; once per step (both ships' shots).
+func _update_shots(dt: float) -> void:
+	for i in range(waves.size() - 1, -1, -1):
+		var w: Dictionary = waves[i]
+		var travel := WAVE_SPEED * dt
+		var n := maxi(1, ceili(travel / MAX_SUBSTEP))
+		for k in n:
+			w.t = float(w.t) + dt / n
+			var p := Vector2(clampf(float(w.x0) + sin(float(w.t) * WAVE_RATE) * WAVE_AMP,
+				field.position.x + 0.2, field.end.x - 0.2), w.pos.y - travel / n)
+			w.pos = p
+			var rect := Rect2(p - WAVE_SIZE * 0.5, WAVE_SIZE)
+			var foe := _enemy_hit_by_rect(rect)
+			while foe != -1:
+				_destroy_enemy(foe)
+				foe = _enemy_hit_by_rect(rect)
+			for j in bricks.size():
+				if bricks[j].alive and not w.hit.has(j) and rect.intersects(bricks[j].rect):
+					w.hit[j] = true
+					if _damage_brick(j):
+						return   # new rack: shots were cleared
+		if w.pos.y < field.position.y:
+			waves.remove_at(i)
+	for i in range(missiles.size() - 1, -1, -1):
+		var m: Dictionary = missiles[i]
+		var tp = _target_pos(m.target)
+		if tp == null:
+			m.target = _missile_target(m.pos)
+			tp = _target_pos(m.target)
+		var vel: Vector2 = m.vel
+		if tp != null:
+			var want: float = (tp - Vector2(m.pos)).angle()
+			var ang := vel.angle()
+			ang += clampf(wrapf(want - ang, -PI, PI), -MISSILE_TURN * dt, MISSILE_TURN * dt)
+			vel = Vector2.from_angle(ang) * MISSILE_SPEED
+		m.vel = vel
+		var p: Vector2 = m.pos + vel * dt
+		m.pos = p
+		var boom := not field.grow(0.5).has_point(p) or (tp != null and p.distance_to(tp) < 0.35) \
+			or _enemy_hit_by_rect(Rect2(p - Vector2.ONE * MISSILE_R, Vector2.ONE * MISSILE_R * 2.0)) != -1
+		if not boom:
+			for b in bricks:
+				if b.alive and not BP.collide_circle_rect(p, MISSILE_R, b.rect).is_empty():
+					boom = true
+					break
+		if boom:
+			missiles.remove_at(i)
+			if _missile_blast(p):
+				return
+
+
+## The nearest live enemy or destructible brick to `from` (null target: none).
+func _missile_target(from: Vector2) -> Array:
+	var best := []
+	var best_d := INF
+	for en in enemies:
+		if en.state != "wormhole" and from.distance_to(en.pos) < best_d:
+			best_d = from.distance_to(en.pos)
+			best = ["enemy", en.id]
+	for j in bricks.size():
+		var b: Dictionary = bricks[j]
+		if b.alive and not b.get("metal", false) and from.distance_to(b.rect.get_center()) < best_d:
+			best_d = from.distance_to(b.rect.get_center())
+			best = ["brick", j]
+	return best
+
+
+func _target_pos(t: Array) -> Variant:
+	if t.is_empty():
+		return null
+	if t[0] == "enemy":
+		for en in enemies:
+			if en.id == t[1] and en.state != "wormhole":
+				return en.pos
+		return null
+	var b: Dictionary = bricks[int(t[1])]
+	return b.rect.get_center() if b.alive else null
+
+
+## The missile's blast: everything in a 3x3-brick area takes MISSILE_HITS hits.
+## True if it cleared the level.
+func _missile_blast(p: Vector2) -> bool:
+	var size := Vector2(MISSILE_AREA.x * _brick_w(), MISSILE_AREA.y * BRICK_H)
+	var area := Rect2(p - size * 0.5, size)
+	events.append(["missile_blast", [p, size]])
+	for k in range(enemies.size() - 1, -1, -1):
+		if enemies[k].state != "wormhole" and not BP.collide_circle_rect(enemies[k].pos, ENEMY_R, area).is_empty():
+			_destroy_enemy(k)
+	for j in bricks.size():
+		if not area.intersects(bricks[j].rect):
+			continue
+		for h in MISSILE_HITS:
+			if bricks[j].alive and _damage_brick(j):
+				return true
+	return false
 
 
 # --- enemies (D-052) ------------------------------------------------------------------
@@ -1215,6 +1397,7 @@ func _destroy_ship() -> void:
 	_end_powerup()
 	extra_balls.clear()
 	blasts.clear()
+	_clear_shots()   # D-327
 	blast_charge = 0.0
 	ship_invulnerable = SHIP_INVULNERABLE
 	balls_left -= 1

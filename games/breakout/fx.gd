@@ -202,15 +202,26 @@ class PowerupCapsule:
 	extends Node3D
 
 	var _orbits: Array[Node3D] = []
+	var _pill: Node3D = null
 
 	## `letter` is the text on the capsule (scaled down to fit when longer);
-	## an `icon` texture replaces it (D-326).
-	func _init(letter: String, color: Color, radius: float, icon: Texture2D = null) -> void:
+	## an `icon` texture replaces it (D-326). `pill`: a paddle upgrade's
+	## capsule, a spinning two-tone pill without electrons (D-327).
+	func _init(letter: String, color: Color, radius: float, icon: Texture2D = null, pill: bool = false) -> void:
 		var core := MeshInstance3D.new()
-		var sphere := SphereMesh.new()
-		sphere.radius = radius
-		sphere.height = radius * 2.0
-		core.mesh = sphere
+		if pill:
+			var cm := CapsuleMesh.new()
+			cm.radius = radius * 0.72
+			cm.height = radius * 2.9
+			core.mesh = cm
+			core.rotation_degrees = Vector3(0.0, 0.0, 90.0)   # lying across the field
+			_pill = Node3D.new()
+			add_child(_pill)
+		else:
+			var sphere := SphereMesh.new()
+			sphere.radius = radius
+			sphere.height = radius * 2.0
+			core.mesh = sphere
 		# Volume (D-075): low self-glow so the scene light shades the sphere, a
 		# glossy highlight and a rim light around the edge.
 		var m := StandardMaterial3D.new()
@@ -225,7 +236,23 @@ class PowerupCapsule:
 		m.rim = 0.8
 		m.rim_tint = 0.3
 		core.material_override = m
-		add_child(core)
+		if _pill != null:
+			_pill.add_child(core)
+			# The pill's lighter half and the seam between the halves.
+			var half := MeshInstance3D.new()
+			var hm := CapsuleMesh.new()
+			hm.radius = radius * 0.74
+			hm.height = radius * 1.55
+			half.mesh = hm
+			half.rotation_degrees = Vector3(0.0, 0.0, 90.0)
+			half.position = Vector3(radius * 0.72, 0.0, 0.0)
+			var m2 := m.duplicate() as StandardMaterial3D
+			m2.albedo_color = color.lerp(Color.WHITE, 0.65)
+			m2.emission = m2.albedo_color
+			half.material_override = m2
+			_pill.add_child(half)
+		else:
+			add_child(core)
 		var key := OmniLight3D.new()  # small key light: lit top-left, shaded bottom-right
 		key.position = Vector3(-radius * 2.2, radius * 3.0, -radius * 1.5)
 		key.omni_range = radius * 7.0
@@ -266,7 +293,7 @@ class PowerupCapsule:
 		shadow.position = Vector3(radius * 0.14, -radius * 0.1, radius * 0.14)
 		add_child(shadow)
 		add_child(label)
-		for tilt in [Vector3(1.1, 0.0, 0.5), Vector3(-1.0, 0.0, -0.6)]:
+		for tilt in ([] if pill else [Vector3(1.1, 0.0, 0.5), Vector3(-1.0, 0.0, -0.6)]):
 			var pivot := Node3D.new()
 			pivot.rotation = tilt
 			var e := MeshInstance3D.new()
@@ -284,6 +311,8 @@ class PowerupCapsule:
 			_orbits.append(pivot)
 
 	func spin(delta: float) -> void:
+		if _pill != null:
+			_pill.rotate_y(delta * 2.4)
 		for i in _orbits.size():
 			_orbits[i].rotate_object_local(Vector3.UP, delta * (5.0 if i == 0 else -6.5))
 

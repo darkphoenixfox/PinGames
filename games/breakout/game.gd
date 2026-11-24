@@ -59,7 +59,8 @@ const LEVEL_COLORS := [Color(0.35, 0.65, 1.0), Color(1.0, 0.85, 0.25), Color(1.0
 ## Power-up colours (D-072); also the DMD power bar colour while active.
 const POWERUP_COLORS := {"T": Color(0.3, 0.55, 1.0), "P": Color(1.0, 0.25, 0.2), "B": Color(1.0, 0.85, 0.2),
 	"I": Color(0.72, 0.3, 1.0), "L": Color(1.0, 1.0, 1.0), "S": Color(0.3, 1.0, 0.4),
-	"U": Color(1.0, 0.35, 0.7), "N": Color(1.0, 0.5, 0.05)}   # D-326: 1UP pink, Nuclear orange
+	"U": Color(1.0, 0.35, 0.7), "N": Color(1.0, 0.5, 0.05),   # D-326: 1UP pink, Nuclear orange
+	"W": Color(0.2, 1.0, 0.9), "H": Color(0.65, 1.0, 0.2), "K": Color(0.55, 0.75, 1.0)}   # D-327
 const ATOM_ICON := preload("res://assets/textures/breakout/pu_atom.png")   # D-326
 const MUSIC := "res://assets/audio/music/breakout/tilt_breaker_original.ogg"   # D-318: the director's own (was n-Dimensions)
 const MUSIC_ATTRACT := "res://assets/audio/music/breakout/dead_ship_attract.ogg"  # D-082
@@ -412,6 +413,10 @@ func _process(delta: float) -> void:
 		set_meta("dev_pu_clear", true)
 		_on_debug_action(&"powerup")
 		_on_debug_action(&"clear_level")
+	if Config.cli.has("tb-give") and _phase == "play" and not has_meta("dev_give"):   # dev: start with power-ups, e.g. H,K (D-327)
+		set_meta("dev_give", true)
+		for k in str(Config.cli["tb-give"]).split(","):
+			sim.apply_powerup(k)
 	if Config.cli.has("tb-drop") and _phase == "play" and not has_meta("dev_drop"):   # dev: drop capsules, e.g. U,N (D-326)
 		set_meta("dev_drop", true)
 		sim.events.clear()
@@ -438,6 +443,10 @@ func _process(delta: float) -> void:
 	else:
 		sim.paddle_axis = CabinetInput.steer_axis()   # D-252
 		sim.charge_held = _charge_btn and CabinetInput.is_down(&"launch")   # D-264
+		if Config.cli.has("tb-autofire"):   # dev: serve, then keep charging and firing (D-327)
+			if sim.state == Sim.State.SERVE:
+				_launch = true
+			sim.charge_held = fmod(_phase_t, 1.2) < 1.0
 		sim.step(minf(delta, 0.05), CabinetInput.is_down(&"flip_l"), CabinetInput.is_down(&"flip_r"), _launch, _dash)
 	_launch = false
 	_launch2 = false
@@ -525,6 +534,21 @@ func _handle_events() -> void:
 					_recoil = 0.5 + 0.25 * blevel
 				_spawn_blast_node(blevel, bdir)
 				_lights.pulse(BackglassLights.SHOTS + BackglassLights.IMPACTS, 0.5 + 0.2 * blevel, 10.0)
+			"wave_fire":   # D-327
+				_stop_charge_sound()
+				_sfx("tb_blast2")
+				_recoil = 0.8
+				_lights.pulse(BackglassLights.SHOTS, 0.6, 10.0)
+			"missile_fire":   # D-327
+				_stop_charge_sound()
+				_sfx("tb_fire")
+				_recoil = 0.6
+				_lights.pulse(BackglassLights.SHOTS, 0.5, 10.0)
+			"missile_blast":   # D-327: the 3x3-brick blast
+				var mp: Vector2 = e[1][0]
+				_sfx("tb_explode")
+				_explode_brick(Vector3(mp.x, 0.2, mp.y), POWERUP_COLORS["H"], 2.4)
+				_lights.pulse(BackglassLights.IMPACTS + BackglassLights.SHOTS, 0.9, 10.0)
 			"blast_fail":
 				_sfx("tb_low_power")
 				_low_power_t = 1.2  # LOW shows only in the DMD power bar area (D-072)
@@ -539,6 +563,8 @@ func _handle_events() -> void:
 			"powerup_collect":
 				_remove_powerup_node(e[1][0])
 				var kind: String = e[1][1]
+				if (e[1] as Array).size() > 3:
+					_pickup_popup(tr("TB_PU_%s" % kind), e[1][3], POWERUP_COLORS[kind])
 				_sfx("tb_pu_get")
 				if kind != "U":   # 1UP: its EXTRA CHARGE! callout comes with the charge (D-326)
 					Dmd.flash(tr("TB_PU_%s" % kind), 1.4, POWERUP_COLORS[kind])
@@ -621,6 +647,129 @@ func _handle_events() -> void:
 		_refresh_status()
 
 
+## D-327: the power-up's name pops out where it was caught: growing and fading.
+func _pickup_popup(text: String, at: Vector2, col: Color) -> void:
+	var l := Label3D.new()
+	l.text = text
+	l.font = load("res://assets/fonts/pinpixel.ttf")
+	l.font_size = 48
+	l.pixel_size = 0.0075
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = true
+	l.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	l.modulate = col.lerp(Color.WHITE, 0.25)
+	l.outline_size = 12
+	l.outline_modulate = Color(0, 0, 0, 0.8)
+	l.render_priority = 3
+	l.position = Vector3(at.x, 1.0, at.y)
+	l.scale = Vector3.ONE * 0.35
+	_root.add_child(l)
+	var tw := l.create_tween().set_parallel(true)
+	tw.tween_property(l, "scale", Vector3.ONE * 1.0, 1.1).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	tw.tween_property(l, "position:z", at.y - 0.9, 1.1).set_ease(Tween.EASE_OUT)
+	tw.tween_property(l, "modulate:a", 0.0, 0.7).set_delay(0.4)
+	tw.tween_property(l, "outline_modulate:a", 0.0, 0.7).set_delay(0.4)
+	tw.chain().tween_callback(l.queue_free)
+
+
+## D-327: the wave shots and missiles, one node each, kept in step with the sim.
+var _shot_nodes := {}   # id -> {node, trail}
+
+
+func _animate_shots(_delta: float) -> void:
+	var live := {}
+	for w in sim.waves:
+		live[w.id] = true
+		if not _shot_nodes.has(w.id):
+			var m := MeshInstance3D.new()
+			var plane := PlaneMesh.new()
+			plane.size = Vector2(Sim.WAVE_SIZE.x * 1.9, Sim.WAVE_SIZE.y * 2.4)
+			m.mesh = plane
+			var mat := ShaderMaterial.new()
+			mat.shader = BLAST_SHADER
+			mat.set_shader_parameter("body_color", POWERUP_COLORS["W"])
+			mat.set_shader_parameter("edge_color", Color(0.4, 0.6, 1.0))
+			mat.set_shader_parameter("intensity", 3.2)
+			m.material_override = mat
+			m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_root.add_child(m)
+			var tr_node := Fx.Trail.new()
+			tr_node.width = 0.32
+			tr_node.head_color = Color(POWERUP_COLORS["W"], 0.8)
+			tr_node.tail_color = Color(0.2, 0.4, 1.0, 0.0)
+			_root.add_child(tr_node)
+			_shot_nodes[w.id] = {"node": m, "trail": tr_node}
+		var n: Dictionary = _shot_nodes[w.id]
+		var wp: Vector2 = w.pos
+		n.node.position = Vector3(wp.x, 0.25, wp.y)
+		n.node.rotation.y = -cos(float(w.t) * Sim.WAVE_RATE) * 0.6   # leans along its swing
+		n.trail.update(Vector3(wp.x, 0.2, wp.y))
+	for mi in sim.missiles:
+		live[mi.id] = true
+		if not _shot_nodes.has(mi.id):
+			var b := Fx.make_plasma_ball(Sim.MISSILE_R * 0.9)
+			Fx.tint_plasma(b, POWERUP_COLORS["H"])
+			_root.add_child(b)
+			var tr2 := Fx.Trail.new()
+			tr2.width = 0.16
+			tr2.head_color = Color(1.0, 0.95, 0.6, 0.9)
+			tr2.tail_color = Color(1.0, 0.4, 0.1, 0.0)
+			_root.add_child(tr2)
+			_shot_nodes[mi.id] = {"node": b, "trail": tr2}
+		var n2: Dictionary = _shot_nodes[mi.id]
+		var mp: Vector2 = mi.pos
+		n2.node.position = Vector3(mp.x, 0.25, mp.y)
+		n2.trail.update(Vector3(mp.x, 0.2, mp.y))
+	for id in _shot_nodes.keys():
+		if not live.has(id):
+			_shot_nodes[id].node.queue_free()
+			_shot_nodes[id].trail.queue_free()
+			_shot_nodes.erase(id)
+
+
+## D-327: the Sidekicks: two small ships that fly up from below and lock onto
+## the ship's sides (its catching width grows by Sim.SIDEKICK_W each side).
+const SIDEKICK_SCALE := 0.36
+const SIDEKICK_FLY := 0.7   # s to fly in
+
+
+func _animate_sidekicks(delta: float) -> void:
+	if not _paddle.has_meta("sidekicks"):
+		var pair := []
+		var scene := load(PADDLE_MODEL) as PackedScene
+		for side in [-1.0, 1.0]:
+			var holder := Node3D.new()
+			if scene:
+				var model := scene.instantiate() as Node3D
+				var s := Sim.PADDLE_W / MODEL_PADDLE_WIDTH * SIDEKICK_SCALE
+				model.scale = Vector3(s, s, s)
+				model.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+				holder.add_child(model)
+			else:
+				holder.add_child(_box(Vector3(Sim.SIDEKICK_W, 0.2, Sim.PADDLE_H * 0.7), Vector3.ZERO, StandardMaterial3D.new()))
+			var eng := Fx.ShipEngine.new(Vector3(0.0, 0.0, 1.0))   # belly burner while flying in
+			eng.position = Vector3(0.0, 0.0, 0.15)
+			holder.add_child(eng)
+			holder.visible = false
+			_ship.add_child(holder)
+			pair.append(holder)
+		_paddle.set_meta("sidekicks", pair)
+		_paddle.set_meta("sidekick_t", 0.0)
+	var on: bool = sim.padup == "K" and _phase == "play"
+	var t: float = _paddle.get_meta("sidekick_t")
+	t = minf(1.0, t + delta / SIDEKICK_FLY) if on else 0.0
+	_paddle.set_meta("sidekick_t", t)
+	var e := 1.0 - pow(1.0 - t, 3.0)   # ease out: they brake as they dock
+	var pair: Array = _paddle.get_meta("sidekicks")
+	for i in 2:
+		var side := -1.0 if i == 0 else 1.0
+		var h: Node3D = pair[i]
+		h.visible = on
+		var dock := Vector3(side * (Sim.PADDLE_W * 0.5 + Sim.SIDEKICK_W * 0.5), 0.0, 0.0)
+		h.position = dock + Vector3(side * 0.6, 0.0, 5.0) * (1.0 - e)
+		(h.get_child(h.get_child_count() - 1) as Fx.ShipEngine).set_thrust(1.0 - e)
+
+
 ## D-326: the Nuclear power-up's flash: the TABLE goes white and fades out.
 func _nuke_flash() -> void:
 	var f := ColorRect.new()
@@ -650,7 +799,7 @@ func _refresh_status() -> void:
 			var pu2: String = sim.player_get(i, "powerup")
 			var c2: Color = POWERUP_COLORS.get(pu2, Dmd.YELLOW)
 			var low: float = _low_power_t if i == _vship else float(_vs[i]._low_power_t)
-			var enabled: bool = pu2 != "L" and pu2 != "S"
+			var enabled := true   # D-327: paddle upgrades never stop the blaster
 			# No power-up: the badge slot shows the player's number instead.
 			bars.append({"value": sim.player_get(i, "power"), "color": c2,
 				"badge": pu2 if not pu2.is_empty() else str(i + 1),
@@ -660,7 +809,8 @@ func _refresh_status() -> void:
 	var pu: String = sim.powerup
 	var pcol: Color = POWERUP_COLORS.get(pu, Dmd.YELLOW)
 	Dmd.show_status(sim.score, sim.balls_left, sim.balls_total,
-		sim.power, 3, ACCENT, pcol, sim.level, pu, pcol, sim.blasts_enabled(), _low_power_t > 0.0)
+		sim.power, 3, ACCENT, pcol, sim.level, pu, pcol, sim.blasts_enabled(), _low_power_t > 0.0,
+		sim.padup, POWERUP_COLORS.get(sim.padup, Dmd.WHITE))   # D-327: the paddle slot's badge
 
 
 # --- game-over finale (D-044) -----------------------------------------------------------
@@ -710,6 +860,7 @@ func _animate(delta: float) -> void:
 	_animate_blasts(delta)
 	_animate_enemies(delta)
 	_animate_powerups(delta)
+	_animate_shots(delta)   # D-327
 	_animate_ships(delta)   # D-286: each ship's own visuals
 	# Edge shields (dev: --tb-show-shields keeps them lit mid-ripple for checks)
 	for side in _edge_shields:
@@ -764,6 +915,7 @@ func _animate_ship(delta: float) -> void:
 		_paddle.visible = since > 0.6 and fmod(Time.get_ticks_msec() / 1000.0, 0.2) < 0.13
 	else:
 		_paddle.visible = true
+	_animate_sidekicks(delta)   # D-327
 	# Shield flash
 	_shield_age += delta
 	_shield_mat.set_shader_parameter("age", _shield_age)
@@ -801,9 +953,9 @@ func _animate_ship(delta: float) -> void:
 	if sim.blast_charge <= 0.0 and not charging:
 		_stop_charge_sound()
 	if charging:
-		# Power laser goes straight to level 3: red particles only (D-076).
-		_charge_particles.color = LEVEL_COLORS[2] if sim.powerup == "P" else LEVEL_COLORS[reached]
-	_charge_glow.visible = reached >= 1 and sim.powerup != "P"
+		# D-327: an upgrade charges in its own colour (one level only).
+		_charge_particles.color = POWERUP_COLORS[sim.powerup] if POWERUP_COLORS.has(sim.powerup) else LEVEL_COLORS[reached]
+	_charge_glow.visible = reached >= 1 and sim.powerup.is_empty()
 	if reached >= 1:
 		if _charge_level_shown != reached:
 			_charge_level_shown = reached
@@ -928,7 +1080,9 @@ func _update_p2_bars() -> void:
 		var pu: String = sim.player_get(i, "powerup")
 		fill.size.x = 240.0 * pw
 		fill.color = POWERUP_COLORS.get(pu, Color(0.4, 0.75, 1.0) if i == 0 else Color(1.0, 0.6, 0.3))
-		(_p2_bars[i][2] as Label).text = tr("TB_P%d" % (i + 1)) + ("  " + pu if not pu.is_empty() else "")
+		var pad: String = sim.player_get(i, "padup")
+		(_p2_bars[i][2] as Label).text = tr("TB_P%d" % (i + 1)) + ("  " + pu if not pu.is_empty() else "") \
+			+ ("  " + pad if not pad.is_empty() else "")
 		(_p2_bars[i][0] as Control).visible = _phase == "play"
 
 
@@ -1805,7 +1959,7 @@ func _set_belly_thrust(t: float) -> void:
 # --- power-up visuals (D-072) -----------------------------------------------------------
 func _spawn_powerup_node(id: int, pos: Vector2, kind: String) -> void:
 	var cap := Fx.PowerupCapsule.new("1UP" if kind == "U" else kind, POWERUP_COLORS[kind], Sim.POWERUP_R,
-		ATOM_ICON if kind == "N" else null)   # D-326
+		ATOM_ICON if kind == "N" else null, kind in Sim.PADDLE_KINDS)   # D-326, D-327: paddle upgrades are pills
 	cap.position = Vector3(pos.x, 0.3, pos.y)
 	_root.add_child(cap)
 	_powerup_nodes[id] = cap
@@ -1902,7 +2056,7 @@ func _animate_powerups(delta: float) -> void:
 ## third for 3-level guns, only when full for 1-level guns (Bounce, Ion), never
 ## without a bar (Lightspeed, Shield). Pickups and level refills count too.
 func _animate_recharge_flash(delta: float) -> void:
-	var levels := 3 if sim.max_level() >= 3 and sim.powerup != "I" else 1
+	var levels := roundi(1.0 / sim.shot_cost())   # D-327: a flash per shot's worth
 	var step := int(floor(sim.power * levels + 0.0001))
 	if _phase == "play" and sim.blasts_enabled() and _last_power_step >= 0 and step > _last_power_step:
 		_recharge_flash = 1.0

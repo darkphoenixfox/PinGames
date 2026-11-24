@@ -203,7 +203,7 @@ func test_breakout_powerups(Sim) -> void:
 		for e in pe.events:
 			if e[0] == "charge_start" or e[0] == "charged":
 				starts.append([e[0], e[1]])
-	check(starts == [["charge_start", 3], ["charged", 3]], "power laser: only level-3 charge effects (%s)" % [starts])
+	check(starts == [["charge_start", 1], ["charged", 1]], "power laser: one level of charge (D-327) (%s)" % [starts])
 	# I: only level 3, full bar, clears the column.
 	var ion = mk.call()
 	ion.apply_powerup("I")
@@ -212,7 +212,7 @@ func test_breakout_powerups(Sim) -> void:
 	ion.step(dt, false, false, false, 0)
 	check(ion.power > 0.9, "ion: releasing before level 3 does nothing")
 	var before: int = ion.bricks_alive()
-	for k in 200:
+	for k in int(Sim.BLAST_CHARGE_TIME * 60.0) + 3:   # D-327: one level of charge
 		ion.step(dt, true, true, false, 0)
 	ion.step(dt, false, false, false, 0)
 	check(ion.power < 0.1 and ion.bricks_alive() <= before - 4, "ion beam fries the column (%d -> %d)" % [before, ion.bricks_alive()])
@@ -244,13 +244,13 @@ func test_breakout_powerups(Sim) -> void:
 	var sh = mk.call()
 	sh.apply_powerup("S")
 	sh.freeze_ball = false
-	check(sh.affordable_level() == 0, "shield: no charged shot")
+	check(sh.affordable_level() > 0 and sh.padup == "S" and sh.powerup == "", "shield: a paddle upgrade; the blaster still fires (D-327)")
 	sh.ball_pos = Vector2(-3.0, Sim.SHIELD_Y - 0.5)
 	sh.ball_vel = Vector2(0, 9)
 	for k in 10:
 		sh.step(dt, false, false, false, 0)
 	check(sh.ball_vel.y < 0.0 and not sh.shield_active and sh.balls_left == 3, "shield bounces one ball, then breaks")
-	check(sh.powerup == "" and sh.affordable_level() > 0, "lost shield returns to the normal plasma cannon (D-084)")
+	check(sh.padup == "" and sh.affordable_level() > 0, "lost shield empties the paddle slot (D-084, D-327)")
 	# L: afterimages trail the moving ship and are cleared with the power-up on death.
 	var ls = mk.call()
 	ls.apply_powerup("L")
@@ -259,7 +259,7 @@ func test_breakout_powerups(Sim) -> void:
 	check(ls.ghost_xs().size() == 2, "lightspeed: two afterimages while moving")
 	ls.power = 0.2
 	ls._lose_ball()
-	check(ls.powerup == "", "power-up ends on death")
+	check(ls.powerup == "" and ls.padup == "", "power-ups end on death")
 	check(ls.power == 1.0, "losing a life refills the power bar (D-102)")
 	ls.power = 0.1
 	ls._destroy_ship()
@@ -374,6 +374,67 @@ func test_breakout_difficulty(Sim) -> void:
 	cube_low = ag.enemies[1].pos.y > ag.enemies[0].pos.y
 	check(kinds_ok and dist[1] < dist[0] * 0.85 and cube_low,
 		"cube enemy: nearer the ship (%.0f vs %.0f) and lower than a tetra" % [dist[1], dist[0]])
+	# D-327: two slots; upgrades charge one level and use their cost per shot.
+	var sl = Sim.new()
+	sl.setup(3)
+	sl.apply_powerup("T")
+	sl.apply_powerup("S")
+	var both: bool = sl.powerup == "T" and sl.padup == "S"
+	sl.apply_powerup("W")
+	sl.apply_powerup("L")
+	both = both and sl.powerup == "W" and sl.padup == "L" and sl.max_level() == 1
+	var tc = Sim.new()
+	tc.setup(3)
+	tc.step(1.0 / 60.0, false, false, true, 0)   # serve
+	tc.freeze_ball = true
+	tc.apply_powerup("T")
+	for k in int(Sim.BLAST_CHARGE_TIME * 60.0) + 3:
+		tc.step(1.0 / 60.0, true, true, false, 0)
+	var t_ok: bool = tc.blasts.size() == 3 and absf(tc.power - 2.0 / 3.0) < 0.02 and tc.blasts[0].level == 1
+	check(both and t_ok, "two slots; T: level 1 after one charge time, 3 bolts for one cell (power %.2f)" % tc.power)
+	# W: snakes up through the bricks, hitting each once.
+	var wv = Sim.new()
+	wv.setup(3)
+	wv.step(1.0 / 60.0, false, false, true, 0)
+	wv.freeze_ball = true
+	var hp_before := {}
+	for j in wv.bricks.size():
+		hp_before[j] = wv.bricks[j].hp
+	wv.apply_powerup("W")
+	for k in int(Sim.BLAST_CHARGE_TIME * 60.0) + 3:
+		wv.step(1.0 / 60.0, true, true, false, 0)
+	var fired: bool = wv.waves.size() == 1 and wv.power < 0.01
+	var lost := 0
+	for k in 120:
+		wv.step(1.0 / 60.0, false, false, false, 0)
+	for j in wv.bricks.size():
+		if not wv.bricks[j].alive or wv.bricks[j].hp < hp_before[j]:
+			lost += 1
+	check(fired and wv.waves.is_empty() and lost >= 4, "wave beam: the full bar, passes through, hits %d bricks once each" % lost)
+	# H: homes on the nearest target; 3 hits on everything in a 3x3-brick area.
+	var hm = Sim.new()
+	hm.setup(3)
+	hm.step(1.0 / 60.0, false, false, true, 0)
+	hm.freeze_ball = true
+	var alive0: int = hm.bricks_alive()
+	hm.apply_powerup("H")
+	for k in int(Sim.BLAST_CHARGE_TIME * 60.0) + 3:
+		hm.step(1.0 / 60.0, true, true, false, 0)
+	var launched: bool = hm.missiles.size() == 1
+	var blasted := false
+	for k in 180:
+		hm.step(1.0 / 60.0, false, false, false, 0)
+		for ev in hm.events:
+			blasted = blasted or ev[0] == "missile_blast"
+	check(launched and blasted and hm.missiles.is_empty() and alive0 - hm.bricks_alive() >= 5,
+		"homing missile: one blast takes out a 3x3 area (%d bricks)" % (alive0 - hm.bricks_alive()))
+	# K: sidekicks widen what catches the plasma and the capsules.
+	var sk = Sim.new()
+	sk.setup(3)
+	var w0: float = sk.catch_rect().size.x
+	sk.apply_powerup("K")
+	check(is_equal_approx(sk.catch_rect().size.x, w0 + Sim.SIDEKICK_W * 2.0) and sk.affordable_level() > 0,
+		"sidekicks: the ship catches %.2f m wider, no energy used" % (Sim.SIDEKICK_W * 2.0))
 	# D-326: 1UP and Nuclear, rarer than the others, used on the catch.
 	var rp = Sim.new()
 	rp.setup(3)
@@ -458,13 +519,13 @@ func test_breakout_difficulty(Sim) -> void:
 	tp._use(1)
 	tp.apply_powerup("L")
 	tp._use(0)
-	check(tp.player_get(1, "powerup") == "L" and tp.player_get(0, "powerup") == "", "2P: power-ups are per ship")
+	check(tp.player_get(1, "padup") == "L" and tp.player_get(0, "padup") == "", "2P: power-ups are per ship")
 	var lives: int = tp.balls_left
 	tp.step_two(1.0 / 60.0, [false, false, true, 0], [false, false, false, 0])   # serve
 	tp.ball_pos = Vector2(0.0, Sim.DRAIN_Y + 1.0)
 	tp.ball_vel = Vector2(0.0, 5.0)
 	tp.step_two(1.0 / 60.0, [false, false, false, 0], [false, false, false, 0])
-	check(tp.balls_left == lives - 1 and tp.server == 1 and tp.player_get(1, "powerup") == "",
+	check(tp.balls_left == lives - 1 and tp.server == 1 and tp.player_get(1, "padup") == "",
 		"2P: a drain costs a shared life, ends both power-ups and passes the serve")
 	n.set_difficulty("hard", 3)
 	check(n.balls_left == 2 and n.balls_total == 2 and n.ball_speed == 10.0 and n.level == 1, "picking later keeps the level")

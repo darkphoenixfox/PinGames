@@ -3277,3 +3277,18 @@
 - **Test:** over 6000 draws both appear and each is under 60% of a normal kind; a caught 1UP adds a charge and leaves no held power-up; a caught Nuclear clears the level and adds score.
 - **Dev:** `--tb-drop=U,N` (any kinds) drops capsules at the start of play; the F-key debug drop cycles through the new kinds too.
 - **Status:** Accepted
+
+### D-327 — Tilt Breaker: two power-up slots, Wave Beam, Homing Missile, Sidekicks, pickup popup
+- **Date:** 2026-11-24
+- **Decision (director):** power-ups split into two categories in two slots, three new ones, and the power-up's name pops up where it's caught.
+- **Pickup popup:** the name (`TB_PU_*`) appears at the catch point in its colour, grows (0.35x to 1x over 1.1 s, rising a little) and fades out.
+- **Blaster upgrades** (the atom-sphere capsules): T, P, B, I, W (Wave Beam), H (Homing Missile). They charge to level 1 only, in one `BLAST_CHARGE_TIME` (as the plain cannon's level 1), and fire as soon as it's reached (D-074). Each shot uses `UPGRADE_COST` of the 3-cell bar: T and P one cell; B, I, W and H the full bar. P is now a level-3 bolt (3 hits, wide) for one cell. Supersedes the per-kind rules of D-072, D-076 and D-078 (P's 3x-fast charge to level 3, I's level-3-only).
+- **Paddle upgrades** (spinning two-tone pill capsules, no electrons): S, L, K (Sidekicks). They use no energy and no longer stop the blaster. A shield that breaks empties only the paddle slot.
+- **Slots:** `powerup` (blaster) and the new `padup` (paddle; a 2P per-ship field). A new capsule replaces only its own slot's. Both end at a level's end or a lost charge. A drop is never one held in either slot (by either player in 2P). The DMD shows the paddle badge left of the blaster badge (1P; the 2P TABLE bars list both).
+- **Wave Beam (W, aqua):** snakes upwards (10 m/s, ±1.1 m swing), hitting each brick on its way once (one damage each) and destroying enemies; nothing stops it.
+- **Homing Missile (H, lime):** heads for the nearest enemy or destructible brick (retargets if it's gone), turning at 7 rad/s. It explodes on reaching it or touching any brick or enemy; everything in a 3×3-brick area takes 3 hits (destroys any non-metal brick). I read "the equivalent of 3 square bricks" as a 3×3 block of bricks.
+- **Sidekicks (K, steel blue):** two small copies of the ship (0.36 scale) fly up from below and dock at the ship's sides. The ball and capsules are caught 0.55 m wider each side (`catch_rect`); the bounce angle uses the wider half-width; enemy hits still use the ship alone.
+- **Letters** W, H and K are my picks (K: S is the Shield). Wave shots and missiles move once per step for both ships (their own lists).
+- **Tests:** two slots coexist; T's 3 bolts at level 1 use one cell; W uses the full bar and damages several bricks once; H's one blast takes out at least 5 bricks; K widens the catch. Old P, I, S and 2P tests updated to the new rules.
+- **Dev:** `--tb-give=H,K` starts play holding those; `--tb-autofire` serves and keeps charging.
+- **Status:** Accepted
