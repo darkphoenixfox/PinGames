@@ -3058,3 +3058,17 @@
 - Turbo Run's engine, wind, skid, siren, horn and passer loops were already silenced on its menus (D-235, D-236). They now use the same list, which adds the 1/2-player and radio screens.
 - The race countdown, Tilt Breaker's intro and everything after keep their sounds. (Sky Striker has no sound effects yet.)
 - **Status:** Accepted
+
+### D-303 — Turbo Run: contact sparks like metal scraping metal
+- **Date:** 2026-11-24
+- **Decision (director):** smaller sparks, from where the vehicles actually touch, flying towards the back of the car like metal scratching metal (supersedes D-292's sparks).
+- **The contact point** is on the hit car's body, facing the other vehicle: its flank when the other is beside it (more than 40% of a car's width across), otherwise its front or rear bumper (along the road, clamped to the car's length). It's 0.45 m up.
+- **The sparks:**
+  - small (0.1 m) specks in a short 0.35 s stream (not a burst) from that point;
+  - the emitter rides on the car that was hit: this view's own car, or the other player's car in 2P;
+  - each spark leaves forward along the road at 55–85% of the car's speed, so it streaks back along the body and off behind, dropping under gravity;
+  - a flat fan with 14° of spread;
+  - crashes into cars and trucks give more sparks.
+- **The dust puff** stays where it happened (D-292).
+- `--rc-burst` now makes a contact on the car's right flank at its speed.
+- **Status:** Accepted

@@ -829,7 +829,7 @@ func _process(delta: float) -> void:
 			sim._use(_role)
 		_finale(delta)
 	if Config.cli.has("rc-burst") and _phase == "race" and fmod(_phase_t, 0.5) < delta:   # dev: collision FX (D-292)
-		_burst(sim.track.point(sim.s + 9.0, sim.x + 1.0, 0.6), int(_phase_t) % 2 == 0)
+		_burst(sim.track.point(sim.s, sim.x + Sim.CAR_W * 0.5, 0.45), int(_phase_t) % 2 == 0, _role, sim.v)
 	_update_chunks()
 	_animate(delta)
 	_update_audio()
@@ -1859,45 +1859,55 @@ func _collision_fx(e: Array, who: int) -> void:
 		return
 	var ps: float = sim.player_get(who, "s")
 	var px: float = sim.player_get(who, "x")
-	var at := Vector2.INF   # (s, x) of the contact
+	var other := Vector2.INF   # (s, x) of the vehicle it touched
 	var big := false
 	match e[0]:
 		"bump":
 			var id := int(e[1])
 			if id == -2:   # the two players
-				at = Vector2((ps + float(sim.player_get(1 - who, "s"))) * 0.5, (px + float(sim.player_get(1 - who, "x"))) * 0.5)
+				other = Vector2(float(sim.player_get(1 - who, "s")), float(sim.player_get(1 - who, "x")))
 			elif id >= 0:
 				for t in sim.traffic:
 					if int(t.id) == id:
-						at = Vector2((ps + float(t.s)) * 0.5, (px + float(t.x)) * 0.5)
+						other = Vector2(float(t.s), float(t.x))
 						break
 		"crash":
 			if str(e[1]) == "car" or str(e[1]) == "truck":
-				at = Vector2(ps + Sim.CAR_LEN * 0.5, px)
+				other = Vector2(ps + Sim.CAR_LEN, px)
 				big = true
 		"police_ram", "police_bumped":
 			var pol: Dictionary = sim.player_get(who, "police")
 			if not pol.is_empty():
-				at = Vector2((ps + float(pol.s)) * 0.5, (px + float(pol.x)) * 0.5)
-	if at == Vector2.INF or absf(at.x - sim.s) > 300.0:
+				other = Vector2(float(pol.s), float(pol.x))
+	if other == Vector2.INF or absf(ps - sim.s) > 300.0:
 		return
-	_burst(sim.track.point(at.x, at.y, 0.6), big)
+	# D-303: the contact is on this car's body, on the side or end facing the
+	# other vehicle: beside it, the flank; behind or ahead, the bumper.
+	var ds := other.x - ps
+	var dx := other.y - px
+	var contact := Vector2(ps + clampf(ds * 0.5, -Sim.CAR_LEN * 0.5, Sim.CAR_LEN * 0.5), (px + other.y) * 0.5)
+	if absf(dx) > Sim.CAR_W * 0.4:
+		contact.y = px + signf(dx) * Sim.CAR_W * 0.5
+	_burst(sim.track.point(contact.x, contact.y, 0.45), big, who, float(sim.player_get(who, "v")))
 
 
-## One burst: hot sparks flying out and falling, and a puff of road dust.
-func _burst(pos: Vector3, big: bool) -> void:
+## One contact: metal-on-metal sparks and a puff of road dust. The sparks
+## (D-303) stream for a moment from the contact point on the car, which they
+## ride along with; each leaves at a little under the car's speed, so it
+## streaks back along the body and off behind, dropping as it goes.
+func _burst(pos: Vector3, big: bool, who: int = -1, car_v: float = 0.0) -> void:
 	var k := 1.6 if big else 1.0
 	var sparks := CPUParticles3D.new()   # (GPU particles don't move in our TABLE viewports)
 	sparks.one_shot = true
-	sparks.explosiveness = 1.0
-	sparks.amount = int(36 * k)
-	sparks.lifetime = 0.6
+	sparks.explosiveness = 0.0           # a short stream, not a pop
+	sparks.amount = int(40 * k)
+	sparks.lifetime = 0.35
 	sparks.local_coords = false
-	sparks.direction = Vector3.UP
-	sparks.spread = 75.0
-	sparks.initial_velocity_min = 3.0 * k
-	sparks.initial_velocity_max = 7.0 * k
-	sparks.gravity = Vector3(0.0, -16.0, 0.0)
+	sparks.spread = 14.0
+	sparks.flatness = 0.6                # a fan along the road, not a cone
+	sparks.initial_velocity_min = maxf(car_v * 0.55, 2.0)
+	sparks.initial_velocity_max = maxf(car_v * 0.85, 5.0)
+	sparks.gravity = Vector3(0.0, -12.0, 0.0)
 	sparks.scale_amount_min = 0.5
 	sparks.scale_amount_max = 1.0
 	var sg := Gradient.new()
@@ -1905,7 +1915,7 @@ func _burst(pos: Vector3, big: bool) -> void:
 	sg.colors = PackedColorArray([Color(1.0, 1.0, 0.8), Color(1.0, 0.65, 0.15), Color(1.0, 0.25, 0.05, 0.0)])
 	sparks.color_ramp = sg
 	var sq := QuadMesh.new()
-	sq.size = Vector2(0.28, 0.28)
+	sq.size = Vector2(0.1, 0.1)   # D-303: small hot specks
 	sq.material = _fx_material(_spark_texture())
 	sparks.mesh = sq
 	var dust := CPUParticles3D.new()
@@ -1935,12 +1945,19 @@ func _burst(pos: Vector3, big: bool) -> void:
 	dq.size = Vector2(0.7, 0.7)
 	dq.material = _fx_material(_puff_texture())
 	dust.mesh = dq
+	# The sparks ride on the car that was hit (this view's own, or the other
+	# player's), aimed forward along the road at under the car's speed.
+	var car: Node3D = _car if (not _two or who == _role or who < 0) else _rival
+	var fwd := (sim.track.point(sim.s + 1.0, 0.0, 0.0) - sim.track.point(sim.s, 0.0, 0.0)).normalized()
 	for em in [dust, sparks]:
 		em.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_root.add_child(em)
+		var parent: Node3D = car if em == sparks and is_instance_valid(car) else _root
+		parent.add_child(em)
 		em.global_position = pos
+		if em == sparks:
+			sparks.direction = (parent.global_basis.inverse() * fwd).normalized()
 		em.restart()   # (one-shot: fire once, from here)
-		get_tree().create_timer(em.lifetime + 0.3, false).timeout.connect(em.queue_free)
+		get_tree().create_timer(em.lifetime + 0.4, false).timeout.connect(em.queue_free)
 
 
 var _fx_mats := {}
