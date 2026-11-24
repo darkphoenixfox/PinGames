@@ -3032,3 +3032,19 @@
 - **Result:** the clean drive finishes with 3–5 s to spare (three seeds), with a 9–19 s buffer through the middle stages. A player using nitro and perfect shifts gains more. One crash plus a bust (~15 s) mid-race is survivable; several aren't.
 - **The other cars:** their per-car extras (D-183: easy +10, hard −4) apply to the floor as before.
 - **Status:** Accepted
+
+### D-301 — Turbo Run: the radio (music select) after car select
+- **Date:** 2026-11-24
+- **Decision (director):** after the car select (both players' in 2P), a music select screen: a mock-up radio in 16-bit art style, with a dial, the song titles scrolling on an LCD and a 90s-style graphic equaliser. The chosen song plays for the whole run.
+- **The radio** (`games/racer/radio.gd`) is drawn flat in code in the UI layer, so 8-BIT/16-BIT get real pixels:
+  - a bevelled dark body with a speaker grille each side (their cone caps thump with the bass);
+  - a dark LCD with scan lines, a glass glint, FM / ST, the frequency, the title scrolling in cyan dot-matrix text ("SONG  -  BOGART VGM"), and a 12-band, 10-segment equaliser (green / yellow / red, falling peaks);
+  - a cream backlit tuning dial (88–108 MHz) with the five stations marked and a red needle that slides to the chosen one;
+  - five preset buttons (the chosen one pressed in, its lamp lit);
+  - VOL and TUNE knobs (TUNE turns with the needle) and a "TURBO FM STEREO" badge.
+- **The equaliser:** follows the music through a spectrum analyser added to the Music bus while the radio shows (12 log-spaced bands, 60 Hz–12 kHz). Where bus effects don't run (web playback), it bounces on its own to a ~120 bpm pulse.
+- **Controls:** flippers (or magna saves; either player in 2P) tune down/up, Launch confirms. As in the other menus, it goes on by itself after `SELECT_TIME`. Each station plays its song as soon as it's tuned (crossfaded in from where it gets going, D-227), and the DMD shows the title and frequency. The attract demo keeps driving behind the dimmed screen.
+- **Stations:** 88.9 Maximum Overdrive, 92.3 One More Round, 96.5 Nightlife, 101.1 Dreamstate, 105.7 Chillwave Nightdrive, all Bogart VGM. The choice is kept for the session.
+- **The run's music:** the race carries the chosen song on and it loops for the whole run. This replaces D-226's one song per two stages with crossfades at the checkpoints.
+- **Dev:** `--rc-radio` opens the radio straight away.
+- **Status:** Accepted

@@ -28,6 +28,7 @@ const WEATHER_FOG := {"rain": Vector2(90.0, 430.0), "snow": Vector2(45.0, 320.0)
 const HAZE_COL := Color(0.84, 0.68, 0.48)
 const Toon = preload("res://games/racer/toon.gd")
 const Sprites = preload("res://games/racer/sprites.gd")
+const Radio = preload("res://games/racer/radio.gd")   # D-301
 const Night = preload("res://games/racer/night.gd")
 const DmdAnims = preload("res://games/racer/dmd_anims.gd")
 const Showroom = preload("res://games/racer/showroom.gd")
@@ -253,6 +254,14 @@ const MUSIC_RACE := [
 	"res://assets/audio/music/racer/bogart_chillwave_nightdrive.ogg",   # 9-10
 ]
 const MUSIC_STAGES := 2
+## D-301: the radio's stations, one per song (MUSIC_RACE's order).
+const SONG_KEYS := ["RC_SONG_1", "RC_SONG_2", "RC_SONG_3", "RC_SONG_4", "RC_SONG_5"]
+const SONG_FREQS := [88.9, 92.3, 96.5, 101.1, 105.7]
+static var _song := 0         # the chosen song (kept for the session)
+var _radio: Control
+var _radio_ui: Control
+var _radio_hint: Label
+var _spec_idx := -1           # the spectrum analyser on the music bus while the radio shows
 const MUSIC_XFADE := 6.0
 ## Where each song comes in on a crossfade (D-227), measured: past each one's
 ## quiet opening, to where it's at full strength (One More Round builds for
@@ -652,7 +661,10 @@ func start(_players: int) -> void:
 		_hues = [_car_hue(_chosen_car), _car_hue(_p2_car, 1)]
 		if _p2_car == _chosen_car:
 			_hues[1] = fposmod(_hues[0] + float(PAINTS[1]), 1.0)
-	if Config.cli.has("rc-skip-intro"):
+	if Config.cli.has("rc-radio"):   # dev: straight to the music select (D-301)
+		_enter_attract()
+		_begin_radio()
+	elif Config.cli.has("rc-skip-intro"):
 		_begin_race()
 	else:
 		_enter_attract()
@@ -665,8 +677,8 @@ func on_action(action: StringName, pressed: bool) -> void:
 		if _phase == "race" and is_instance_valid(_p2):
 			_p2.on_action(base, pressed)
 			return
-		if _phase == "select" and _select_p2:
-			action = base   # player 2 picks their own car
+		if (_phase == "select" and _select_p2) or _phase == "radio":
+			action = base   # player 2 picks their own car; either tunes the radio
 		else:
 			return
 	if _two and sim != null:
@@ -697,6 +709,15 @@ func on_action(action: StringName, pressed: bool) -> void:
 				_move_stage(1)
 			&"launch", &"start":
 				_confirm_stage()
+		return
+	if _phase == "radio":
+		match action:
+			&"flip_l", &"magna_l":
+				_tune(_song - 1)
+			&"flip_r", &"magna_r":
+				_tune(_song + 1)
+			&"launch", &"start":
+				_confirm_radio()
 		return
 	if _phase == "gfx":
 		match action:
@@ -759,6 +780,13 @@ func _process(delta: float) -> void:
 	elif _phase == "players":
 		sim.time_left = 99.0
 		sim.step(dt, false, false)
+	elif _phase == "radio":
+		sim.time_left = 99.0
+		sim.step(dt, false, false)   # the attract demo keeps driving behind the radio
+		if is_instance_valid(_radio_hint):
+			_radio_hint.text = tr("RC_RADIO_HINT") % maxi(ceili(SELECT_TIME - _phase_t), 0)
+		if _phase_t >= SELECT_TIME:
+			_confirm_radio()
 	elif _phase == "gfx":
 		sim.time_left = 99.0
 		sim.step(dt, false, false)   # the attract demo keeps driving behind the menu
@@ -910,12 +938,6 @@ func _painted(img: Image, hue: float) -> Image:
 				c.h = fposmod(c.h + hue, 1.0)
 				out.set_pixel(x, y, c)
 	return out
-
-
-## The song for stage k (D-226): one per MUSIC_STAGES stages; the last one goes
-## on past the finish.
-func _stage_music(k: int) -> String:
-	return MUSIC_RACE[clampi((k - 1) / MUSIC_STAGES, 0, MUSIC_RACE.size() - 1)]
 
 
 ## Paint (D-236): on the car select screen the magna buttons step the
@@ -1244,7 +1266,7 @@ func _confirm_car() -> void:
 	_set_ui_res.call_deferred()   # D-254: back to the HUD's layout
 	_showroom = null
 	_world_view.visible = true
-	_begin_race()
+	_begin_radio()   # D-301: then the music
 
 
 ## DMD while choosing (D-122): the car in its colour, its name, top speed and
@@ -1287,7 +1309,7 @@ func _begin_race() -> void:
 	_paint_hero()
 	# The start stage's song (D-226): stage 1 carries on attract's from where it
 	# is; a later start stage (testing) plays its own from the top.
-	_music(_stage_music(sim.checkpoints + 1))
+	_music(MUSIC_RACE[_song])   # D-301: the radio's song, for the whole run
 	Audio.sfx("start")
 	_hud.visible = true
 	_show_mode()
@@ -1347,6 +1369,96 @@ func _finale(delta: float) -> void:
 				finished.emit([])   # D-289: no high score for a 2-player race
 		else:
 			finished.emit([sim.score])
+
+
+# --- radio: the music select (D-301) -----------------------------------------------------
+func _begin_radio() -> void:
+	if is_instance_valid(_attract_ui):
+		_attract_ui.queue_free()
+	_phase = "radio"
+	_phase_t = 0.0
+	Audio.sfx("start")
+	_radio_ui = Control.new()
+	_radio_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_radio_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_radio_ui.add_child(UI.fill(Color(0, 0, 0, 0.55)))
+	var col := UI.vstack(36)
+	col.add_child(UI.styled_label(tr("RC_RADIO_TITLE"), TITLE_FONT, 2))
+	_radio = Radio.new()
+	var names := []
+	for k in SONG_KEYS:
+		names.append(tr(k) + "  -  " + tr("RC_CREDIT_BOGART"))
+	_radio.setup(names, SONG_FREQS, tr("RC_RADIO_VOL"), tr("RC_RADIO_TUNE"), tr("RC_RADIO_BRAND"), tr("RC_RADIO_FM"), tr("RC_RADIO_MHZ"), tr("RC_RADIO_ST"))
+	_radio.spectrum = _spectrum
+	col.add_child(_radio)
+	_radio_hint = UI.label("", 36, UI.WHITE)
+	_radio_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(_radio_hint)
+	_radio_ui.add_child(col)
+	_add_ui(_radio_ui)
+	_spectrum_on(true)
+	_tune(_song, false)
+
+
+## Tunes the radio to station i: the needle slides, the song plays from where
+## it gets going (D-227), the DMD shows its name.
+func _tune(i: int, click: bool = true) -> void:
+	i = clampi(i, 0, MUSIC_RACE.size() - 1)
+	_phase_t = 0.0
+	if click:
+		if i == _song:
+			Audio.sfx("error")
+			return
+		Audio.sfx("rc_shift")
+	_song = i
+	_radio.set_station(i)
+	if Audio.current_music() != MUSIC_RACE[i]:
+		_crossfade(MUSIC_RACE[i], 1.5, MUSIC_SKIP[i])
+	_dmd.show_text(tr(SONG_KEYS[i]), tr("RC_RADIO_MHZ") % float(SONG_FREQS[i]), Dmd.CYAN, Dmd.YELLOW)
+
+
+func _confirm_radio() -> void:
+	if _phase != "radio":
+		return
+	_spectrum_on(false)
+	if is_instance_valid(_radio_ui):
+		_radio_ui.queue_free()
+	_radio = null
+	_begin_race()
+
+
+## A spectrum analyser on the music bus while the radio shows (D-301), for its
+## equaliser. (Web playback skips bus effects: the bars then dance by themselves.)
+func _spectrum_on(on: bool) -> void:
+	var bus := AudioServer.get_bus_index("Music")
+	if bus < 0:
+		return
+	if on and _spec_idx < 0:
+		var fx := AudioEffectSpectrumAnalyzer.new()
+		fx.buffer_length = 0.1
+		AudioServer.add_bus_effect(bus, fx)
+		_spec_idx = AudioServer.get_bus_effect_count(bus) - 1
+	elif not on and _spec_idx >= 0:
+		if _spec_idx < AudioServer.get_bus_effect_count(bus):
+			AudioServer.remove_bus_effect(bus, _spec_idx)
+		_spec_idx = -1
+
+
+func _spectrum() -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	var bus := AudioServer.get_bus_index("Music")
+	if _spec_idx < 0 or bus < 0:
+		return out
+	var inst := AudioServer.get_bus_effect_instance(bus, _spec_idx) as AudioEffectSpectrumAnalyzerInstance
+	if inst == null:
+		return out
+	var f0 := 60.0
+	for b in Radio.BANDS:
+		var f1 := f0 * pow(12000.0 / 60.0, 1.0 / Radio.BANDS)
+		var mag := inst.get_magnitude_for_frequency_range(f0, f1).length()
+		out.append(clampf((linear_to_db(maxf(mag, 1e-6)) + 62.0) / 52.0, 0.0, 1.0))
+		f0 = f1
+	return out
 
 
 # --- 2 players (D-289) ----------------------------------------------------------------------
@@ -1875,11 +1987,7 @@ func _handle_events() -> void:
 			"checkpoint":
 				_bg_flash = 1.2
 				Audio.sfx("rc_checkpoint")
-				# A new song every MUSIC_STAGES stages (D-226), crossfaded in from
-				# a little way into it.
-				var stage := int(e[1]) + 1
-				if _stage_music(stage) != Audio.current_music():
-					_crossfade(_stage_music(stage), MUSIC_XFADE, MUSIC_SKIP[MUSIC_RACE.find(_stage_music(stage))])
+				# (D-301: one song, chosen on the radio, plays the whole run.)
 				# Reached on momentum after TIME UP: the race goes on (D-103).
 				var saved: bool = e.size() > 3 and e[3]
 				# No CHECKPOINT notice mid-TABLE (D-142): the gate, DMD and sound
@@ -4050,6 +4158,7 @@ func _radar_beep() -> void:
 
 
 func _exit_tree() -> void:
+	_spectrum_on(false)   # D-301
 	if _two and _main:
 		CabinetInput.set_two_player(false)   # D-289: player 2's keys go back to 1P
 		Screens.show_single_dmd(true)        # D-291

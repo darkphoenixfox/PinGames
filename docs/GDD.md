@@ -247,6 +247,8 @@ Rules:
 
 ## 8. Asset pipeline
 
+**Radio (D-301).** After car select, a 16-bit car-stereo screen picks the music: a tuning dial with a sliding needle, the title scrolling on an LCD over a graphic equaliser, five presets. The chosen Bogart VGM song plays for the whole run.
+
 **2 players (D-288, D-289).** Available only on a single landscape screen with a keyboard or gamepads (D-284). After PRESS START, players choose 1 PLAYER or 2 PLAYERS. Each player then picks a car (P1 first, then P2) after the graphics and stage screens.
 - **Screen:** split side by side. Each half has its own camera and HUD, with POSITION (1ST/2ND) where the clock was. Each player sees the other's car, and the cars bump each other. While the other car is ahead and in sight, a red P1/P2 tag with a down triangle marks it (D-290).
 - **Race:** no time limit. The first to the end of stage 10 wins; the race ends when both have stopped, or 8 s after the winner crosses. There's no high-score entry.
