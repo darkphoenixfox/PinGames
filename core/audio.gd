@@ -123,9 +123,10 @@ func stop_sfx(player: AudioStreamPlayer, sound_name: String = "") -> void:
 
 
 ## Plays a looping music track (res:// path to an .ogg), fading out whatever is
-## playing. Calling it again with the same path keeps the track going.
-func play_music(path: String, fade: float = 1.0) -> void:
-	if path == _music_path and _music.playing:
+## playing. Calling it again with the same path keeps the track going, unless
+## `restart` (D-307): then it starts again from the top.
+func play_music(path: String, fade: float = 1.0, restart: bool = false) -> void:
+	if path == _music_path and _music.playing and not restart:
 		return
 	var stream := load(path) as AudioStream
 	if stream == null:

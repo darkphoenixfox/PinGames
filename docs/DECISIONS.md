@@ -3094,3 +3094,10 @@
 - **Fix:** `want_side_panels()` lays the single screen out again at once, as `want_dmd_above()` already did.
 - **Checked:** reproduced (quit 20 steps after starting the game; the boxes stayed on the menu), then fixed in the single layout; the windowed layout is unaffected.
 - **Status:** Accepted
+
+### D-307 — Turbo Run: the race's song starts from the top
+- **Date:** 2026-11-24
+- **Decision (director):** at the start of the race, the chosen song (D-301) starts from its beginning, with no crossfade (one song per race now).
+- **How:** `Audio.play_music(path, fade, restart)` takes a `restart` flag. Asking for the song already playing then starts it again from 0 instead of carrying it on. The race calls it with fade 0 and restart, so the radio's preview (which joins each song past its quiet opening, D-227) is cut and the song starts at its first note.
+- The radio still crossfades between stations while tuning.
+- **Status:** Accepted

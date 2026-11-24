@@ -420,9 +420,9 @@ func _dmd_custom(fn: Callable) -> void:
 		fn.call(p))
 
 
-func _music(path: String) -> void:
+func _music(path: String, fade: float = 1.0, restart: bool = false) -> void:
 	if _main:
-		Audio.play_music(path)
+		Audio.play_music(path, fade, restart)
 
 
 func _crossfade(path: String, t: float, skip: float = 0.0) -> void:
@@ -1343,7 +1343,7 @@ func _begin_race() -> void:
 	_paint_hero()
 	# The start stage's song (D-226): stage 1 carries on attract's from where it
 	# is; a later start stage (testing) plays its own from the top.
-	_music(MUSIC_RACE[_song])   # D-301: the radio's song, for the whole run
+	_music(MUSIC_RACE[_song], 0.0, true)   # D-301: the radio's song, for the whole run; D-307: from its first note
 	_sfx("start")
 	_hud.visible = true
 	_show_mode()
