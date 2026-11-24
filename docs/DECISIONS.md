@@ -3200,3 +3200,10 @@
 - **Test:** a car at 60 m/s into a truck's back rolls, is never inside the truck, and the truck speeds up. Both checks fail on the old code.
 - **Dev:** `--rc-crash-at=N --rc-crash-truck` puts a truck just ahead in the car's lane at N s.
 - **Status:** Accepted
+
+### D-318 — Tilt Breaker: the director's own gameplay music
+- **Date:** 2026-11-24
+- **Decision (director):** the director's "Tilt Breaker" track (`tilt_breaker-original.mp3`, 2:25) plays during Tilt Breaker's gameplay.
+- It is the game's `MUSIC` (was n-Dimensions, which stays in the repo and credits, unused). Attract keeps "My Very Own Dead Ship" (D-082).
+- Converted to `assets/audio/music/breakout/tilt_breaker_original.ogg` (Vorbis q5). Recorded in `assets/CREDITS.md`.
+- **Status:** Accepted
