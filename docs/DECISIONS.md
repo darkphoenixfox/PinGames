@@ -3483,3 +3483,9 @@
 - **Decision (director):** the director's 1PLAYER and 2PLAYER images replace the text on the players screen.
 - Same treatment as the difficulty art (D-350): up to 620 px wide within the field, the chosen one full size and bright, the other 70% and dimmed. The DMD keeps its text. The screen only exists where 2 players are possible (the single landscape screen, D-284), so it was checked there. Prepared by `scripts/tools/prepare_breakout_titles.py`; recorded in `assets/CREDITS.md`.
 - **Status:** Accepted
+
+### D-352 — Pillar 6: stable screens
+- **Date:** 2026-11-24
+- **Decision (director):** a new pillar in the GDD vision: adding, removing or modifying UI elements while playing can't cause other existing elements on the screen to move or drift. Users expect consistency.
+- Generalises D-096 (blink with `modulate.a`, never `visible`, so containers don't reflow). In practice: elements that come and go keep their space reserved or are overlays outside layout containers; changing text or size mustn't re-centre neighbours; DMD status lines keep fixed positions.
+- **Status:** Accepted

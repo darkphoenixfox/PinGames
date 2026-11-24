@@ -13,6 +13,7 @@ PinGames is a bundle of short, loud, readable arcade games built for virtual pin
 3. **Arcade sessions.** A typical game lasts 3–5 minutes. There are no tutorials longer than one attract loop, and you're in the game within 5 seconds of pressing Start.
 4. **Readable at cabinet distance.** The playfield is about 1 m away, at an angle, on a 40"+ TV. Use high contrast, big sprites and no small text on TABLE.
 5. **Inspired by, never copied.** Same genres and feel; original names, art, music and levels.
+6. **Stable screens (D-352).** Adding, removing or changing UI elements during play must never make other elements on screen move or drift. Players expect consistency: things appear and disappear in place (blink with `modulate.a`, reserve their space, overlay instead of reflowing).
 
 ## 2. Hardware and screens
 | Screen | Orientation | Base resolution | Role |
