@@ -3072,3 +3072,17 @@
 - **The dust puff** stays where it happened (D-292).
 - `--rc-burst` now makes a contact on the car's right flank at its speed.
 - **Status:** Accepted
+
+### D-304 — Menus keep their own sounds; only the gameplay behind them is silent
+- **Date:** 2026-11-24
+- **Decision (director):** corrects D-302. The attract and selection screens still play their menu sounds when choosing options. Only the background gameplay sound is silent: car and gameplay effects.
+- **How:** in `QUIET_PHASES`, `_sfx()` lets through only `MENU_SFX` (start, select, move, error, rc_shift, the tuning/shift click Turbo Run's menus use) and drops everything else.
+- The attract demo car's radar beeps (their own player) stay quiet too. The engine, wind, skid, siren, horn and passer loops stay silent as before (D-235).
+- **Status:** Accepted
+
+### D-305 — Turbo Run: timed menus tick through their last 5 seconds
+- **Date:** 2026-11-24
+- **Decision (director):** the menus that choose by themselves after `SELECT_TIME` (graphics, start stage, car select, radio) play a tick once a second for the last 5 seconds (`rc_tick`, the race clock's tick, now also a menu sound).
+- A move restarts the menu's timer, and the ticking with it.
+- Tilt Breaker's menus have no time limit, so they don't tick.
+- **Status:** Accepted

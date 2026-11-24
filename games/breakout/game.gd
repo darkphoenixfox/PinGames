@@ -405,13 +405,15 @@ func _process(delta: float) -> void:
 	_animate(delta)
 
 
-## D-302 (director): no sound effects on the attract and selection screens,
-## only music. Every effect in this game goes through here.
+## D-302, D-304 (director): on the attract and selection screens only the
+## menu sounds play (choosing, confirming, a blocked move), never the gameplay
+## behind them. Every effect in this game goes through here.
+const MENU_SFX := ["start", "select", "move", "error", "rc_shift"]
 const QUIET_PHASES := ["attract", "players", "select"]
 
 
 func _sfx(sound_name: String) -> AudioStreamPlayer:
-	if _phase in QUIET_PHASES:
+	if _phase in QUIET_PHASES and not (sound_name in MENU_SFX):
 		return null
 	return Audio.sfx(sound_name)
 

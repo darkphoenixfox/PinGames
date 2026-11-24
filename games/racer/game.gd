@@ -774,6 +774,7 @@ func _process(delta: float) -> void:
 	elif _phase == "stage":
 		sim.time_left = 99.0
 		sim.step(dt, false, false)
+		_menu_tick()   # D-305
 		_stage_hint.text = tr("RC_GFX_HINT") % maxi(ceili(SELECT_TIME - _phase_t), 0)
 		if _phase_t >= SELECT_TIME:
 			_confirm_stage()
@@ -783,6 +784,7 @@ func _process(delta: float) -> void:
 	elif _phase == "radio":
 		sim.time_left = 99.0
 		sim.step(dt, false, false)   # the attract demo keeps driving behind the radio
+		_menu_tick()   # D-305
 		if is_instance_valid(_radio_hint):
 			_radio_hint.text = tr("RC_RADIO_HINT") % maxi(ceili(SELECT_TIME - _phase_t), 0)
 		if _phase_t >= SELECT_TIME:
@@ -790,10 +792,12 @@ func _process(delta: float) -> void:
 	elif _phase == "gfx":
 		sim.time_left = 99.0
 		sim.step(dt, false, false)   # the attract demo keeps driving behind the menu
+		_menu_tick()   # D-305
 		_gfx_hint.text = tr("RC_GFX_HINT") % maxi(ceili(SELECT_TIME - _phase_t), 0)
 		if _phase_t >= SELECT_TIME:
 			_confirm_gfx()
 	elif _phase == "select":
+		_menu_tick()   # D-305
 		var left := ceili(SELECT_TIME - _phase_t)
 		_select_hint.text = tr("RC_SELECT_HINT_TOUCH" if _touch_play() else "RC_SELECT_HINT") % maxi(left, 0)
 		if _phase_t >= SELECT_TIME:
@@ -855,13 +859,32 @@ func _read_input() -> Array:
 	return [l, r, CabinetInput.is_down(CabinetInput.for_player(&"magna_l", _role)) or _pad_brake]
 
 
-## D-302 (director): no sound effects on the attract and selection screens,
-## only music. Every effect in this game goes through here.
+## D-302, D-304 (director): on the attract and selection screens only the
+## menu sounds play (choosing, confirming, a blocked move), never the gameplay
+## behind them. Every effect in this game goes through here.
+const MENU_SFX := ["start", "select", "move", "error", "rc_shift", "rc_tick"]
 const QUIET_PHASES := ["attract", "players", "gfx", "stage", "select", "radio"]
 
 
+## D-305 (director): a timed menu (graphics, stage, car, radio) ticks once a
+## second through its last MENU_TICKS seconds before it chooses by itself.
+## A move restarts its timer, and the ticking with it.
+const MENU_TICKS := 5
+var _menu_tick_last := -1
+
+
+func _menu_tick() -> void:
+	var left := ceili(SELECT_TIME - _phase_t)
+	if left > MENU_TICKS:
+		_menu_tick_last = -1
+		return
+	if left >= 1 and left != _menu_tick_last:
+		_menu_tick_last = left
+		_sfx("rc_tick")
+
+
 func _sfx(sound_name: String) -> AudioStreamPlayer:
-	if _phase in QUIET_PHASES:
+	if _phase in QUIET_PHASES and not (sound_name in MENU_SFX):
 		return null
 	return Audio.sfx(sound_name)
 
@@ -4167,6 +4190,8 @@ func _tod_progress() -> float:
 ## Radar beep (D-215): its own player on a dry bus with the SFX bus's volume,
 ## so the tunnel reverb on SFX doesn't touch it (the detector is in the car).
 func _radar_beep() -> void:
+	if _phase in QUIET_PHASES:   # D-304: the attract demo's radar stays quiet
+		return
 	var sfx := AudioServer.get_bus_index("SFX")
 	var dry := AudioServer.get_bus_index(DRY_BUS)
 	if dry < 0:
