@@ -289,7 +289,13 @@ func set_flexible(on: bool) -> void:
 
 
 ## D-262: the DMD above the game area instead of over it (Tilt Breaker).
-func want_side_panels(on: bool, frame_tex: Texture2D = null) -> void:
+func want_side_panels(on: bool, frame_tex: Texture2D = null, owner: Object = null) -> void:
+	# D-319: only the one who asked for them takes them away. A game that
+	# restarts into itself starts its new copy before the old one is freed.
+	if on:
+		_panels_owner = owner
+	elif owner != null and _panels_owner != null and owner != _panels_owner:
+		return
 	side_panels = on
 	panel_frame = frame_tex
 	if not on:
@@ -299,6 +305,9 @@ func want_side_panels(on: bool, frame_tex: Texture2D = null) -> void:
 	# DMD and BACKGLASS boxes on the menus and the next game.
 	if current_layout == "single" and is_instance_valid(_single_page):
 		_place_single(Vector2(get_window().size))
+
+
+var _panels_owner: Object = null
 
 
 ## D-267: the game says how wide its play area is (half width / TABLE width).

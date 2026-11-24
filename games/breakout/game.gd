@@ -275,7 +275,7 @@ func start(_players: int) -> void:
 	# shows more space at the sides.
 	_portrait_req = true
 	# D-265: landscape: DMD left, backglass right; D-266: framed in circuit brick.
-	Screens.want_side_panels(true, load("res://assets/textures/breakout/circuit_blue.png"))
+	Screens.want_side_panels(true, load("res://assets/textures/breakout/circuit_blue.png"), self)
 	for s in SOUNDS:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
 	sim = Sim.new()
@@ -385,6 +385,11 @@ func _process(delta: float) -> void:
 		return
 	if Config.cli.has("tb-dmd-anim") and not Dmd.is_animating():  # dev: loop one DMD animation
 		_dmd_anim(str(Config.cli["tb-dmd-anim"]))
+	if Config.cli.has("tb-over-at") and _phase_t >= float(str(Config.cli["tb-over-at"])) 			and sim.state != Sim.State.OVER and not has_meta("dev_over"):   # dev: game over at N s (D-319)
+		set_meta("dev_over", true)
+		sim.balls_left = 1
+		sim._lose_ball()
+		_handle_events()
 	if _two:   # D-286: each player's controls and stick
 		sim.player_set(0, "paddle_axis", CabinetInput.steer_axis(0))
 		sim.player_set(1, "paddle_axis", CabinetInput.steer_axis(1))
@@ -1911,5 +1916,5 @@ func _exit_tree() -> void:
 	if _two:
 		CabinetInput.set_two_player(false)   # D-286: player 2's keys go back to 1P
 	if _portrait_req:
-		Screens.want_side_panels(false)   # D-265
+		Screens.want_side_panels(false, null, self)   # D-265; D-319: only if still ours
 	super._exit_tree()

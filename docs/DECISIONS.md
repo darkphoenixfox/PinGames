@@ -3207,3 +3207,11 @@
 - It is the game's `MUSIC` (was n-Dimensions, which stays in the repo and credits, unused). Attract keeps "My Very Own Dead Ship" (D-082).
 - Converted to `assets/audio/music/breakout/tilt_breaker_original.ogg` (Vorbis q5). Recorded in `assets/CREDITS.md`.
 - **Status:** Accepted
+
+### D-319 — Fix: Tilt Breaker lost its side panels after a game over
+- **Date:** 2026-11-24
+- **Bug (director):** Tilt Breaker showed the DMD at the top in the mirror frame (D-314), and no backglass.
+- **Cause:** after a game over, the game goes straight back to its own PRESS START (D-277). Its new copy starts, asking for the side panels, before the old copy is freed. The old copy's exit then turned them off. D-306 made that take effect at once; before, the stale layout happened to stay.
+- **Fix:** `Screens.want_side_panels(on, frame, owner)` remembers who asked, and a request to turn them off from anyone else is ignored. Tilt Breaker passes itself.
+- **Checked:** reproduced with a new `--tb-over-at=N` dev flag (game over at N s); the same run with the fix keeps the panels.
+- **Status:** Accepted
