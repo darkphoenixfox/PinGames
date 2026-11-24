@@ -3433,3 +3433,10 @@
 - **Thrusters:** `Fx.ShipEngine` takes a brightness; the side thrusters use 0.22 (colours and light scaled by it, opacity by its square root so the overlapping particles don't burn white at the nozzle). The belly burners and the Sidekicks' burners are unchanged.
 - **Test:** holding LAUNCH after a lost charge keeps the serve for 1 s and launches after 2 s.
 - **Status:** Accepted
+
+### D-345 — Tilt Breaker space backdrop: distant fly-bys, a moon with parallax
+- **Date:** 2026-11-24
+- **Decision (director):** the background enemies must look very far away, well out of the play's reach; the moon reacts a little to the scenery's movement, like the stars but much less.
+- **Fly-bys:** 35% of an enemy's size, 72% transparent, 0.5–1 m/s, 40–60 units deep, so they pass behind the Earth and the moon (which hide them) as well as everything in play; thinner, slower thruster trails. One every 8–16 s (was 5–11; they stay on screen longer).
+- **Moon parallax:** it swings sideways with the starfield (which turns with the ship's movement, D-049) at 8% of the near stars' swing, along the same arc around the stars' pivot, and eases back to its spot (1/0.6 s), on top of its slow orbit (D-343).
+- **Status:** Accepted

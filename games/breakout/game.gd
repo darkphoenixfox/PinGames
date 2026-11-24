@@ -2088,7 +2088,11 @@ func _confirm_select() -> void:
 const SPACE_EARTH_R := 10.0
 const SPACE_EARTH_AT := Vector2(-5.0, -14.2)   # view units from the view centre: its rim just under the ship
 const SPACE_MOON_R := 1.4
-const SPACE_FLYBY := Vector2(5.0, 11.0)        # s between ships
+const SPACE_FLYBY := Vector2(8.0, 16.0)        # s between ships (D-345: they linger longer now)
+## D-345: fly-bys are far off: tiny, slow, dim, behind the Earth and the moon.
+const FLYBY_SCALE := 0.35
+const FLYBY_DEPTH := Vector2(40.0, 60.0)
+const FLYBY_SPEED := Vector2(0.5, 1.0)
 var _planet_horizon: Fx.Planet
 var _planet_space: Fx.Planet
 var _moon: Fx.Planet
@@ -2098,6 +2102,10 @@ var _flyby_in := 3.0
 var _flybys: Array = []   # {node, vel}
 var _view_basis: Basis
 var _view_target: Vector3
+const MOON_PARALLAX := 0.08     # D-345: of the near stars' swing
+const MOON_RETURN := 0.6        # 1/s it eases back to its spot
+const STAR_PIVOT_DIST := 48.0   # view units from the top of the view to the stars' pivot (3 TABLE heights)
+var _moon_sway := 0.0
 
 
 func _build_space_backdrop(basis: Basis, target: Vector3) -> void:
@@ -2148,7 +2156,12 @@ func _animate_backdrop(delta: float) -> void:
 	var hw := _view_half_width()
 	var base := Vector2(minf(6.4, hw - 1.6), 4.6)
 	var a := _space_t * TAU / 120.0
-	_moon.place_at(_view_basis, _view_target, base + Vector2(cos(a) * 1.1, sin(a) * 0.45), 18.0 - sin(a) * 2.0)
+	# D-345: it swings a little with the starfield (the ship's movement), much
+	# less than the stars, and eases back: a far, slow parallax.
+	_moon_sway += _star_spin * MOON_PARALLAX * delta
+	_moon_sway *= exp(-MOON_RETURN * delta)
+	var sway := Vector2(-_moon_sway * STAR_PIVOT_DIST, 0.0)
+	_moon.place_at(_view_basis, _view_target, base + Vector2(cos(a) * 1.1, sin(a) * 0.45) + sway, 18.0 - sin(a) * 2.0)
 	_moon.rotate_y(delta * 0.05)
 	_planet_space.rotate_y(delta * 0.01)
 	# Fly-bys, far behind and dimmed.
@@ -2174,15 +2187,15 @@ func _spawn_flyby(hw: float) -> void:
 	var x0 := -(hw + 2.0) if from_left else hw + 2.0
 	var p0 := Vector2(x0, y0)
 	var p1 := Vector2(-x0, y1)
-	var speed := randf_range(1.6, 3.0)
+	var speed := randf_range(FLYBY_SPEED.x, FLYBY_SPEED.y)
 	var dur := p0.distance_to(p1) / speed
-	var depth := randf_range(10.0, 15.0)
+	var depth := randf_range(FLYBY_DEPTH.x, FLYBY_DEPTH.y)
 	var start := _view_target + _view_basis.x * p0.x + _view_basis.y * p0.y - _view_basis.z * depth
 	var vel := (_view_basis.x * (p1.x - p0.x) + _view_basis.y * (p1.y - p0.y)) / dur
 	var root := Node3D.new()
 	root.position = start
 	var tex: Texture2D = load("res://assets/textures/breakout/circuit_%s.png" % ["red", "yellow", "green", "blue"][randi() % 4])
-	var r := Sim.ENEMY_R * 1.5 * randf_range(0.8, 1.2)
+	var r := Sim.ENEMY_R * 1.5 * FLYBY_SCALE * randf_range(0.8, 1.2)
 	var body: Node3D
 	match randi() % 3:
 		0: body = Fx.make_tetrahedron(r, tex, Color(0.6, 0.4, 0.9))
@@ -2190,23 +2203,23 @@ func _spawn_flyby(hw: float) -> void:
 		_: body = Fx.make_icosahedron(r, tex, Color(1.0, 0.3, 0.3), 0.6)
 	root.add_child(body)
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
-		(mi as GeometryInstance3D).transparency = 0.6   # dimmed: background, not a threat
+		(mi as GeometryInstance3D).transparency = 0.72   # dimmed: background, not a threat
 	var p := CPUParticles3D.new()
-	p.amount = 40
-	p.lifetime = 0.6
+	p.amount = 24
+	p.lifetime = 0.7
 	p.local_coords = false
 	p.direction = -vel.normalized()
-	p.spread = 12.0
+	p.spread = 10.0
 	p.gravity = Vector3.ZERO
-	p.initial_velocity_min = 1.0
-	p.initial_velocity_max = 1.8
+	p.initial_velocity_min = 0.3
+	p.initial_velocity_max = 0.5
 	var grad := Gradient.new()
 	grad.set_color(0, Color(0.55, 0.5, 0.4, 0.6))
 	grad.set_color(1, Color(0.2, 0.15, 0.12, 0.0))
 	grad.add_point(0.3, Color(0.5, 0.28, 0.1, 0.45))
 	p.color_ramp = grad
 	var q := QuadMesh.new()
-	q.size = Vector2(0.07, 0.07)
+	q.size = Vector2(0.035, 0.035)
 	var pm := StandardMaterial3D.new()
 	pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	pm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
