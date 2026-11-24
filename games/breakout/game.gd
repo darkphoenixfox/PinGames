@@ -319,7 +319,7 @@ func on_action(action: StringName, pressed: bool) -> void:
 		match action:
 			&"flip_l", &"flip_r", &"magna_l", &"magna_r":
 				_players_sel = 1 - _players_sel
-				Audio.sfx("move")
+				_sfx("move")
 				_refresh_players()
 			&"launch", &"start":
 				_confirm_players()
@@ -405,6 +405,17 @@ func _process(delta: float) -> void:
 	_animate(delta)
 
 
+## D-302 (director): no sound effects on the attract and selection screens,
+## only music. Every effect in this game goes through here.
+const QUIET_PHASES := ["attract", "players", "select"]
+
+
+func _sfx(sound_name: String) -> AudioStreamPlayer:
+	if _phase in QUIET_PHASES:
+		return null
+	return Audio.sfx(sound_name)
+
+
 # --- events ------------------------------------------------------------------------
 func _handle_events() -> void:
 	for k in sim.events.size():
@@ -424,60 +435,60 @@ func _handle_events() -> void:
 			_view_use(who)
 		match e[0]:
 			"paddle":
-				Audio.sfx("tb_shield")
+				_sfx("tb_shield")
 				_lights.pulse(BackglassLights.SHOTS, 0.3, 16.0, 0.7)
 				_shield_age = 0.0
 				_shield_mat.set_shader_parameter("hit_x",
 					clampf((sim.ball_pos.x - sim.paddle_x) / (Sim.PADDLE_W * 0.5), -1.0, 1.0))
 			"wall":
-				Audio.sfx("tb_shield")
+				_sfx("tb_shield")
 				_flash_edge_shield(e[1][0], e[1][1])
 			"brick":
 				var n := _brick_nodes[e[1]]
 				n.visible = false
 				_explode_brick(n.position, _brick_glow(sim.bricks[e[1]]))
 				_lights.pulse(BackglassLights.IMPACTS, 0.35, 14.0)
-				Audio.sfx("tb_brick")
+				_sfx("tb_brick")
 			"serve":
-				Audio.sfx("tb_fire")
+				_sfx("tb_fire")
 				_lights.pulse(BackglassLights.SHOTS, 0.7, 12.0)
 				_fire_flash = 1.0
 				_recoil = 1.0
 				_trail.clear()
 				_hint.visible = false
 			"dash":
-				Audio.sfx("tb_dash")
+				_sfx("tb_dash")
 				_dash_glow = 1.0
 			"charge_start":
 				_stop_charge_sound()
 				_charge_sound_name = "tb_charge%d" % int(e[1])
-				_charge_sound = Audio.sfx(_charge_sound_name)
+				_charge_sound = _sfx(_charge_sound_name)
 			"charged":
-				Audio.sfx("tb_level%d" % int(e[1]))
+				_sfx("tb_level%d" % int(e[1]))
 			"blast":
 				_stop_charge_sound()
 				var blevel: int = e[1][1]
 				var bdir: Vector2 = e[1][2] if e[1].size() > 2 else Vector2.UP
 				if bdir == Vector2.UP:  # one sound/recoil per volley (Triple = 3 events)
-					Audio.sfx("tb_blast%d" % blevel)
+					_sfx("tb_blast%d" % blevel)
 					_recoil = 0.5 + 0.25 * blevel
 				_spawn_blast_node(blevel, bdir)
 				_lights.pulse(BackglassLights.SHOTS + BackglassLights.IMPACTS, 0.5 + 0.2 * blevel, 10.0)
 			"blast_fail":
-				Audio.sfx("tb_low_power")
+				_sfx("tb_low_power")
 				_low_power_t = 1.2  # LOW shows only in the DMD power bar area (D-072)
 			"brick_hit":
 				var hb: Dictionary = sim.bricks[e[1]]
 				InstParam.set_param(_brick_nodes[e[1]], "mode", 2.0)
-				Audio.sfx("tb_armour")
+				_sfx("tb_armour")
 				_explode_brick(_brick_nodes[e[1]].position, _brick_glow(hb), 0.5)
 			"powerup_spawn":
 				_spawn_powerup_node(e[1][0], e[1][1], e[1][2])
-				Audio.sfx("tb_pu_drop")
+				_sfx("tb_pu_drop")
 			"powerup_collect":
 				_remove_powerup_node(e[1][0])
 				var kind: String = e[1][1]
-				Audio.sfx("tb_pu_get")
+				_sfx("tb_pu_get")
 				Dmd.flash(tr("TB_PU_%s" % kind), 1.4, POWERUP_COLORS[kind])
 				_lights.pulse(BackglassLights.ALL, 0.8, 10.0)
 				_recoil = 0.4
@@ -486,17 +497,17 @@ func _handle_events() -> void:
 			"ion_beam":
 				_fire_ion_beam(e[1])
 			"bounce_ball":
-				Audio.sfx("tb_fire")
+				_sfx("tb_fire")
 				_recoil = 0.7
 			"ghost":
-				Audio.sfx("tb_shield")
+				_sfx("tb_shield")
 			"shield_used":
-				Audio.sfx("tb_shield_break")
+				_sfx("tb_shield_break")
 				_shield_flash = 0.0
 				_shield_bar_mat.set_shader_parameter("hit_x", clampf(e[1] / (sim.field.size.x * 0.5), -1.0, 1.0))
 				_lights.pulse(BackglassLights.ENGINES + BackglassLights.SHOTS, 0.6, 12.0)
 			"extra_lost":
-				Audio.sfx("tb_explode")
+				_sfx("tb_explode")
 				_planet.impact(Vector3(e[1], 0.0, Sim.DRAIN_Y), -_cam.global_transform.basis.z)
 			"blast_end":
 				var end_pos: Vector2 = e[1][0]
@@ -504,7 +515,7 @@ func _handle_events() -> void:
 				_explode_brick(Vector3(end_pos.x, 0.0, end_pos.y), LEVEL_COLORS[end_level - 1], 0.8 + 0.3 * end_level)
 			"enemy_spawn":
 				_spawn_enemy_node(e[1][0], e[1][1])
-				Audio.sfx("tb_wormhole")
+				_sfx("tb_wormhole")
 				_dmd_anim("incoming")
 			"enemy_ready":
 				_close_wormhole(e[1])
@@ -513,14 +524,14 @@ func _handle_events() -> void:
 				_remove_enemy_node(e[1][0])
 				var ep: Vector2 = e[1][1]
 				_explode_brick(Vector3(ep.x, 0.2, ep.y), ecol, 1.2)
-				Audio.sfx("tb_enemy_die")
+				_sfx("tb_enemy_die")
 				_lights.pulse(BackglassLights.IMPACTS + BackglassLights.SHOTS, 0.8, 10.0)
 				if e[1][2]:  # shot down (not a ship collision)
 					_dmd_anims.enemy_color = ecol
 					_dmd_anim("tetra_hit")
 			"ship_destroyed":
 				var sp: Vector2 = e[1]
-				Audio.sfx("tb_ship_die")
+				_sfx("tb_ship_die")
 				_lights.pulse(BackglassLights.ALL, 1.3, 8.0)
 				_explode_brick(Vector3(sp.x, 0.2, sp.y), Color(0.4, 0.8, 1.0), 2.6)
 				_trail.clear()
@@ -530,14 +541,14 @@ func _handle_events() -> void:
 					_dmd_anim("ship_destroyed")
 					_hint.visible = true
 			"rack_clear":
-				Audio.sfx("tb_rack")
+				_sfx("tb_rack")
 				_lights.chase(1.8)
 				_dmd_anim("rack_clear")
 				_trail.clear()
 				_begin_outro()
 			"lost":
 				var last := sim.state == Sim.State.OVER
-				Audio.sfx("tb_explode_big" if last else "tb_explode")
+				_sfx("tb_explode_big" if last else "tb_explode")
 				_lights.pulse(BackglassLights.ALL, 1.2, 8.0)
 				_planet.impact(Vector3(e[1], 0.0, Sim.DRAIN_Y), -_cam.global_transform.basis.z, last)
 				_trail.clear()
@@ -740,7 +751,7 @@ func _enter_players() -> void:
 	_phase_t = 0.0
 	if is_instance_valid(_attract_ui):
 		_attract_ui.queue_free()
-	Audio.sfx("select")
+	_sfx("select")
 	Dmd.play(Callable(), 0.0)
 	_players_ui = UI.vstack(70)
 	_players_rows.clear()
@@ -1286,7 +1297,7 @@ func _on_debug_action(action: StringName) -> void:
 	if action == &"fire_line" and sim != null and sim.state != Sim.State.OVER:
 		# Called between frames, so react here (sim events are cleared on the next step).
 		sim.debug_fire_line()
-		Audio.sfx("tb_blast3")
+		_sfx("tb_blast3")
 		_spawn_blast_node(3)
 
 
@@ -1374,7 +1385,7 @@ func _enter_select() -> void:
 	_phase_t = 0.0
 	if is_instance_valid(_attract_ui):
 		_attract_ui.queue_free()
-	Audio.sfx("select")
+	_sfx("select")
 	Dmd.play(Callable(), 0.0)   # stop the attract animation so the choice shows
 	_select_index = maxi(0, Sim.DIFFICULTY_ORDER.find(_start_difficulty()))
 	_select_ui = UI.vstack(70)
@@ -1398,10 +1409,10 @@ func _move_select(step: int) -> void:
 	var i := clampi(_select_index + step, 0, Sim.DIFFICULTY_ORDER.size() - 1)
 	_phase_t = 0.0
 	if i == _select_index:
-		Audio.sfx("error")
+		_sfx("error")
 		return
 	_select_index = i
-	Audio.sfx("move")
+	_sfx("move")
 	_refresh_select()
 
 
@@ -1439,7 +1450,7 @@ func _begin_intro() -> void:
 	_landed = 0
 	if is_instance_valid(_attract_ui):
 		_attract_ui.queue_free()
-	Audio.sfx("start")
+	_sfx("start")
 	Dmd.play(Callable(), 0.0)
 	# Level 1 says GET READY; later levels announce their number (D-068).
 	var title: String = tr("TB_GET_READY") if sim.level == 1 else tr("TB_LEVEL") % sim.level
@@ -1472,7 +1483,7 @@ func _intro() -> void:
 	while _landed < landed:
 		_landed += 1
 		if _landed % 3 == 1:  # don't spam: a clack every few bricks
-			Audio.sfx("tb_brick_land")
+			_sfx("tb_brick_land")
 	var bricks_done := (_brick_nodes.size() - 1) * INTRO_BRICK_STAGGER + INTRO_BRICK_FALL
 	var st := (t - bricks_done) / INTRO_SHIP_TIME
 	for ship in (2 if _two else 1):   # D-286: both ships fly in together
@@ -1484,7 +1495,7 @@ func _intro() -> void:
 		if not _paddle.visible:
 			_paddle.visible = true
 			if ship == 0:
-				Audio.sfx("tb_ship_arrive")
+				_sfx("tb_ship_arrive")
 		var e := 1.0 - pow(1.0 - clampf(st, 0.0, 1.0), 3.0)  # ease out
 		_paddle.position = Vector3(sim.paddle_x, 0.0, lerpf(INTRO_SHIP_FROM_Z, sim.paddle_y, e))
 		_set_belly_thrust(1.5 * (1.0 - e) + 0.1 if st < 1.0 else 0.0)
@@ -1558,7 +1569,7 @@ func _outro() -> void:
 	if k > 0.0 and not _outro_lifted:
 		_outro_lifted = true
 		DebugTools.mark("outro_lift")
-		Audio.sfx("tb_ship_arrive")
+		_sfx("tb_ship_arrive")
 		Dmd.play(Callable(_dmd_anims, "ship_boost"), DmdAnims.DURATIONS["ship_boost"])  # D-076
 	var e := k * k
 	# Before lift-off the ship glides to the centre and levels out (D-085).
@@ -1665,7 +1676,7 @@ func _remove_powerup_node(id: int) -> void:
 
 
 func _fire_ion_beam(x: float) -> void:
-	Audio.sfx("tb_ion")
+	_sfx("tb_ion")
 	_recoil = 1.0
 	_lights.pulse(BackglassLights.SHOTS + BackglassLights.IMPACTS, 1.0, 14.0)
 	var m := MeshInstance3D.new()

@@ -696,7 +696,7 @@ func on_action(action: StringName, pressed: bool) -> void:
 		match action:
 			&"flip_l", &"flip_r", &"magna_l", &"magna_r":
 				_players_sel = 1 - _players_sel
-				Audio.sfx("rc_shift")
+				_sfx("rc_shift")
 				_refresh_players()
 			&"launch", &"start":
 				_confirm_players()
@@ -732,10 +732,10 @@ func on_action(action: StringName, pressed: bool) -> void:
 		match action:
 			&"flip_l":
 				_showroom.move(-1)
-				Audio.sfx("rc_shift")
+				_sfx("rc_shift")
 			&"flip_r":
 				_showroom.move(1)
-				Audio.sfx("rc_shift")
+				_sfx("rc_shift")
 			&"magna_l":
 				_repaint(-1)
 			&"magna_r":
@@ -855,6 +855,17 @@ func _read_input() -> Array:
 	return [l, r, CabinetInput.is_down(CabinetInput.for_player(&"magna_l", _role)) or _pad_brake]
 
 
+## D-302 (director): no sound effects on the attract and selection screens,
+## only music. Every effect in this game goes through here.
+const QUIET_PHASES := ["attract", "players", "gfx", "stage", "select", "radio"]
+
+
+func _sfx(sound_name: String) -> AudioStreamPlayer:
+	if _phase in QUIET_PHASES:
+		return null
+	return Audio.sfx(sound_name)
+
+
 # --- phases --------------------------------------------------------------------------
 func _new_sim() -> void:
 	sim = Sim.new()
@@ -961,7 +972,7 @@ func _repaint(d: int) -> void:
 	paint[i] = posmod(int(paint[i]) + d, PAINTS.size())
 	_showroom.set_hue(i, _car_hue(i, 1 if _select_p2 else 0))
 	_phase_t = 0.0
-	Audio.sfx("rc_shift")
+	_sfx("rc_shift")
 
 
 func _enter_attract() -> void:
@@ -1099,7 +1110,7 @@ func _begin_gfx() -> void:
 		_attract_ui.queue_free()
 	_phase = "gfx"
 	_phase_t = 0.0
-	Audio.sfx("start")
+	_sfx("start")
 	_gfx_index = maxi(GFX_OPTIONS.find(_gfx_mode), 0)
 	_gfx_ui = Control.new()
 	_gfx_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1128,7 +1139,7 @@ func _move_gfx(i: int) -> void:
 	if i == _gfx_index:
 		return
 	_gfx_index = i
-	Audio.sfx("rc_shift")
+	_sfx("rc_shift")
 	_apply_gfx(GFX_OPTIONS[i])
 	_refresh_gfx()
 
@@ -1192,7 +1203,7 @@ func _move_stage(d: int) -> void:
 	if n == _start_stage:
 		return
 	_start_stage = n
-	Audio.sfx("rc_shift")
+	_sfx("rc_shift")
 	_refresh_stage()
 
 
@@ -1216,7 +1227,7 @@ func _begin_select() -> void:
 		_attract_ui.queue_free()
 	_phase = "select"
 	_phase_t = 0.0
-	Audio.sfx("start")
+	_sfx("start")
 	_world_view.visible = false
 	_showroom = Showroom.new()
 	_showroom.hd = _gfx_hd
@@ -1310,11 +1321,11 @@ func _begin_race() -> void:
 	# The start stage's song (D-226): stage 1 carries on attract's from where it
 	# is; a later start stage (testing) plays its own from the top.
 	_music(MUSIC_RACE[_song])   # D-301: the radio's song, for the whole run
-	Audio.sfx("start")
+	_sfx("start")
 	_hud.visible = true
 	_show_mode()
 	_center_message("3", 1.0)
-	Audio.sfx("rc_count")
+	_sfx("rc_count")
 	_dmd_custom(_draw_dmd_revup)   # REV UP! with a live tacho (D-154)
 	_last_tick = -1
 
@@ -1377,7 +1388,7 @@ func _begin_radio() -> void:
 		_attract_ui.queue_free()
 	_phase = "radio"
 	_phase_t = 0.0
-	Audio.sfx("start")
+	_sfx("start")
 	_radio_ui = Control.new()
 	_radio_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_radio_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1407,9 +1418,9 @@ func _tune(i: int, click: bool = true) -> void:
 	_phase_t = 0.0
 	if click:
 		if i == _song:
-			Audio.sfx("error")
+			_sfx("error")
 			return
-		Audio.sfx("rc_shift")
+		_sfx("rc_shift")
 	_song = i
 	_radio.set_station(i)
 	if Audio.current_music() != MUSIC_RACE[i]:
@@ -1467,7 +1478,7 @@ func _begin_players() -> void:
 		_attract_ui.queue_free()
 	_phase = "players"
 	_phase_t = 0.0
-	Audio.sfx("start")
+	_sfx("start")
 	_players_ui = Control.new()
 	_players_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_players_ui.add_child(UI.fill(Color(0, 0, 0, 0.35)))
@@ -1976,17 +1987,17 @@ func _handle_events() -> void:
 				_dmd.flash(tr("RC_P_WINS") % (int(e[1]) + 1), 3.0, Dmd.YELLOW)
 			"count":
 				_center_message(str(e[1]), 1.0)
-				Audio.sfx("rc_count")
+				_sfx("rc_count")
 				_dmd_custom(_draw_dmd_revup)
 			"go":
 				if Config.cli.has("rc-police") and sim.police.is_empty():   # dev: a chase straight away (D-246)
 					sim.call_police()
 				_center_message(tr("RC_GO"), 1.0)
-				Audio.sfx("rc_go")
+				_sfx("rc_go")
 				_dmd.flash(tr("RC_GO"), 1.0, Dmd.GREEN)
 			"checkpoint":
 				_bg_flash = 1.2
-				Audio.sfx("rc_checkpoint")
+				_sfx("rc_checkpoint")
 				# (D-301: one song, chosen on the radio, plays the whole run.)
 				# Reached on momentum after TIME UP: the race goes on (D-103).
 				var saved: bool = e.size() > 3 and e[3]
@@ -1996,7 +2007,7 @@ func _handle_events() -> void:
 					_center_message(tr("RC_JUST_MADE_IT"), 1.6)
 				_dmd_anim("checkpoint", [tr("RC_CHECKPOINT"), tr("RC_EXTENDED") % int(e[2])])
 			"finish":
-				Audio.sfx("fanfare")
+				_sfx("fanfare")
 				if _two:   # D-289: first or second across the line
 					_center_message(tr("RC_WINNER") if sim.winner == _role else tr("RC_SECOND"), 4.0)
 				else:
@@ -2004,84 +2015,84 @@ func _handle_events() -> void:
 				_dmd.flash(tr("RC_FINISH"), 4.0, Dmd.YELLOW)
 				_bg_flash = 0.6
 			"time_up":
-				Audio.sfx("rc_time_up")
+				_sfx("rc_time_up")
 				_center_message(tr("RC_TIME_UP"), 3.0)
 				_dmd.flash(tr("RC_TIME_UP"), 3.0, Dmd.RED)
 			"drift_start":
 				pass
 			"drift_end":
 				if int(e[1]) > 0:
-					Audio.sfx("rc_drift_bank")
+					_sfx("rc_drift_bank")
 					_drift_label.text = tr("RC_DRIFT_POINTS") % ScoreTable.format_score(int(e[1]))
 					_dmd_anim("drift", [tr("RC_DRIFT"), ScoreTable.format_score(int(e[1]))])
 					_drift_label.modulate.a = 1.0
 			"nitro", "nitro_refill":
 				_bg_flash = 0.6
-				Audio.sfx("rc_nitro")
+				_sfx("rc_nitro")
 				_nitro_pop_t = 0.8   # small notice over the speedometer (D-159)
 				_dmd_anim("nitro", [tr("RC_NITRO")])
 				_shake = 0.3
 			"high_beams":
 				_honk(int(e[1]))
 			"perfect_start":
-				Audio.sfx("rc_perfect")
-				Audio.sfx("rc_backfire")
+				_sfx("rc_perfect")
+				_sfx("rc_backfire")
 				_dmd_anim("perfect", [tr("RC_PERFECT_START")])
 				_bg_flash = 0.6
 				_shake = 0.3
 			"perfect_shift":
-				Audio.sfx("rc_perfect")
-				Audio.sfx("rc_backfire")
+				_sfx("rc_perfect")
+				_sfx("rc_backfire")
 				_dmd_anim("perfect", [tr("RC_PERFECT_SHIFT")])
 				_bg_flash = 0.5
 				_shake = 0.25
 			"shift":
-				Audio.sfx("rc_shift")
+				_sfx("rc_shift")
 				# Upshift: a short exhaust flame + backfire; downshift: tyre smoke
 				# + a chirp (D-112).
 				if int(e[1]) == Sim.Gear.HIGH:
 					_shift_flame_t = 0.16
-					Audio.sfx("rc_backfire")
+					_sfx("rc_backfire")
 				else:
 					_shift_smoke_t = 0.5
 					if sim.spin_t <= 0.0:
-						Audio.sfx("rc_chirp")
+						_sfx("rc_chirp")
 				if sim.spin_t <= 0.0:   # a crash's own downshift shows the crash instead
 					_dmd_anim("shift", [int(e[1]) == Sim.Gear.HIGH, tr("RC_GEAR"), tr("RC_GEAR_H"), tr("RC_GEAR_L")])
 			"near_miss":
 				_bg_flash = 0.4
-				Audio.sfx("rc_near_miss")
+				_sfx("rc_near_miss")
 				_dmd_anim("near_miss", [tr("RC_NEAR_MISS"), "+" + ScoreTable.format_score(5000)])
 			"pass":
 				pass
 			"bump":
-				Audio.sfx("rc_bump")
+				_sfx("rc_bump")
 				_shake = maxf(_shake, 0.25)
 			"police_spawn":
 				_center_message(tr("RC_POLICE"), 1.4)
 				_cops_flash = true   # red/blue flashing text (D-158)
 				_dmd.flash(tr("RC_POLICE"), 1.4, Dmd.RED)
 			"police_ram":
-				Audio.sfx("rc_bump")
+				_sfx("rc_bump")
 				_shake = 0.45
 				_bg_dark = 0.3
 			"police_bumped":   # we ran into the police car (D-198)
-				Audio.sfx("rc_bump")
+				_sfx("rc_bump")
 				_shake = 0.3
 			"police_hits_reset":   # its rams start counting again (D-198)
 				_dmd.flash(tr("RC_RAMS_RESET"), 1.0, Dmd.GREEN)
 			"busted":
 				_center_message(tr("RC_BUSTED"), 2.5)
 				_dmd_anim("fine", [tr("RC_BUSTED"), tr("RC_FINE"), "-" + ScoreTable.format_score(int(e[1]))])
-				Audio.sfx("rc_time_up")
+				_sfx("rc_time_up")
 			"police_escape":
 				_center_message(tr("RC_ESCAPED"), 1.4)
 				_dmd.flash(tr("RC_ESCAPED"), 1.2, Dmd.GREEN)
-				Audio.sfx("rc_perfect")
+				_sfx("rc_perfect")
 			"crash":
 				_shift_armed = true   # the SHIFT hint may show again (D-160)
 				_bg_dark = 0.8
-				Audio.sfx("rc_crash")
+				_sfx("rc_crash")
 				_shake = 0.8
 				_dmd_anim("crash", [tr("RC_CRASH")])
 
@@ -3402,7 +3413,7 @@ func _animate(delta: float) -> void:
 			_shift_flame_t = 0.14
 			_rev_pop_t = randf_range(0.18, 0.4)
 			_rev_popped = falling
-			Audio.sfx("rc_backfire")
+			_sfx("rc_backfire")
 		if not falling:
 			_rev_popped = false
 	_last_rpm = sim.rpm
@@ -3742,7 +3753,7 @@ func _update_hud(delta: float) -> void:
 	UI.set_color(_time_label, UI.RED if low and fmod(sim.time_left, 0.5) < 0.25 else UI.YELLOW)
 	if low and sim.state == Sim.State.RACE and ceili(sim.time_left) != _last_tick:
 		_last_tick = ceili(sim.time_left)
-		Audio.sfx("rc_tick")
+		_sfx("rc_tick")
 	_score_label.text = ScoreTable.format_score(sim.score)
 	_stage_label.text = tr("RC_FINISH") if sim.finished else tr("RC_STAGE") % (sim.checkpoints + 1)
 	_speed_label.text = str(sim.speed_mph())
@@ -4493,7 +4504,7 @@ func _update_audio() -> void:
 	var squeal := sim.drifting or (sim.state == Sim.State.OVER and sim.v > 3.0) 		or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
 	_skid.volume_db = lerpf(_skid.volume_db, -10.0 if squeal else -60.0, 0.2)
 	# D-235: the attract demo (and the menus over it) is music only.
-	if _phase in ["attract", "gfx", "stage", "select"]:   # D-236: car select too
+	if _phase in QUIET_PHASES:   # D-236: car select too; D-302: every menu
 		for pl in [_engine, _engine_hi, _wind, _skid, _siren, _horn] + _passers:
 			if pl != null:
 				(pl as AudioStreamPlayer).volume_db = -80.0

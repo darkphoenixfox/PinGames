@@ -3048,3 +3048,13 @@
 - **The run's music:** the race carries the chosen song on and it loops for the whole run. This replaces D-226's one song per two stages with crossfades at the checkpoints.
 - **Dev:** `--rc-radio` opens the radio straight away.
 - **Status:** Accepted
+
+### D-302 — No sound effects on attract or selection screens
+- **Date:** 2026-11-24
+- **Decision (director):** attract and the selection screens are music only, with no sound effects.
+- **How:** every sound effect in Turbo Run and Tilt Breaker goes through the game's `_sfx()`, which drops it while `_phase` is in `QUIET_PHASES`:
+  - Turbo Run: attract, players, gfx, stage, select, radio;
+  - Tilt Breaker: attract, players, select.
+- Turbo Run's engine, wind, skid, siren, horn and passer loops were already silenced on its menus (D-235, D-236). They now use the same list, which adds the 1/2-player and radio screens.
+- The race countdown, Tilt Breaker's intro and everything after keep their sounds. (Sky Striker has no sound effects yet.)
+- **Status:** Accepted
