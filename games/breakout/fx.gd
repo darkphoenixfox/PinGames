@@ -147,6 +147,88 @@ static func make_cube(radius: float, texture: Texture2D, edge_color: Color) -> N
 	return root
 
 
+## D-335: the boss body: an icosahedron (circumradius `radius`) of see-through
+## circuit panels (one random crop per face) with glowing edges, so the eye
+## inside shows.
+static func make_icosahedron(radius: float, texture: Texture2D, edge_color: Color, alpha: float = 0.5) -> Node3D:
+	var root := Node3D.new()
+	root.name = "Icosahedron"
+	var phi := (1.0 + sqrt(5.0)) * 0.5
+	var raw := []
+	for a in [-1.0, 1.0]:
+		for b in [-phi, phi]:
+			raw.append(Vector3(0, a, b))
+			raw.append(Vector3(a, b, 0))
+			raw.append(Vector3(b, 0, a))
+	var v := []
+	for p in raw:
+		v.append((p as Vector3).normalized() * radius)
+	var edge := INF
+	for i in v.size():
+		for j in range(i + 1, v.size()):
+			edge = minf(edge, (v[i] as Vector3).distance_to(v[j]))
+	var near := func(a: Vector3, b: Vector3) -> bool: return absf(a.distance_to(b) - edge) < edge * 0.01
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = texture
+	m.albedo_color = Color(1, 1, 1, alpha)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	m.emission_enabled = true
+	m.emission_texture = texture
+	m.emission_energy_multiplier = 1.2
+	m.roughness = 0.4
+	m.metallic = 0.3
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var crop := 96.0 / 512.0
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in v.size():
+		for j in range(i + 1, v.size()):
+			if not near.call(v[i], v[j]):
+				continue
+			for k in range(j + 1, v.size()):
+				if not (near.call(v[i], v[k]) and near.call(v[j], v[k])):
+					continue
+				var a: Vector3 = v[i]
+				var b: Vector3 = v[j]
+				var c: Vector3 = v[k]
+				var n := (b - a).cross(c - a).normalized()
+				if n.dot(a + b + c) < 0.0:   # outwards
+					var t := b
+					b = c
+					c = t
+					n = -n
+				var off := Vector2(randi() % 410, randi() % 410) / 512.0
+				var uvs := [off + Vector2(0.0, 1.0) * crop, off + Vector2(0.5, 0.0) * crop, off + Vector2(1.0, 1.0) * crop]
+				var pts := [a, b, c]
+				for q in 3:
+					st.set_normal(n)
+					st.set_uv(uvs[q])
+					st.add_vertex(pts[q])
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = m
+	mi.name = "Faces"
+	root.add_child(mi)
+	var lines := ImmediateMesh.new()
+	lines.surface_begin(Mesh.PRIMITIVE_LINES)
+	for i in v.size():
+		for j in range(i + 1, v.size()):
+			if near.call(v[i], v[j]):
+				lines.surface_add_vertex(v[i] * 1.01)
+				lines.surface_add_vertex(v[j] * 1.01)
+	lines.surface_end()
+	var lm := StandardMaterial3D.new()
+	lm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	lm.albedo_color = edge_color * 2.5
+	var li := MeshInstance3D.new()
+	li.mesh = lines
+	li.material_override = lm
+	li.name = "Edges"
+	root.add_child(li)
+	return root
+
+
 ## D-331: the Homing Missile: a thin metal rocket, nose along -Z, a coloured
 ## band behind the nose, four tail fins and a particle thruster (world-space
 ## sparks and smoke that trail behind it). Call `restart()` on the "Thruster"

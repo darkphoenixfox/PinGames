@@ -3350,3 +3350,23 @@
 - **Audit:** a new test (`_trapped_bricks`) checks every level, 1-player and 2-player. From the open space below (and above, once a way opens) the ball passes through empty cells (an empty cell, 0.75×0.4 m, is wider and taller than the 0.32 m ball; the 0.05 m gaps between bricks are not), and any destructible brick it touches breaks and opens its cell, repeated until nothing changes. Metal never breaks. Any destructible brick left is reported. Only level 6 and its 2-player version failed.
 - **Fix:** the metal brick under the heart is now an armoured yellow brick (`y`), in both versions. The metal crown (top and sides) stays; you break in from below.
 - **Status:** Accepted
+
+### D-335 — Tilt Breaker: the level-10 boss
+- **Date:** 2026-11-24
+- **Decision (director):** a boss on level 10: a spinning icosahedron with a red "HAL"-style eye sphere in the middle, about 5 times a cube enemy's size. It moves around the top of the level (bricks moved as needed) and never comes down to the player. Every 10–15 s it charges (red particles pouring into the eye) and shoots a slow ray at the player's position. The ray ignores bricks; only the plasma ball (or a Bounce ball) stops it.
+- **Body:** `Fx.make_icosahedron`: see-through red circuit panels (45% alpha, random crops) with glowing edges, 1.35 m circumradius (2.7 m across, about 5 cube widths), spinning. The eye (`shaders/hal_eye.gdshader`) is a sphere inside: white-hot pinpoint, red glow, dark lens, silver rim; it brightens while charging and flashes when hit. A red light glows from it.
+- **Movement:** a slow Lissajous over the top of the field; its centre never goes below y -4.85 (bottom edge above the bricks) or above -5.3 (top edge clear of the rail); side to side within the walls. Faster on higher tiers like enemies.
+- **Attack:** a timer of 10–15 s. The last 1.5 s are the charge (`boss_charge` event: charge particles into the eye, `tb_charge3`). Then a ray (red bolt, 1.1 m long) flies at 3.4 m/s at where the ship is (2P: alternating ships), straight through bricks. A plasma ball or Bounce ball touching it destroys it; touching a ship (catch width, not while invulnerable) destroys the ship (a lost charge). It only fires in play.
+- **Fighting it:** 30 HP. The ball bounces off it (1 damage); a charged bolt spends itself on it (its level's hits); a wave shot 2 (once per shot); a missile blast 3 (missiles home on it); the ion beam 3 if it's in the column. Nuclear doesn't touch it. A health bar runs along the top of the play field. Destroyed: 5000 points, a chain of explosions, "BOSS DESTROYED!".
+- **Level end:** the level is clear when its bricks are gone and the boss is destroyed, whichever comes last. Enemies keep coming during the fight.
+- **Level 10:** rewritten (1P and 2P) with the top six rows empty for the boss and the hive in the bottom four rows (`levels/level_10.txt`, `level2p_10.txt`); the D-334 reachability test passes. Every 10th level (they loop) has the boss. The intro DMD warns "WARNING: BOSS".
+- **Tests:** no boss on level 1; it never goes below its limit; it charges and fires; the ray passes the bricks and costs a charge; the ball stops a ray; an empty level waits for the boss and clears when it dies.
+- **Dev:** `--tb-level=10 --tb-boss-fire=N` (serves and fires N s into play).
+- **Status:** Accepted
+
+### D-336 — Tilt Breaker: start-level select
+- **Date:** 2026-11-24
+- **Decision (director):** a level select option at the start of the game, after 1 PLAYER / 2 PLAYERS.
+- New phase `level` between the players choice (or attract, where 2 players isn't possible) and the difficulty: "START LEVEL", a big "< n >" (1–10, wrapping) chosen with the flippers, "BOSS LEVEL" under 10, LAUNCH to go on. The DMD shows "LEVEL n". Idle for 30 s returns to attract, like the difficulty screen. It defaults to 1 each game.
+- Choosing a level builds its rack (and the boss on 10), with that level's enemy tier; the intro drops its bricks in as usual.
+- **Status:** Accepted

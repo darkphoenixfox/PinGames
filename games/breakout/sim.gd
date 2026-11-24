@@ -114,6 +114,24 @@ const POWERUP_FALL := 2.2
 const POWERUP_R := 0.28
 const POWERUP_REACH_UP := 0.55       # D-329: the catch hitbox reaches this far above the capsule
 const POWERUP_KINDS := ["T", "P", "B", "I", "W", "H", "L", "S", "K", "U", "N"]
+## D-335: the boss of level 10 (every 10th level): an icosahedron with a red
+## eye that roams the top of the field, never lower than BOSS_Y.y, and every
+## 10-15 s charges (BOSS_CHARGE s) and fires a slow ray at the ship. The ray
+## passes through bricks; only a plasma ball stops it. The level is clear when
+## its bricks are gone AND the boss is destroyed.
+const BOSS_EVERY := 10
+const BOSS_R := 1.2                  # hitbox (about 5 cubes across)
+const BOSS_HP := 30
+const BOSS_POINTS := 5000
+const BOSS_Y := Vector2(-5.3, -4.85)    # its centre's top and bottom limits (its top edge clear of the rail)
+const BOSS_SPEED := 0.35             # rad/s along its Lissajous path
+const BOSS_FIRE := Vector2(10.0, 15.0)
+const BOSS_CHARGE := 1.5
+const RAY_SPEED := 3.4               # m/s: slow enough to see coming
+const RAY_LEN := 1.1                 # m, head to tail
+const RAY_R := 0.16                  # half its thickness
+const BOSS_HITS := {"ball": 1, "missile": 3, "ion": 3, "wave": 2}
+
 ## D-327: two slots. Blaster upgrades (atom capsules) replace the plasma cannon:
 ## they charge to level 1 only (one BLAST_CHARGE_TIME) and each shot uses
 ## UPGRADE_COST of the 3-cell power bar. Paddle upgrades (pill capsules) change
@@ -203,7 +221,15 @@ var _next_shot_id := 1
 var shield_active := false
 var _next_powerup_id := 1
 var _broken_count := 0
-var _since_drop := 0   # D-333: bricks destroyed since the last capsule drop
+var _since_drop := 0
+## D-335: boss state (boss_hp 0 = no boss), its rays {id, pos, vel}.
+var boss_hp := 0
+var boss_pos := Vector2.ZERO
+var boss_t := 0.0
+var boss_fire_in := 0.0
+var boss_charging := false
+var rays: Array = []
+var _boss_aim := 0   # 2P: the ship the next ray goes for (alternates)   # D-333: bricks destroyed since the last capsule drop
 var _time := 0.0
 var _paddle_hist: Array = []  # [time, x], newest last
 var _held_time := 0.0
@@ -333,6 +359,9 @@ func step_two(dt: float, a: Array, b: Array) -> void:
 	_update_shots(dt)   # D-327
 	if state == State.OVER or state == State.LEVEL_CLEAR:
 		return
+	_update_boss(dt)   # D-335
+	if state == State.OVER:
+		return
 	_update_enemies(dt)
 	if state == State.OVER:
 		return
@@ -368,6 +397,7 @@ func set_difficulty(diff: String, operator_balls: int) -> void:
 
 ## Builds the bricks of the current level from its text file.
 func build_rack() -> void:
+	_setup_boss()   # D-335
 	bricks.clear()
 	var layout := level_layout(level, two_player)
 	var w := field.size.x / cols
@@ -485,6 +515,9 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 	_move_paddle(dt, left, right, dash)
 	_update_shots(dt)   # D-327
 	if state == State.OVER or state == State.LEVEL_CLEAR:
+		return
+	_update_boss(dt)   # D-335
+	if state == State.OVER:
 		return
 	_update_enemies(dt)
 	if state == State.OVER:
@@ -623,6 +656,13 @@ func _update_power_and_blast(dt: float, both: bool) -> void:
 		for k in n:
 			pos += dir * travel / n
 			var rect := Rect2(pos - Vector2(w, BLAST_H) * 0.5, Vector2(w, BLAST_H))
+			# D-335: a bolt that reaches the boss spends itself on it.
+			if boss_hp > 0 and not BP.collide_circle_rect(boss_pos, BOSS_R, rect).is_empty():
+				var dmg := int(b.hits_left)
+				b.hits_left = 0
+				if _hurt_boss(dmg):
+					return
+				break
 			# Each brick/enemy touched uses one hit; the blast pierces until spent.
 			var foe := _enemy_hit_by_rect(rect)
 			if foe != -1:
@@ -696,6 +736,9 @@ func _fire(lvl: int) -> void:
 
 func _ion_beam(x: float) -> void:
 	var beam := Rect2(x - ION_BEAM_W * 0.5, field.position.y, ION_BEAM_W, paddle_y - field.position.y)
+	if boss_hp > 0 and not BP.collide_circle_rect(boss_pos, BOSS_R, beam).is_empty():
+		if _hurt_boss(int(BOSS_HITS["ion"])):   # D-335
+			return
 	for k in range(enemies.size() - 1, -1, -1):
 		if enemies[k].state != "wormhole" and not BP.collide_circle_rect(enemies[k].pos, ENEMY_R, beam).is_empty():
 			_destroy_enemy(k)
@@ -758,7 +801,7 @@ func _damage_brick(i: int) -> bool:
 	if not _nuking and (due or _since_drop > DROP_PITY) and bricks_alive() > 0:
 		_since_drop = 0
 		spawn_powerup(random_powerup_kind(), b.rect.get_center())
-	if bricks_alive() == 0:
+	if bricks_alive() == 0 and boss_hp <= 0:   # D-335: and the boss is down
 		score += RACK_BONUS
 		# Level complete (D-068): every enemy left explodes; play pauses until
 		# the game runs its outro and calls next_level().
@@ -904,6 +947,20 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 		_gain_power(_last_hitter, BRICK_HIT_POWER)   # D-330
 		if _damage_brick(best):
 			return BALL_STOP
+	# D-335: the boss: the plasma bounces off it and hurts it; it stops rays.
+	if boss_hp > 0 and pos.distance_to(boss_pos) < BOSS_R + BALL_R:
+		var bn := (pos - boss_pos).normalized()
+		if vel.dot(bn) < 0.0:
+			vel = BP.reflect(vel, bn)
+		pos = boss_pos + bn * (BOSS_R + BALL_R + 0.01)
+		b.pos = pos
+		b.vel = vel
+		if _hurt_boss(int(BOSS_HITS["ball"])):
+			return BALL_STOP
+	for k in range(rays.size() - 1, -1, -1):
+		if _ray_touches(rays[k], pos, BALL_R):
+			events.append(["ray_blocked", rays[k].pos])
+			rays.remove_at(k)
 	# Enemies: the plasma destroys them and rebounds.
 	for k in enemies.size():
 		var en: Dictionary = enemies[k]
@@ -1084,6 +1141,118 @@ func _end_padup() -> void:
 	shield_active = false
 
 
+# --- the boss (D-335) ------------------------------------------------------------------
+func is_boss_level() -> bool:
+	return level % BOSS_EVERY == 0
+
+
+func _setup_boss() -> void:
+	rays.clear()
+	boss_charging = false
+	boss_hp = BOSS_HP if is_boss_level() else 0
+	boss_t = 0.0
+	boss_pos = _boss_path(0.0)
+	boss_fire_in = randf_range(BOSS_FIRE.x, BOSS_FIRE.y)
+
+
+## A slow Lissajous over the top of the field, never below BOSS_Y.y.
+func _boss_path(t: float) -> Vector2:
+	var span := field.size.x * 0.5 - BOSS_R - 0.45   # its drawn edge (1.35 m) clear of the walls
+	var mid := (BOSS_Y.x + BOSS_Y.y) * 0.5
+	var amp := (BOSS_Y.y - BOSS_Y.x) * 0.5
+	return Vector2(sin(t * BOSS_SPEED) * span, mid + sin(t * BOSS_SPEED * 2.3 + 1.0) * amp)
+
+
+func _update_boss(dt: float) -> void:
+	# Rays fly on, through the bricks, until a ball, a ship or the edge stops them.
+	for k in range(rays.size() - 1, -1, -1):
+		var r: Dictionary = rays[k]
+		r.pos = Vector2(r.pos) + Vector2(r.vel) * dt
+		var blocked := _ray_touches(r, ball_pos, BALL_R) and state == State.PLAY
+		for e in extra_balls:
+			blocked = blocked or _ray_touches(r, e.pos, BALL_R)
+		if blocked:
+			events.append(["ray_blocked", r.pos])
+			rays.remove_at(k)
+			continue
+		var hit_ship := -1
+		for ship in (2 if two_player else 1):
+			_use(ship)
+			if ship_invulnerable <= 0.0 and not BP.collide_circle_rect(r.pos, RAY_R, catch_rect()).is_empty():
+				hit_ship = ship
+				break
+		if hit_ship >= 0:
+			rays.remove_at(k)
+			events.append(["ray_hit", r.pos])
+			_destroy_ship()
+			_use(0)
+			if state == State.OVER:
+				return
+			continue
+		_use(0)
+		if not field.grow(1.0).has_point(r.pos):
+			rays.remove_at(k)
+	if boss_hp <= 0:
+		return
+	boss_t += dt * enemy_speed_mult()
+	boss_pos = _boss_path(boss_t)
+	if state != State.PLAY:
+		return
+	boss_fire_in -= dt
+	if not boss_charging and boss_fire_in <= BOSS_CHARGE:
+		boss_charging = true
+		events.append(["boss_charge", null])
+	if boss_fire_in <= 0.0:
+		boss_charging = false
+		boss_fire_in = randf_range(BOSS_FIRE.x, BOSS_FIRE.y)
+		var target_x: float = paddle_x
+		var target_y: float = paddle_y
+		if two_player:
+			_boss_aim = 1 - _boss_aim
+			target_x = player_get(_boss_aim, "paddle_x")
+			target_y = player_get(_boss_aim, "paddle_y")
+		var dir := (Vector2(target_x, target_y) - boss_pos).normalized()
+		var start := boss_pos + dir * (BOSS_R * 0.6)
+		var id := _next_shot_id
+		_next_shot_id += 1
+		rays.append({"id": id, "pos": start, "vel": dir * RAY_SPEED})
+		events.append(["boss_fire", start])
+
+
+## Whether a ray (its head and the RAY_LEN behind it) touches a circle.
+func _ray_touches(r: Dictionary, c: Vector2, rad: float) -> bool:
+	var head: Vector2 = r.pos
+	var tail: Vector2 = head - Vector2(r.vel).normalized() * RAY_LEN
+	return Geometry2D.get_closest_point_to_segment(c, tail, head).distance_to(c) < rad + RAY_R
+
+
+## Damages the boss; true if that cleared the level (its bricks were already gone).
+func _hurt_boss(n: int) -> bool:
+	if boss_hp <= 0:
+		return false
+	boss_hp = maxi(0, boss_hp - n)
+	events.append(["boss_hit", boss_hp])
+	if boss_hp > 0:
+		return false
+	score += BOSS_POINTS
+	rays.clear()
+	boss_charging = false
+	events.append(["boss_dead", boss_pos])
+	if bricks_alive() == 0:
+		score += RACK_BONUS
+		while not enemies.is_empty():
+			_destroy_enemy(0, false)
+		blasts.clear()
+		_clear_shots()
+		powerups.clear()
+		extra_balls.clear()
+		blast_charge = 0.0
+		state = State.LEVEL_CLEAR
+		events.append(["rack_clear", level])
+		return true
+	return false
+
+
 # --- wave beam and homing missiles (D-327) --------------------------------------------
 func _clear_shots() -> void:
 	waves.clear()
@@ -1106,6 +1275,10 @@ func _update_shots(dt: float) -> void:
 				field.position.x + 0.2, field.end.x - 0.2), w.pos.y - travel / n)
 			w.pos = p
 			var rect := Rect2(p - WAVE_SIZE * 0.5, WAVE_SIZE)
+			if boss_hp > 0 and not w.hit.has("boss") and not BP.collide_circle_rect(boss_pos, BOSS_R, rect).is_empty():
+				w.hit["boss"] = true   # D-335
+				if _hurt_boss(int(BOSS_HITS["wave"])):
+					return
 			var foe := _enemy_hit_by_rect(rect)
 			while foe != -1:
 				_destroy_enemy(foe)
@@ -1133,7 +1306,8 @@ func _update_shots(dt: float) -> void:
 		var p: Vector2 = m.pos + vel * dt
 		m.pos = p
 		var boom := not field.grow(0.5).has_point(p) or (tp != null and p.distance_to(tp) < 0.35) \
-			or _enemy_hit_by_rect(Rect2(p - Vector2.ONE * MISSILE_R, Vector2.ONE * MISSILE_R * 2.0)) != -1
+			or _enemy_hit_by_rect(Rect2(p - Vector2.ONE * MISSILE_R, Vector2.ONE * MISSILE_R * 2.0)) != -1 \
+			or (boss_hp > 0 and p.distance_to(boss_pos) < BOSS_R + MISSILE_R)
 		if not boom:
 			for b in bricks:
 				if b.alive and not BP.collide_circle_rect(p, MISSILE_R, b.rect).is_empty():
@@ -1149,6 +1323,9 @@ func _update_shots(dt: float) -> void:
 func _missile_target(from: Vector2) -> Array:
 	var best := []
 	var best_d := INF
+	if boss_hp > 0:   # D-335: the boss first, if it's nearest
+		best = ["boss", 0]
+		best_d = from.distance_to(boss_pos) - BOSS_R
 	for en in enemies:
 		if en.state != "wormhole" and from.distance_to(en.pos) < best_d:
 			best_d = from.distance_to(en.pos)
@@ -1164,6 +1341,8 @@ func _missile_target(from: Vector2) -> Array:
 func _target_pos(t: Array) -> Variant:
 	if t.is_empty():
 		return null
+	if t[0] == "boss":
+		return boss_pos if boss_hp > 0 else null
 	if t[0] == "enemy":
 		for en in enemies:
 			if en.id == t[1] and en.state != "wormhole":
@@ -1179,6 +1358,9 @@ func _missile_blast(p: Vector2) -> bool:
 	var size := Vector2(MISSILE_AREA.x * _brick_w(), MISSILE_AREA.y * BRICK_H)
 	var area := Rect2(p - size * 0.5, size)
 	events.append(["missile_blast", [p, size]])
+	if boss_hp > 0 and not BP.collide_circle_rect(boss_pos, BOSS_R, area).is_empty():
+		if _hurt_boss(int(BOSS_HITS["missile"])):   # D-335
+			return true
 	for k in range(enemies.size() - 1, -1, -1):
 		if enemies[k].state != "wormhole" and not BP.collide_circle_rect(enemies[k].pos, ENEMY_R, area).is_empty():
 			_destroy_enemy(k)

@@ -374,6 +374,54 @@ func test_breakout_difficulty(Sim) -> void:
 	cube_low = ag.enemies[1].pos.y > ag.enemies[0].pos.y
 	check(kinds_ok and dist[1] < dist[0] * 0.85 and cube_low,
 		"cube enemy: nearer the ship (%.0f vs %.0f) and lower than a tetra" % [dist[1], dist[0]])
+	# D-335: the level-10 boss.
+	var bs = Sim.new()
+	bs.setup(3)
+	var none_on_1: bool = bs.boss_hp == 0
+	bs.level = 10
+	bs.build_rack()
+	var b_low := -INF
+	for i in 600:
+		bs.boss_t += 0.1
+		b_low = maxf(b_low, bs._boss_path(bs.boss_t).y)
+	var stays_up: bool = b_low <= Sim.BOSS_Y.y + 0.001
+	bs.step(1.0 / 60.0, false, false, true, 0)   # serve
+	bs.freeze_ball = true
+	bs.ball_pos = Vector2(-3.5, 3.0)   # out of the ray's way
+	bs.boss_fire_in = 0.05
+	var b_fired := false
+	for i in 10:
+		bs.step(1.0 / 60.0, false, false, false, 0)
+		for ev in bs.events:
+			b_fired = b_fired or ev[0] == "boss_fire"
+	var b_through: bool = bs.rays.size() == 1
+	var lives_b: int = bs.balls_left
+	for i in 400:   # it flies through the bricks onto the ship
+		bs.step(1.0 / 60.0, false, false, false, 0)
+		if bs.rays.is_empty():
+			break
+	var ship_hit: bool = bs.balls_left == lives_b - 1
+	# The ball stops a ray.
+	var bl = Sim.new()
+	bl.setup(3)
+	bl.level = 10
+	bl.build_rack()
+	bl.step(1.0 / 60.0, false, false, true, 0)
+	bl.freeze_ball = true
+	bl.ball_pos = Vector2(0.0, 2.0)
+	bl.rays.append({"id": 999, "pos": Vector2(0.0, 1.0), "vel": Vector2(0.0, Sim.RAY_SPEED)})
+	for i in 30:
+		bl.step(1.0 / 60.0, false, false, false, 0)
+	var b_blocked: bool = bl.rays.is_empty() and bl.balls_left == 3
+	# No level clear while the boss lives; its death clears an empty level.
+	for j in bl.bricks.size():
+		if bl.bricks[j].alive and not bl.bricks[j].metal:
+			bl.bricks[j].hp = 1
+			bl._damage_brick(j)
+	var b_waits: bool = bl.state != Sim.State.LEVEL_CLEAR
+	bl._hurt_boss(Sim.BOSS_HP)
+	check(none_on_1 and stays_up and b_fired and b_through and ship_hit and b_blocked and b_waits and bl.state == Sim.State.LEVEL_CLEAR,
+		"boss: level 10 only, stays up, fires through bricks, hits the ship, the ball stops rays, level ends with it")
 	# D-333: never more than 15 bricks in a row without a drop.
 	var pt = Sim.new()
 	pt.setup(3)

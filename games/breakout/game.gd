@@ -329,7 +329,16 @@ func on_action(action: StringName, pressed: bool) -> void:
 			if CabinetInput.two_player_possible():
 				_enter_players()   # D-286: 1 PLAYER / 2 PLAYERS first
 			else:
-				_enter_select()
+				_enter_level()   # D-336
+		return
+	if _phase == "level":   # D-336: the starting level
+		match action:
+			&"flip_l", &"magna_l":
+				_move_level(-1)
+			&"flip_r", &"magna_r":
+				_move_level(1)
+			&"launch", &"start":
+				_confirm_level()
 		return
 	if _phase == "players":
 		match action:
@@ -387,6 +396,12 @@ func _process(delta: float) -> void:
 			_select_ui.queue_free()
 			_enter_attract()
 		return
+	if _phase == "level":   # D-336
+		_animate(delta)
+		if _phase_t > SELECT_IDLE_SECONDS:
+			_level_ui.queue_free()
+			_enter_attract()
+		return
 	if _phase == "intro":
 		_animate(delta)
 		_intro()
@@ -417,6 +432,10 @@ func _process(delta: float) -> void:
 		set_meta("dev_pu_clear", true)
 		_on_debug_action(&"powerup")
 		_on_debug_action(&"clear_level")
+	if Config.cli.has("tb-boss-fire") and _phase == "play" and not has_meta("dev_boss_fire"):   # dev: the boss fires N s in (D-335)
+		set_meta("dev_boss_fire", true)
+		sim.boss_fire_in = float(str(Config.cli["tb-boss-fire"]))
+		_launch = true   # it only fires in play
 	if Config.cli.has("tb-give") and _phase == "play" and not has_meta("dev_give"):   # dev: start with power-ups, e.g. H,K (D-327)
 		set_meta("dev_give", true)
 		for k in str(Config.cli["tb-give"]).split(","):
@@ -465,7 +484,7 @@ func _process(delta: float) -> void:
 ## menu sounds play (choosing, confirming, a blocked move), never the gameplay
 ## behind them. Every effect in this game goes through here.
 const MENU_SFX := ["start", "select", "move", "error", "rc_shift"]
-const QUIET_PHASES := ["attract", "players", "select"]
+const QUIET_PHASES := ["attract", "players", "select", "level"]
 
 
 func _sfx(sound_name: String) -> AudioStreamPlayer:
@@ -550,6 +569,38 @@ func _handle_events() -> void:
 				_sfx("tb_fire")
 				_recoil = 0.6
 				_lights.pulse(BackglassLights.SHOTS, 0.5, 10.0)
+			"boss_charge":   # D-335: red sparks pour into the eye
+				_sfx("tb_charge3")
+				_boss_charge_t = Sim.BOSS_CHARGE
+				if _boss_nodes.has("charge"):
+					(_boss_nodes.charge as CPUParticles3D).restart()
+					(_boss_nodes.charge as CPUParticles3D).emitting = true
+			"boss_fire":
+				_sfx("tb_ion")
+				_boss_charge_t = 0.0
+				_lights.pulse(BackglassLights.SHOTS, 0.8, 12.0)
+				if _boss_nodes.has("charge"):
+					(_boss_nodes.charge as CPUParticles3D).emitting = false
+			"boss_hit":
+				_sfx("tb_armour")
+				_boss_flash = 1.0
+				_lights.pulse(BackglassLights.IMPACTS, 0.4, 14.0)
+			"boss_dead":
+				var bp: Vector2 = e[1]
+				_sfx("tb_explode_big")
+				_lights.pulse(BackglassLights.ALL, 2.0, 8.0)
+				for q in 7:
+					var off := Vector2.from_angle(q * 0.9) * (0.4 + 0.15 * q)
+					_explode_brick(Vector3(bp.x + off.x, 0.4, bp.y + off.y),
+						[Color(1.0, 0.2, 0.1), Color(1.0, 0.7, 0.2), Color(0.9, 0.3, 1.0)][q % 3], 2.0 + 0.3 * q)
+				Dmd.flash(tr("TB_BOSS_DOWN"), 2.2, Dmd.RED)
+				_free_boss_nodes()
+			"ray_blocked":
+				var rb: Vector2 = e[1]
+				_sfx("tb_shield_break")
+				_explode_brick(Vector3(rb.x, 0.3, rb.y), Color(1.0, 0.25, 0.2), 1.1)
+			"ray_hit":
+				_sfx("tb_ion")
 			"missile_blast":   # D-327: the 3x3-brick blast
 				var mp: Vector2 = e[1][0]
 				_sfx("tb_explode")
@@ -677,6 +728,129 @@ func _pickup_popup(text: String, at: Vector2, col: Color) -> void:
 	tw.tween_property(l, "modulate:a", 0.0, 0.7).set_delay(0.4)
 	tw.tween_property(l, "outline_modulate:a", 0.0, 0.7).set_delay(0.4)
 	tw.chain().tween_callback(l.queue_free)
+
+
+## D-335: the boss (icosahedron, HAL eye, charge sparks), its rays and its
+## health bar at the top of the TABLE.
+const HAL_SHADER := preload("res://games/breakout/shaders/hal_eye.gdshader")
+const BOSS_VIS_R := 1.35   # the icosahedron's circumradius (hitbox: Sim.BOSS_R)
+var _boss_nodes := {}
+var _boss_flash := 0.0
+var _boss_charge_t := 0.0
+var _ray_nodes := {}
+
+
+func _build_boss_nodes() -> void:
+	var root := Node3D.new()
+	var body := Fx.make_icosahedron(BOSS_VIS_R, load("res://assets/textures/breakout/circuit_red.png"),
+		Color(1.0, 0.25, 0.3), 0.45)
+	root.add_child(body)
+	var eye := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.5
+	sm.height = 1.0
+	eye.mesh = sm
+	var em := ShaderMaterial.new()
+	em.shader = HAL_SHADER
+	eye.material_override = em
+	root.add_child(eye)
+	var glow := OmniLight3D.new()
+	glow.light_color = Color(1.0, 0.15, 0.1)
+	glow.omni_range = 3.0
+	glow.light_energy = 1.5
+	root.add_child(glow)
+	var charge := Fx.make_charge_particles(1.9, Color(1.0, 0.15, 0.1))
+	charge.amount = 90
+	charge.position = Vector3(0.0, 0.6, 0.0)
+	root.add_child(charge)
+	_root.add_child(root)
+	# Health bar along the top of the TABLE.
+	var bar := Control.new()
+	bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	bar.offset_top = 18
+	bar.offset_bottom = 62
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var back := ColorRect.new()
+	back.color = Color(0.15, 0.0, 0.02, 0.8)
+	back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Over the play field only (the single screen's TABLE is wider): the camera
+	# shows 16 units over the TABLE's height.
+	var base := Vector2(Screens.table_base())
+	var half_px := sim.field.size.x * 0.5 * base.y / 16.0
+	back.offset_left = maxf(150.0, base.x * 0.5 - half_px + 110.0)
+	back.offset_right = -maxf(40.0, base.x * 0.5 - half_px)
+	back.offset_top = 10
+	back.offset_bottom = -10
+	bar.add_child(back)
+	var fill := ColorRect.new()
+	fill.color = Color(1.0, 0.15, 0.2)
+	fill.position = Vector2(2, 2)
+	back.add_child(fill)
+	var name_l := UI.label(tr("TB_BOSS"), 36, UI.RED, HORIZONTAL_ALIGNMENT_LEFT)
+	name_l.position = Vector2(back.offset_left - 120.0, 2)
+	bar.add_child(name_l)
+	add_to_table(bar)
+	_boss_nodes = {"root": root, "body": body, "eye": em, "light": glow, "charge": charge,
+		"bar": bar, "back": back, "fill": fill}
+
+
+func _free_boss_nodes() -> void:
+	if _boss_nodes.is_empty():
+		return
+	(_boss_nodes.root as Node).queue_free()
+	(_boss_nodes.bar as Node).queue_free()
+	_boss_nodes = {}
+
+
+func _animate_boss(delta: float) -> void:
+	var live := sim.boss_hp > 0 and _phase in ["play", "intro", "outro"]
+	if live and _boss_nodes.is_empty():
+		_build_boss_nodes()
+	elif not live and not _boss_nodes.is_empty():
+		_free_boss_nodes()
+	if not _boss_nodes.is_empty():
+		var p: Vector2 = sim.boss_pos
+		(_boss_nodes.root as Node3D).position = Vector3(p.x, 0.4, p.y)
+		(_boss_nodes.body as Node3D).rotate(Vector3(0.3, 1.0, 0.45).normalized(), delta * 0.8)
+		_boss_flash = maxf(0.0, _boss_flash - delta * 4.0)
+		_boss_charge_t = maxf(0.0, _boss_charge_t - delta)
+		var charge := 1.0 - _boss_charge_t / Sim.BOSS_CHARGE if _boss_charge_t > 0.0 else 0.0
+		(_boss_nodes.eye as ShaderMaterial).set_shader_parameter("glow", charge * 1.5 + _boss_flash)
+		(_boss_nodes.light as OmniLight3D).light_energy = 1.5 + charge * 4.0 + _boss_flash * 3.0
+		if _boss_charge_t <= 0.0 and (_boss_nodes.charge as CPUParticles3D).emitting:
+			(_boss_nodes.charge as CPUParticles3D).emitting = false
+		var back: ColorRect = _boss_nodes.back
+		var fill: ColorRect = _boss_nodes.fill
+		fill.size = Vector2(maxf(0.0, (back.size.x - 4.0) * float(sim.boss_hp) / Sim.BOSS_HP), maxf(0.0, back.size.y - 4.0))
+		fill.color = Color(1.0, 0.15, 0.2) if _boss_flash < 0.5 else Color.WHITE
+	# Rays: a red bolt each, along its flight.
+	var seen := {}
+	for r in sim.rays:
+		seen[r.id] = true
+		if not _ray_nodes.has(r.id):
+			var m := MeshInstance3D.new()
+			var plane := PlaneMesh.new()
+			plane.size = Vector2(Sim.RAY_R * 4.0, Sim.RAY_LEN * 1.5)
+			m.mesh = plane
+			var mat := ShaderMaterial.new()
+			mat.shader = BLAST_SHADER
+			mat.set_shader_parameter("body_color", Color(1.0, 0.12, 0.08))
+			mat.set_shader_parameter("edge_color", Color(1.0, 0.5, 0.2))
+			mat.set_shader_parameter("intensity", 3.5)
+			m.material_override = mat
+			m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_root.add_child(m)
+			_ray_nodes[r.id] = m
+		var rp: Vector2 = r.pos
+		var rv: Vector2 = r.vel
+		var mid := rp - rv.normalized() * Sim.RAY_LEN * 0.5
+		var node: MeshInstance3D = _ray_nodes[r.id]
+		node.position = Vector3(mid.x, 0.35, mid.y)
+		node.rotation.y = -atan2(rv.x, -rv.y)
+	for id in _ray_nodes.keys():
+		if not seen.has(id):
+			(_ray_nodes[id] as Node).queue_free()
+			_ray_nodes.erase(id)
 
 
 ## D-327: the wave shots and missiles, one node each, kept in step with the sim.
@@ -886,6 +1060,7 @@ func _animate(delta: float) -> void:
 	_animate_enemies(delta)
 	_animate_powerups(delta)
 	_animate_shots(delta)   # D-327
+	_animate_boss(delta)   # D-335
 	_animate_ships(delta)   # D-286: each ship's own visuals
 	# Edge shields (dev: --tb-show-shields keeps them lit mid-ripple for checks)
 	for side in _edge_shields:
@@ -931,7 +1106,7 @@ func _animate_ship(delta: float) -> void:
 	_engines[0].set_thrust(burn if push > 0.0 else 0.0)
 	_engines[1].set_thrust(burn if push < 0.0 else 0.0)
 	# Ship respawn: hidden briefly after being destroyed, then blinks while invulnerable.
-	if _phase == "attract" or _phase == "select" or _phase == "players":
+	if _phase == "attract" or _phase == "select" or _phase == "players" or _phase == "level":
 		_paddle.visible = false
 	elif _phase == "intro":
 		pass  # positioned and shown by _intro()
@@ -993,6 +1168,63 @@ func _animate_ship(delta: float) -> void:
 	_animate_recharge_flash(delta)
 
 
+# --- level select (D-336) ---------------------------------------------------------------
+## After 1 PLAYER / 2 PLAYERS: the level to start on, 1..10 (wrapping), with
+## the flippers; LAUNCH goes on to the difficulty.
+var _level_ui: Control
+var _level_sel := 1
+var _level_num: Label
+var _level_info: Label
+
+
+func _enter_level() -> void:
+	_phase = "level"
+	_phase_t = 0.0
+	if is_instance_valid(_attract_ui):
+		_attract_ui.queue_free()
+	_sfx("select")
+	Dmd.play(Callable(), 0.0)
+	_level_sel = 1
+	_level_ui = UI.vstack(50)
+	_level_ui.add_child(UI.styled_label(tr("TB_START_LEVEL"), TITLE_FONT, 2))
+	_level_num = UI.label("", 192, UI.YELLOW)
+	_level_ui.add_child(_level_num)
+	_level_info = UI.label("", 48, UI.WHITE)
+	_level_ui.add_child(_level_info)
+	_level_ui.add_child(UI.label(tr("TB_SELECT_HINT"), 36, UI.CYAN))
+	add_to_table(_level_ui)
+	_refresh_level()
+
+
+func _move_level(step: int) -> void:
+	_phase_t = 0.0
+	_level_sel = wrapi(_level_sel + step, 1, Sim.LEVEL_FILES.size() + 1)
+	_sfx("move")
+	_refresh_level()
+
+
+func _refresh_level() -> void:
+	_level_num.text = "< %d >" % _level_sel
+	var boss := _level_sel % Sim.BOSS_EVERY == 0
+	_level_info.text = tr("TB_BOSS_LEVEL") if boss else ""
+	_level_info.add_theme_color_override("font_color", UI.RED)
+	Dmd.show_text(tr("TB_LEVEL") % _level_sel, tr("TB_BOSS_LEVEL") if boss else tr("TB_SELECT_HINT_DMD"),
+		Dmd.YELLOW, Dmd.RED if boss else Dmd.WHITE)
+
+
+func _confirm_level() -> void:
+	if is_instance_valid(_level_ui):
+		_level_ui.queue_free()
+	if _level_sel != sim.level:
+		sim.level = _level_sel
+		sim.build_rack()
+		sim._enemy_timer = Sim.ENEMY_FIRST_SPAWN / (1.0 + Sim.ENEMY_TIER_RATE * sim.enemy_tier())
+		_build_bricks()
+		for n in _brick_nodes:   # the intro drops them in
+			n.visible = false
+	_enter_select()
+
+
 # --- 2 players (D-286) ------------------------------------------------------------------
 func _enter_players() -> void:
 	_phase = "players"
@@ -1028,7 +1260,7 @@ func _confirm_players() -> void:
 		_players_ui.queue_free()
 	if _players_sel == 1:
 		_go_two()
-	_enter_select()
+	_enter_level()   # D-336
 
 
 ## Switches to a 2-player game: player 2's controls, the 2P simulation on the
@@ -1776,6 +2008,8 @@ func _begin_intro() -> void:
 	# Level 1 says GET READY; later levels announce their number (D-068).
 	var title: String = tr("TB_GET_READY") if sim.level == 1 else tr("TB_LEVEL") % sim.level
 	Dmd.show_text(title, tr("TB_GET_READY") if sim.level > 1 else tr("TB_TWO_PLAYERS" if _two else "DMD_PLAYER_1"), Dmd.YELLOW, Dmd.WHITE)
+	if sim.is_boss_level():   # D-335
+		Dmd.show_text(title, tr("TB_BOSS_WARNING"), Dmd.YELLOW, Dmd.RED)
 	_ready_label = UI.styled_label(title, TITLE_FONT, 3)
 	_ready_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_ready_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
