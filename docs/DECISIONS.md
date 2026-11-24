@@ -3179,3 +3179,11 @@
 - It is `MUSIC_ATTRACT` (was the Turbo Run theme, D-308). The 1/2-player, graphics, start-stage and car select screens carry it on. The radio still plays the station being tuned (D-301), and the Turbo Run theme stays radio station 1.
 - Converted to `assets/audio/music/racer/start_your_engines.ogg` (Vorbis q5). Recorded in `assets/CREDITS.md`.
 - **Status:** Accepted
+
+### D-316 — Turbo Run: the slide after a roll-over leaves tyre marks
+- **Date:** 2026-11-24
+- **Decision (director):** when the car rolls over in a crash, its wheels leave skid marks while it slides after the flip.
+- **How:** during the roll-over's slide (`crash_slide`: landed on its wheels, turned across the road) the skid marks (D-309) come from all four tyres, front and rear, turned with the car. Only the rear tyres would put them all to one side of a car sliding sideways.
+- The roll itself (wheels in the air) still leaves none.
+- **Dev:** `--rc-crash-flip` makes `--rc-crash-at` a roll-over.
+- **Status:** Accepted

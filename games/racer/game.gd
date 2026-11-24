@@ -856,7 +856,7 @@ func _process(delta: float) -> void:
 		_finale(delta)
 	if Config.cli.has("rc-crash-at") and _phase == "race" and sim.state == Sim.State.RACE and sim.spin_t <= 0.0 			and _phase_t >= float(str(Config.cli["rc-crash-at"])) and not has_meta("dev_crashed"):   # dev: a spin-out at N s (D-310)
 		set_meta("dev_crashed", true)
-		sim._crash("car", 1.0)
+		sim._crash("truck" if Config.cli.has("rc-crash-flip") else "car", 1.0)   # --rc-crash-flip: a roll-over
 		_handle_events()
 	if Config.cli.has("rc-burst") and _phase == "race" and fmod(_phase_t, 0.5) < delta:   # dev: collision FX (D-292)
 		_burst(sim.track.point(sim.s, sim.x + Sim.CAR_W * 0.5, 0.45), int(_phase_t) % 2 == 0, _role, sim.v)
@@ -2696,7 +2696,7 @@ func _build_skids() -> void:
 
 ## Lays the rear tyres' marks while skidding (D-309). `yaw` is the body's turn
 ## on the road (drift angle), so the strips come from where the tyres really are.
-func _update_skids(skidding: bool, yaw: float) -> void:
+func _update_skids(skidding: bool, yaw: float, four: bool = false) -> void:
 	if _skids == null:
 		_build_skids()
 	if not skidding or sim.v < 2.0:
@@ -2705,14 +2705,15 @@ func _update_skids(skidding: bool, yaw: float) -> void:
 	var up := _car.global_basis.y.normalized()
 	var turn := Basis(Vector3.UP, yaw)
 	var pts := []
-	for side in [-SKID_TRACK, SKID_TRACK]:
-		pts.append(_car.global_transform * (turn * Vector3(side, 0.035, SKID_REAR)))
-	if _skid_last.size() != 2:
+	for z in ([SKID_REAR, -SKID_REAR] if four else [SKID_REAR]):
+		for side in [-SKID_TRACK, SKID_TRACK]:
+			pts.append(_car.global_transform * (turn * Vector3(side, 0.035, z)))
+	if _skid_last.size() != pts.size():
 		_skid_last = pts
 		return
 	if pts[0].distance_to(_skid_last[0]) < SKID_STEP:
 		return
-	for k in 2:
+	for k in pts.size():
 		var a: Vector3 = _skid_last[k]
 		var b: Vector3 = pts[k]
 		var dir := b - a
@@ -3577,7 +3578,10 @@ func _animate(delta: float) -> void:
 	var smoking := sim.drifting or sliding_out or launching or _shift_smoke_t > 0.0 or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
 	_update_puffs(delta, smoking, launching and not (sim.drifting or sliding_out or sim.spin_t > 0.0))
 	# D-310: a crash (spin-out or roll, while it still moves) marks the road too.
-	_update_skids(sim.drifting or sliding_out or (sim.spin_t > 0.0 and not sim.stalled() and not sim.flipping) or Config.cli.has("rc-skid"), yaw)   # (--rc-skid: dev, always)
+	# D-316: the slide after a roll-over (on its wheels, across the road) marks
+	# with all four tyres.
+	var four := sim.flipping and sim.crash_slide
+	_update_skids(sim.drifting or sliding_out or (sim.spin_t > 0.0 and not sim.stalled() and not sim.flipping) or four 		or Config.cli.has("rc-skid"), yaw, four)   # (--rc-skid: dev, always)
 	# Revving on the grid spits fire (D-116): pops while held high, and one as
 	# the revs drop.
 	if sim.state == Sim.State.COUNTDOWN:
