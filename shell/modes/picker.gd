@@ -116,7 +116,7 @@ func enter() -> void:
 	add_backglass(_bg_title)
 
 	Credits.changed.connect(_refresh)
-	Audio.play_music(Audio.MUSIC_MAIN)
+	Audio.play_music(Audio.MUSIC_PICKER)   # D-308
 	_refresh()
 	if _open_quit:
 		_show_quit_confirm()

@@ -246,13 +246,18 @@ const TITLE_FONT := "sunset"
 ## every two stages. Attract plays the first, and the race carries it on from
 ## the start; each new song crossfades in over MUSIC_XFADE s, starting
 ## MUSIC_SKIP s in (they all open very quietly).
+## D-308 (director): Turbo Run's own theme (the director's) is the main tune
+## and station 1; the Bogart VGM songs follow; Chillwave Nightdrive moved to
+## the game selection menu.
 const MUSIC_RACE := [
-	"res://assets/audio/music/racer/bogart_maximum_overdrive.ogg",   # stages 1-2
-	"res://assets/audio/music/racer/bogart_one_more_round.ogg",      # 3-4
-	"res://assets/audio/music/racer/bogart_nightlife.ogg",           # 5-6
-	"res://assets/audio/music/racer/bogart_dreamstate.ogg",          # 7-8
-	"res://assets/audio/music/racer/bogart_chillwave_nightdrive.ogg",   # 9-10
+	"res://assets/audio/music/racer/turbo_run_original.ogg",
+	"res://assets/audio/music/racer/bogart_maximum_overdrive.ogg",
+	"res://assets/audio/music/racer/bogart_one_more_round.ogg",
+	"res://assets/audio/music/racer/bogart_nightlife.ogg",
+	"res://assets/audio/music/racer/bogart_dreamstate.ogg",
 ]
+## Who made each song, for the radio's LCD (D-308).
+const SONG_BY := ["RC_CREDIT_ORIGINAL", "RC_CREDIT_BOGART", "RC_CREDIT_BOGART", "RC_CREDIT_BOGART", "RC_CREDIT_BOGART"]
 const MUSIC_STAGES := 2
 ## D-301: the radio's stations, one per song (MUSIC_RACE's order).
 const SONG_KEYS := ["RC_SONG_1", "RC_SONG_2", "RC_SONG_3", "RC_SONG_4", "RC_SONG_5"]
@@ -266,7 +271,7 @@ const MUSIC_XFADE := 6.0
 ## Where each song comes in on a crossfade (D-227), measured: past each one's
 ## quiet opening, to where it's at full strength (One More Round builds for
 ## 17 s, Dreamstate swells at 34 s).
-const MUSIC_SKIP := [0.5, 16.5, 5.5, 31.0, 1.0]
+const MUSIC_SKIP := [3.0, 0.5, 16.5, 5.5, 31.0]   # D-308: Turbo Run's theme is full from ~3 s
 const PASSERS := 2          # traffic engine voices (D-134)
 ## Oncoming horns (D-213): a dual-tone electric car horn (low and high tones a
 ## dissonant interval apart, buzzy diaphragm harmonics with a nasal resonance,
@@ -285,7 +290,7 @@ const SOUND_SPEED := 85.0   # m/s, exaggerated so the Doppler shift is obvious (
 const ENGINE_GAIN_DB := -0.92   # D-192: the hero car's engine 10% lower (0.9x)
 const PASS_DUCK_DB := 4.0       # D-192: engine + wind dip while a car passes close
 const PASS_DUCK_RANGE := 15.0   # m
-const MUSIC_ATTRACT := "res://assets/audio/music/racer/bogart_maximum_overdrive.ogg"
+const MUSIC_ATTRACT := "res://assets/audio/music/racer/turbo_run_original.ogg"   # D-308: the main tune
 const CHUNK := 100.0             # metres of road per mesh chunk
 const VIEW_AHEAD := 900.0
 const VIEW_BEHIND := 60.0
@@ -1420,8 +1425,8 @@ func _begin_radio() -> void:
 	col.add_child(UI.styled_label(tr("RC_RADIO_TITLE"), TITLE_FONT, 2))
 	_radio = Radio.new()
 	var names := []
-	for k in SONG_KEYS:
-		names.append(tr(k) + "  -  " + tr("RC_CREDIT_BOGART"))
+	for k in SONG_KEYS.size():
+		names.append(tr(SONG_KEYS[k]) + "  -  " + tr(SONG_BY[k]))
 	_radio.setup(names, SONG_FREQS, tr("RC_RADIO_VOL"), tr("RC_RADIO_TUNE"), tr("RC_RADIO_BRAND"), tr("RC_RADIO_FM"), tr("RC_RADIO_MHZ"), tr("RC_RADIO_ST"))
 	_radio.spectrum = _spectrum
 	col.add_child(_radio)

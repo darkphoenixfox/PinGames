@@ -37,6 +37,8 @@ const UI_SOUNDS := {
 
 ## Shared music (D-033). Game-specific tracks live in each game module.
 const MUSIC_MAIN := "res://assets/audio/music/main/legends.ogg"
+## D-308 (director): the game selection menu's song.
+const MUSIC_PICKER := "res://assets/audio/music/racer/bogart_chillwave_nightdrive.ogg"
 
 var _music: AudioStreamPlayer
 var _music_b: AudioStreamPlayer     # the other player, for crossfades (D-226)

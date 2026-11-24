@@ -3101,3 +3101,12 @@
 - **How:** `Audio.play_music(path, fade, restart)` takes a `restart` flag. Asking for the song already playing then starts it again from 0 instead of carrying it on. The race calls it with fade 0 and restart, so the radio's preview (which joins each song past its quiet opening, D-227) is cut and the song starts at its first note.
 - The radio still crossfades between stations while tuning.
 - **Status:** Accepted
+
+### D-308 — Turbo Run's own theme; Chillwave Nightdrive to the game selection menu
+- **Date:** 2026-11-24
+- **Decision (director):** the director's own "Turbo Run" theme (`Turbo_Run-Original.mp3`, CC BY 3.0, the director's work) is Turbo Run's main tune. The other songs move down one place, and the 5th (Chillwave Nightdrive) leaves the racing game to become the game selection menu's song.
+- **Turbo Run:** it plays in attract (`MUSIC_ATTRACT`) and is radio station 1 (88.9, the default). The LCD credits it as "TURBO RUN - ORIGINAL SOUNDTRACK".
+- **The other stations:** 2 Maximum Overdrive, 3 One More Round, 4 Nightlife, 5 Dreamstate (all Bogart VGM). Its crossfade join point is 3 s (measured: full strength from ~3 s).
+- **The game selection menu (picker):** plays Chillwave Nightdrive (`Audio.MUSIC_PICKER`). The shell's attract keeps `MUSIC_MAIN`.
+- **Files:** converted to `assets/audio/music/racer/turbo_run_original.ogg` (Vorbis q5). Recorded in `assets/CREDITS.md`.
+- **Status:** Accepted
