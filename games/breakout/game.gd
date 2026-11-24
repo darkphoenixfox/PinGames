@@ -500,7 +500,7 @@ func _handle_events() -> void:
 				_lights.pulse(BackglassLights.SHOTS, 0.3, 16.0, 0.7)
 				_shield_age = 0.0
 				_shield_mat.set_shader_parameter("hit_x",
-					clampf((sim.ball_pos.x - sim.paddle_x) / (Sim.PADDLE_W * 0.5), -1.0, 1.0))
+					clampf((sim.ball_pos.x - sim.paddle_x) / sim.catch_half_w(), -1.0, 1.0))   # D-332: sidekicks too
 			"wall":
 				_sfx("tb_shield")
 				_flash_edge_shield(e[1][0], e[1][1])
@@ -731,28 +731,43 @@ func _animate_shots(_delta: float) -> void:
 			_shot_nodes.erase(id)
 
 
-## D-327: the Sidekicks: two small ships that fly up from below and lock onto
-## the ship's sides (its catching width grows by Sim.SIDEKICK_W each side).
-const SIDEKICK_SCALE := 0.36
+## D-327, D-332: the Sidekicks: the ship's own outer thirds, cut from the ship
+## model by a shader (full height), fly up from below and dock at its ends;
+## the catch width grows by Sim.SIDEKICK_W (a third of the ship) each side.
 const SIDEKICK_FLY := 0.7   # s to fly in
+const CLIP_SHADER := preload("res://games/breakout/shaders/clip_x.gdshader")
 
 
 func _animate_sidekicks(delta: float) -> void:
 	if not _paddle.has_meta("sidekicks"):
 		var pair := []
 		var scene := load(PADDLE_MODEL) as PackedScene
+		var s := Sim.PADDLE_W / MODEL_PADDLE_WIDTH
+		var half := MODEL_PADDLE_WIDTH * 0.5
 		for side in [-1.0, 1.0]:
 			var holder := Node3D.new()
 			if scene:
 				var model := scene.instantiate() as Node3D
-				var s := Sim.PADDLE_W / MODEL_PADDLE_WIDTH * SIDEKICK_SCALE
 				model.scale = Vector3(s, s, s)
 				model.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+				# Keep only this side's outer third of the ship (model X).
+				for mi in model.find_children("*", "MeshInstance3D", true, false):
+					var m := mi as MeshInstance3D
+					var src := m.get_active_material(0) as StandardMaterial3D
+					var cm := ShaderMaterial.new()
+					cm.shader = CLIP_SHADER
+					if src:
+						cm.set_shader_parameter("albedo_tex", src.albedo_texture)
+						cm.set_shader_parameter("roughness_v", src.roughness)
+						cm.set_shader_parameter("metallic_v", src.metallic)
+					cm.set_shader_parameter("keep_min", half / 3.0 if side > 0.0 else -100.0)
+					cm.set_shader_parameter("keep_max", 100.0 if side > 0.0 else -half / 3.0)
+					m.material_override = cm
 				holder.add_child(model)
 			else:
-				holder.add_child(_box(Vector3(Sim.SIDEKICK_W, 0.2, Sim.PADDLE_H * 0.7), Vector3.ZERO, StandardMaterial3D.new()))
+				holder.add_child(_box(Vector3(Sim.SIDEKICK_W, 0.2, Sim.PADDLE_H * 0.7), Vector3(side * Sim.PADDLE_W / 3.0, 0, 0), StandardMaterial3D.new()))
 			var eng := Fx.ShipEngine.new(Vector3(0.0, 0.0, 1.0))   # belly burner while flying in
-			eng.position = Vector3(0.0, 0.0, 0.15)
+			eng.position = Vector3(side * Sim.PADDLE_W / 3.0, 0.0, 0.15)   # under the piece
 			holder.add_child(eng)
 			holder.visible = false
 			_ship.add_child(holder)
@@ -769,9 +784,15 @@ func _animate_sidekicks(delta: float) -> void:
 		var side := -1.0 if i == 0 else 1.0
 		var h: Node3D = pair[i]
 		h.visible = on
-		var dock := Vector3(side * (Sim.PADDLE_W * 0.5 + Sim.SIDEKICK_W * 0.5), 0.0, 0.0)
+		# The piece is the ship's outer third; moved out by a third it sits
+		# just beyond the ship's end.
+		var dock := Vector3(side * Sim.PADDLE_W / 3.0, 0.0, 0.0)
 		h.position = dock + Vector3(side * 0.6, 0.0, 5.0) * (1.0 - e)
 		(h.get_child(h.get_child_count() - 1) as Fx.ShipEngine).set_thrust(1.0 - e)
+	# The ball-hit shield spreads over the docked sidekicks too.
+	if _paddle.has_meta("shield_node"):
+		var reach := 1.0 + (Sim.SIDEKICK_W * 2.0 / Sim.PADDLE_W) * (e if on else 0.0)
+		(_paddle.get_meta("shield_node") as Node3D).scale.x = reach
 
 
 ## D-326: the Nuclear power-up's flash: the TABLE goes white and fades out.
@@ -1293,6 +1314,7 @@ func _build_ship(fallback_mat: Material) -> void:
 	shield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	shield.position = Vector3(0.0, 0.08, -Sim.PADDLE_H * 0.5 - 0.2)
 	_ship.add_child(shield)
+	_paddle.set_meta("shield_node", shield)   # D-332: widened over the sidekicks
 	# Belly afterburner (D-061): fires downwards for the ship's entrance.
 	# Two belly nozzles (left/right of centre on the ship's lower edge, D-072).
 	for bx in [-0.3, 0.27]:

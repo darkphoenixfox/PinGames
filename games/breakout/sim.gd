@@ -120,7 +120,7 @@ const POWERUP_KINDS := ["T", "P", "B", "I", "W", "H", "L", "S", "K", "U", "N"]
 const BLASTER_KINDS := ["T", "P", "B", "I", "W", "H"]
 const PADDLE_KINDS := ["S", "L", "K"]
 const UPGRADE_COST := {"T": 1.0 / 3.0, "P": 1.0 / 3.0, "B": 1.0, "I": 1.0, "W": 1.0, "H": 1.0}
-const SIDEKICK_W := 0.55             # K: each sidekick adds this much reach per side
+const SIDEKICK_W := PADDLE_W / 3.0   # K: each sidekick (a third of the ship, D-332) adds this much reach per side
 ## W: a wave shot that snakes up, hitting each brick in its way once, never stopped.
 const WAVE_SPEED := 10.0
 const WAVE_AMP := 1.1                # m either side of where it was fired

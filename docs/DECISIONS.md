@@ -3327,3 +3327,11 @@
 - The thruster starts with `restart()` (D-303's black-square lesson).
 - **Dev:** `--tb-autofire` now also holds the plasma in place after the serve, so test runs don't lose a charge (which ends the upgrade).
 - **Status:** Accepted
+
+### D-332 — Tilt Breaker: the Sidekicks are the ship's own end pods
+- **Date:** 2026-11-24
+- **Decision (director):** the Sidekicks look like the ship's end section (about a third of the model), as tall as the ship, with no new model; the ball-hit shield effect covers them too.
+- **How:** each sidekick is the ship model at full scale with `shaders/clip_x.gdshader`, which discards everything outside its outer third along the model's X axis (the model is one centred mesh with one texture, so the shader reuses its albedo texture, roughness and metallic). The left sidekick keeps the left third, the right the right third; each is moved out by a third of the ship, so it docks just beyond the ship's end. The fly-in from below and the belly burner are unchanged (D-327).
+- **Reach:** `SIDEKICK_W` is now a third of the ship (0.5 m, was 0.55) so the catch width matches what's drawn.
+- **Shield:** the ball-hit shield plane stretches across the sidekicks as they dock, and the hit point is measured against the full catch width.
+- **Status:** Accepted
