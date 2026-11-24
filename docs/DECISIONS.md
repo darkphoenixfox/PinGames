@@ -3257,3 +3257,11 @@
 - **Decision (director):** cube enemies (D-323) don't spawn until level 3. From level 3 on, 35% of spawns are cubes, as before. `CUBE_FROM_LEVEL` in `sim.gd`.
 - **Test:** 400 spawns on levels 1–2 give no cube; level 3 gives some.
 - **Status:** Accepted
+
+### D-325 — Fix: a power-up capsule froze on screen after a level ended
+- **Date:** 2026-11-24
+- **Bug (director):** finishing a level (often with the F debug key) while a capsule was just dropping left it frozen on screen, through the level change and after.
+- **Cause:** at a level's end the sim clears its capsules without a `powerup_lost` event (D-068), so the view never freed their nodes. The F key's ion beam makes it likely: it breaks a column in one step, so an early brick can drop a capsule and a later one clear the rack in the same step; the capsule's node is made from the spawn event after the sim has already cleared it.
+- **Fix:** the view frees every capsule node whose capsule is no longer in the sim, each frame (also during the level outro and the finale), however it was dropped.
+- **Checked:** a new `--tb-pu-clear-at=N` dev flag drops a capsule and clears the level at N s. Without the fix, four capsules hung frozen over level 2; with it, none (both layouts).
+- **Status:** Accepted

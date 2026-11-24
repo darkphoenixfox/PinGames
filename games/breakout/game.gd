@@ -406,6 +406,10 @@ func _process(delta: float) -> void:
 		sim.events.append(["enemy_ready", eid])
 		sim.ship_invulnerable = 999.0   # so it stays for the screenshot
 		_handle_events()
+	if Config.cli.has("tb-pu-clear-at") and _phase == "play" and _phase_t >= float(str(Config.cli["tb-pu-clear-at"])) 			and not has_meta("dev_pu_clear"):   # dev: a capsule drops as the level ends (D-325)
+		set_meta("dev_pu_clear", true)
+		_on_debug_action(&"powerup")
+		_on_debug_action(&"clear_level")
 	if Config.cli.has("tb-score") and not has_meta("dev_score"):   # dev: start at N points (D-321)
 		set_meta("dev_score", true)
 		sim.score = int(str(Config.cli["tb-score"]))
@@ -1805,6 +1809,15 @@ func _fire_ion_beam(x: float) -> void:
 
 ## Capsules, extra plasma balls, Lightspeed afterimages, Shield barrier.
 func _animate_powerups(delta: float) -> void:
+	# D-325: a capsule the sim dropped without an event (cleared at a level's
+	# end, or a new level / serve reset) goes too; it used to stay on screen.
+	if not _powerup_nodes.is_empty():
+		var live := {}
+		for p in sim.powerups:
+			live[p.id] = true
+		for id in _powerup_nodes.keys():
+			if not live.has(id):
+				_remove_powerup_node(id)
 	for p in sim.powerups:
 		if _powerup_nodes.has(p.id):
 			var cap: Fx.PowerupCapsule = _powerup_nodes[p.id]
