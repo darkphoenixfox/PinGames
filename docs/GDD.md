@@ -150,7 +150,7 @@ Rules:
 - **Bricks (D-073):** UPPERCASE = 1 hit; lowercase = armoured (2 hits, glowing frame, cracks after the first hit, 1.5× points); `X` = indestructible metal (doesn't count towards clearing).
 - **Levels 1–10 (D-073):** rows, pyramid, checkerboard, eye (first armour), metal-core towers, diamond, funnel, twin fortresses, armour weave, hive mind. Every 5 levels enemies get +40 % speed, spawn more often, one more can be on screen, and their orbits steer towards the ship.
 - **Level-change boost (D-076):** "LEVEL CLEAR!" shows first, then the ship glides to the centre and levels out, and lifts off as the DMD plays the pixel ship boosting away (D-085).
-- **Cube enemy (D-323):** about a third of enemies are cubes in the same circuit style; they drift towards the nearest ship while sweeping, descend faster and follow the ship at the bottom.
+- **Cube enemy (D-323, D-324):** from level 3, about a third of enemies are cubes in the same circuit style; they drift towards the nearest ship while sweeping, descend faster and follow the ship at the bottom.
 - **Unstuck (D-323):** an enemy that hasn't got lower for 10 s starts circling from a 12 o'clock heading, hugging and going over the bricks that hold it, then resumes its sweep once lower.
 - **Proximity alert (D-322):** while an enemy is in the bottom 20% of the screen, "⚠ DANGER ⚠ / PROXIMITY ALERT" blinks in see-through red in the middle of the play area, until it moves away or is destroyed.
 - **Extra charge (D-321):** one extra charge (life) at **20,000** and one at **50,000** points: a jingle, "EXTRA CHARGE!" on the DMD and a new charge dot. The attract DMD shows "EXTRA CHARGE AT 20,000 50,000".

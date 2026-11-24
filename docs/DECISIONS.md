@@ -3251,3 +3251,9 @@
 - **Tests:** a cube stays nearer the ship and gets lower than a tetra; an enemy in a brick cup starts circling at 10 s and gets out below it without ever touching a brick.
 - **Dev:** `--tb-cube` with `--tb-enemy-low` makes the low enemy a cube.
 - **Status:** Accepted
+
+### D-324 — Tilt Breaker: cubes from level 3
+- **Date:** 2026-11-24
+- **Decision (director):** cube enemies (D-323) don't spawn until level 3. From level 3 on, 35% of spawns are cubes, as before. `CUBE_FROM_LEVEL` in `sim.gd`.
+- **Test:** 400 spawns on levels 1–2 give no cube; level 3 gives some.
+- **Status:** Accepted

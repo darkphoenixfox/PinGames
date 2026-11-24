@@ -374,6 +374,21 @@ func test_breakout_difficulty(Sim) -> void:
 	cube_low = ag.enemies[1].pos.y > ag.enemies[0].pos.y
 	check(kinds_ok and dist[1] < dist[0] * 0.85 and cube_low,
 		"cube enemy: nearer the ship (%.0f vs %.0f) and lower than a tetra" % [dist[1], dist[0]])
+	# D-324: no cubes before level 3.
+	var cl = Sim.new()
+	cl.setup(3)
+	var early_cube := false
+	for lv in [1, 2]:
+		cl.level = lv
+		for i in 200:
+			cl.spawn_enemy()
+			early_cube = early_cube or cl.enemies[-1].kind == "cube"
+	cl.level = 3
+	var late_cube := false
+	for i in 200:
+		cl.spawn_enemy()
+		late_cube = late_cube or cl.enemies[-1].kind == "cube"
+	check(not early_cube and late_cube, "cube enemies spawn from level 3 only")
 	# D-323: unstuck. An enemy in a brick cup circles up and out after 10 s.
 	var us = Sim.new()
 	us.setup(3)

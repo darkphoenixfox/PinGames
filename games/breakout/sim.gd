@@ -955,8 +955,10 @@ func enemy_in_danger(margin: float = 0.0) -> bool:
 	return false
 
 
-## D-323: the cube, a more aggressive enemy: CUBE_CHANCE of the spawns.
+## D-323: the cube, a more aggressive enemy: CUBE_CHANCE of the spawns from
+## level CUBE_FROM_LEVEL on (D-324).
 const CUBE_CHANCE := 0.35
+const CUBE_FROM_LEVEL := 3
 const CUBE_DESCENT := 1.3            # x the tetra's descent
 const CUBE_SWEEP_PULL := 0.9         # units/s its sweep's centre drifts towards the ship
 const CUBE_ORBIT_PULL := 1.1         # units/s its orbit's centre follows the ship (+ tier steering)
@@ -977,7 +979,7 @@ func spawn_enemy(x: float = NAN, kind: String = "") -> int:
 	if is_nan(x):
 		x = randf_range(-lim, lim)
 	if kind.is_empty():
-		kind = "cube" if randf() < CUBE_CHANCE else "tetra"
+		kind = "cube" if level >= CUBE_FROM_LEVEL and randf() < CUBE_CHANCE else "tetra"
 	var id := _next_enemy_id
 	_next_enemy_id += 1
 	var pos := Vector2(clampf(x, -lim, lim), ENEMY_SPAWN_Y)
