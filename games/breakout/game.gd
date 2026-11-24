@@ -1134,6 +1134,7 @@ func _animate(delta: float) -> void:
 	_animate_enemies(delta)
 	_animate_powerups(delta)
 	_animate_shots(delta)   # D-327
+	_animate_backdrop(delta)   # D-343
 	_animate_boss(delta)   # D-335
 	_animate_ships(delta)   # D-286: each ship's own visuals
 	# Edge shields (dev: --tb-show-shields keeps them lit mid-ripple for checks)
@@ -1296,6 +1297,7 @@ func _confirm_level() -> void:
 		_build_bricks()
 		for n in _brick_nodes:   # the intro drops them in
 			n.visible = false
+		_apply_backdrop()   # D-343
 	_enter_select()
 
 
@@ -1495,6 +1497,8 @@ func _build_world() -> void:
 	_planet = Fx.Planet.new(PLANET_RADIUS)
 	_root.add_child(_planet)
 	_planet.place(cam.global_transform.basis, target, -cam.size * 0.5 + PLANET_RIM_ABOVE_BOTTOM, PLANET_DEPTH_BEHIND)
+	_planet_horizon = _planet
+	_build_space_backdrop(cam.global_transform.basis, target)
 
 	# No visible barriers (D-049): invisible boundaries flash an energy shield
 	# where the plasma rebounds.
@@ -2074,6 +2078,147 @@ func _confirm_select() -> void:
 	_begin_intro()
 
 
+# --- levels 11-20 backdrop (D-343) -------------------------------------------------------
+## Earth seen from further out: its curve fills the bottom-left corner and runs
+## under the ship; a grey moon orbits slowly at the top right; now and then a
+## dimmed alien ship crosses far behind, thrusters trailing particles.
+const SPACE_EARTH_R := 10.0
+const SPACE_EARTH_AT := Vector2(-5.0, -14.2)   # view units from the view centre: its rim just under the ship
+const SPACE_MOON_R := 1.4
+const SPACE_FLYBY := Vector2(5.0, 11.0)        # s between ships
+var _planet_horizon: Fx.Planet
+var _planet_space: Fx.Planet
+var _moon: Fx.Planet
+var _space_on := false
+var _space_t := 0.0
+var _flyby_in := 3.0
+var _flybys: Array = []   # {node, vel}
+var _view_basis: Basis
+var _view_target: Vector3
+
+
+func _build_space_backdrop(basis: Basis, target: Vector3) -> void:
+	_view_basis = basis
+	_view_target = target
+	_planet_space = Fx.Planet.new(SPACE_EARTH_R)
+	_planet_space.restyle({"detail_scale": 0.7}, Color(0.3, 0.6, 1.0), 1.6)
+	_planet_space.place_at(basis, target, SPACE_EARTH_AT, 24.0)
+	_planet_space.visible = false
+	_root.add_child(_planet_space)
+	_moon = Fx.Planet.new(SPACE_MOON_R)
+	_moon.restyle({"detail_scale": 2.6, "sea_level": 0.48, "softness": 0.25,
+		"deep_sea": Color(0.32, 0.32, 0.34), "shallow_sea": Color(0.42, 0.42, 0.44),
+		"lowland": Color(0.55, 0.55, 0.56), "highland": Color(0.7, 0.69, 0.66),
+		"atmosphere": Color(0.5, 0.5, 0.55), "atmosphere_glow": 0.6, "cloud_amount": 0.0},
+		Color(0.6, 0.6, 0.65), 0.35)
+	_moon.visible = false
+	_root.add_child(_moon)
+	_apply_backdrop()
+
+
+## Levels 11-20 (of each 20) use the space backdrop; the others the horizon.
+func _apply_backdrop() -> void:
+	if _planet_space == null:
+		return
+	var on := (sim.level - 1) % 20 >= 10
+	_space_on = on
+	_planet_horizon.visible = not on
+	_planet_space.visible = on
+	_moon.visible = on
+	_planet = _planet_space if on else _planet_horizon   # drains hit the visible one
+	if not on:
+		for f in _flybys:
+			(f.node as Node).queue_free()
+		_flybys.clear()
+
+
+func _view_half_width() -> float:
+	var b := Vector2(Screens.table_base())
+	return 8.0 * b.x / b.y
+
+
+func _animate_backdrop(delta: float) -> void:
+	if not _space_on:
+		return
+	_space_t += delta
+	# The moon: a slow orbit (an ellipse about its spot, 2 minutes round) and spin.
+	var hw := _view_half_width()
+	var base := Vector2(minf(6.4, hw - 1.6), 4.6)
+	var a := _space_t * TAU / 120.0
+	_moon.place_at(_view_basis, _view_target, base + Vector2(cos(a) * 1.1, sin(a) * 0.45), 18.0 - sin(a) * 2.0)
+	_moon.rotate_y(delta * 0.05)
+	_planet_space.rotate_y(delta * 0.01)
+	# Fly-bys, far behind and dimmed.
+	_flyby_in -= delta
+	if _flyby_in <= 0.0:
+		_flyby_in = randf_range(SPACE_FLYBY.x, SPACE_FLYBY.y)
+		_spawn_flyby(hw)
+	for i in range(_flybys.size() - 1, -1, -1):
+		var f: Dictionary = _flybys[i]
+		var node: Node3D = f.node
+		node.position += f.vel * delta
+		(node.get_child(0) as Node3D).rotate(Vector3(0.3, 1.0, 0.2).normalized(), delta * 1.2)
+		if f.t_left <= 0.0:
+			node.queue_free()
+			_flybys.remove_at(i)
+		f.t_left = float(f.t_left) - delta
+
+
+func _spawn_flyby(hw: float) -> void:
+	var from_left := randf() < 0.5
+	var y0 := randf_range(-1.0, 6.5)
+	var y1 := y0 + randf_range(-2.0, 2.0)
+	var x0 := -(hw + 2.0) if from_left else hw + 2.0
+	var p0 := Vector2(x0, y0)
+	var p1 := Vector2(-x0, y1)
+	var speed := randf_range(1.6, 3.0)
+	var dur := p0.distance_to(p1) / speed
+	var depth := randf_range(10.0, 15.0)
+	var start := _view_target + _view_basis.x * p0.x + _view_basis.y * p0.y - _view_basis.z * depth
+	var vel := (_view_basis.x * (p1.x - p0.x) + _view_basis.y * (p1.y - p0.y)) / dur
+	var root := Node3D.new()
+	root.position = start
+	var tex: Texture2D = load("res://assets/textures/breakout/circuit_%s.png" % ["red", "yellow", "green", "blue"][randi() % 4])
+	var r := Sim.ENEMY_R * 1.5 * randf_range(0.8, 1.2)
+	var body: Node3D
+	match randi() % 3:
+		0: body = Fx.make_tetrahedron(r, tex, Color(0.6, 0.4, 0.9))
+		1: body = Fx.make_cube(r, tex, Color(0.4, 0.7, 0.9))
+		_: body = Fx.make_icosahedron(r, tex, Color(1.0, 0.3, 0.3), 0.6)
+	root.add_child(body)
+	for mi in body.find_children("*", "MeshInstance3D", true, false):
+		(mi as GeometryInstance3D).transparency = 0.6   # dimmed: background, not a threat
+	var p := CPUParticles3D.new()
+	p.amount = 40
+	p.lifetime = 0.6
+	p.local_coords = false
+	p.direction = -vel.normalized()
+	p.spread = 12.0
+	p.gravity = Vector3.ZERO
+	p.initial_velocity_min = 1.0
+	p.initial_velocity_max = 1.8
+	var grad := Gradient.new()
+	grad.set_color(0, Color(0.55, 0.5, 0.4, 0.6))
+	grad.set_color(1, Color(0.2, 0.15, 0.12, 0.0))
+	grad.add_point(0.3, Color(0.5, 0.28, 0.1, 0.45))
+	p.color_ramp = grad
+	var q := QuadMesh.new()
+	q.size = Vector2(0.07, 0.07)
+	var pm := StandardMaterial3D.new()
+	pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	pm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	pm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	pm.vertex_color_use_as_albedo = true
+	pm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	q.material = pm
+	p.mesh = q
+	p.position = -vel.normalized() * r
+	root.add_child(p)
+	_root.add_child(root)
+	p.restart()
+	_flybys.append({"node": root, "vel": vel, "t_left": dur + 1.0})
+
+
 func _begin_intro() -> void:
 	# Game music (D-081): "n-Dimensions (Retro)" by Matthew Pablo, CC BY 3.0.
 	Audio.play_music(MUSIC)
@@ -2230,6 +2375,7 @@ func _outro() -> void:
 func _load_next_level() -> void:
 	DebugTools.mark("next_level")
 	sim.next_level()
+	_apply_backdrop()   # D-343
 	_build_bricks()
 	for n in _brick_nodes:
 		n.visible = false

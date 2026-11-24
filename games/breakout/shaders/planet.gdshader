@@ -17,6 +17,7 @@ uniform vec4 atmosphere : source_color = vec4(0.35, 0.65, 1.0, 1.0);
 uniform float atmosphere_glow = 4.5;
 uniform vec3 impact_point = vec3(0.0, -9999.0, 0.0);
 uniform float impact_age = 99.0;
+uniform float cloud_amount = 0.85;   // D-343: 0 for the moon
 
 varying vec3 local_pos;
 varying vec3 world_pos;
@@ -64,7 +65,7 @@ void fragment() {
 	// Drifting clouds
 	float c = fbm(p * 1.6 + vec3(TIME * 0.015, 0.0, TIME * 0.01));
 	float cloud = smoothstep(0.5, 0.5 + softness * 2.5, c);
-	col = mix(col, vec3(0.95), cloud * 0.85);
+	col = mix(col, vec3(0.95), cloud * cloud_amount);
 	ALBEDO = col;
 	ROUGHNESS = mix(0.35, 0.95, max(land, cloud));
 	SPECULAR = mix(0.5, 0.1, max(land, cloud));

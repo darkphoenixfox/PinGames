@@ -789,6 +789,22 @@ class Planet:
 		add_child(haze)
 		# A random-ish but fixed orientation so a coastline sits under the playfield.
 		rotation = Vector3(0.4, 1.1, 0.2)
+		_haze_mat = haze_mat
+
+	var _haze_mat: ShaderMaterial
+
+	## D-343: overrides the surface shader's values (colours, detail_scale,
+	## cloud_amount...) and the halo's colour and strength.
+	func restyle(params: Dictionary, haze: Color, haze_intensity: float) -> void:
+		for k in params:
+			_mat.set_shader_parameter(k, params[k])
+		_haze_mat.set_shader_parameter("haze_color", haze)
+		_haze_mat.set_shader_parameter("intensity", haze_intensity)
+
+	## D-343: places the centre at (x right, y up) in view units from `target`,
+	## `depth` behind it (orthographic, so depth only sorts).
+	func place_at(cam_basis: Basis, target: Vector3, view: Vector2, depth: float) -> void:
+		position = target + cam_basis.x * view.x + cam_basis.y * view.y - cam_basis.z * depth
 
 	## Orthographic placement: the silhouette's top lands `rim_v` units above the
 	## view centre (`target`), with the centre `depth_behind` units further from

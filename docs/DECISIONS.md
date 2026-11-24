@@ -3416,3 +3416,12 @@
 - **Tests:** a charged brick fires one torpedo on its first hit; a plasma brick frees a ball; mini-icosahedrons appear from level 11 and fire smaller torpedoes; the corrupted paddle's band is clear on 15–19, it blocks the ball, and dies to 10 ball or 5 weapon hits; level 20's boss is the dodecahedron and fires three.
 - **Dev:** `--tb-enemy-kind=ico` (with `--tb-enemy-low`), `--tb-dark`.
 - **Status:** Accepted
+
+### D-343 — Tilt Breaker: a space backdrop for levels 11–20
+- **Date:** 2026-11-24
+- **Decision (director, with a sketch):** a new background for levels 11–20: Earth in the bottom-left corner, extending under the area the ship protects; a moon-like planet at the top right, slowly orbiting; alien enemies sometimes flying past far in the background, with particle thrusters, darkened so they don't distract.
+- **Earth:** a second `Fx.Planet` (radius 10 instead of the horizon's 100) with its centre 5 units left of and 14.2 below the view centre, so the whole curve shows across the bottom-left and its rim passes just under the ship. Coarser surface detail (`detail_scale` 0.7) since the whole disc is seen; it turns very slowly. Drains hit it as they hit the horizon planet (the game's `_planet` points at the visible one).
+- **Moon:** a small grey `Fx.Planet` (radius 1.4; grey palette, no clouds, faint halo; `cloud_amount` is new in the planet shader) at the top right (6.4 units right, or inside the view on the narrow cabinet TABLE), going round a small ellipse once every 2 minutes and spinning slowly.
+- **Fly-bys:** every 5–11 s a tetra, cube or mini-icosahedron (60% transparent) crosses the view far behind the play (10–15 units deep) at 1.6–3 m/s on a gentle diagonal, tumbling, with a dim orange particle thruster trail.
+- `Fx.Planet` gains `restyle()` and `place_at()`. Levels 1–10 (and each 1–10 of later loops) keep the horizon; the backdrop switches at each level start and on the level select.
+- **Status:** Accepted
