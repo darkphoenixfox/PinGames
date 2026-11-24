@@ -3187,3 +3187,16 @@
 - The roll itself (wheels in the air) still leaves none.
 - **Dev:** `--rc-crash-flip` makes `--rc-crash-at` a roll-over.
 - **Status:** Accepted
+
+### D-317 — Turbo Run: rear-ending a truck no longer rolls the car through it
+- **Date:** 2026-11-24
+- **Bug (director):** crashing into the back of a truck, the car's roll carried it forward through the truck. The roll slides on at up to 30 m/s, faster than the truck.
+- **Fix (director's design):** a high-speed rear-end into a truck (same direction):
+  - shoves the truck on: it gains `TRUCK_SHOVE` 8 m/s, then eases back to its own speed;
+  - moves the rolling car off to the truck's nearer side (towards the road's middle if it's square behind), at `VEER_RATE` 14 m/s, to just clear of the truck's flank;
+  - rolls the car away from the truck;
+  - holds the car behind the truck's tail, at no more than the truck's speed, until it's clear sideways.
+- **State:** `veer_x` / `veer_id` (per player in 2P). Any other crash clears them.
+- **Test:** a car at 60 m/s into a truck's back rolls, is never inside the truck, and the truck speeds up. Both checks fail on the old code.
+- **Dev:** `--rc-crash-at=N --rc-crash-truck` puts a truck just ahead in the car's lane at N s.
+- **Status:** Accepted

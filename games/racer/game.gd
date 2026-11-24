@@ -856,7 +856,13 @@ func _process(delta: float) -> void:
 		_finale(delta)
 	if Config.cli.has("rc-crash-at") and _phase == "race" and sim.state == Sim.State.RACE and sim.spin_t <= 0.0 			and _phase_t >= float(str(Config.cli["rc-crash-at"])) and not has_meta("dev_crashed"):   # dev: a spin-out at N s (D-310)
 		set_meta("dev_crashed", true)
-		sim._crash("truck" if Config.cli.has("rc-crash-flip") else "car", 1.0)   # --rc-crash-flip: a roll-over
+		if Config.cli.has("rc-crash-truck"):   # --rc-crash-truck: a truck just ahead in our lane (D-317)
+			var ln := 2 if absf(sim.x - Track.LANES[2]) < absf(sim.x - Track.LANES[3]) else 3
+			sim.x = Track.LANES[ln] + 0.6
+			sim.traffic.append({"id": 9000, "s": sim.s + 9.0, "x": Track.LANES[ln], "lane": ln, "v": 22.0, "hue": 0.0,
+				"weave": 0.0, "last_ds": 9.0, "kind": "truck", "len": Sim.TRUCK_LEN, "w": Sim.TRUCK_W})
+		else:
+			sim._crash("truck" if Config.cli.has("rc-crash-flip") else "car", 1.0)   # --rc-crash-flip: a roll-over
 		_handle_events()
 	if Config.cli.has("rc-burst") and _phase == "race" and fmod(_phase_t, 0.5) < delta:   # dev: collision FX (D-292)
 		_burst(sim.track.point(sim.s, sim.x + Sim.CAR_W * 0.5, 0.45), int(_phase_t) % 2 == 0, _role, sim.v)

@@ -946,6 +946,28 @@ func test_racer_time_of_day() -> void:
 func test_racer_sim() -> void:
 	var Sim = load("res://games/racer/sim.gd")
 	var dt := 1.0 / 60.0
+	# D-317: rear-ending a truck: it's shoved on, the car rolls off beside it, never through it.
+	var rt = Sim.new()
+	rt.setup(7)
+	rt.state = Sim.State.RACE
+	rt.time_left = 99.0
+	rt.v = 60.0
+	rt.x = float(Sim.Track.LANES[3])
+	rt.traffic = [{"id": 900, "s": rt.s + 9.0, "x": rt.x, "lane": 3, "v": 22.0, "hue": 0.0, "weave": 0.0,
+		"last_ds": 9.0, "kind": "truck", "len": Sim.TRUCK_LEN, "w": Sim.TRUCK_W}]
+	var inside := false
+	var truck_v0 := 22.0
+	var max_tv := 0.0
+	for k in 240:
+		rt.step(dt, false, false)
+		for t in rt.traffic:
+			if int(t.id) == 900:
+				max_tv = maxf(max_tv, float(t.v))
+				if absf(rt.s - float(t.s)) < (Sim.CAR_LEN + Sim.TRUCK_LEN) * 0.5 - 0.3 						and absf(rt.x - float(t.x)) < (Sim.CAR_W + Sim.TRUCK_W) * 0.5 - 0.3:
+					inside = true
+	check(rt.flipping or rt.spin_t > 0.0 or rt.grace_t > 0.0, "D-317: rear-ending a truck at speed rolls the car")
+	check(not inside, "D-317: the rolling car never passes through the truck")
+	check(max_tv > truck_v0 + 3.0, "D-317: the truck is shoved forward")
 	# D-288: 2-player Turbo Run.
 	var r2 = Sim.new()
 	r2.setup_two(7, [0, 2])

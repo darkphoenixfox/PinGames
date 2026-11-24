@@ -256,6 +256,12 @@ var spin_t := 0.0              # crash timer (spin-out or flip)
 var flipping := false          # this crash is a roll-over (big obstacle)
 var crash_anim := 0.0          # animation length of the current crash (s)
 var crash_slide := false       # a rolled car sliding to a stop (D-106)
+## D-317: rolling off a truck's back: the x it slides to, beside the truck, and
+## which truck (traffic id; -1 = none).
+var veer_x := 0.0
+var veer_id := -1
+const TRUCK_SHOVE := 8.0         # m/s a truck gains when rear-ended
+const VEER_RATE := 14.0          # m/s the car moves aside while rolling off it
 var flip_dir := 1.0            # +1 rolls to the right, -1 to the left
 var flip_turns := 1            # full rolls in this roll-over (2 at 100+ mph, D-206)
 var time_left := START_TIME
@@ -279,7 +285,7 @@ const PLAYER_FIELDS := ["state", "countdown", "manual", "shift_request", "autopi
 	"boosting", "pickups", "_next_pickup_s", "_next_id_pickups", "car", "gear", "_launch_t",
 	"_rev_lock_l", "_rev_lock_r", "freeze_time", "perfect_t", "rpm", "shift_hold", "_shift_lock",
 	"police", "busted_t", "radar", "_trap_passed", "in_tunnel", "_scrape_t", "grace_t", "finished",
-	"sway", "time_bonus", "spin_t", "flipping", "crash_anim", "crash_slide", "flip_dir", "flip_turns",
+	"sway", "time_bonus", "spin_t", "flipping", "crash_anim", "crash_slide", "flip_dir", "flip_turns", "veer_x", "veer_id",
 	"time_left", "next_checkpoint", "checkpoints", "score", "_score_f", "over_t", "done"]
 const P2_START_X := 1.9          # the two cars start side by side, either side of the line
 const RIVAL_SIDE_BOUNCE := 6.0   # m/s sideways when the two players swipe each other
@@ -928,6 +934,21 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 				grace_t = CRASH_GRACE   # back on the move: traffic can't hit us yet
 			crash_slide = flipping and spin_t > 0.0 and spin_t <= CRASH_STOP and v > 0.5
 		want = 0.0
+		if veer_id >= 0:   # D-317: off the truck's back, beside it
+			x = move_toward(x, veer_x, VEER_RATE * dt)
+			var tr_t: Dictionary = {}
+			for t in traffic:
+				if int(t.id) == veer_id:
+					tr_t = t
+					break
+			if tr_t.is_empty() or absf(x - veer_x) < 0.05:
+				veer_id = -1
+			elif absf(x - float(tr_t.x)) < (float(tr_t.get("w", CAR_W)) + CAR_W) * 0.5:
+				# Not clear yet: stay behind its tail.
+				var tail: float = float(tr_t.s) - (CAR_LEN + float(tr_t.get("len", CAR_LEN))) * 0.5 - 0.2
+				if s > tail:
+					s = tail
+				v = minf(v, maxf(float(tr_t.v), 0.0))
 		if stalled():
 			v = 0.0
 			# A crash that ends off the road is put back on it (D-114): during the
@@ -1092,6 +1113,7 @@ func stalled() -> bool:
 ## `slide` = false for head-on hits: the car stops there instead of tumbling on.
 func _crash(kind: String, side: float = 0.0, slide: bool = true) -> void:
 	_end_drift()
+	veer_id = -1   # (set again by a truck rear-end, D-317)
 	flipping = kind in FLIP_KINDS
 	# Rolls away from the obstacle: one on the right (+side) rolls it left.
 	flip_dir = -signf(side) if side != 0.0 else 1.0
@@ -1194,6 +1216,15 @@ func _update_traffic(dt: float) -> void:
 				# Head-on, or rear-ending at speed: a truck rolls the car over.
 				_crash("truck" if big else "car", t.x - x, t.v >= 0.0)
 				s = t.s - (CAR_LEN + tlen) * 0.5 - 0.3
+				if big and t.v >= 0.0 and ds > 0.0:
+					# D-317: into a truck's back: the truck is shoved on, and the
+					# car rolls off to the truck's nearer side (towards the road
+					# if it's square behind), held behind its tail until clear.
+					t.v = minf(float(t.v) + TRUCK_SHOVE, float(t.v0) + TRUCK_SHOVE)
+					var side := signf(x - t.x) if absf(x - t.x) > 0.2 else (-signf(t.x) if absf(t.x) > 0.1 else 1.0)
+					veer_x = float(t.x) + side * ((tw + CAR_W) * 0.5 + 0.5)
+					veer_id = int(t.id)
+					flip_dir = -side   # rolls away from the truck
 			else:
 				# Bump: lose speed, get shoved sideways.
 				v = minf(v, t.v * 0.85) if ds > 0.0 else v
