@@ -3004,3 +3004,9 @@
 - **Decision (director):** the 2P bottom-right gauge block is 25% bigger: the speedo (`COMPACT` 0.5 → 0.625 of the full dial), the shifter (`GEAR_COMPACT` 0.6 → 0.75) and the tach bar (18 → 22 px high, the speedo's width).
 - The text (dial numbers, MPH, digital speed) was already full size and stays as it is (PinPixel sizes snap to multiples of 12, D-060).
 - **Status:** Accepted
+
+### D-297 — Turbo Run 2P: the REV! hand points at the bar tachometer
+- **Date:** 2026-11-24
+- **Decision (director):** in 2P the countdown's REV! hand (D-197, D-209) pointed at thin air: the round tacho it aims at is hidden there (D-293).
+- **Fix:** with the bar tachometer, the hand turns 90° counter-clockwise to point down. Its fingertip sits just above the bar's green start band and pokes down at it, with REV! to its left. 1P is unchanged.
+- **Status:** Accepted

@@ -572,6 +572,7 @@ var _speed_label: Label
 var _speedo: Control
 var _tacho: Control
 var _rev_hint: Control       # D-197: pointing hand + REV! during the countdown
+var _rev_label: Control
 var _rev_hand: TextureRect
 var _gear_lever: Control
 var _shift_big: Label
@@ -3767,6 +3768,7 @@ func _update_rev_hint(countdown: bool) -> void:
 		var lab := UI.styled_label(tr("RC_REV_HINT"), TITLE_FONT, 2)
 		lab.position = Vector2(4, -94)
 		_rev_hint.add_child(lab)
+		_rev_label = lab
 		_hud.add_child(_rev_hint)
 	var show := countdown and _phase == "race"
 	_rev_hint.modulate.a = 1.0 if show else 0.0
@@ -3780,6 +3782,18 @@ func _update_rev_hint(countdown: bool) -> void:
 	if _phase_t < REV_POKES * TAU / REV_POKE_RATE:
 		poke = 0.5 - 0.5 * cos(_phase_t * REV_POKE_RATE)   # 0 out, 1 in
 	var bob := REV_HAND_GAP - 18.0 * poke
+	if _tach_bar != null:
+		# D-297: 2P's bar tachometer: the hand turned to point down at the
+		# bar's green band from above, REV! to its left.
+		var hs := _rev_hand.size
+		_rev_hand.pivot_offset = hs * 0.5
+		_rev_hand.rotation = -PI * 0.5   # counter-clockwise: the fingertip (left edge) now at the bottom
+		var tip: Vector2 = _tach_bar.global_position - _hud.global_position + Vector2(_tach_bar.size.x * band, 0.0)
+		var centre := tip - Vector2(0.0, hs.x * 0.5 + 4.0 + 14.0 * (1.0 - poke))   # just above the bar
+		_rev_hint.position = centre - hs * 0.5
+		_rev_label.position = Vector2(hs.x * 0.5 - hs.y * 0.5 - _rev_label.size.x - 8.0, hs.y * 0.5 - _rev_label.size.y * 0.5)
+		return
+	_rev_hand.rotation = 0.0
 	_rev_hint.position = target + Vector2(bob, -_rev_hand.size.y * 0.5)
 
 
