@@ -950,6 +950,18 @@ func _animate_sidekicks(delta: float) -> void:
 		_paddle.set_meta("sidekick_t", 0.0)
 	var on: bool = sim.padup == "K" and _phase == "play"
 	var t: float = _paddle.get_meta("sidekick_t")
+	# D-337: losing them (another paddle upgrade, a lost charge) sends them off
+	# down the screen, burners on, instead of vanishing.
+	var leave: float = _paddle.get_meta("sidekick_leave", -1.0)
+	if on:
+		leave = -1.0
+	elif t > 0.0 and _phase == "play":
+		leave = 0.0
+	elif leave >= 0.0:
+		leave += delta / SIDEKICK_FLY
+		if leave >= 1.0:
+			leave = -1.0
+	_paddle.set_meta("sidekick_leave", leave)
 	t = minf(1.0, t + delta / SIDEKICK_FLY) if on else 0.0
 	_paddle.set_meta("sidekick_t", t)
 	var e := 1.0 - pow(1.0 - t, 3.0)   # ease out: they brake as they dock
@@ -957,12 +969,18 @@ func _animate_sidekicks(delta: float) -> void:
 	for i in 2:
 		var side := -1.0 if i == 0 else 1.0
 		var h: Node3D = pair[i]
-		h.visible = on
+		h.visible = on or leave >= 0.0
 		# The piece is the ship's outer third; moved out by a third it sits
 		# just beyond the ship's end.
 		var dock := Vector3(side * Sim.PADDLE_W / 3.0, 0.0, 0.0)
-		h.position = dock + Vector3(side * 0.6, 0.0, 5.0) * (1.0 - e)
-		(h.get_child(h.get_child_count() - 1) as Fx.ShipEngine).set_thrust(1.0 - e)
+		var burn := 1.0 - e
+		if leave >= 0.0:   # accelerating away, peeling outwards
+			var k := leave * leave
+			h.position = dock + Vector3(side * 0.8, 0.0, 6.0) * k
+			burn = 1.0
+		else:
+			h.position = dock + Vector3(side * 0.6, 0.0, 5.0) * (1.0 - e)
+		(h.get_child(h.get_child_count() - 1) as Fx.ShipEngine).set_thrust(burn)
 	# The ball-hit shield spreads over the docked sidekicks too.
 	if _paddle.has_meta("shield_node"):
 		var reach := 1.0 + (Sim.SIDEKICK_W * 2.0 / Sim.PADDLE_W) * (e if on else 0.0)

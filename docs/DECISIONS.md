@@ -3370,3 +3370,9 @@
 - New phase `level` between the players choice (or attract, where 2 players isn't possible) and the difficulty: "START LEVEL", a big "< n >" (1–10, wrapping) chosen with the flippers, "BOSS LEVEL" under 10, LAUNCH to go on. The DMD shows "LEVEL n". Idle for 30 s returns to attract, like the difficulty screen. It defaults to 1 each game.
 - Choosing a level builds its rack (and the boss on 10), with that level's enemy tier; the intro drops its bricks in as usual.
 - **Status:** Accepted
+
+### D-337 — Tilt Breaker: lost Sidekicks fly away
+- **Date:** 2026-11-24
+- **Decision (director):** when the Sidekicks are lost by picking up another paddle upgrade, they fly away towards the bottom of the screen.
+- They undock and accelerate down and slightly outwards over 0.7 s (6 m down, 0.8 m out, easing in), burners full on, then disappear. The same happens whenever they're lost during play (a lost charge too); they still vanish at once outside play (level end, menus).
+- **Status:** Accepted
