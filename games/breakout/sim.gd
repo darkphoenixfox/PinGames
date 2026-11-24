@@ -284,6 +284,9 @@ var _dark_timer := DARK_FIRST   # D-339: damage since its last capsule   # 2P: t
 var _time := 0.0
 var _paddle_hist: Array = []  # [time, x], newest last
 var _held_time := 0.0
+## D-344: seconds before the plasma can be launched again after a lost charge.
+const SERVE_LOCK := 2.0
+var serve_lock := 0.0
 ## Test hook: keeps the plasma in place (used by headless tests of long holds).
 var freeze_ball := false
 
@@ -421,7 +424,8 @@ func step_two(dt: float, a: Array, b: Array) -> void:
 		_use(server)
 		ball_pos = Vector2(paddle_x, paddle_y - PADDLE_H * 0.5 - BALL_R - 0.01)
 		_held_time += dt
-		var go: bool = inp[server][2] or _held_time >= AUTO_SERVE_SECONDS
+		serve_lock = maxf(0.0, serve_lock - dt)
+		var go: bool = (inp[server][2] or _held_time >= AUTO_SERVE_SECONDS) and serve_lock <= 0.0
 		if go:
 			_serve()
 		_use(0)
@@ -589,7 +593,8 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 	if state == State.SERVE:
 		ball_pos = Vector2(paddle_x, paddle_y - PADDLE_H * 0.5 - BALL_R - 0.01)
 		_held_time += dt
-		if launch or _held_time >= AUTO_SERVE_SECONDS:
+		serve_lock = maxf(0.0, serve_lock - dt)
+		if (launch or _held_time >= AUTO_SERVE_SECONDS) and serve_lock <= 0.0:   # D-344
 			_serve()
 		return
 	if state != State.PLAY or freeze_ball:
@@ -1837,6 +1842,7 @@ func _destroy_ship() -> void:
 	else:
 		power = 1.0  # a new life starts with a full power bar (D-102)
 		_reset_serve()
+		serve_lock = SERVE_LOCK   # D-344: no instant relaunch after a lost charge
 
 
 func _lose_ball() -> void:
@@ -1857,3 +1863,4 @@ func _lose_ball() -> void:
 	else:
 		power = 1.0  # a new life starts with a full power bar (D-102)
 		_reset_serve()
+		serve_lock = SERVE_LOCK   # D-344: no instant relaunch after a lost charge

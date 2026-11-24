@@ -26,6 +26,7 @@ const STARFIELD_SHADER = preload("res://games/breakout/shaders/starfield.gdshade
 const ACCENT := Color("3ec7ff")
 const TITLE_FONT := "nano"  # D-062
 const PADDLE_MODEL := "res://assets/models/breakout/paddle.glb"
+const SIDE_THRUST_BRIGHTNESS := 0.22   # D-344: the side thrusters, dimmed so the ship's ends read
 const MODEL_PADDLE_WIDTH := 1.9  # paddle.glb's native length along X
 const ENGINE_X := 0.74           # engine nozzles, after scaling to PADDLE_W
 ## Brick textures (D-045): the director's circuit_<colour>.png, downsampled to
@@ -1129,6 +1130,8 @@ func _animate(delta: float) -> void:
 		_hint.visible = false
 	if _hint != null and _hint.visible:
 		_hint.modulate.a = 1.0 if fmod(Time.get_ticks_msec() / 1000.0, 0.8) < 0.5 else 0.0
+		if sim.serve_lock > 0.0:   # D-344: not ready until the relaunch lock ends
+			_hint.modulate.a = 0.0
 	_update_danger()   # D-322
 	_animate_blasts(delta)
 	_animate_enemies(delta)
@@ -1609,7 +1612,7 @@ func _build_ship(fallback_mat: Material) -> void:
 		_ship.add_child(_box(Vector3(Sim.PADDLE_W, 0.3, Sim.PADDLE_H), Vector3.ZERO, fallback_mat))
 	# Side engines (left fires outward to -X, right to +X).
 	for side in [-1.0, 1.0]:
-		var eng := Fx.ShipEngine.new(Vector3(side, 0.0, 0.0))
+		var eng := Fx.ShipEngine.new(Vector3(side, 0.0, 0.0), SIDE_THRUST_BRIGHTNESS)   # D-344: darker
 		eng.position = Vector3(side * ENGINE_X, 0.0, 0.0)
 		_ship.add_child(eng)
 		_engines.append(eng)

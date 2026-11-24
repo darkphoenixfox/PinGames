@@ -3425,3 +3425,11 @@
 - **Fly-bys:** every 5–11 s a tetra, cube or mini-icosahedron (60% transparent) crosses the view far behind the play (10–15 units deep) at 1.6–3 m/s on a gentle diagonal, tumbling, with a dim orange particle thruster trail.
 - `Fx.Planet` gains `restyle()` and `place_at()`. Levels 1–10 (and each 1–10 of later loops) keep the horizon; the backdrop switches at each level start and on the level select.
 - **Status:** Accepted
+
+### D-344 — Tilt Breaker: 2 s before relaunching after a lost charge; darker side thrusters
+- **Date:** 2026-11-24
+- **Decision (director):** the player can't launch a new ball right after dying: a 2-second delay. The ship's side thrusters are darker, as they were distracting and hid where the ship starts and ends.
+- **Relaunch lock:** after a lost charge (ball sunk or ship destroyed) `serve_lock` is 2 s; LAUNCH (and the auto-serve) does nothing until it runs out, and PLASMA CANNON READY only shows once it has. Not applied at a level's start.
+- **Thrusters:** `Fx.ShipEngine` takes a brightness; the side thrusters use 0.22 (colours and light scaled by it, opacity by its square root so the overlapping particles don't burn white at the nozzle). The belly burners and the Sidekicks' burners are unchanged.
+- **Test:** holding LAUNCH after a lost charge keeps the serve for 1 s and launches after 2 s.
+- **Status:** Accepted

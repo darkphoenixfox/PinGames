@@ -683,7 +683,11 @@ class ShipEngine:
 	var _particles: CPUParticles3D
 	var _light: OmniLight3D
 
-	func _init(dir: Vector3) -> void:
+	var _bright := 1.0
+
+	## `brightness` dims the flame and its light (D-344: the side thrusters).
+	func _init(dir: Vector3, brightness: float = 1.0) -> void:
+		_bright = brightness
 		_particles = CPUParticles3D.new()
 		_particles.amount = 40
 		_particles.lifetime = 0.26
@@ -702,8 +706,10 @@ class ShipEngine:
 		_particles.scale_amount_curve = curve
 		var grad := Gradient.new()
 		grad.offsets = PackedFloat32Array([0.0, 0.1, 0.45, 1.0])
-		grad.colors = PackedColorArray([Color(0.9, 0.95, 1.0, 0.7), Color(0.45, 0.8, 1.0, 0.6),
-			Color(0.15, 0.4, 1.0, 0.4), Color(0.05, 0.12, 0.7, 0.0)])
+		var b := brightness
+		var ab := sqrt(b)   # dimmer flames are thinner too, so the overlap doesn't burn white
+		grad.colors = PackedColorArray([Color(0.9 * b, 0.95 * b, 1.0 * b, 0.7 * ab), Color(0.45 * b, 0.8 * b, 1.0 * b, 0.6 * ab),
+			Color(0.15 * b, 0.4 * b, 1.0 * b, 0.4 * ab), Color(0.05 * b, 0.12 * b, 0.7 * b, 0.0)])
 		_particles.color_ramp = grad
 
 		var quad := QuadMesh.new()
@@ -744,7 +750,7 @@ class ShipEngine:
 		# Longer, faster flame with more thrust (cone length ~ velocity * lifetime).
 		_particles.initial_velocity_min = 2.8 + k * 3.2
 		_particles.initial_velocity_max = 3.2 + k * 3.6
-		_light.light_energy = 0.4 + k * 1.6
+		_light.light_energy = (0.4 + k * 1.6) * _bright
 
 
 ## Backdrop planet (D-043): an earth-like world so large that only a gently curved

@@ -526,6 +526,17 @@ func test_breakout_difficulty(Sim) -> void:
 		dd.step(1.0 / 60.0, false, false, false, 0)
 	check(dd.boss_kind == "dodeca" and dd.boss_hp == Sim.DODECA_HP and dd.rays.size() == 3,
 		"level 20: the dodecahedron fires three torpedoes (%d)" % dd.rays.size())
+	# D-344: no relaunch for 2 s after a lost charge.
+	var sl2 = Sim.new()
+	sl2.setup(3)
+	sl2.step(1.0 / 60.0, false, false, true, 0)
+	sl2._lose_ball()
+	for i in 60:   # 1 s of launch held
+		sl2.step(1.0 / 60.0, false, false, true, 0)
+	var still: bool = sl2.state == Sim.State.SERVE
+	for i in 70:
+		sl2.step(1.0 / 60.0, false, false, true, 0)
+	check(still and sl2.state == Sim.State.PLAY, "after a lost charge the plasma can't be launched for 2 s")
 	# D-339: every 4 damage to the boss drops a capsule.
 	var bd = Sim.new()
 	bd.setup(3)
