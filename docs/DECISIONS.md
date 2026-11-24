@@ -3458,3 +3458,16 @@
 - Mini-icosahedrons: their sweep's descent stops with their centre at the top 20% of the field (`ICO_TOP_FRAC`); they never reach the orbit at the bottom or start unstuck circling (D-323), and fire their torpedoes from up there.
 - **Test:** with no bricks, a mini-icosahedron never goes below the top 20% in 40 s.
 - **Status:** Accepted
+
+### D-348 — Tilt Breaker: READY! art blinks 3 times at the start of each life
+- **Date:** 2026-11-24
+- **Decision (director):** instead of the GET READY message at the start and the PLASMA CANNON READY message, the director's `ready.png` blinks 3 times on screen at the start of each life; no double warning at the start of the game.
+- The big GET READY / LEVEL n text on the TABLE during the intro is gone (the DMD still shows the level and the boss warning). PLASMA CANNON READY (which blinked until the serve) is replaced by READY!: 3 blinks (0.35 s on, 0.2 s off), then it hides, whether or not the plasma has been launched. It starts when play begins and after each lost charge, once the relaunch lock (D-344) has ended.
+- Art: trimmed and scaled to 1200 px (`assets/textures/breakout/ready.png`, original in `source/breakout/`), shown up to 760 px wide (within the field on the single screen), centred a little below the middle.
+- **Status:** Accepted
+
+### D-349 — Tilt Breaker: GAME OVER and PRESS START art
+- **Date:** 2026-11-24
+- **Decision (director):** the director's `GAME_OVER.png` and `PRESS_START.png` replace the GAME OVER and blinking PRESS START text on the TABLE.
+- GAME OVER (up to 720 px wide) heads the finale above FINAL SCORE; PRESS START (up to 520 px) blinks under the logo in attract as before. The DMD keeps its dot text. Both trimmed and scaled to 1200 px by `scripts/tools/prepare_breakout_titles.py` (which now also makes `ready.png`); recorded in `assets/CREDITS.md`.
+- **Status:** Accepted

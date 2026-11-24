@@ -225,7 +225,11 @@ var _halo: MeshInstance3D
 var _trail: Fx.Trail
 var _brick_nodes: Array[MeshInstance3D] = []
 var _brick_mats := {}  # colour -> ShaderMaterial
-var _hint: Label
+var _hint: Control   # D-348: the READY! image (was PLASMA CANNON READY text)
+var _ready_t := -1.0   # D-348: time into its 3 blinks (< 0: not running)
+const READY_BLINKS := 3
+const READY_ON := 0.35
+const READY_OFF := 0.2
 var _blast_nodes: Array[Node3D] = []
 var _enemy_nodes := {}  # enemy id -> {root, body, spin: Vector3, hole, colour: Color}
 var _circuit_textures: Array = []
@@ -271,7 +275,7 @@ var _recharge_flash := 0.0
 var _outro_x0 := 0.0  # ship x when the level ended (it glides to the centre)
 var _last_power_step := -1  # bar levels reached, to detect recharges (D-084)
 var _attract_ui: Control
-var _attract_blink: Label
+var _attract_blink: Control
 var _ready_label: Label
 var _attract_steps: Array = []  # [Callable, seconds]
 var _attract_step := -1
@@ -730,7 +734,7 @@ func _handle_events() -> void:
 					_planet._spawn_fireball(Vector3(sp.x, 0.5, sp.y), 18.0, 1.1, 99.0)
 				else:
 					_dmd_anim("ship_destroyed")
-					_hint.visible = true
+					_show_ready()
 			"rack_clear":
 				_sfx("tb_rack")
 				_lights.chase(1.8)
@@ -746,7 +750,7 @@ func _handle_events() -> void:
 				_trail.clear()
 				if sim.state != Sim.State.OVER:
 					_dmd_anim("charge_lost")
-					_hint.visible = true
+					_show_ready()
 				_refresh_status()
 			"over":
 				_finale_t = 0.0
@@ -1110,7 +1114,7 @@ func _finale(delta: float) -> void:
 	if before < FINALE_TEXT_AT and _finale_t >= FINALE_TEXT_AT:
 		_lights.set_dark(true)
 		var col := UI.vstack(40)
-		col.add_child(UI.styled_label(tr("DMD_GAME_OVER"), TITLE_FONT, 3))
+		col.add_child(_title_art("game_over", 720.0))   # D-349: the director's art (was text)
 		col.add_child(UI.spacer(40))
 		col.add_child(UI.styled_label(tr("TB_FINAL_SCORE"), TITLE_FONT, 2))
 		col.add_child(UI.styled_label(ScoreTable.format_score(sim.score), TITLE_FONT, 2))
@@ -1134,13 +1138,25 @@ func _animate(delta: float) -> void:
 		Screens.set_play_half_width((sim.field.size.x * 0.5 + PLAY_MARGIN) / (16.0 * b.x / b.y))
 	_refresh_status()  # DMD power bar changes continuously
 	_update_backglass_lights(delta)
-	# "PLASMA CANNON READY" blinks while waiting to fire (D-059).
+	# D-348: READY! blinks 3 times at the start of each life (after the
+	# relaunch lock, D-344), then goes. Replaces the endless PLASMA CANNON READY.
 	if _hint != null and _phase != "play":
 		_hint.visible = false
 	if _hint != null and _hint.visible:
-		_hint.modulate.a = 1.0 if fmod(Time.get_ticks_msec() / 1000.0, 0.8) < 0.5 else 0.0
-		if sim.serve_lock > 0.0:   # D-344: not ready until the relaunch lock ends
+		if sim.serve_lock > 0.0:
 			_hint.modulate.a = 0.0
+		else:
+			if _ready_t < 0.0:
+				_ready_t = 0.0
+			_ready_t += delta
+			var cycle := READY_ON + READY_OFF
+			if _ready_t >= cycle * READY_BLINKS:
+				_hint.visible = false
+				_ready_t = -1.0
+			else:
+				_hint.modulate.a = 1.0 if fmod(_ready_t, cycle) < READY_ON else 0.0
+	else:
+		_ready_t = -1.0
 	_update_danger()   # D-322
 	_animate_blasts(delta)
 	_animate_enemies(delta)
@@ -1854,12 +1870,47 @@ func _box(size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
 
 # --- 2D overlays ---------------------------------------------------------------------
 ## The TABLE stays clean: status lives on the DMD (D-051); only the fire hint here.
+## D-349: one of the director's title images (assets/textures/breakout/<name>.png)
+## as a centred TextureRect at most `max_w` TABLE pixels wide, within the field.
+func _title_art(name: String, max_w: float) -> TextureRect:
+	var tex: Texture2D = load("res://assets/textures/breakout/%s.png" % name)
+	var rt := TextureRect.new()
+	rt.texture = tex
+	rt.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rt.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rt.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	var base := Vector2(Screens.table_base())
+	var w := minf(max_w, sim.field.size.x * base.y / 16.0 * 0.9)
+	rt.custom_minimum_size = Vector2(w, w * tex.get_height() / tex.get_width())
+	rt.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	return rt
+
+
+## D-348: starts READY!'s 3 blinks (a new life or level).
+func _show_ready() -> void:
+	_hint.visible = true
+	_ready_t = -1.0
+	_hint.modulate.a = 0.0
+
+
 func _build_hud() -> void:
-	_hint = UI.styled_label(tr("TB_PRESS_LAUNCH"), TITLE_FONT, 2)
-	_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_hint.offset_top = -560
-	_hint.offset_left = -400
-	_hint.offset_right = 400
+	# D-348: the director's READY! art, centred a little above the middle.
+	var rt := TextureRect.new()
+	rt.texture = load("res://assets/textures/breakout/ready.png")
+	rt.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rt.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rt.set_anchors_preset(Control.PRESET_CENTER)
+	var base := Vector2(Screens.table_base())
+	var w := minf(760.0, sim.field.size.x * base.y / 16.0 * 0.9)   # within the play field
+	var h := w * 347.0 / 1200.0
+	rt.offset_left = -w * 0.5
+	rt.offset_right = w * 0.5
+	rt.offset_top = -h * 0.5 + base.y * 0.08
+	rt.offset_bottom = h * 0.5 + base.y * 0.08
+	rt.visible = false
+	_hint = rt
 	add_to_table(_hint)
 	_build_danger()
 
@@ -1964,7 +2015,7 @@ func _enter_attract() -> void:
 	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	logo.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_attract_ui.add_child(logo)
-	_attract_blink = UI.styled_label(tr("TB_PRESS_START"), TITLE_FONT, 2)
+	_attract_blink = _title_art("press_start", 520.0)   # D-349: the director's art (was text)
 	_attract_ui.add_child(_attract_blink)
 	add_to_table(_attract_ui)
 	_build_attract_steps()
@@ -2259,10 +2310,7 @@ func _begin_intro() -> void:
 	Dmd.show_text(title, tr("TB_GET_READY") if sim.level > 1 else tr("TB_TWO_PLAYERS" if _two else "DMD_PLAYER_1"), Dmd.YELLOW, Dmd.WHITE)
 	if sim.is_boss_level():   # D-335
 		Dmd.show_text(title, tr("TB_BOSS_WARNING"), Dmd.YELLOW, Dmd.RED)
-	_ready_label = UI.styled_label(title, TITLE_FONT, 3)
-	_ready_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_ready_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	add_to_table(_ready_label)
+	# D-348: no big title on the TABLE: READY! blinks once play starts.
 	_lights.chase(1.5)
 
 
@@ -2328,7 +2376,7 @@ func _enter_play() -> void:
 		_ready_label.queue_free()
 	if is_instance_valid(_attract_ui):
 		_attract_ui.queue_free()
-	_hint.visible = true
+	_show_ready()
 	_shown_score = -1
 	_refresh_status()
 
