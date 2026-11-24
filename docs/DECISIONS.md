@@ -3145,3 +3145,30 @@
 - **Saved checkpoint:** a checkpoint reached on momentum after time up (the race goes on, D-103) brings the race's song back.
 - Recorded in `assets/CREDITS.md`.
 - **Status:** Accepted
+
+### D-312 — Turbo Run: default paints yellow, orange, red; black and grey added
+- **Date:** 2026-11-24
+- **Decision (director):** the default car colours are yellow (Easy), orange (Normal) and red (Hard). Black and grey join the colour options.
+- **Defaults:** set by the cars' base hue turns (`Sim.CARS[i].hue`): the red hot hatch turned to yellow (0.13), the red sports car to orange (0.06). The supercar's own paint is a pale yellow, which a hue turn alone makes pink. It uses a "deepened" paint: a hue of `10 + turn` in the car shader means turn, then deepen the paintwork's colour (10.89 = red). `_turn_hue()` keeps that through repaints. `CAR_COLS` (DMD) follows.
+- **Black and grey:** two new entries at the end of `PAINTS` (`PAINT_BLACK` 2.0, `PAINT_GREY` 3.0). The car shader reads a hue of 1.5 or more as a neutral paint: only the paintwork (saturated texels) becomes black or grey, keeping its light and shade, while glass, tyres, chrome, stripes and lamps stay as they are. Under the showroom's strong light black reads as a dark charcoal.
+- **The DMD pictures** (`_painted`) follow: deepened paints are turned and saturated; black shows as dark grey (still visible on the black DMD), grey as light grey.
+- **Fix found on the way:** a shader local named `mn` clashed with an existing varying and the car shader failed to compile (all cars pale). The tests don't compile spatial shaders, so only a screen run showed it.
+- **Status:** Accepted
+
+### D-313 — Turbo Run: the car select DMD shows each car's own picture
+- **Date:** 2026-11-24
+- **Decision (director):** the cars on the car select DMD didn't look like their in-game counterparts (a generic dot car).
+- **How:**
+  - The DMD now draws the highlighted car's own side picture (the race's DMD sprites, D-243/245) in its current paint, cached per car and paint, and repainted live as the colour changes.
+  - The hot hatch got its own picture (`dmd_car_hatch.png`, 22×9): rendered side-on from its model with `render_car_side.py`, converted with `gen_loading_car.py --wheels --flip`. It was using the sports car's picture, in the race animations too.
+- **Status:** Accepted
+
+### D-314 — Single screen: the DMD framed as the car's rear-view mirror
+- **Date:** 2026-11-24
+- **Decision (director):** on a single screen, a thin frame round the DMD that makes it look like the car's mirror; the mount stalk minimal.
+- **How:**
+  - `Screens.MirrorFrame`: a thin dark rounded housing (2.5% of the DMD's width, lit top edge, soft shadow) and a light line round the glass.
+  - A minimal stalk up to the top edge of the screen.
+  - The DMD hangs that much lower so the housing shows all round.
+- **When:** on a landscape single screen, whenever its shared DMD shows at the top centre (every game). Not with Tilt Breaker's side panels (their own frames, D-266), not in portrait (the DMD spans the width), and not in a 2P race (each half has its own DMD, D-291).
+- **Status:** Accepted

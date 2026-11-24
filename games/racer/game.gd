@@ -35,7 +35,7 @@ const Showroom = preload("res://games/racer/showroom.gd")
 const Tunnel = preload("res://games/racer/tunnel.gd")
 const SELECT_TIME := 15.0   # s to choose a car before the highlighted one is taken
 ## Car colours on the DMD, matching Sim.CARS' hues (red, yellow, blue).
-const CAR_COLS := [Color("3f8cff"), Color("e8303a"), Color("ff8a1e")]   # D-202: easy blue, normal red, hard orange
+const CAR_COLS := [Color("ffd23e"), Color("ff8a1e"), Color("e8303a")]   # D-312: easy yellow, normal orange, hard red
 const NIGHT_GROUP := &"rc_night_lights"
 const Dial = preload("res://games/racer/dial.gd")
 const GearLever = preload("res://games/racer/gear_lever.gd")
@@ -682,7 +682,7 @@ func start(_players: int) -> void:
 		_p2_car = clampi(int(str(Config.cli.get("rc-car2", "2"))), 0, Sim.CARS.size() - 1)
 		_hues = [_car_hue(_chosen_car), _car_hue(_p2_car, 1)]
 		if _p2_car == _chosen_car:
-			_hues[1] = fposmod(_hues[0] + float(PAINTS[1]), 1.0)
+			_hues[1] = _turn_hue(_hues[0], float(PAINTS[1]))
 	if Config.cli.has("rc-radio"):   # dev: straight to the music select (D-301)
 		_enter_attract()
 		_begin_radio()
@@ -967,8 +967,9 @@ func _new_sim() -> void:
 ## The player car's DMD dot sprite (D-243), or null for the plain dot car.
 const DMD_SPRITES := {SUPERCAR_MODEL: "res://assets/textures/racer/dmd_car_supercar.png",
 	CAR_MODEL: "res://assets/textures/racer/dmd_car_sports.png",
-	HOTHATCH_MODEL: "res://assets/textures/racer/dmd_car_sports.png"}   # D-244: red sports car (no hatch picture)
+	HOTHATCH_MODEL: "res://assets/textures/racer/dmd_car_hatch.png"}   # D-313: its own side picture (was the sports car's)
 static var _dmd_sprites := {}
+var _select_sprites := {}   # D-313: painted car-select pictures by "car/hue"
 
 
 func _dmd_image(path: String) -> Image:
@@ -999,7 +1000,14 @@ func _painted(img: Image, hue: float) -> Image:
 		for x in out.get_width():
 			var c := out.get_pixel(x, y)
 			if c.a > 0.5 and c.s > 0.35:
-				c.h = fposmod(c.h + hue, 1.0)
+				if hue >= 9.5:   # D-312: a deepened paint
+					c.h = fposmod(c.h + hue - 10.0, 1.0)
+					c.s = minf(1.0, c.s * 1.8)
+				elif hue >= 1.5:   # D-312: black shows as dark grey on the (black) DMD
+					var g := 0.3 + 0.25 * c.v if hue < 2.5 else 0.55 + 0.35 * c.v
+					c = Color(g, g, g, c.a)
+				else:
+					c.h = fposmod(c.h + hue, 1.0)
 				out.set_pixel(x, y, c)
 	return out
 
@@ -1007,7 +1015,10 @@ func _painted(img: Image, hue: float) -> Image:
 ## Paint (D-236): on the car select screen the magna buttons step the
 ## highlighted car through PAINTS (tints on top of its own paint, 0 = as it
 ## comes); kept for the session.
-const PAINTS := [0.0, 0.36, 0.62, 0.08, 0.13, 0.8, 0.5, 0.92]
+const PAINTS := [0.0, 0.36, 0.62, 0.08, 0.13, 0.8, 0.5, 0.92, PAINT_BLACK, PAINT_GREY]
+## D-312: neutral paints (the car shader's hue >= 1.5): not hue turns.
+const PAINT_BLACK := 2.0
+const PAINT_GREY := 3.0
 static var _car_paint := [0, 0, 0]
 ## D-292 (director): player 2's paints, by default a different colour from
 ## player 1's (the second paint); their magna buttons change their own.
@@ -1016,7 +1027,17 @@ static var _car_paint_p2 := [1, 1, 1]
 
 func _car_hue(i: int, player: int = 0) -> float:
 	var paint: Array = _car_paint_p2 if player == 1 else _car_paint
-	return fposmod(float(Sim.CARS[i].hue) + float(PAINTS[int(paint[i])]), 1.0)
+	var p: float = PAINTS[int(paint[i])]
+	if p >= 1.5:
+		return p   # black / grey (D-312)
+	return _turn_hue(float(Sim.CARS[i].hue), p)
+
+
+## A paint turned by d (D-312): a deepened paint (10 + turn) stays deepened.
+static func _turn_hue(h: float, d: float) -> float:
+	if h >= 9.5:
+		return 10.0 + fposmod(h - 10.0 + d, 1.0)
+	return fposmod(h + d, 1.0)
 
 
 func _repaint(d: int) -> void:
@@ -1322,7 +1343,7 @@ func _confirm_car() -> void:
 		_p2_car = _showroom.selected
 		_hues[1] = _car_hue(_p2_car, 1)
 		if _p2_car == _chosen_car and is_equal_approx(_hues[1], _hues[0]):
-			_hues[1] = fposmod(_hues[0] + float(PAINTS[1]), 1.0)   # never two identical cars
+			_hues[1] = _turn_hue(_hues[0], float(PAINTS[1]))   # never two identical cars
 		_select_p2 = false
 	else:
 		_chosen_car = _showroom.selected
@@ -1341,7 +1362,21 @@ func _draw_dmd_select(p) -> void:
 	var i: int = _showroom.selected
 	var spec: Dictionary = Sim.CARS[i]
 	var col: Color = CAR_COLS[i]
-	_anims._car(p, 5, 13, col)
+	# D-313: the car as it is in the game: its own DMD picture in its paint.
+	var hue := _car_hue(i, 1 if _select_p2 else 0)
+	var key := "%d/%.3f" % [i, hue]
+	if not _select_sprites.has(key):
+		_select_sprites[key] = _painted(_dmd_sprite(CAR_MODELS[i]), hue)
+	var spr: Image = _select_sprites[key]
+	if spr != null:
+		var y0 := 20 - spr.get_height()
+		for r in spr.get_height():
+			for c in spr.get_width():
+				var px := spr.get_pixel(c, r)
+				if px.a >= 0.5:
+					p.dot(1 + c, y0 + r, Color(px.r, px.g, px.b))
+	else:
+		_anims._car(p, 5, 13, col)
 	p.text(tr(spec.name), 24, 1, 1, Showroom.ROW_COLS[i])
 	p.text(tr("RC_DMD_TOP") % roundi(float(spec.top) * Sim.MPH), 24, 12, 1, Dmd.WHITE)
 	p.text(tr("RC_DMD_CORNER"), 24, 23, 1, Dmd.DIM)

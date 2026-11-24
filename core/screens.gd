@@ -311,10 +311,68 @@ func set_play_half_width(k: float) -> void:
 		_place_single(Vector2(get_window().size))
 
 
+## D-314 (director): on a landscape single screen the DMD at the top centre is
+## framed as a car's rear-view mirror: a thin dark rounded housing round it,
+## a light edge on its glass, and a stalk up to the top of the screen. Not
+## with the side panels (Tilt Breaker frames its own, D-266) or in portrait.
+var _mirror: Control
+
+
+func _mirror_rim(dmd_w: float) -> float:
+	return maxf(4.0, roundf(dmd_w * 0.025))
+
+
+func _place_mirror() -> void:
+	var d := _single_dmd
+	if not is_instance_valid(d) or not is_instance_valid(_single_page):
+		return
+	var win := Vector2(get_window().size)
+	var on := win.x > win.y and d.visible and not side_panels
+	if _mirror == null:
+		_mirror = MirrorFrame.new()
+		_mirror.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_single_page.add_child(_mirror)
+	if _mirror.get_index() > d.get_index():
+		_single_page.move_child(_mirror, d.get_index())   # under the DMD
+	_mirror.visible = on
+	if on:
+		var rim := _mirror_rim(d.size.x)
+		_mirror.position = Vector2.ZERO
+		_mirror.size = win
+		(_mirror as MirrorFrame).glass = Rect2(d.position, d.size)
+		(_mirror as MirrorFrame).rim = rim
+		_mirror.queue_redraw()
+
+
+class MirrorFrame extends Control:
+	var glass := Rect2()
+	var rim := 6.0
+
+	func _draw() -> void:
+		var r := glass.grow(rim)
+		var c := glass.get_center()
+		# A minimal stalk up to the windscreen (the top of the screen).
+		draw_rect(Rect2(c.x - rim * 0.4, 0.0, rim * 0.8, r.position.y + rim), Color("16181d"))
+		# Housing: a dark rounded shell, lit along its top edge.
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color("16181d")
+		sb.set_corner_radius_all(int(rim * 2.2))
+		sb.border_color = Color("2c3039")
+		sb.set_border_width_all(int(maxf(1.0, rim * 0.25)))
+		sb.border_width_top = int(maxf(1.0, rim * 0.4))
+		sb.shadow_color = Color(0, 0, 0, 0.45)
+		sb.shadow_size = int(rim)
+		sb.shadow_offset = Vector2(0, rim * 0.4)
+		draw_style_box(sb, r)
+		# The glass's edge: a thin light line just round the DMD.
+		draw_rect(glass.grow(1.0), Color(0.75, 0.8, 0.88, 0.45), false, 1.0)
+
+
 ## D-291: hides the single screen's DMD box (a 2-player game shows its own).
 func show_single_dmd(on: bool) -> void:
 	if is_instance_valid(_single_dmd):
 		_single_dmd.visible = on
+	_place_mirror()   # D-314
 
 
 func want_dmd_above(on: bool) -> void:
@@ -480,6 +538,7 @@ func _place_single(win: Vector2) -> void:
 	var t := _single_table
 	if not is_instance_valid(d) or not is_instance_valid(t):
 		return
+	_place_mirror.call_deferred()
 	var ratio := float(Dmd.size.x) / Dmd.size.y
 	if win.y > win.x:
 		var dh := win.x / ratio
@@ -493,6 +552,8 @@ func _place_single(win: Vector2) -> void:
 		var dh := dw / ratio
 		d.position = Vector2((win.x - dw) * 0.5, 0)
 		d.size = Vector2(dw, dh)
+		# D-314: framed as the car's rear-view mirror, hung a little down.
+		d.position.y = _mirror_rim(dw)
 		for n in [_single_bgv, _frame_d, _frame_b]:
 			if is_instance_valid(n):
 				n.visible = false

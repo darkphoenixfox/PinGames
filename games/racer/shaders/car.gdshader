@@ -76,9 +76,37 @@ vec3 hue_rotate(vec3 c, float a) {
 	return c * ca + cross(k, c) * sin(a) + k * dot(k, c) * (1.0 - ca);
 }
 
+// D-312: hue >= 1.5 is a neutral paint: 2 = black, 3 = grey. Only the
+// paintwork changes (coloured texels: saturation above ~0.3); glass, tyres,
+// chrome and lamps keep their own colours.
+vec3 neutral_paint(vec3 c, float kind) {
+	float hi = max(c.r, max(c.g, c.b));
+	float lo = min(c.r, min(c.g, c.b));
+	float sat = hi > 0.001 ? (hi - lo) / hi : 0.0;
+	float paint = smoothstep(0.22, 0.4, sat);
+	float shade = hi;   // the paint's light and shadow, without its colour
+	vec3 col = kind < 2.5 ? vec3(0.015 + shade * 0.07) : vec3(0.16 + shade * 0.3);
+	return mix(c, col, paint);
+}
+
 void fragment() {
 	vec3 c = hd ? texture(tex_hd, UV).rgb : texture(tex, UV).rgb;
-	ALBEDO = hue_rotate(c, hue * 6.2831853) * bright;
+	// hue >= 9.5 (D-312): a hue turn of (hue - 10), then the paint's colour
+	// deepened, for pale paints (the supercar's) that must come out strong.
+	vec3 painted;
+	if (hue >= 9.5) {
+		vec3 r = hue_rotate(c, (hue - 10.0) * 6.2831853);
+		float l = dot(r, vec3(0.3, 0.59, 0.11));
+		float hi = max(c.r, max(c.g, c.b));
+		float lo = min(c.r, min(c.g, c.b));
+		float k = smoothstep(0.15, 0.3, hi > 0.001 ? (hi - lo) / hi : 0.0);
+		painted = mix(r, clamp(mix(vec3(l), r, 2.6) * 0.85, 0.0, 1.0), k);
+	} else if (hue >= 1.5) {
+		painted = neutral_paint(c, hue);
+	} else {
+		painted = hue_rotate(c, hue * 6.2831853);
+	}
+	ALBEDO = painted * bright;
 	float lum = dot(c, vec3(0.3, 0.59, 0.11));
 	if (spin > 0.5 && wheel_n > 0 && abs(mp.x) > 0.5 && mn.x * sign(mp.x) > 0.3) {
 		for (int i = 0; i < 6; i++) {
