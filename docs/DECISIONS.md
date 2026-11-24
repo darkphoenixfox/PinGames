@@ -3319,3 +3319,11 @@
 - The recharge over time (D-084 and before) is unchanged.
 - **Test:** a brick hit adds exactly 0.02 and a ship hit 0.05.
 - **Status:** Accepted
+
+### D-331 — Tilt Breaker: the Homing Missile looks like a rocket
+- **Date:** 2026-11-24
+- **Decision (director):** the missile shot is drawn as a missile: a straight, thin metal rocket with a thruster made of particles.
+- `Fx.make_missile(band)`: a 0.5 m metal body (cylinder and nose cone, slightly self-lit so it reads against space), a lime band behind the nose (H's colour), four tail fins, and a world-space `CPUParticles3D` thruster (96 additive sparks, 0.35 s, white to yellow to orange to fading grey smoke, growing as they cool) that leaves a trail behind it. It turns to face its flight every frame. It replaces the tinted plasma ball and ribbon trail of D-327.
+- The thruster starts with `restart()` (D-303's black-square lesson).
+- **Dev:** `--tb-autofire` now also holds the plasma in place after the serve, so test runs don't lose a charge (which ends the upgrade).
+- **Status:** Accepted

@@ -147,6 +147,107 @@ static func make_cube(radius: float, texture: Texture2D, edge_color: Color) -> N
 	return root
 
 
+## D-331: the Homing Missile: a thin metal rocket, nose along -Z, a coloured
+## band behind the nose, four tail fins and a particle thruster (world-space
+## sparks and smoke that trail behind it). Call `restart()` on the "Thruster"
+## child once it's in the tree.
+static func make_missile(band: Color) -> Node3D:
+	var root := Node3D.new()
+	root.name = "Missile"
+	var metal := StandardMaterial3D.new()
+	metal.albedo_color = Color(0.78, 0.8, 0.84)
+	metal.metallic = 0.9
+	metal.roughness = 0.28
+	metal.emission_enabled = true   # readable against space
+	metal.emission = Color(0.25, 0.27, 0.3)
+	var body := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.035
+	cyl.bottom_radius = 0.035
+	cyl.height = 0.4
+	cyl.radial_segments = 10
+	body.mesh = cyl
+	body.material_override = metal
+	body.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+	root.add_child(body)
+	var nose := MeshInstance3D.new()
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.0
+	cone.bottom_radius = 0.035
+	cone.height = 0.11
+	cone.radial_segments = 10
+	nose.mesh = cone
+	nose.material_override = metal
+	nose.rotation_degrees = Vector3(-90.0, 0.0, 0.0)   # tip towards -Z
+	nose.position = Vector3(0.0, 0.0, -0.255)
+	root.add_child(nose)
+	var ring := MeshInstance3D.new()
+	var rc := CylinderMesh.new()
+	rc.top_radius = 0.038
+	rc.bottom_radius = 0.038
+	rc.height = 0.05
+	rc.radial_segments = 10
+	ring.mesh = rc
+	var bm := StandardMaterial3D.new()
+	bm.albedo_color = band
+	bm.emission_enabled = true
+	bm.emission = band
+	bm.emission_energy_multiplier = 1.5
+	ring.material_override = bm
+	ring.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+	ring.position = Vector3(0.0, 0.0, -0.13)
+	root.add_child(ring)
+	for k in 4:   # tail fins
+		var fin := MeshInstance3D.new()
+		var bx := BoxMesh.new()
+		bx.size = Vector3(0.012, 0.09, 0.1)
+		fin.mesh = bx
+		fin.material_override = metal
+		var piv := Node3D.new()
+		piv.rotation.z = k * PI * 0.5 + PI * 0.25
+		piv.position = Vector3(0.0, 0.0, 0.15)
+		fin.position = Vector3(0.0, 0.06, 0.0)
+		piv.add_child(fin)
+		root.add_child(piv)
+	# Thruster: hot sparks shooting back, cooling to smoke, left behind in the world.
+	var p := CPUParticles3D.new()
+	p.name = "Thruster"
+	p.amount = 96
+	p.lifetime = 0.35
+	p.local_coords = false
+	p.position = Vector3(0.0, 0.0, 0.21)
+	p.direction = Vector3(0.0, 0.0, 1.0)
+	p.spread = 14.0
+	p.gravity = Vector3.ZERO
+	p.initial_velocity_min = 1.5
+	p.initial_velocity_max = 3.0
+	p.scale_amount_min = 0.6
+	p.scale_amount_max = 1.0
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 0.5))
+	curve.add_point(Vector2(0.25, 1.0))
+	curve.add_point(Vector2(1.0, 1.8))
+	p.scale_amount_curve = curve
+	var grad := Gradient.new()
+	grad.set_color(0, Color(1.0, 1.0, 0.9, 1.0))
+	grad.set_color(1, Color(0.5, 0.5, 0.55, 0.0))
+	grad.add_point(0.2, Color(1.0, 0.85, 0.3, 0.95))
+	grad.add_point(0.45, Color(1.0, 0.45, 0.1, 0.7))
+	p.color_ramp = grad
+	var q := QuadMesh.new()
+	q.size = Vector2(0.06, 0.06)
+	var pm := StandardMaterial3D.new()
+	pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	pm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	pm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	pm.vertex_color_use_as_albedo = true
+	pm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	q.material = pm
+	p.mesh = q
+	root.add_child(p)
+	return root
+
+
 ## Charge-up particles (D-053): glowing square pixels that spawn on a ring around
 ## the emitter and are pulled into its centre, shrinking as they arrive.
 ## Toggle `emitting` while charging.

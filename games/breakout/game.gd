@@ -450,6 +450,7 @@ func _process(delta: float) -> void:
 		if Config.cli.has("tb-autofire"):   # dev: serve, then keep charging and firing (D-327)
 			if sim.state == Sim.State.SERVE:
 				_launch = true
+			sim.freeze_ball = sim.state == Sim.State.PLAY   # the plasma waits, so no charge is lost
 			sim.charge_held = fmod(_phase_t, 1.2) < 1.0
 		sim.step(minf(delta, 0.05), CabinetInput.is_down(&"flip_l"), CabinetInput.is_down(&"flip_r"), _launch, _dash)
 	_launch = false
@@ -713,23 +714,20 @@ func _animate_shots(_delta: float) -> void:
 	for mi in sim.missiles:
 		live[mi.id] = true
 		if not _shot_nodes.has(mi.id):
-			var b := Fx.make_plasma_ball(Sim.MISSILE_R * 0.9)
-			Fx.tint_plasma(b, POWERUP_COLORS["H"])
-			_root.add_child(b)
-			var tr2 := Fx.Trail.new()
-			tr2.width = 0.16
-			tr2.head_color = Color(1.0, 0.95, 0.6, 0.9)
-			tr2.tail_color = Color(1.0, 0.4, 0.1, 0.0)
-			_root.add_child(tr2)
-			_shot_nodes[mi.id] = {"node": b, "trail": tr2}
+			var rocket := Fx.make_missile(POWERUP_COLORS["H"])   # D-331: a rocket, not a plasma ball
+			_root.add_child(rocket)
+			(rocket.get_node("Thruster") as CPUParticles3D).restart()
+			_shot_nodes[mi.id] = {"node": rocket, "trail": null}
 		var n2: Dictionary = _shot_nodes[mi.id]
 		var mp: Vector2 = mi.pos
+		var mv: Vector2 = mi.vel
 		n2.node.position = Vector3(mp.x, 0.25, mp.y)
-		n2.trail.update(Vector3(mp.x, 0.2, mp.y))
+		n2.node.rotation.y = -atan2(mv.x, -mv.y)   # nose along its flight
 	for id in _shot_nodes.keys():
 		if not live.has(id):
 			_shot_nodes[id].node.queue_free()
-			_shot_nodes[id].trail.queue_free()
+			if _shot_nodes[id].trail != null:
+				_shot_nodes[id].trail.queue_free()
 			_shot_nodes.erase(id)
 
 
