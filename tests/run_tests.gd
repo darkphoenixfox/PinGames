@@ -374,6 +374,28 @@ func test_breakout_difficulty(Sim) -> void:
 	cube_low = ag.enemies[1].pos.y > ag.enemies[0].pos.y
 	check(kinds_ok and dist[1] < dist[0] * 0.85 and cube_low,
 		"cube enemy: nearer the ship (%.0f vs %.0f) and lower than a tetra" % [dist[1], dist[0]])
+	# D-326: 1UP and Nuclear, rarer than the others, used on the catch.
+	var rp = Sim.new()
+	rp.setup(3)
+	var counts := {}
+	for i in 6000:
+		var kk: String = rp.random_powerup_kind()
+		counts[kk] = int(counts.get(kk, 0)) + 1
+	var rare_ok: bool = counts.get("U", 0) > 200 and counts.get("N", 0) > 200 		and counts.get("U", 0) < counts.get("T", 0) * 0.6 and counts.get("N", 0) < counts.get("T", 0) * 0.6
+	var up = Sim.new()
+	up.setup(3)
+	var lives0: int = up.balls_left
+	up.spawn_powerup("U", Vector2(up.paddle_x, Sim.PADDLE_Y - 0.3))
+	for i in 20:
+		up.step(1.0 / 60.0, false, false, false, 0)
+	var nk = Sim.new()
+	nk.setup(3)
+	nk.spawn_powerup("N", Vector2(nk.paddle_x, Sim.PADDLE_Y - 0.3))
+	var score0: int = nk.score
+	for i in 20:
+		nk.step(1.0 / 60.0, false, false, false, 0)
+	check(rare_ok and up.balls_left == lives0 + 1 and up.powerup == "" 		and nk.bricks_alive() == 0 and nk.state == Sim.State.LEVEL_CLEAR and nk.score > score0 and nk.powerups.is_empty(),
+		"1UP adds a charge, Nuclear clears the level; both rarer (U %d, N %d, T %d per 6000)" % [counts.get("U", 0), counts.get("N", 0), counts.get("T", 0)])
 	# D-324: no cubes before level 3.
 	var cl = Sim.new()
 	cl.setup(3)

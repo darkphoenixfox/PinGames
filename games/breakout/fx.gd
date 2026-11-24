@@ -203,7 +203,9 @@ class PowerupCapsule:
 
 	var _orbits: Array[Node3D] = []
 
-	func _init(letter: String, color: Color, radius: float) -> void:
+	## `letter` is the text on the capsule (scaled down to fit when longer);
+	## an `icon` texture replaces it (D-326).
+	func _init(letter: String, color: Color, radius: float, icon: Texture2D = null) -> void:
 		var core := MeshInstance3D.new()
 		var sphere := SphereMesh.new()
 		sphere.radius = radius
@@ -230,11 +232,25 @@ class PowerupCapsule:
 		key.light_energy = 1.6
 		key.light_color = color.lerp(Color.WHITE, 0.6)
 		add_child(key)
+		if icon != null:
+			for sh in [true, false]:
+				var sp := Sprite3D.new()
+				sp.texture = icon
+				sp.pixel_size = radius * 1.5 / float(icon.get_width())
+				sp.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+				sp.no_depth_test = true
+				sp.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+				sp.render_priority = 1 if sh else 2
+				if sh:   # drop shadow (D-075)
+					sp.modulate = Color(0, 0, 0, 0.7)
+					sp.position = Vector3(radius * 0.14, -radius * 0.1, radius * 0.14)
+				add_child(sp)
+			letter = ""
 		var label := Label3D.new()
 		label.text = letter
 		label.font = load("res://assets/fonts/pinpixel.ttf")
 		label.font_size = 96
-		label.pixel_size = radius * 0.012
+		label.pixel_size = radius * 0.012 / maxf(1.0, letter.length() * 0.6)
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		label.no_depth_test = true
 		label.modulate = Color.WHITE if color.get_luminance() < 0.75 else Color(0.1, 0.1, 0.15)

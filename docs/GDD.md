@@ -145,6 +145,7 @@ Rules:
   - **I** (purple) Ion cannon: level 3 only, full bar; an instant beam fries the one brick column straight above the ship (D-078).
   - **L** (white) Lightspeed: no shot, no bar; the ship is 30 % faster and leaves two afterimages that also bounce the plasma.
   - **S** (green) Shield: no shot, no bar; a green barrier at the bottom saves one sinking ball, then you return to the normal plasma cannon (D-084).
+  - **1UP** (pink, reads "1UP") and **Nuclear** (orange, atom symbol) are rarer (about a third as likely as the others) and act at once (D-326): 1UP adds a charge; Nuclear flashes the screen white and destroys every brick (not metal), clearing the level.
   - The ship never blocks a ball rising from below.
 - **Charged shot (D-074..D-076):** reaching the maximum level fires automatically. With an empty bar, "LOW" shows only in the DMD bar area, and only after both flippers are held for more than 0.5 s. The bar is full at the start of every level. The ship flashes yellow each time the bar recharges a level (each third; only when full for Bounce and Ion) (D-084).
 - **Bricks (D-073):** UPPERCASE = 1 hit; lowercase = armoured (2 hits, glowing frame, cracks after the first hit, 1.5× points); `X` = indestructible metal (doesn't count towards clearing).

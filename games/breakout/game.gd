@@ -58,7 +58,9 @@ const CAMERA_TILT_DEG := 20.0
 const LEVEL_COLORS := [Color(0.35, 0.65, 1.0), Color(1.0, 0.85, 0.25), Color(1.0, 0.3, 0.2)]
 ## Power-up colours (D-072); also the DMD power bar colour while active.
 const POWERUP_COLORS := {"T": Color(0.3, 0.55, 1.0), "P": Color(1.0, 0.25, 0.2), "B": Color(1.0, 0.85, 0.2),
-	"I": Color(0.72, 0.3, 1.0), "L": Color(1.0, 1.0, 1.0), "S": Color(0.3, 1.0, 0.4)}
+	"I": Color(0.72, 0.3, 1.0), "L": Color(1.0, 1.0, 1.0), "S": Color(0.3, 1.0, 0.4),
+	"U": Color(1.0, 0.35, 0.7), "N": Color(1.0, 0.5, 0.05)}   # D-326: 1UP pink, Nuclear orange
+const ATOM_ICON := preload("res://assets/textures/breakout/pu_atom.png")   # D-326
 const MUSIC := "res://assets/audio/music/breakout/tilt_breaker_original.ogg"   # D-318: the director's own (was n-Dimensions)
 const MUSIC_ATTRACT := "res://assets/audio/music/breakout/dead_ship_attract.ogg"  # D-082
 const MUSIC_GAME_OVER := "res://assets/audio/music/breakout/earths_end.ogg"   # D-320: the director's, after the last life
@@ -410,6 +412,13 @@ func _process(delta: float) -> void:
 		set_meta("dev_pu_clear", true)
 		_on_debug_action(&"powerup")
 		_on_debug_action(&"clear_level")
+	if Config.cli.has("tb-drop") and _phase == "play" and not has_meta("dev_drop"):   # dev: drop capsules, e.g. U,N (D-326)
+		set_meta("dev_drop", true)
+		sim.events.clear()
+		var kinds: PackedStringArray = str(Config.cli["tb-drop"]).split(",")
+		for i in kinds.size():
+			sim.spawn_powerup(kinds[i], Vector2((i - (kinds.size() - 1) * 0.5) * 1.2, -1.0))
+		_handle_events()
 	if Config.cli.has("tb-score") and not has_meta("dev_score"):   # dev: start at N points (D-321)
 		set_meta("dev_score", true)
 		sim.score = int(str(Config.cli["tb-score"]))
@@ -453,6 +462,8 @@ func _sfx(sound_name: String) -> AudioStreamPlayer:
 
 # --- events ------------------------------------------------------------------------
 func _handle_events() -> void:
+	# D-326: a nuke's bricks share one big blast sound, not one each.
+	var nuked := sim.events.any(func(ev): return ev[0] == "nuke")
 	for k in sim.events.size():
 		var e: Array = sim.events[k]
 		if e[0] != "paddle" and e[0] != "wall":
@@ -481,9 +492,14 @@ func _handle_events() -> void:
 			"brick":
 				var n := _brick_nodes[e[1]]
 				n.visible = false
-				_explode_brick(n.position, _brick_glow(sim.bricks[e[1]]))
+				_explode_brick(n.position, _brick_glow(sim.bricks[e[1]]), 1.5 if nuked else 1.0)
 				_lights.pulse(BackglassLights.IMPACTS, 0.35, 14.0)
-				_sfx("tb_brick")
+				if not nuked:
+					_sfx("tb_brick")
+			"nuke":   # D-326: a white flash over the TABLE, one big blast
+				_sfx("tb_explode_big")
+				_lights.pulse(BackglassLights.ALL, 1.4, 8.0)
+				_nuke_flash()
 			"serve":
 				_sfx("tb_fire")
 				_lights.pulse(BackglassLights.SHOTS, 0.7, 12.0)
@@ -524,7 +540,8 @@ func _handle_events() -> void:
 				_remove_powerup_node(e[1][0])
 				var kind: String = e[1][1]
 				_sfx("tb_pu_get")
-				Dmd.flash(tr("TB_PU_%s" % kind), 1.4, POWERUP_COLORS[kind])
+				if kind != "U":   # 1UP: its EXTRA CHARGE! callout comes with the charge (D-326)
+					Dmd.flash(tr("TB_PU_%s" % kind), 1.4, POWERUP_COLORS[kind])
 				_lights.pulse(BackglassLights.ALL, 0.8, 10.0)
 				_recoil = 0.4
 			"powerup_lost":
@@ -602,6 +619,18 @@ func _handle_events() -> void:
 				_hint.visible = false
 	if sim.score != _shown_score:
 		_refresh_status()
+
+
+## D-326: the Nuclear power-up's flash: the TABLE goes white and fades out.
+func _nuke_flash() -> void:
+	var f := ColorRect.new()
+	f.color = Color(1.0, 0.95, 0.85, 0.9)
+	f.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	f.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_to_table(f)
+	var tw := f.create_tween()
+	tw.tween_property(f, "color:a", 0.0, 0.9).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(f.queue_free)
 
 
 ## Score, lives (plasma dots) and blast power are shown only on the DMD (D-051).
@@ -1775,7 +1804,8 @@ func _set_belly_thrust(t: float) -> void:
 
 # --- power-up visuals (D-072) -----------------------------------------------------------
 func _spawn_powerup_node(id: int, pos: Vector2, kind: String) -> void:
-	var cap := Fx.PowerupCapsule.new(kind, POWERUP_COLORS[kind], Sim.POWERUP_R)
+	var cap := Fx.PowerupCapsule.new("1UP" if kind == "U" else kind, POWERUP_COLORS[kind], Sim.POWERUP_R,
+		ATOM_ICON if kind == "N" else null)   # D-326
 	cap.position = Vector3(pos.x, 0.3, pos.y)
 	_root.add_child(cap)
 	_powerup_nodes[id] = cap

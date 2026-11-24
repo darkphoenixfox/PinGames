@@ -3265,3 +3265,15 @@
 - **Fix:** the view frees every capsule node whose capsule is no longer in the sim, each frame (also during the level outro and the finale), however it was dropped.
 - **Checked:** a new `--tb-pu-clear-at=N` dev flag drops a capsule and clears the level at N s. Without the fix, four capsules hung frozen over level 2; with it, none (both layouts).
 - **Status:** Accepted
+
+### D-326 — Tilt Breaker: 1UP and Nuclear power-ups
+- **Date:** 2026-11-24
+- **Decision (director):** two more power-ups, rarer than the rest: **1UP** (the capsule reads "1UP"; an extra life) and **Nuclear** (an atom symbol; wipes every block on screen).
+- Both are **instant**: used on the catch, never held, so the ship keeps its current power-up and the DMD badge doesn't change. Each still adds a bar level, like every capsule (D-078).
+- **Chance:** each has 0.35 of a normal kind's weight (`RARE_WEIGHT`, my call): about 7% of drops each, against about 17% for each of the other six.
+- **1UP:** one more charge, through the same `extra_life` event as D-321 (jingle, "EXTRA CHARGE!", a new DMD dot). Pink capsule.
+- **Nuclear:** every destructible brick is destroyed with its points, so the level clears (rack bonus, outro). Metal bricks stay (indestructible, D-073). No capsules drop from the bricks it destroys. The view flashes the TABLE white (fading over 0.9 s), plays one big blast instead of a brick sound per brick, and the brick explosions are 1.5x. DMD "NUCLEAR!". Orange capsule.
+- **Atom icon:** `assets/textures/breakout/pu_atom.png`, 64×64, drawn by `scripts/tools/gen_pu_atom.py` (the font has no ⚛). `Fx.PowerupCapsule` takes an optional icon in place of the letter; longer text ("1UP") is scaled down to fit.
+- **Test:** over 6000 draws both appear and each is under 60% of a normal kind; a caught 1UP adds a charge and leaves no held power-up; a caught Nuclear clears the level and adds score.
+- **Dev:** `--tb-drop=U,N` (any kinds) drops capsules at the start of play; the F-key debug drop cycles through the new kinds too.
+- **Status:** Accepted

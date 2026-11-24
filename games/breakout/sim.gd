@@ -107,7 +107,12 @@ const POWERUP_EVERY := 10            # every 10th brick destroyed...
 const POWERUP_CHANCE := 0.7          # ...has a 70% chance to drop one
 const POWERUP_FALL := 2.2
 const POWERUP_R := 0.28
-const POWERUP_KINDS := ["T", "P", "B", "I", "L", "S"]
+const POWERUP_KINDS := ["T", "P", "B", "I", "L", "S", "U", "N"]
+## D-326: instant power-ups, used on the catch (never held): U = 1UP (an extra
+## charge), N = Nuclear (every brick on screen goes). Rarer: RARE_WEIGHT of a
+## normal kind's chance each.
+const INSTANT_KINDS := ["U", "N"]
+const RARE_WEIGHT := 0.35
 const TRIPLE_ANGLE := 20.0           # T: side bolts at +-20 degrees (D-078)
 const POWER_CHARGE_MULT := 3.0       # P: charges 3x faster (one phase)
 const ION_BEAM_W := 0.7              # I: width of the beam
@@ -122,6 +127,7 @@ var state := State.SERVE
 var score := 0
 var balls_left := 3
 var balls_total := 3   # lives at the start of the game (DMD status dots)
+var _nuking := false   # D-326: no capsules from the bricks a nuke destroys
 ## D-321: an extra life at each of these scores (once each, per game).
 const EXTRA_LIFE_AT := [20000, 50000]
 var extra_lives_given := 0
@@ -680,7 +686,7 @@ func _damage_brick(i: int) -> bool:
 	score += b.points
 	events.append(["brick", i])
 	_broken_count += 1
-	if _broken_count % POWERUP_EVERY == 0 and randf() < POWERUP_CHANCE and bricks_alive() > 0:
+	if not _nuking and _broken_count % POWERUP_EVERY == 0 and randf() < POWERUP_CHANCE and bricks_alive() > 0:
 		spawn_powerup(random_powerup_kind(), b.rect.get_center())
 	if bricks_alive() == 0:
 		score += RACK_BONUS
@@ -890,7 +896,15 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 func random_powerup_kind() -> String:
 	var held := [powerup] if not two_player else [player_get(0, "powerup"), player_get(1, "powerup")]
 	var kinds: Array = POWERUP_KINDS.filter(func(k): return not (k in held))
-	return kinds[randi() % kinds.size()]
+	var total := 0.0
+	for k in kinds:
+		total += RARE_WEIGHT if k in INSTANT_KINDS else 1.0
+	var r := randf() * total
+	for k in kinds:
+		r -= RARE_WEIGHT if k in INSTANT_KINDS else 1.0
+		if r < 0.0:
+			return k
+	return kinds[-1]
 
 
 func spawn_powerup(kind: String, pos: Vector2) -> int:
@@ -914,13 +928,36 @@ func _update_powerups(dt: float) -> void:
 				break
 		if caught >= 0:
 			powerups.remove_at(i)
-			apply_powerup(p.kind)
 			power = minf(1.0, power + 1.0 / BLAST_MAX_LEVEL)  # +1 bar level (D-078)
 			events.append(["powerup_collect", [p.id, p.kind, caught]])
+			if p.kind in INSTANT_KINDS:   # D-326
+				_use_instant(p.kind)
+				if state != State.PLAY and state != State.SERVE:
+					break   # the nuke cleared the level
+			else:
+				apply_powerup(p.kind)
 		elif p.pos.y - POWERUP_R > DRAIN_Y:
 			powerups.remove_at(i)
 			events.append(["powerup_lost", p.id])
 	_use(keep)
+
+
+## D-326: 1UP adds a charge; Nuclear destroys every destructible brick (with
+## their points), which clears the level. Metal stays.
+func _use_instant(kind: String) -> void:
+	if kind == "U":
+		balls_left += 1
+		balls_total = maxi(balls_total, balls_left)
+		events.append(["extra_life", balls_left])
+	elif kind == "N":
+		events.append(["nuke", 0])
+		_nuking = true
+		for i in bricks.size():
+			if bricks[i].alive and not bricks[i].get("metal", false):
+				bricks[i].hp = 1
+				if _damage_brick(i):
+					break
+		_nuking = false
 
 
 ## Only one power-up at a time: a new one replaces the current one.
