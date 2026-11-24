@@ -3133,3 +3133,15 @@
   - A roll-over doesn't mark the road (its wheels are in the air), and neither does a car stopped after a crash.
 - **Dev:** `--rc-crash-at=N` makes the car spin out N s into the race.
 - **Status:** Accepted
+
+### D-311 — Turbo Run: the director's finish and time-over jingles
+- **Date:** 2026-11-24
+- **Decision (director):** the director's `racing_goal` plays after crossing the finish line, and `time_over` plays when time runs out. Both are the director's own work.
+- **How:**
+  - Both are converted to OGG (`assets/audio/music/racer/racing_goal.ogg`, 5.0 s; `time_over.ogg`, 6.7 s).
+  - They play once on the music channel in place of the race's song (`Audio.play_music(..., loop = false)`, a new option), quickly faded in from it.
+  - They replace the old synth fanfare and time-up sound for these moments.
+- **In 2P:** the goal jingle plays when the winner crosses (player 1's view owns the music).
+- **Saved checkpoint:** a checkpoint reached on momentum after time up (the race goes on, D-103) brings the race's song back.
+- Recorded in `assets/CREDITS.md`.
+- **Status:** Accepted

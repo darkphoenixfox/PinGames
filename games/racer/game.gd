@@ -290,6 +290,10 @@ const SOUND_SPEED := 85.0   # m/s, exaggerated so the Doppler shift is obvious (
 const ENGINE_GAIN_DB := -0.92   # D-192: the hero car's engine 10% lower (0.9x)
 const PASS_DUCK_DB := 4.0       # D-192: engine + wind dip while a car passes close
 const PASS_DUCK_RANGE := 15.0   # m
+## D-311: the director's jingles, played once in place of the race's song:
+## past the finish line (2P: when the winner crosses), and at time up.
+const JINGLE_GOAL := "res://assets/audio/music/racer/racing_goal.ogg"
+const JINGLE_TIME_OVER := "res://assets/audio/music/racer/time_over.ogg"
 const MUSIC_ATTRACT := "res://assets/audio/music/racer/turbo_run_original.ogg"   # D-308: the main tune
 const CHUNK := 100.0             # metres of road per mesh chunk
 const VIEW_AHEAD := 900.0
@@ -425,9 +429,9 @@ func _dmd_custom(fn: Callable) -> void:
 		fn.call(p))
 
 
-func _music(path: String, fade: float = 1.0, restart: bool = false) -> void:
+func _music(path: String, fade: float = 1.0, restart: bool = false, loop: bool = true) -> void:
 	if _main:
-		Audio.play_music(path, fade, restart)
+		Audio.play_music(path, fade, restart, loop)
 
 
 func _crossfade(path: String, t: float, skip: float = 0.0) -> void:
@@ -2048,6 +2052,7 @@ func _handle_events() -> void:
 				continue
 		match e[0]:
 			"winner":
+				_music(JINGLE_GOAL, 0.3, true, false)   # D-311: (player 1's view plays the music)
 				if int(e[1]) != _role:
 					_center_message(tr("RC_P_WINS") % (int(e[1]) + 1), 3.0)
 				_dmd.flash(tr("RC_P_WINS") % (int(e[1]) + 1), 3.0, Dmd.YELLOW)
@@ -2071,9 +2076,11 @@ func _handle_events() -> void:
 				# say it; JUST MADE IT! still shows when it saves the race.
 				if saved:
 					_center_message(tr("RC_JUST_MADE_IT"), 1.6)
+					_music(MUSIC_RACE[_song], 0.3, true)   # D-311: back from the time-over jingle
 				_dmd_anim("checkpoint", [tr("RC_CHECKPOINT"), tr("RC_EXTENDED") % int(e[2])])
 			"finish":
-				_sfx("fanfare")
+				if not _two:
+					_music(JINGLE_GOAL, 0.3, true, false)   # D-311 (was the fanfare)
 				if _two:   # D-289: first or second across the line
 					_center_message(tr("RC_WINNER") if sim.winner == _role else tr("RC_SECOND"), 4.0)
 				else:
@@ -2081,7 +2088,7 @@ func _handle_events() -> void:
 				_dmd.flash(tr("RC_FINISH"), 4.0, Dmd.YELLOW)
 				_bg_flash = 0.6
 			"time_up":
-				_sfx("rc_time_up")
+				_music(JINGLE_TIME_OVER, 0.3, true, false)   # D-311 (was the time-up sound)
 				_center_message(tr("RC_TIME_UP"), 3.0)
 				_dmd.flash(tr("RC_TIME_UP"), 3.0, Dmd.RED)
 			"drift_start":

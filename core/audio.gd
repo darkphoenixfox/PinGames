@@ -126,8 +126,9 @@ func stop_sfx(player: AudioStreamPlayer, sound_name: String = "") -> void:
 
 ## Plays a looping music track (res:// path to an .ogg), fading out whatever is
 ## playing. Calling it again with the same path keeps the track going, unless
-## `restart` (D-307): then it starts again from the top.
-func play_music(path: String, fade: float = 1.0, restart: bool = false) -> void:
+## `restart` (D-307): then it starts again from the top. `loop` false (D-311):
+## a jingle, played once.
+func play_music(path: String, fade: float = 1.0, restart: bool = false, loop: bool = true) -> void:
 	if path == _music_path and _music.playing and not restart:
 		return
 	var stream := load(path) as AudioStream
@@ -135,7 +136,7 @@ func play_music(path: String, fade: float = 1.0, restart: bool = false) -> void:
 		push_warning("Audio: cannot load music '%s'" % path)
 		return
 	if stream is AudioStreamOggVorbis:
-		(stream as AudioStreamOggVorbis).loop = true
+		(stream as AudioStreamOggVorbis).loop = loop
 	_music_path = path
 	if _music_b.playing:   # cut a crossfade's outgoing song short (D-226)
 		_music_b.stop()
