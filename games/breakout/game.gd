@@ -422,7 +422,8 @@ func _process(delta: float) -> void:
 			_dmd_anim(an)
 	if Config.cli.has("tb-enemy-low") and _phase == "play" and not has_meta("dev_enemy"):   # dev: an enemy at the bottom (D-322)
 		set_meta("dev_enemy", true)
-		var eid: int = sim.spawn_enemy(-3.0, "cube" if Config.cli.has("tb-cube") else "tetra")
+		var ek := "cube" if Config.cli.has("tb-cube") else str(Config.cli.get("tb-enemy-kind", "tetra"))
+		var eid: int = sim.spawn_enemy(-3.0, ek)
 		sim.enemies[-1].state = "sweep"
 		sim.enemies[-1].pos = Vector2(-3.0, Sim.ENEMY_ORBIT_START_Y + 0.5)
 		sim.events.append(["enemy_ready", eid])
@@ -432,6 +433,11 @@ func _process(delta: float) -> void:
 		set_meta("dev_pu_clear", true)
 		_on_debug_action(&"powerup")
 		_on_debug_action(&"clear_level")
+	if Config.cli.has("tb-dark") and _phase == "play" and not has_meta("dev_dark"):   # dev: a corrupted paddle now (D-342)
+		set_meta("dev_dark", true)
+		sim.events.clear()
+		sim.spawn_dark(1.0)
+		_handle_events()
 	if Config.cli.has("tb-boss-hp") and sim.boss_hp > 0 and not has_meta("dev_boss_hp"):   # dev: boss health (D-338)
 		set_meta("dev_boss_hp", true)
 		sim.boss_hp = int(str(Config.cli["tb-boss-hp"]))
@@ -587,6 +593,7 @@ func _handle_events() -> void:
 			"boss_hit":
 				_sfx("tb_armour")
 				_boss_flash = 1.0
+				_boss_shield_hit(e[1][1] if e[1] is Array else sim.boss_pos)   # D-342
 				_lights.pulse(BackglassLights.IMPACTS, 0.4, 14.0)
 			"boss_dead":
 				var bp: Vector2 = e[1]
@@ -598,6 +605,37 @@ func _handle_events() -> void:
 						[Color(1.0, 0.2, 0.1), Color(1.0, 0.7, 0.2), Color(0.9, 0.3, 1.0)][q % 3], 2.0 + 0.3 * q)
 				Dmd.flash(tr("TB_BOSS_DOWN"), 2.2, Dmd.RED)
 				_free_boss_nodes()
+			"brick_torpedo":   # D-342: a charged brick fires back
+				_sfx("tb_fire")
+				InstParam.set_param(_brick_nodes[e[1][0]], "hit_flash", 0.0)
+			"plasma_free":   # D-342: a captured ball goes free
+				_sfx("tb_pu_get")
+				_lights.pulse(BackglassLights.SHOTS, 0.5, 12.0)
+			"mini_charge":
+				if _enemy_nodes.has(e[1]) and _enemy_nodes[e[1]].has("charge"):
+					var mc: CPUParticles3D = _enemy_nodes[e[1]].charge
+					mc.restart()
+					mc.emitting = true
+					_enemy_nodes[e[1]].charge_t = Sim.MINI_CHARGE
+			"mini_fire":
+				_sfx("tb_blast1")
+				if _enemy_nodes.has(e[1][0]) and _enemy_nodes[e[1][0]].has("charge"):
+					(_enemy_nodes[e[1][0]].charge as CPUParticles3D).emitting = false
+			"dark_spawn":
+				_spawn_dark_node(e[1][0], e[1][1])
+				_sfx("tb_wormhole")
+			"dark_hit":
+				_sfx("tb_armour")
+				if _dark_nodes.has(e[1][0]):
+					_dark_nodes[e[1][0]].flash = 1.0
+			"dark_dead":
+				var dp: Vector2 = e[1][1]
+				_sfx("tb_explode")
+				_explode_brick(Vector3(dp.x, 0.3, dp.y), Color(1.0, 0.2, 0.2), 1.8)
+				_lights.pulse(BackglassLights.IMPACTS + BackglassLights.SHOTS, 0.8, 10.0)
+				if _dark_nodes.has(e[1][0]):
+					(_dark_nodes[e[1][0]].root as Node).queue_free()
+					_dark_nodes.erase(e[1][0])
 			"ray_blocked":
 				var rb: Vector2 = e[1]
 				_sfx("tb_shield_break")
@@ -736,6 +774,17 @@ func _pickup_popup(text: String, at: Vector2, col: Color) -> void:
 ## D-335: the boss (icosahedron, HAL eye, charge sparks) and its rays
 ## (D-338: no health bar; the eye's colour shows it).
 const HAL_SHADER := preload("res://games/breakout/shaders/hal_eye.gdshader")
+const BOSS_SHIELD_SHADER := preload("res://games/breakout/shaders/boss_shield.gdshader")
+var _boss_shield_age := 9.0
+
+
+## D-342: lights the boss's shield where a hit landed (`at`, field coords).
+func _boss_shield_hit(at: Vector2) -> void:
+	if _boss_nodes.is_empty():
+		return
+	var d := at - sim.boss_pos
+	(_boss_nodes.shield as ShaderMaterial).set_shader_parameter("hit_dir", Vector3(d.x, 0.45, d.y).normalized())
+	_boss_shield_age = 0.0
 const BOSS_VIS_R := 1.35   # the icosahedron's circumradius (hitbox: Sim.BOSS_R)
 var _boss_nodes := {}
 var _boss_flash := 0.0
@@ -745,9 +794,25 @@ var _ray_nodes := {}
 
 func _build_boss_nodes() -> void:
 	var root := Node3D.new()
-	var body := Fx.make_icosahedron(BOSS_VIS_R, load("res://assets/textures/breakout/circuit_red.png"),
-		Color(1.0, 0.25, 0.3), 0.45)
+	var body: Node3D
+	if sim.boss_kind == "dodeca":   # D-342: level 20
+		body = Fx.make_dodecahedron(BOSS_VIS_R * 1.05, load("res://assets/textures/breakout/circuit_blue.png"),
+			Color(0.75, 0.3, 1.0), 0.45)
+	else:
+		body = Fx.make_icosahedron(BOSS_VIS_R, load("res://assets/textures/breakout/circuit_red.png"),
+			Color(1.0, 0.25, 0.3), 0.45)
 	root.add_child(body)
+	# D-342: the shield: a red glow where hits land.
+	var shell := MeshInstance3D.new()
+	var shm := SphereMesh.new()
+	shm.radius = Sim.BOSS_R + 0.25
+	shm.height = (Sim.BOSS_R + 0.25) * 2.0
+	shell.mesh = shm
+	var shmat := ShaderMaterial.new()
+	shmat.shader = BOSS_SHIELD_SHADER
+	shell.material_override = shmat
+	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(shell)
 	var eye := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = 0.5
@@ -767,7 +832,7 @@ func _build_boss_nodes() -> void:
 	charge.position = Vector3(0.0, 0.6, 0.0)
 	root.add_child(charge)
 	_root.add_child(root)
-	_boss_nodes = {"root": root, "body": body, "eye": em, "light": glow, "charge": charge}
+	_boss_nodes = {"root": root, "body": body, "eye": em, "light": glow, "charge": charge, "shield": shmat}
 
 
 ## D-338: the eye's colour by health left (1 = full): blue, green, yellow,
@@ -800,6 +865,10 @@ func _animate_boss(delta: float) -> void:
 		(_boss_nodes.root as Node3D).position = Vector3(p.x, 0.4, p.y)
 		(_boss_nodes.body as Node3D).rotate(Vector3(0.3, 1.0, 0.45).normalized(), delta * 0.8)
 		_boss_flash = maxf(0.0, _boss_flash - delta * 4.0)
+		_boss_shield_age += delta
+		var shm2: ShaderMaterial = _boss_nodes.shield
+		shm2.set_shader_parameter("age", _boss_shield_age)
+		shm2.set_shader_parameter("strength", clampf(1.0 - _boss_shield_age / 0.6, 0.0, 1.0))
 		_boss_charge_t = maxf(0.0, _boss_charge_t - delta)
 		var charge := 1.0 - _boss_charge_t / Sim.BOSS_CHARGE if _boss_charge_t > 0.0 else 0.0
 		(_boss_nodes.eye as ShaderMaterial).set_shader_parameter("glow", charge * 1.5 + _boss_flash)
@@ -807,7 +876,7 @@ func _animate_boss(delta: float) -> void:
 		if _boss_charge_t <= 0.0 and (_boss_nodes.charge as CPUParticles3D).emitting:
 			(_boss_nodes.charge as CPUParticles3D).emitting = false
 		# D-338: no health bar: the eye's colour tells it, blue to red.
-		var iris := _boss_eye_colour(float(sim.boss_hp) / Sim.BOSS_HP)
+		var iris := _boss_eye_colour(float(sim.boss_hp) / sim.boss_max_hp)
 		(_boss_nodes.eye as ShaderMaterial).set_shader_parameter("iris", iris)
 		(_boss_nodes.light as OmniLight3D).light_color = iris
 	# Rays: a red bolt each, along its flight.
@@ -817,7 +886,7 @@ func _animate_boss(delta: float) -> void:
 		if not _ray_nodes.has(r.id):
 			var m := MeshInstance3D.new()
 			var plane := PlaneMesh.new()
-			plane.size = Vector2(Sim.RAY_R * 4.0, Sim.RAY_LEN * 1.5)
+			plane.size = Vector2(float(r.get("r", Sim.RAY_R)) * 4.0, float(r.get("len", Sim.RAY_LEN)) * 1.5)
 			m.mesh = plane
 			var mat := ShaderMaterial.new()
 			mat.shader = BLAST_SHADER
@@ -830,7 +899,7 @@ func _animate_boss(delta: float) -> void:
 			_ray_nodes[r.id] = m
 		var rp: Vector2 = r.pos
 		var rv: Vector2 = r.vel
-		var mid := rp - rv.normalized() * Sim.RAY_LEN * 0.5
+		var mid := rp - rv.normalized() * float(r.get("len", Sim.RAY_LEN)) * 0.5
 		var node: MeshInstance3D = _ray_nodes[r.id]
 		node.position = Vector3(mid.x, 0.35, mid.y)
 		node.rotation.y = -atan2(rv.x, -rv.y)
@@ -1613,7 +1682,12 @@ func _build_bricks() -> void:
 		_randomize_crop(n)
 		# Pulse ripples diagonally across the swarm, with a little jitter.
 		InstParam.set_param(n, "phase", -(col * 0.55 + b.row * 0.8) + float((i * 37) % 11) * 0.08)
-		InstParam.set_param(n, "mode", 3.0 if b.get("metal", false) else (1.0 if b.get("armoured", false) else 0.0))
+		InstParam.set_param(n, "mode", 3.0 if b.get("metal", false) else (4.0 if b.get("charged", false)
+			else (1.0 if b.get("armoured", false) else 0.0)))   # D-342: 4 = charged
+		if b.get("plasma", false):   # D-342: its captured plasma ball, on show
+			var pb := Fx.make_plasma_ball(Sim.BALL_R * 0.8)
+			pb.position = Vector3(0.0, 0.2, 0.0)
+			n.add_child(pb)
 		_root.add_child(n)
 		_brick_nodes.append(n)
 
@@ -2360,6 +2434,79 @@ func _make_ghost_ship() -> Node3D:
 	return root
 
 
+# --- corrupted paddles (D-342) ---------------------------------------------------------
+## A dark copy of the ship (the ship model, darkened, by the clip shader with
+## nothing cut) with a red HAL eye in the middle; it warps in (grows out of a
+## red flash) and flashes when hit.
+var _dark_nodes := {}
+
+
+func _spawn_dark_node(id: int, pos: Vector2) -> void:
+	var root := Node3D.new()
+	root.position = Vector3(pos.x, 0.0, pos.y)
+	var scene := load(PADDLE_MODEL) as PackedScene
+	var s := Sim.PADDLE_W / MODEL_PADDLE_WIDTH
+	var mats := []
+	if scene:
+		var model := scene.instantiate() as Node3D
+		model.scale = Vector3(s, s, s)
+		model.rotation_degrees = Vector3(-90.0, 180.0, 0.0)   # facing the player
+		for mi in model.find_children("*", "MeshInstance3D", true, false):
+			var m := mi as MeshInstance3D
+			var src := m.get_active_material(0) as StandardMaterial3D
+			var cm := ShaderMaterial.new()
+			cm.shader = CLIP_SHADER
+			if src:
+				cm.set_shader_parameter("albedo_tex", src.albedo_texture)
+			cm.set_shader_parameter("tint", Color(0.22, 0.17, 0.22))
+			m.material_override = cm
+			mats.append(cm)
+		root.add_child(model)
+	var eye := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.15
+	sm.height = 0.3
+	eye.mesh = sm
+	var em := ShaderMaterial.new()
+	em.shader = HAL_SHADER
+	eye.material_override = em
+	eye.position = Vector3(0.0, 0.2, 0.0)
+	root.add_child(eye)
+	var glow := OmniLight3D.new()
+	glow.light_color = Color(1.0, 0.1, 0.1)
+	glow.omni_range = 1.6
+	glow.light_energy = 1.2
+	glow.position = Vector3(0.0, 0.4, 0.0)
+	root.add_child(glow)
+	root.scale = Vector3(0.01, 1.0, 0.01)
+	_root.add_child(root)
+	_explode_brick(Vector3(pos.x, 0.3, pos.y), Color(1.0, 0.15, 0.2), 1.2)   # the warp flash
+	_dark_nodes[id] = {"root": root, "mats": mats, "eye": em, "flash": 0.0}
+
+
+func _animate_darks(delta: float) -> void:
+	for d in sim.darks:
+		if not _dark_nodes.has(d.id):
+			_spawn_dark_node(d.id, d.pos)
+		var n: Dictionary = _dark_nodes[d.id]
+		var p: Vector2 = d.pos
+		var root: Node3D = n.root
+		root.position = Vector3(p.x, 0.0, p.y)
+		var w: float = clampf(float(d.t) / Sim.DARK_WARP, 0.0, 1.0) if d.state == "warp" else 1.0
+		root.scale = Vector3(maxf(0.01, w * w), 1.0, maxf(0.01, w))
+		n.flash = maxf(0.0, float(n.flash) - delta * 5.0)
+		for m in n.mats:
+			(m as ShaderMaterial).set_shader_parameter("tint", Color(0.22, 0.17, 0.22).lerp(Color(1.0, 0.5, 0.5), n.flash))
+		(n.eye as ShaderMaterial).set_shader_parameter("glow", 0.6 + 0.4 * sin(Time.get_ticks_msec() * 0.006) + n.flash)
+	for id in _dark_nodes.keys():
+		var alive := false
+		for d in sim.darks:
+			alive = alive or d.id == id
+		if not alive:
+			(_dark_nodes[id].root as Node).queue_free()
+			_dark_nodes.erase(id)
+
+
 # --- tetrahedron enemies (D-052) ------------------------------------------------------
 func _spawn_enemy_node(id: int, pos: Vector2, kind: String = "tetra") -> void:
 	if _circuit_textures.is_empty():
@@ -2370,10 +2517,32 @@ func _spawn_enemy_node(id: int, pos: Vector2, kind: String = "tetra") -> void:
 	# One circuit colour per enemy (D-053).
 	var pick := randi() % _circuit_textures.size()
 	var colour: Color = CIRCUIT_GLOW[["red", "yellow", "green", "blue"][pick]]
-	var body := Fx.make_cube(Sim.ENEMY_R * 1.5, _circuit_textures[pick], colour) if kind == "cube" \
-		else Fx.make_tetrahedron(Sim.ENEMY_R * 1.5, _circuit_textures[pick], colour)   # D-323
+	var body: Node3D
+	if kind == "ico":   # D-342: a little boss: red panels, a HAL eye, its own charge sparks
+		body = Fx.make_icosahedron(Sim.ENEMY_R * 1.5, _circuit_textures[0], Color(1.0, 0.25, 0.3), 0.5)
+	elif kind == "cube":
+		body = Fx.make_cube(Sim.ENEMY_R * 1.5, _circuit_textures[pick], colour)   # D-323
+	else:
+		body = Fx.make_tetrahedron(Sim.ENEMY_R * 1.5, _circuit_textures[pick], colour)
 	body.scale = Vector3.ONE * 0.01
 	root.add_child(body)
+	var extra := {}
+	if kind == "ico":
+		colour = Color(1.0, 0.25, 0.3)
+		var eye := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = 0.13
+		sm.height = 0.26
+		eye.mesh = sm
+		var em := ShaderMaterial.new()
+		em.shader = HAL_SHADER
+		eye.material_override = em
+		eye.scale = Vector3.ONE * 0.01
+		root.add_child(eye)
+		var ch := Fx.make_charge_particles(0.7, Color(1.0, 0.15, 0.1))
+		ch.position = Vector3(0.0, 0.3, 0.0)
+		root.add_child(ch)
+		extra = {"eye": eye, "eye_mat": em, "charge": ch, "charge_t": 0.0}
 	_root.add_child(root)
 	var hole := Fx.make_wormhole(1.7)
 	hole.position = Vector3(pos.x, 0.25, pos.y)
@@ -2383,6 +2552,7 @@ func _spawn_enemy_node(id: int, pos: Vector2, kind: String = "tetra") -> void:
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	var spin := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized() * randf_range(1.2, 2.2)
 	_enemy_nodes[id] = {"root": root, "body": body, "spin": spin, "hole": hole, "colour": colour}
+	_enemy_nodes[id].merge(extra)
 
 
 func _close_wormhole(id: int) -> void:
@@ -2416,6 +2586,13 @@ func _animate_enemies(delta: float) -> void:
 		# Emerges from the wormhole over the last part of WORMHOLE_TIME.
 		var emerge := clampf((en.t - 0.3) / (Sim.WORMHOLE_TIME - 0.3), 0.0, 1.0) if en.state == "wormhole" else 1.0
 		body.scale = Vector3.ONE * maxf(0.01, emerge)
+		if n.has("eye"):   # D-342: the mini-icosahedron's eye glows up as it charges
+			(n.eye as Node3D).scale = body.scale
+			n.charge_t = maxf(0.0, float(n.charge_t) - delta)
+			(n.eye_mat as ShaderMaterial).set_shader_parameter("glow", (1.0 - n.charge_t / Sim.MINI_CHARGE) * 1.5 if n.charge_t > 0.0 else 0.0)
+			if n.charge_t <= 0.0 and (n.charge as CPUParticles3D).emitting:
+				(n.charge as CPUParticles3D).emitting = false
+	_animate_darks(delta)   # D-342
 
 
 # --- energy blast visuals (D-051) -------------------------------------------------------

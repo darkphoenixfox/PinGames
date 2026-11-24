@@ -1,0 +1,8 @@
+# Tilt Breaker 2-player level 16 (D-285): 19 columns, generated from level 16
+# by scripts/tools/gen_breakout_2p_levels.py (its 11 columns in the middle, its edge columns mirrored out). Edit freely.
+RRR.X.RRRRRRR.X.RRR
+YYY.X.YYYCYYY.X.YYY
+GGG.X.GGGGGGG.X.GGG
+BPB.X.BPBBBPB.X.BPB
+....X.........X....
+.XXXXXXX...XXXXXXX.

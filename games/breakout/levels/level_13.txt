@@ -1,0 +1,6 @@
+# Level 13: a gauntlet of charged bricks behind an armoured screen (D-342).
+CRCRCRCRCRC
+YYYYYYYYYYY
+gggggPggggg
+B.B.B.B.B.B
+.C.C.C.C.C.

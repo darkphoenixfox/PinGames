@@ -9,6 +9,7 @@ uniform float keep_min = -100.0;
 uniform float keep_max = 100.0;
 uniform float roughness_v = 0.8;
 uniform float metallic_v = 0.0;
+uniform vec4 tint : source_color = vec4(1.0);   // D-342: darkens the corrupted paddle
 
 varying float model_x;
 
@@ -20,7 +21,7 @@ void fragment() {
 	if (model_x < keep_min || model_x > keep_max) {
 		discard;
 	}
-	ALBEDO = texture(albedo_tex, UV).rgb;
+	ALBEDO = texture(albedo_tex, UV).rgb * tint.rgb;
 	ROUGHNESS = roughness_v;
 	METALLIC = metallic_v;
 }

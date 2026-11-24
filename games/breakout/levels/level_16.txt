@@ -1,0 +1,7 @@
+# Level 16: twin gates (D-342).
+X.RRRRRRR.X
+X.YYYCYYY.X
+X.GGGGGGG.X
+X.BPBBBPB.X
+X.........X
+XXXX...XXXX

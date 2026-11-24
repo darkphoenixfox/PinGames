@@ -1,0 +1,7 @@
+# Level 17: corruption spreads (D-342).
+CCCCCCCCCCC
+rRrRrRrRrRr
+.Y.Y.P.Y.Y.
+G.G.G.G.G.G
+.b.b.b.b.b.
+B.B.B.B.B.B

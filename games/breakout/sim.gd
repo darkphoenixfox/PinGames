@@ -54,6 +54,16 @@ const LEVEL_FILES := [
 	"res://games/breakout/levels/level_08.txt",
 	"res://games/breakout/levels/level_09.txt",
 	"res://games/breakout/levels/level_10.txt",
+	"res://games/breakout/levels/level_11.txt",
+	"res://games/breakout/levels/level_12.txt",
+	"res://games/breakout/levels/level_13.txt",
+	"res://games/breakout/levels/level_14.txt",
+	"res://games/breakout/levels/level_15.txt",
+	"res://games/breakout/levels/level_16.txt",
+	"res://games/breakout/levels/level_17.txt",
+	"res://games/breakout/levels/level_18.txt",
+	"res://games/breakout/levels/level_19.txt",
+	"res://games/breakout/levels/level_20.txt",
 ]
 ## D-285: 2-player levels, 19 columns on a wider field (generated from the
 ## 1-player ones; the director may edit them).
@@ -63,6 +73,16 @@ const LEVEL_FILES_2P := [
 	"res://games/breakout/levels/level2p_05.txt", "res://games/breakout/levels/level2p_06.txt",
 	"res://games/breakout/levels/level2p_07.txt", "res://games/breakout/levels/level2p_08.txt",
 	"res://games/breakout/levels/level2p_09.txt", "res://games/breakout/levels/level2p_10.txt",
+	"res://games/breakout/levels/level2p_11.txt",
+	"res://games/breakout/levels/level2p_12.txt",
+	"res://games/breakout/levels/level2p_13.txt",
+	"res://games/breakout/levels/level2p_14.txt",
+	"res://games/breakout/levels/level2p_15.txt",
+	"res://games/breakout/levels/level2p_16.txt",
+	"res://games/breakout/levels/level2p_17.txt",
+	"res://games/breakout/levels/level2p_18.txt",
+	"res://games/breakout/levels/level2p_19.txt",
+	"res://games/breakout/levels/level2p_20.txt",
 ]
 const BRICK_COLS_2P := 19
 const FIELD_2P := Rect2(-7.08, -7.1, 14.16, 15.1)   # 19 bricks at the 1P brick width
@@ -71,6 +91,29 @@ const COLOUR_POINTS := {"R": 120, "Y": 100, "G": 80, "B": 60}
 ## Brick letters (D-073): UPPERCASE = 1 hit, lowercase = 2-hit armoured
 ## (1.5x points), X = indestructible metal (doesn't count for clearing).
 const ARMOURED_MULT := 1.5
+const CHARGED_POINTS := 200   # D-342
+const PLASMA_POINTS := 150    # D-342
+## D-342: torpedoes (the boss's ray, D-335, generalised): {id, pos, vel, r, len}.
+## They pass through bricks; a plasma ball stops them; they cost the ship a charge.
+const TORP_BRICK := {"speed": 4.0, "r": 0.1, "len": 0.6}     # from a charged brick, straight down
+const TORP_MINI := {"speed": 4.25, "r": 0.08, "len": 0.5}    # from a mini-icosahedron
+## D-342: the mini-icosahedron enemy (from level 11): moves like the others,
+## charges MINI_CHARGE s and fires a small torpedo at the ship every MINI_FIRE s.
+const ICO_FROM_LEVEL := 11
+const ICO_CHANCE := 0.3
+const MINI_FIRE := Vector2(6.0, 10.0)
+const MINI_CHARGE := 0.9
+## D-342: the corrupted paddle (from level 15): a dark copy of the ship that
+## warps in DARK_Y_FRAC down the field (only where no brick is in the way),
+## slides side to side and blocks the plasma. 10 HP: a ball hit 1, a weapon 2.
+const DARK_FROM_LEVEL := 15
+const DARK_Y_FRAC := 0.35
+const DARK_HP := 10
+const DARK_SPEED := 2.2
+const DARK_WARP := 0.8
+const DARK_POINTS := 1500
+const DARK_INTERVAL := Vector2(18.0, 28.0)
+const DARK_FIRST := 12.0
 const BRICK_TOP := -5.55  # leaves the top 10% free for enemies (D-052)
 const BRICK_H := 0.4
 const BRICK_GAP := 0.05
@@ -130,6 +173,8 @@ const BOSS_CHARGE := 1.5
 const RAY_SPEED := 4.25              # m/s: slow enough to see coming (D-338: +25%)
 const RAY_LEN := 0.88                # m, head to tail (D-338: -20%)
 const RAY_R := 0.128                 # half its thickness (D-338: -20%)
+const DODECA_HP := 60                # D-342: the level-20 boss
+const DODECA_SHOT_SPEED := 0.7       # x RAY_SPEED for its three torpedoes
 const BOSS_DROP_EVERY := 4           # D-339: every 4 damage to the boss drops a capsule
 const BOSS_HITS := {"ball": 1, "missile": 3, "ion": 3, "wave": 2}
 
@@ -231,7 +276,11 @@ var boss_fire_in := 0.0
 var boss_charging := false
 var rays: Array = []
 var _boss_aim := 0
-var _boss_drop_count := 0   # D-339: damage since its last capsule   # 2P: the ship the next ray goes for (alternates)   # D-333: bricks destroyed since the last capsule drop
+var _boss_drop_count := 0
+var boss_kind := "ico"   # D-342: "ico" (level 10, 30...) or "dodeca" (level 20, 40...)
+var boss_max_hp := BOSS_HP
+var darks: Array = []    # D-342: corrupted paddles {id, pos, vx, hp, state ("warp"|"live"), t}
+var _dark_timer := DARK_FIRST   # D-339: damage since its last capsule   # 2P: the ship the next ray goes for (alternates)   # D-333: bricks destroyed since the last capsule drop
 var _time := 0.0
 var _paddle_hist: Array = []  # [time, x], newest last
 var _held_time := 0.0
@@ -409,6 +458,18 @@ func build_rack() -> void:
 			var raw := line[col]
 			var ch := raw.to_upper()
 			var metal := ch == "X"
+			# D-342: C = charged (red, 2 hits; the first fires a torpedo down),
+			# P = plasma (holds a ball that's set free when it breaks).
+			var charged := raw == "C"
+			var plasma := raw == "P"
+			if charged or plasma:
+				var rect2 := Rect2(field.position.x + col * w + BRICK_GAP * 0.5,
+					BRICK_TOP + row * BRICK_H + BRICK_GAP * 0.5, w - BRICK_GAP, BRICK_H - BRICK_GAP)
+				bricks.append({"rect": rect2, "hp": 2 if charged else 1, "alive": true,
+					"row": row, "col": col, "colour": "R" if charged else "B",
+					"points": CHARGED_POINTS if charged else PLASMA_POINTS,
+					"metal": false, "armoured": false, "charged": charged, "plasma": plasma})
+				continue
 			if not metal and not COLOUR_POINTS.has(ch):
 				continue
 			var armoured := not metal and raw != ch  # lowercase
@@ -662,8 +723,14 @@ func _update_power_and_blast(dt: float, both: bool) -> void:
 			if boss_hp > 0 and not BP.collide_circle_rect(boss_pos, BOSS_R, rect).is_empty():
 				var dmg := int(b.hits_left)
 				b.hits_left = 0
-				if _hurt_boss(dmg):
+				if _hurt_boss(dmg, pos):
 					return
+				break
+			# D-342: a corrupted paddle stops a bolt (a weapon hit).
+			var dk := _dark_hit_by_rect(rect)
+			if dk != -1:
+				b.hits_left = 0
+				_hurt_dark(dk, 2)
 				break
 			# Each brick/enemy touched uses one hit; the blast pierces until spent.
 			var foe := _enemy_hit_by_rect(rect)
@@ -739,8 +806,11 @@ func _fire(lvl: int) -> void:
 func _ion_beam(x: float) -> void:
 	var beam := Rect2(x - ION_BEAM_W * 0.5, field.position.y, ION_BEAM_W, paddle_y - field.position.y)
 	if boss_hp > 0 and not BP.collide_circle_rect(boss_pos, BOSS_R, beam).is_empty():
-		if _hurt_boss(int(BOSS_HITS["ion"])):   # D-335
+		if _hurt_boss(int(BOSS_HITS["ion"]), boss_pos + Vector2(0.0, BOSS_R)):   # D-335
 			return
+	for k2 in range(darks.size() - 1, -1, -1):   # D-342
+		if darks[k2].state == "live" and beam.intersects(_dark_rect(darks[k2])):
+			_hurt_dark(k2, 2)
 	for k in range(enemies.size() - 1, -1, -1):
 		if enemies[k].state != "wormhole" and not BP.collide_circle_rect(enemies[k].pos, ENEMY_R, beam).is_empty():
 			_destroy_enemy(k)
@@ -790,10 +860,19 @@ func _damage_brick(i: int) -> bool:
 	if b.get("metal", false):
 		return false  # indestructible
 	b.hp -= 1
+	if b.get("charged", false) and b.hp == 1:   # D-342: the first hit fires it
+		var bottom := Vector2(b.rect.get_center().x, b.rect.end.y + 0.1)
+		_spawn_torpedo(bottom, Vector2.DOWN, TORP_BRICK)
+		events.append(["brick_torpedo", [i, bottom]])
 	if b.hp > 0:
 		events.append(["brick_hit", i])
 		return false
 	b.alive = false
+	if b.get("plasma", false):   # D-342: its captured ball goes free
+		var ang := deg_to_rad(randf_range(-30.0, 30.0))
+		var c: Vector2 = b.rect.get_center()
+		extra_balls.append({"pos": c, "vel": Vector2(sin(ang), cos(ang)) * ball_start_speed, "speed": ball_start_speed})
+		events.append(["plasma_free", c])
 	score += b.points
 	events.append(["brick", i])
 	_broken_count += 1
@@ -809,6 +888,7 @@ func _damage_brick(i: int) -> bool:
 		# the game runs its outro and calls next_level().
 		while not enemies.is_empty():
 			_destroy_enemy(0, false)
+		darks.clear()   # D-342
 		blasts.clear()
 		_clear_shots()   # D-327
 		powerups.clear()
@@ -957,8 +1037,21 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 		pos = boss_pos + bn * (BOSS_R + BALL_R + 0.01)
 		b.pos = pos
 		b.vel = vel
-		if _hurt_boss(int(BOSS_HITS["ball"])):
+		if _hurt_boss(int(BOSS_HITS["ball"]), pos):
 			return BALL_STOP
+	# D-342: corrupted paddles: the plasma bounces off them like off a brick.
+	for k in darks.size():
+		var dkk: Dictionary = darks[k]
+		if dkk.state != "live":
+			continue
+		var dc := BP.collide_circle_rect(pos, BALL_R, _dark_rect(dkk))
+		if not dc.is_empty():
+			pos += dc.normal * dc.depth
+			vel = BP.reflect(vel, dc.normal)
+			b.pos = pos
+			b.vel = vel
+			_hurt_dark(k, 1)
+			break
 	for k in range(rays.size() - 1, -1, -1):
 		if _ray_touches(rays[k], pos, BALL_R):
 			events.append(["ray_blocked", rays[k].pos])
@@ -1143,6 +1236,75 @@ func _end_padup() -> void:
 	shield_active = false
 
 
+# --- corrupted paddles (D-342) ---------------------------------------------------------
+func _dark_y() -> float:
+	return field.position.y + field.size.y * DARK_Y_FRAC
+
+
+func _dark_rect(d: Dictionary) -> Rect2:
+	return Rect2(Vector2(d.pos) - Vector2(PADDLE_W, PADDLE_H) * 0.5, Vector2(PADDLE_W, PADDLE_H))
+
+
+## Whether the corrupted paddles' band (DARK_Y_FRAC down) is clear of bricks.
+func dark_band_clear() -> bool:
+	var band := Rect2(field.position.x, _dark_y() - PADDLE_H, field.size.x, PADDLE_H * 2.0)
+	for b in bricks:
+		if b.alive and band.intersects(b.rect):
+			return false
+	return true
+
+
+func spawn_dark(x: float = NAN) -> void:
+	var lim := field.size.x * 0.5 - PADDLE_W * 0.5
+	if is_nan(x):
+		x = randf_range(-lim, lim)
+	var id := _next_enemy_id
+	_next_enemy_id += 1
+	darks.append({"id": id, "pos": Vector2(clampf(x, -lim, lim), _dark_y()), "vx": DARK_SPEED * (1.0 if randf() < 0.5 else -1.0),
+		"hp": DARK_HP, "state": "warp", "t": 0.0})
+	events.append(["dark_spawn", [id, darks[-1].pos]])
+
+
+func _update_darks(dt: float) -> void:
+	if state == State.PLAY and level >= DARK_FROM_LEVEL and not is_boss_level():
+		_dark_timer -= dt
+		if _dark_timer <= 0.0:
+			_dark_timer = randf_range(DARK_INTERVAL.x, DARK_INTERVAL.y)
+			if darks.is_empty() and dark_band_clear():
+				spawn_dark()
+	var lim := field.size.x * 0.5 - PADDLE_W * 0.5
+	for d in darks:
+		d.t = float(d.t) + dt
+		if d.state == "warp":
+			if d.t >= DARK_WARP:
+				d.state = "live"
+				events.append(["dark_ready", d.id])
+			continue
+		var p: Vector2 = d.pos
+		p.x += float(d.vx) * enemy_speed_mult() * dt
+		if absf(p.x) > lim:
+			p.x = clampf(p.x, -lim, lim)
+			d.vx = -float(d.vx)
+		d.pos = p
+
+
+func _dark_hit_by_rect(rect: Rect2) -> int:
+	for k in darks.size():
+		if darks[k].state == "live" and rect.intersects(_dark_rect(darks[k])):
+			return k
+	return -1
+
+
+func _hurt_dark(k: int, n: int) -> void:
+	var d: Dictionary = darks[k]
+	d.hp = int(d.hp) - n
+	events.append(["dark_hit", [d.id, d.hp]])
+	if d.hp <= 0:
+		score += DARK_POINTS
+		events.append(["dark_dead", [d.id, d.pos]])
+		darks.remove_at(k)
+
+
 # --- the boss (D-335) ------------------------------------------------------------------
 func is_boss_level() -> bool:
 	return level % BOSS_EVERY == 0
@@ -1151,7 +1313,11 @@ func is_boss_level() -> bool:
 func _setup_boss() -> void:
 	rays.clear()
 	boss_charging = false
-	boss_hp = BOSS_HP if is_boss_level() else 0
+	boss_kind = "dodeca" if (level / BOSS_EVERY) % 2 == 0 else "ico"   # D-342: 10 ico, 20 dodeca, 30 ico...
+	boss_max_hp = DODECA_HP if boss_kind == "dodeca" else BOSS_HP
+	boss_hp = boss_max_hp if is_boss_level() else 0
+	darks.clear()
+	_dark_timer = DARK_FIRST
 	boss_t = 0.0
 	boss_pos = _boss_path(0.0)
 	boss_fire_in = randf_range(BOSS_FIRE.x, BOSS_FIRE.y)
@@ -1181,7 +1347,7 @@ func _update_boss(dt: float) -> void:
 		var hit_ship := -1
 		for ship in (2 if two_player else 1):
 			_use(ship)
-			if ship_invulnerable <= 0.0 and not BP.collide_circle_rect(r.pos, RAY_R, catch_rect()).is_empty():
+			if ship_invulnerable <= 0.0 and not BP.collide_circle_rect(r.pos, float(r.get("r", RAY_R)), catch_rect()).is_empty():
 				hit_ship = ship
 				break
 		if hit_ship >= 0:
@@ -1208,33 +1374,45 @@ func _update_boss(dt: float) -> void:
 	if boss_fire_in <= 0.0:
 		boss_charging = false
 		boss_fire_in = randf_range(BOSS_FIRE.x, BOSS_FIRE.y)
-		var target_x: float = paddle_x
-		var target_y: float = paddle_y
-		if two_player:
-			_boss_aim = 1 - _boss_aim
-			target_x = player_get(_boss_aim, "paddle_x")
-			target_y = player_get(_boss_aim, "paddle_y")
-		var dir := (Vector2(target_x, target_y) - boss_pos).normalized()
+		var dir := (_aim_point() - boss_pos).normalized()
 		var start := boss_pos + dir * (BOSS_R * 0.6)
-		var id := _next_shot_id
-		_next_shot_id += 1
-		rays.append({"id": id, "pos": start, "vel": dir * RAY_SPEED})
+		if boss_kind == "dodeca":   # D-342: three, fanned like the Triple Laser, slower
+			for a in [-TRIPLE_ANGLE, 0.0, TRIPLE_ANGLE]:
+				_spawn_torpedo(start, dir.rotated(deg_to_rad(a)), {"speed": RAY_SPEED * DODECA_SHOT_SPEED, "r": RAY_R, "len": RAY_LEN})
+		else:
+			_spawn_torpedo(start, dir, {"speed": RAY_SPEED, "r": RAY_R, "len": RAY_LEN})
 		events.append(["boss_fire", start])
 
 
-## Whether a ray (its head and the RAY_LEN behind it) touches a circle.
+## Whether a ray (its head and the length behind it) touches a circle.
 func _ray_touches(r: Dictionary, c: Vector2, rad: float) -> bool:
 	var head: Vector2 = r.pos
-	var tail: Vector2 = head - Vector2(r.vel).normalized() * RAY_LEN
-	return Geometry2D.get_closest_point_to_segment(c, tail, head).distance_to(c) < rad + RAY_R
+	var tail: Vector2 = head - Vector2(r.vel).normalized() * float(r.get("len", RAY_LEN))
+	return Geometry2D.get_closest_point_to_segment(c, tail, head).distance_to(c) < rad + float(r.get("r", RAY_R))
+
+
+## D-342: launches a torpedo from `at` along `dir` with a size/speed spec.
+func _spawn_torpedo(at: Vector2, dir: Vector2, spec: Dictionary) -> void:
+	var id := _next_shot_id
+	_next_shot_id += 1
+	rays.append({"id": id, "pos": at, "vel": dir.normalized() * float(spec.speed),
+		"r": float(spec.r), "len": float(spec.len)})
+
+
+## D-342: where the boss aims: the ship (2P: alternating ships).
+func _aim_point() -> Vector2:
+	if two_player:
+		_boss_aim = 1 - _boss_aim
+		return Vector2(player_get(_boss_aim, "paddle_x"), player_get(_boss_aim, "paddle_y"))
+	return Vector2(paddle_x, paddle_y)
 
 
 ## Damages the boss; true if that cleared the level (its bricks were already gone).
-func _hurt_boss(n: int) -> bool:
+func _hurt_boss(n: int, at: Vector2 = Vector2.INF) -> bool:
 	if boss_hp <= 0:
 		return false
 	boss_hp = maxi(0, boss_hp - n)
-	events.append(["boss_hit", boss_hp])
+	events.append(["boss_hit", [boss_hp, at if at != Vector2.INF else boss_pos + Vector2(0.0, BOSS_R)]])
 	if boss_hp > 0:
 		# D-339: hurting it shakes capsules loose, like breaking bricks.
 		_boss_drop_count += n
@@ -1251,6 +1429,7 @@ func _hurt_boss(n: int) -> bool:
 		score += RACK_BONUS
 		while not enemies.is_empty():
 			_destroy_enemy(0, false)
+		darks.clear()   # D-342
 		blasts.clear()
 		_clear_shots()
 		powerups.clear()
@@ -1286,8 +1465,13 @@ func _update_shots(dt: float) -> void:
 			var rect := Rect2(p - WAVE_SIZE * 0.5, WAVE_SIZE)
 			if boss_hp > 0 and not w.hit.has("boss") and not BP.collide_circle_rect(boss_pos, BOSS_R, rect).is_empty():
 				w.hit["boss"] = true   # D-335
-				if _hurt_boss(int(BOSS_HITS["wave"])):
+				if _hurt_boss(int(BOSS_HITS["wave"]), p):
 					return
+			for k2 in darks.size():   # D-342
+				if darks[k2].state == "live" and not w.hit.has("dark%d" % darks[k2].id) and rect.intersects(_dark_rect(darks[k2])):
+					w.hit["dark%d" % darks[k2].id] = true
+					_hurt_dark(k2, 2)
+					break
 			var foe := _enemy_hit_by_rect(rect)
 			while foe != -1:
 				_destroy_enemy(foe)
@@ -1368,8 +1552,11 @@ func _missile_blast(p: Vector2) -> bool:
 	var area := Rect2(p - size * 0.5, size)
 	events.append(["missile_blast", [p, size]])
 	if boss_hp > 0 and not BP.collide_circle_rect(boss_pos, BOSS_R, area).is_empty():
-		if _hurt_boss(int(BOSS_HITS["missile"])):   # D-335
+		if _hurt_boss(int(BOSS_HITS["missile"]), p):   # D-335
 			return true
+	for k2 in range(darks.size() - 1, -1, -1):   # D-342
+		if darks[k2].state == "live" and area.intersects(_dark_rect(darks[k2])):
+			_hurt_dark(k2, 2)
 	for k in range(enemies.size() - 1, -1, -1):
 		if enemies[k].state != "wormhole" and not BP.collide_circle_rect(enemies[k].pos, ENEMY_R, area).is_empty():
 			_destroy_enemy(k)
@@ -1419,14 +1606,21 @@ func spawn_enemy(x: float = NAN, kind: String = "") -> int:
 	if is_nan(x):
 		x = randf_range(-lim, lim)
 	if kind.is_empty():
-		kind = "cube" if level >= CUBE_FROM_LEVEL and randf() < CUBE_CHANCE else "tetra"
+		var roll := randf()
+		if level >= ICO_FROM_LEVEL and roll < ICO_CHANCE:   # D-342
+			kind = "ico"
+		elif level >= CUBE_FROM_LEVEL and roll < ICO_CHANCE + CUBE_CHANCE:
+			kind = "cube"
+		else:
+			kind = "tetra"
 	var id := _next_enemy_id
 	_next_enemy_id += 1
 	var pos := Vector2(clampf(x, -lim, lim), ENEMY_SPAWN_Y)
 	enemies.append({"id": id, "kind": kind, "pos": pos, "state": "wormhole", "t": 0.0,
 		"phase": asin(clampf(pos.x / ENEMY_SWEEP_AMP, -1.0, 1.0)), "sweep_x": 0.0,
 		"dir": 1.0 if randf() < 0.5 else -1.0, "center": Vector2.ZERO, "angle": 0.0,
-		"best_y": pos.y, "stuck_t": 0.0, "loop": 0.0, "tries": 0})
+		"best_y": pos.y, "stuck_t": 0.0, "loop": 0.0, "tries": 0,
+		"fire_in": randf_range(MINI_FIRE.x, MINI_FIRE.y), "charging": false})
 	events.append(["enemy_spawn", [id, pos, kind]])
 	return id
 
@@ -1509,6 +1703,21 @@ func _update_enemies(dt: float) -> void:
 		_use(ship)
 		ship_invulnerable = maxf(0.0, ship_invulnerable - dt)
 	_use(0)
+	_update_darks(dt)   # D-342
+	if state == State.PLAY:   # D-342: mini-icosahedrons charge and fire
+		for en in enemies:
+			if en.get("kind", "") != "ico" or en.state == "wormhole":
+				continue
+			en.fire_in = float(en.fire_in) - dt
+			if not en.charging and en.fire_in <= MINI_CHARGE:
+				en.charging = true
+				events.append(["mini_charge", en.id])
+			if en.fire_in <= 0.0:
+				en.charging = false
+				en.fire_in = randf_range(MINI_FIRE.x, MINI_FIRE.y)
+				var dir: Vector2 = (_aim_point() - Vector2(en.pos)).normalized()
+				_spawn_torpedo(Vector2(en.pos) + dir * ENEMY_R, dir, TORP_MINI)
+				events.append(["mini_fire", [en.id, en.pos]])
 	if state == State.PLAY:
 		_enemy_timer -= dt
 		if _enemy_timer <= 0.0:

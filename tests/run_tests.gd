@@ -422,6 +422,110 @@ func test_breakout_difficulty(Sim) -> void:
 	bl._hurt_boss(Sim.BOSS_HP)
 	check(none_on_1 and stays_up and b_fired and b_through and ship_hit and b_blocked and b_waits and bl.state == Sim.State.LEVEL_CLEAR,
 		"boss: level 10 only, stays up, fires through bricks, hits the ship, the ball stops rays, level ends with it")
+	# D-342: new bricks, enemies and the level-20 boss.
+	var nb = Sim.new()
+	nb.setup(3)
+	nb.level = 11
+	nb.build_rack()
+	var ci := -1
+	for j in nb.bricks.size():
+		if nb.bricks[j].get("charged", false):
+			ci = j
+			break
+	var torp0: int = nb.rays.size()
+	nb._damage_brick(ci)
+	var torp_ok: bool = ci != -1 and nb.rays.size() == torp0 + 1 and nb.bricks[ci].alive and Vector2(nb.rays[-1].vel).y > 0.0
+	nb._damage_brick(ci)
+	var torp_once: bool = nb.rays.size() == torp0 + 1 and not nb.bricks[ci].alive
+	nb.level = 12
+	nb.build_rack()
+	var pi := -1
+	for j in nb.bricks.size():
+		if nb.bricks[j].get("plasma", false):
+			pi = j
+			break
+	nb.extra_balls.clear()
+	nb._damage_brick(pi)
+	var freed: bool = pi != -1 and nb.extra_balls.size() == 1
+	check(torp_ok and torp_once and freed, "charged brick fires one torpedo down on its first hit; a plasma brick frees a ball")
+	var mi = Sim.new()
+	mi.setup(3)
+	mi.level = 11
+	mi.build_rack()
+	mi.step(1.0 / 60.0, false, false, true, 0)
+	mi.freeze_ball = true
+	mi.spawn_enemy(0.0, "ico")
+	mi.enemies[0].state = "sweep"
+	mi.enemies[0].fire_in = 0.5
+	var mf := false
+	for i in 60:
+		mi.step(1.0 / 60.0, false, false, false, 0)
+		for ev in mi.events:
+			mf = mf or ev[0] == "mini_fire"
+	var kinds11 := {}
+	for i in 300:
+		mi.spawn_enemy()
+		kinds11[mi.enemies[-1].kind] = true
+	mi.level = 10
+	var ico_early := false
+	for i in 300:
+		mi.spawn_enemy()
+		ico_early = ico_early or mi.enemies[-1].kind == "ico"
+	check(mf and kinds11.has("ico") and not ico_early and float(mi.rays[0].get("r", 1.0)) < Sim.RAY_R,
+		"mini-icosahedron from level 11 fires a smaller torpedo")
+	# Corrupted paddle: only where its band is clear; 10 ball hits or 5 weapon hits.
+	var bands_ok := true
+	for ln in range(15, 20):
+		for wide2 in [false, true]:
+			var lvd = Sim.new()
+			if wide2:
+				lvd.setup_two(3)
+			else:
+				lvd.setup(3)
+			lvd.level = ln
+			lvd.build_rack()
+			bands_ok = bands_ok and lvd.dark_band_clear()
+	var dk = Sim.new()
+	dk.setup(3)
+	dk.level = 15
+	dk.build_rack()
+	dk.spawn_dark(0.0)
+	dk.darks[0].state = "live"
+	for i in 9:
+		dk._hurt_dark(0, 1)
+	var alive9: bool = dk.darks.size() == 1
+	dk._hurt_dark(0, 1)
+	var dead10: bool = dk.darks.is_empty()
+	dk.spawn_dark(0.0)
+	for i in 5:
+		dk._hurt_dark(0, 2)
+	var dead5: bool = dk.darks.is_empty()
+	var bounce = Sim.new()
+	bounce.setup(3)
+	bounce.level = 15
+	bounce.build_rack()
+	bounce.step(1.0 / 60.0, false, false, true, 0)
+	bounce.spawn_dark(0.0)
+	bounce.darks[0].state = "live"
+	bounce.darks[0].vx = 0.0
+	bounce.ball_pos = Vector2(0.0, bounce._dark_y() + 0.6)
+	bounce.ball_vel = Vector2(0.0, -8.0)
+	for i in 12:
+		bounce.step(1.0 / 60.0, false, false, false, 0)
+	check(bands_ok and alive9 and dead10 and dead5 and bounce.ball_vel.y > 0.0 and int(bounce.darks[0].hp) == Sim.DARK_HP - 1,
+		"corrupted paddle: levels 15-19 leave its band clear; blocks the ball; 10 ball hits or 5 weapon hits")
+	var dd = Sim.new()
+	dd.setup(3)
+	dd.level = 20
+	dd.build_rack()
+	dd.step(1.0 / 60.0, false, false, true, 0)
+	dd.freeze_ball = true
+	dd.ball_pos = Vector2(-3.5, 3.0)
+	dd.boss_fire_in = 0.05
+	for i in 6:
+		dd.step(1.0 / 60.0, false, false, false, 0)
+	check(dd.boss_kind == "dodeca" and dd.boss_hp == Sim.DODECA_HP and dd.rays.size() == 3,
+		"level 20: the dodecahedron fires three torpedoes (%d)" % dd.rays.size())
 	# D-339: every 4 damage to the boss drops a capsule.
 	var bd = Sim.new()
 	bd.setup(3)

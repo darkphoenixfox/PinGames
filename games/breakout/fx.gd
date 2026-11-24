@@ -229,6 +229,88 @@ static func make_icosahedron(radius: float, texture: Texture2D, edge_color: Colo
 	return root
 
 
+## D-342: the level-20 boss body: a dodecahedron (circumradius `radius`), the
+## icosahedron's style: see-through circuit panels and glowing edges.
+static func make_dodecahedron(radius: float, texture: Texture2D, edge_color: Color, alpha: float = 0.5) -> Node3D:
+	var root := Node3D.new()
+	root.name = "Dodecahedron"
+	var phi := (1.0 + sqrt(5.0)) * 0.5
+	var ip := 1.0 / phi
+	var raw := []
+	for x in [-1.0, 1.0]:
+		for y in [-1.0, 1.0]:
+			for z in [-1.0, 1.0]:
+				raw.append(Vector3(x, y, z))
+	for a in [-1.0, 1.0]:
+		for b in [-1.0, 1.0]:
+			raw.append(Vector3(0, a * ip, b * phi))
+			raw.append(Vector3(a * ip, b * phi, 0))
+			raw.append(Vector3(a * phi, 0, b * ip))
+	var v := []
+	for p in raw:
+		v.append((p as Vector3).normalized() * radius)
+	# Face normals = the icosahedron's vertices; each face = the 5 nearest corners.
+	var normals := []
+	for a in [-1.0, 1.0]:
+		for b in [-phi, phi]:
+			normals.append(Vector3(0, a, b).normalized())
+			normals.append(Vector3(a, b, 0).normalized())
+			normals.append(Vector3(b, 0, a).normalized())
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = texture
+	m.albedo_color = Color(1, 1, 1, alpha)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	m.emission_enabled = true
+	m.emission_texture = texture
+	m.emission_energy_multiplier = 1.2
+	m.roughness = 0.4
+	m.metallic = 0.3
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var lines := ImmediateMesh.new()
+	lines.surface_begin(Mesh.PRIMITIVE_LINES)
+	var crop := 96.0 / 512.0
+	for n in normals:
+		var corners := v.duplicate()
+		corners.sort_custom(func(p, q): return (p as Vector3).dot(n) > (q as Vector3).dot(n))
+		corners = corners.slice(0, 5)
+		var cen := Vector3.ZERO
+		for c in corners:
+			cen += c
+		cen /= 5.0
+		var ax: Vector3 = ((corners[0] as Vector3) - cen).normalized()
+		var ay: Vector3 = (n as Vector3).cross(ax)
+		corners.sort_custom(func(p, q): return atan2((p - cen).dot(ay), (p - cen).dot(ax)) < atan2((q - cen).dot(ay), (q - cen).dot(ax)))
+		var off := Vector2(randi() % 410, randi() % 410) / 512.0
+		for i in 5:
+			var a: Vector3 = corners[i]
+			var b: Vector3 = corners[(i + 1) % 5]
+			var tri := [cen, a, b]
+			var uvs := [off + Vector2(0.5, 0.5) * crop, off + Vector2(0.5 + 0.5 * cos(i * TAU / 5.0), 0.5 + 0.5 * sin(i * TAU / 5.0)) * crop,
+				off + Vector2(0.5 + 0.5 * cos((i + 1) * TAU / 5.0), 0.5 + 0.5 * sin((i + 1) * TAU / 5.0)) * crop]
+			for q in 3:
+				st.set_normal(n)
+				st.set_uv(uvs[q])
+				st.add_vertex(tri[q])
+			lines.surface_add_vertex(a * 1.01)
+			lines.surface_add_vertex(b * 1.01)
+	lines.surface_end()
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = m
+	root.add_child(mi)
+	var lm := StandardMaterial3D.new()
+	lm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	lm.albedo_color = edge_color * 2.5
+	var li := MeshInstance3D.new()
+	li.mesh = lines
+	li.material_override = lm
+	root.add_child(li)
+	return root
+
+
 ## D-331: the Homing Missile: a thin metal rocket, nose along -Z, a coloured
 ## band behind the nose, four tail fins and a particle thruster (world-space
 ## sparks and smoke that trail behind it). Call `restart()` on the "Thruster"

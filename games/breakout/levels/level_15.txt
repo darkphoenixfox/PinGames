@@ -1,0 +1,7 @@
+# Level 15: first contact. Corrupted paddles warp in under the bricks from here on;
+# levels 15-19 keep their bottom two rows clear for them (D-342).
+RRRRRRRRRRR
+YCYYYYYYYCY
+GGGGGPGGGGG
+BBBBBBBBBBB
+bbbbbbbbbbb

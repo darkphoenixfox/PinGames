@@ -1,0 +1,9 @@
+# Level 14: a metal fortress with plasma in its vaults (D-342).
+XXXX...XXXX
+XPPX...XPPX
+XRRX.C.XRRX
+XYYX.C.XYYX
+.GG.CCC.GG.
+.bb.....bb.
+RRRRRRRRRRR
+YYYYYYYYYYY

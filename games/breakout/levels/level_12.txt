@@ -1,0 +1,7 @@
+# Level 12: plasma bricks (P) set their captured ball free (D-342).
+..RRRRRRR..
+.RYYYPYYYR.
+RYGGGGGGGYR
+RYGPBBBPGYR
+.RYGGGGGYR.
+..RRRCRRR..

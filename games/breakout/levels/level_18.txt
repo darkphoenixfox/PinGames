@@ -1,0 +1,7 @@
+# Level 18: a hive ringed with plasma (D-342).
+...PPPPP...
+..PRRRRRP..
+.PRYYCYYRP.
+.PRYGGGYRP.
+..PRYYYRP..
+...PPPPP...

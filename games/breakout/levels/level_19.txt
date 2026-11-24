@@ -1,0 +1,9 @@
+# Level 19: the last line (D-342).
+XRXRXRXRXRX
+XCXCXCXCXCX
+XYXYXYXYXYX
+.G.G.G.G.G.
+BBBBBBBBBBB
+bbbbbbbbbbb
+rrrrrrrrrrr
+YYYYYYYYYYY

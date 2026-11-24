@@ -26,7 +26,8 @@ uniform float pulse_speed = 2.6;
 INST uniform vec2 crop_offset = vec2(0.0);
 INST uniform float phase = 0.0;
 INST uniform float hit_flash = 0.0;
-// 0 normal, 1 armoured (2 hits), 2 cracked (armoured, hit once), 3 metal (D-073)
+// 0 normal, 1 armoured (2 hits), 2 cracked (armoured, hit once), 3 metal (D-073),
+// 4 charged (D-342: red, pulsing; cracked once it has fired)
 INST uniform float mode = 0.0;
 
 varying vec3 local_pos;
@@ -50,7 +51,10 @@ void fragment() {
 	face = mix(face, mix(t, glow_color.rgb, 0.35) * 1.4, light * (1.0 - dark));
 	float border2 = max(max(step(tx.x, 1.0), step(tx.y, 1.0)),
 		max(step(brick_texels.x - 2.0, tx.x), step(brick_texels.y - 2.0, tx.y)));
-	if (mode > 2.5) {
+	if (mode > 3.5) {
+		// Charged: a hot red frame, pulsing.
+		face = mix(face, vec3(1.0, 0.18, 0.1) * 1.3, border2 * 0.9);
+	} else if (mode > 2.5) {
 		// Metal: steel grey, riveted frame, no life inside.
 		float lum = dot(t, vec3(0.3, 0.59, 0.11));
 		face = vec3(0.32, 0.35, 0.4) * (0.6 + 0.8 * lum) + vec3(0.25) * border2;
@@ -71,9 +75,10 @@ void fragment() {
 	float lo = min(t.r, min(t.g, t.b));
 	float mask = smoothstep(0.45, 0.8, hi) * smoothstep(0.2, 0.45, hi - lo);
 	float pulse = 0.5 + 0.5 * sin(TIME * pulse_speed + phase);
-	float alive_glow = mode > 2.5 ? 0.0 : 1.0;
+	float alive_glow = (mode > 2.5 && mode < 3.5) ? 0.0 : 1.0;
 	EMISSION = (t * 0.5 + glow_color.rgb * 0.5) * mask * (0.5 + 1.3 * pulse) * glow_strength * is_top * alive_glow
 		+ glow_color.rgb * border2 * (mode > 0.5 && mode < 1.5 ? 0.6 : 0.0)
+		+ vec3(1.0, 0.12, 0.06) * border2 * (mode > 3.5 ? 0.9 + 0.8 * sin(TIME * 6.0 + phase) : 0.0)
 		+ vec3(hit_flash);
 	ROUGHNESS = 0.6;
 	SPECULAR = 0.2;

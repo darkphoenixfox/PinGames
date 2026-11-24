@@ -1,0 +1,8 @@
+# Level 11: charged bricks (C) fire a torpedo straight down when first hit.
+# Mini-icosahedrons join the enemies from here on (D-342).
+RRRRRRRRRRR
+YCYYYCYYYCY
+GGGGGGGGGGG
+BBBCBBBCBBB
+rrrrrrrrrrr
+.Y.Y.Y.Y.Y.
