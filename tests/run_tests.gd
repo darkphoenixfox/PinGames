@@ -341,6 +341,18 @@ func test_breakout_difficulty(Sim) -> void:
 	xl.step(1.0 / 60.0, false, false, false, 0)
 	check(none and got1 and once and xl.balls_left == l0 + 2 and xl.balls_total == l0 + 2,
 		"extra life at 20,000 and 50,000, once each (lives %d -> %d)" % [l0, xl.balls_left])
+	# D-322: the proximity alert: an enemy in the bottom 20% of the field.
+	var dz = Sim.new()
+	dz.setup(3)
+	dz.spawn_enemy(0.0)
+	var line: float = dz.field.end.y - dz.field.size.y * 0.2
+	dz.enemies[0].pos = Vector2(0.0, line + 0.3)
+	var hole: bool = dz.enemy_in_danger()   # still in its wormhole: no alert
+	dz.enemies[0].state = "orbit"
+	var near: bool = dz.enemy_in_danger()
+	dz.enemies[0].pos.y = line - 0.2
+	var held: bool = dz.enemy_in_danger(0.45) and not dz.enemy_in_danger()
+	check(not hole and near and held, "proximity alert: an enemy out of its wormhole in the bottom 20%, with hysteresis")
 	# D-285: 2-player Tilt Breaker.
 	var tp = Sim.new()
 	tp.setup_two(3)

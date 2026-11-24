@@ -944,6 +944,18 @@ func _end_powerup() -> void:
 
 # --- enemies (D-052) ------------------------------------------------------------------
 ## Spawns a tetrahedron through a wormhole at x (random if NAN). Public for tests.
+## D-322: true while an enemy (out of its wormhole) is in the bottom
+## DANGER_FRAC of the field. `margin` lowers the line (hysteresis: the alert
+## stays on while an orbit's top dips just above it).
+const DANGER_FRAC := 0.2
+func enemy_in_danger(margin: float = 0.0) -> bool:
+	var line := field.end.y - field.size.y * DANGER_FRAC - margin
+	for en in enemies:
+		if en.state != "wormhole" and float(en.pos.y) >= line:
+			return true
+	return false
+
+
 func spawn_enemy(x: float = NAN) -> int:
 	var lim := field.size.x * 0.5 - ENEMY_R - 0.2
 	if is_nan(x):

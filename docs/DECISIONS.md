@@ -3232,3 +3232,12 @@
 - **Test:** no charge at 19,990; one at 20,000 only once; both by 80,000 and no more after.
 - **Dev:** `--tb-score=N` starts play at N points.
 - **Status:** Accepted
+
+### D-322 — Tilt Breaker: "DANGER / PROXIMITY ALERT"
+- **Date:** 2026-11-24
+- **Decision (director):** while an enemy is in the bottom 20% of the screen, a see-through red "DANGER / PROXIMITY ALERT" blinks in the middle of the play area, until the enemy moves away or is destroyed.
+- **Sim:** `enemy_in_danger(margin)`: any enemy out of its wormhole below `field.end.y - 20% of the field height`. The view turns it off only once the enemy is 0.45 m back above the line, so an orbit's top dipping just above it doesn't flicker the alert.
+- **Look:** PinPixel dot lettering in red at 62% alpha: "DANGER" between two drawn warning triangles (the font has no ⚠ glyph), "PROXIMITY ALERT" under it. Blinks with `modulate.a` (0.6 s cycle). Sized to the TABLE height, so it fits the single screen's narrower play area, and centred 10% above the middle, clear of PLASMA CANNON READY on the single screen.
+- Only during play (not the finale or menus).
+- **Dev:** `--tb-enemy-low` puts an enemy at the bottom (and keeps the ship from colliding with it).
+- **Status:** Accepted

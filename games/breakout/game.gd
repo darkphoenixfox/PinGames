@@ -398,6 +398,14 @@ func _process(delta: float) -> void:
 		return
 	if Config.cli.has("tb-dmd-anim") and not Dmd.is_animating():  # dev: loop one DMD animation
 		_dmd_anim(str(Config.cli["tb-dmd-anim"]))
+	if Config.cli.has("tb-enemy-low") and _phase == "play" and not has_meta("dev_enemy"):   # dev: an enemy at the bottom (D-322)
+		set_meta("dev_enemy", true)
+		var eid: int = sim.spawn_enemy(-3.0)
+		sim.enemies[-1].state = "sweep"
+		sim.enemies[-1].pos = Vector2(-3.0, Sim.ENEMY_ORBIT_START_Y + 0.5)
+		sim.events.append(["enemy_ready", eid])
+		sim.ship_invulnerable = 999.0   # so it stays for the screenshot
+		_handle_events()
 	if Config.cli.has("tb-score") and not has_meta("dev_score"):   # dev: start at N points (D-321)
 		set_meta("dev_score", true)
 		sim.score = int(str(Config.cli["tb-score"]))
@@ -665,6 +673,7 @@ func _animate(delta: float) -> void:
 		_hint.visible = false
 	if _hint != null and _hint.visible:
 		_hint.modulate.a = 1.0 if fmod(Time.get_ticks_msec() / 1000.0, 0.8) < 0.5 else 0.0
+	_update_danger()   # D-322
 	_animate_blasts(delta)
 	_animate_enemies(delta)
 	_animate_powerups(delta)
@@ -1308,6 +1317,69 @@ func _build_hud() -> void:
 	_hint.offset_left = -400
 	_hint.offset_right = 400
 	add_to_table(_hint)
+	_build_danger()
+
+
+## D-322: "DANGER / PROXIMITY ALERT" in see-through red, blinking in the middle
+## of the play area while an enemy is in the bottom 20% of the field. Warning
+## triangles are drawn (PinPixel has no warning sign).
+const DANGER_COL := Color(1.0, 0.16, 0.2, 0.62)
+const DANGER_MARGIN := 0.45      # m the enemy must climb back above the line
+var _danger: Control
+var _danger_on := false
+
+
+class WarnSign extends Control:
+	var col := Color.RED
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		var pts := PackedVector2Array([Vector2(w * 0.5, 0.0), Vector2(w, h), Vector2(0.0, h)])
+		draw_colored_polygon(pts, col)
+		var k := Color(0.0, 0.0, 0.0, 0.55)
+		draw_rect(Rect2(w * 0.44, h * 0.3, w * 0.12, h * 0.38), k)
+		draw_rect(Rect2(w * 0.44, h * 0.76, w * 0.12, h * 0.12), k)
+
+
+func _build_danger() -> void:
+	_danger = Control.new()
+	_danger.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_danger.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Sized to the TABLE's height (the camera shows 16 units over it): the single
+	# screen's landscape TABLE has a narrower play area in base pixels.
+	var k := float(Screens.table_base().y) / 1920.0
+	var v := UI.vstack(roundi(18 * k))
+	_danger.add_child(v)
+	# Centred a little above the middle, clear of PLASMA CANNON READY (which
+	# sits mid-screen on the single screen's short TABLE).
+	v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	v.offset_bottom = -float(Screens.table_base().y) * 0.2
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", roundi(28 * k))
+	v.add_child(row)
+	for part in ["sign", "text", "sign"]:
+		if part == "text":
+			row.add_child(UI.label(tr("TB_DANGER"), roundi(120 * k), DANGER_COL))
+		else:
+			var s := WarnSign.new()
+			s.col = DANGER_COL
+			s.custom_minimum_size = Vector2(96, 84) * k
+			s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			row.add_child(s)
+	v.add_child(UI.label(tr("TB_PROXIMITY_ALERT"), roundi(72 * k), DANGER_COL))
+	_danger.visible = false
+	add_to_table(_danger)
+
+
+func _update_danger() -> void:
+	if _danger == null:
+		return
+	var playing := _phase == "play" and _finale_t < 0.0 and sim.state != Sim.State.OVER
+	_danger_on = playing and sim.enemy_in_danger(DANGER_MARGIN if _danger_on else 0.0)
+	_danger.visible = _danger_on
+	if _danger_on:
+		_danger.modulate.a = 1.0 if fmod(Time.get_ticks_msec() / 1000.0, 0.6) < 0.38 else 0.0
 
 
 ## Debug keys (D-057): F = piercing plasma along the ship's vertical line.
