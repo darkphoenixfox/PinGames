@@ -121,7 +121,7 @@ const POWERUP_KINDS := ["T", "P", "B", "I", "W", "H", "L", "S", "K", "U", "N"]
 ## its bricks are gone AND the boss is destroyed.
 const BOSS_EVERY := 10
 const BOSS_R := 1.2                  # hitbox (about 5 cubes across)
-const BOSS_HP := 30
+const BOSS_HP := 45                  # D-340: 150% of D-335's 30
 const BOSS_POINTS := 5000
 const BOSS_Y := Vector2(-5.3, -4.85)    # its centre's top and bottom limits (its top edge clear of the rail)
 const BOSS_SPEED := 0.35             # rad/s along its Lissajous path

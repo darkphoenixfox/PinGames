@@ -3391,3 +3391,8 @@
 - Every 4 points of damage to the boss (`BOSS_DROP_EVERY`; a ball hit is 1, a missile 3, and so on) drop a capsule from just under it, chosen by the normal rules (blaster/paddle turns, rare 1UP/Nuclear, D-329). It also resets the brick drop counter (D-333). No drop from the killing blow (the level may be ending).
 - **Test:** 8 single hits drop 2 capsules, below the boss.
 - **Status:** Accepted
+
+### D-340 — Tilt Breaker: the boss has 45 HP
+- **Date:** 2026-11-24
+- **Decision (director):** the boss's life is 150% of what it was: 45 HP (was 30, D-335). The eye's colour steps (D-338) and the drop every 4 damage (D-339) scale with it, so a fight now drops about 11 capsules.
+- **Status:** Accepted
