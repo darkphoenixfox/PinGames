@@ -81,6 +81,10 @@ const BLAST_MAX_LEVEL := 3         # levels 1..3, each needs one more power cell
 const BLAST_COST := 1.0 / 3.0      # per level; a full power bar = 3 levels
 const POWER_RECHARGE_DELAY := 1.0  # after the last blast
 const POWER_RECHARGE_RATE := 1.0 / 15.0  # per second (full bar in 15 s)
+## D-330: the plasma refills the bar too, on top of the recharge over time:
+## each brick it hits (for the ship that last hit it) and each hit off the ship.
+const BRICK_HIT_POWER := 0.02
+const PADDLE_HIT_POWER := 0.05
 const BLAST_SPEED := 20.0
 const BLAST_W := 0.36
 const BLAST_H := 0.7
@@ -164,6 +168,7 @@ var two_player := false
 var field := FIELD
 var cols := BRICK_COLS
 var server := 0        # the player whose ship holds the ball before a serve
+var _last_hitter := 0  # D-330: the ship that last sent the plasma up (its brick hits refill its bar)
 var cur := 0           # the player whose fields are live
 var _pl := [{}, {}]
 const PLAYER_FIELDS := ["paddle_x", "paddle_vx", "paddle_y", "_dash_time", "_dash_cd", "_dash_dir",
@@ -819,6 +824,7 @@ func ghost_xs() -> Array:
 
 func _serve() -> void:
 	state = State.PLAY
+	_last_hitter = server
 	var angle := deg_to_rad(randf_range(-15.0, 15.0)) + clampf(paddle_vx * 0.02, -0.25, 0.25)
 	ball_vel = Vector2(sin(angle), -cos(angle)) * ball_speed
 	events.append(["serve", null])
@@ -889,6 +895,7 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 		vel = BP.reflect(vel, best_c.normal)
 		b.pos = pos
 		b.vel = vel
+		_gain_power(_last_hitter, BRICK_HIT_POWER)   # D-330
 		if _damage_brick(best):
 			return BALL_STOP
 	# Enemies: the plasma destroys them and rebounds.
@@ -917,6 +924,8 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 			vel = BP.paddle_bounce(pos.x, paddle_x, catch_half_w(), speed, paddle_vx)
 			pos.y = pr.position.y - BALL_R
 			events.append(["paddle", ship])
+			_last_hitter = ship
+			power = minf(1.0, power + PADDLE_HIT_POWER)   # D-330 (this ship is live)
 			break
 		var ghosted := false
 		for gx in ghost_xs():
@@ -951,6 +960,14 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 
 
 # --- power-ups (D-072) ------------------------------------------------------------------
+## D-330: adds energy to ship i's bar (whichever ship is live).
+func _gain_power(i: int, amount: float) -> void:
+	if not two_player or i == cur:
+		power = minf(1.0, power + amount)
+	else:
+		player_set(i, "power", minf(1.0, float(player_get(i, "power")) + amount))
+
+
 ## Spawns a falling power-up capsule (public for tests / debug).
 ## D-275: any power-up but the one the ship already has.
 func random_powerup_kind() -> String:

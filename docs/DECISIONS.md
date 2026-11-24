@@ -3309,3 +3309,13 @@
 - **Hitbox:** catching uses a rect from the capsule's bottom to 0.55 m above its top (`POWERUP_REACH_UP`) against the ship's catch rect, so a capsule that has slipped just below the ship is still caught.
 - **Test:** 300+ non-instant draws in a row alternate; a capsule 0.3 m under the ship's bottom is caught.
 - **Status:** Accepted
+
+### D-330 — Tilt Breaker: the plasma refills the energy bar
+- **Date:** 2026-11-24
+- **Decision (director):** each brick hit gives back 2% of the energy bar and each hit of the ball with the ship 5%, on top of the recharge over time.
+- **Brick hits:** every collision of a plasma ball (the main one or a Bounce ball) with a brick, metal and armour hits included. Charged shots, wave shots and missiles don't count.
+- **Ship hits:** each bounce off the ship, Sidekicks included (not Lightspeed afterimages).
+- **2P:** a ship hit goes to that ship; brick hits go to the ship that last sent the ball up (the server, after a serve).
+- The recharge over time (D-084 and before) is unchanged.
+- **Test:** a brick hit adds exactly 0.02 and a ship hit 0.05.
+- **Status:** Accepted

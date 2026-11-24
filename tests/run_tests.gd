@@ -374,6 +374,24 @@ func test_breakout_difficulty(Sim) -> void:
 	cube_low = ag.enemies[1].pos.y > ag.enemies[0].pos.y
 	check(kinds_ok and dist[1] < dist[0] * 0.85 and cube_low,
 		"cube enemy: nearer the ship (%.0f vs %.0f) and lower than a tetra" % [dist[1], dist[0]])
+	# D-330: brick hits +2%, ship hits +5% of the bar.
+	var eg = Sim.new()
+	eg.setup(3)
+	eg.step(1.0 / 60.0, false, false, true, 0)   # serve
+	eg.power = 0.3
+	eg._since_blast = 0.0   # no recharge over time in this step
+	var bj: Dictionary = eg.bricks[eg.bricks.size() - 1]
+	eg.ball_pos = Vector2(bj.rect.get_center().x, bj.rect.end.y + Sim.BALL_R + 0.02)
+	eg.ball_vel = Vector2(0.0, -8.0)
+	eg.ball_speed = 8.0
+	eg.step(1.0 / 60.0, false, false, false, 0)
+	var after_brick: float = eg.power
+	eg._since_blast = 0.0
+	eg.ball_pos = Vector2(eg.paddle_x, Sim.PADDLE_Y - Sim.PADDLE_H * 0.5 - Sim.BALL_R - 0.02)
+	eg.ball_vel = Vector2(0.0, 8.0)
+	eg.step(1.0 / 60.0, false, false, false, 0)
+	check(absf(after_brick - 0.32) < 0.001 and absf(eg.power - 0.37) < 0.001,
+		"energy: brick hit +2%% (%.3f), ship hit +5%% (%.3f)" % [after_brick, eg.power])
 	# D-329: blaster and paddle drops take turns; capsules caught just under the ship.
 	var al = Sim.new()
 	al.setup(3)
