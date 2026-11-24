@@ -554,6 +554,19 @@ const PUFF_EVERY := 0.016        # s between puffs per wheel
 const PUFF_LIFE := 0.6
 var _puffs: MultiMesh
 var _puff_list: Array = []       # {pos, vel, age, size, col}
+const LAUNCH_SMOKE_V := 9.0      # D-309: m/s the wheelspin smoke lasts to from a standstill
+var _from_stop := true
+## D-309: black skid marks on the asphalt while drifting (and the drift-brake
+## at time up / the finish): two strips from the rear tyres, built from short
+## flat segments in a ring of SKID_MAX, in the world, so the car leaves them.
+const SKID_MAX := 900
+const SKID_W := 0.26
+const SKID_STEP := 0.6           # m between a strip's points
+const SKID_REAR := 1.35          # m behind the car's centre
+const SKID_TRACK := 0.78         # m from the centre line to each rear tyre
+var _skids: MultiMesh
+var _skid_n := 0                 # segments written (ring index = n % SKID_MAX)
+var _skid_last: Array = []       # each tyre's last point, while skidding
 var _puff_t := 0.0
 var _flames: Array = []          # nitro flame meshes
 var _land_t := 0.0              # s since a roll-over landed (D-211)
@@ -901,6 +914,10 @@ func _new_sim() -> void:
 	_over_turn = 0.0
 	_over_dir = 0.0
 	_puff_list.clear()
+	_skid_n = 0   # D-309
+	_skid_last.clear()
+	if _skids != null:
+		_skids.visible_instance_count = 0
 	if _two:   # D-289: both cars on the grid, no clock
 		sim.setup_two(7, [_chosen_car, _p2_car])
 	else:
@@ -2610,11 +2627,66 @@ func _build_puffs() -> void:
 	_root.add_child(mmi)
 
 
+func _build_skids() -> void:
+	_skids = MultiMesh.new()
+	_skids.transform_format = MultiMesh.TRANSFORM_3D
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(1.0, 1.0)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_color = Color(0.02, 0.02, 0.025, 0.6)
+	m.render_priority = 1   # over the road and its puddles
+	pm.material = m
+	_skids.mesh = pm
+	_skids.instance_count = SKID_MAX
+	_skids.visible_instance_count = 0
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = _skids
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.custom_aabb = AABB(Vector3(-1e5, -1e5, -1e5), Vector3(2e5, 2e5, 2e5))
+	_root.add_child(mmi)
+
+
+## Lays the rear tyres' marks while skidding (D-309). `yaw` is the body's turn
+## on the road (drift angle), so the strips come from where the tyres really are.
+func _update_skids(skidding: bool, yaw: float) -> void:
+	if _skids == null:
+		_build_skids()
+	if not skidding or sim.v < 2.0:
+		_skid_last.clear()
+		return
+	var up := _car.global_basis.y.normalized()
+	var turn := Basis(Vector3.UP, yaw)
+	var pts := []
+	for side in [-SKID_TRACK, SKID_TRACK]:
+		pts.append(_car.global_transform * (turn * Vector3(side, 0.035, SKID_REAR)))
+	if _skid_last.size() != 2:
+		_skid_last = pts
+		return
+	if pts[0].distance_to(_skid_last[0]) < SKID_STEP:
+		return
+	for k in 2:
+		var a: Vector3 = _skid_last[k]
+		var b: Vector3 = pts[k]
+		var dir := b - a
+		var length := dir.length()
+		if length < 0.01 or length > 6.0:   # (a jump: a new strip)
+			continue
+		dir /= length
+		var across := up.cross(dir).normalized()
+		var basis := Basis(across * SKID_W, up, dir * (length + 0.05))
+		_skids.set_instance_transform(_skid_n % SKID_MAX, Transform3D(basis, (a + b) * 0.5))
+		_skid_n += 1
+	_skids.visible_instance_count = mini(_skid_n, SKID_MAX)
+	_skid_last = pts
+
+
 ## Rear-wheel puffs in world space: rise, grow and fade (D-100).
-func _update_puffs(delta: float, smoking: bool) -> void:
+func _update_puffs(delta: float, smoking: bool, light: bool = false) -> void:
 	if smoking:
 		_puff_t += delta
-		var col := Color(0.75, 0.6, 0.4, 0.5) if sim.offroad else Color(0.95, 0.95, 0.95, 0.45)
+		var col := Color(0.75, 0.6, 0.4, 0.5) if sim.offroad else Color(0.95, 0.95, 0.95, 0.22 if light else 0.45)   # D-309: wheelspin: thinner
 		# Fewer puffs when slow, or they pile up into one opaque cloud.
 		var every := PUFF_EVERY * clampf(40.0 / maxf(sim.v, 1.0), 1.0, 4.0)
 		while _puff_t >= every:
@@ -2624,7 +2696,8 @@ func _update_puffs(delta: float, smoking: bool) -> void:
 					_puff_list.pop_front()
 				var pos := _car.global_transform * Vector3(side, 0.3, 1.6)
 				var vel := Vector3(randf_range(-1, 1), randf_range(1.0, 2.5), randf_range(-1, 1))
-				_puff_list.append({"pos": pos, "vel": vel, "age": 0.0, "size": randf_range(0.8, 1.6), "col": col})
+				var sz := randf_range(0.5, 0.9) if light else randf_range(0.8, 1.6)
+				_puff_list.append({"pos": pos, "vel": vel, "age": 0.0, "size": sz, "col": col})
 	else:
 		_puff_t = 0.0
 	for i in range(_puff_list.size() - 1, -1, -1):
@@ -3447,8 +3520,17 @@ func _animate(delta: float) -> void:
 		# Brake lights glow bigger than the running lights (D-198).
 		for tl in _player_lights.get_meta("tails", []):
 			(tl as Node3D).scale = Vector3.ONE * (0.95 if braking else 0.6)
-	var smoking := sim.drifting or sliding_out or _shift_smoke_t > 0.0 or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
-	_update_puffs(delta, smoking)
+	# D-309: pulling away from a standstill spins the tyres: smoke until it's
+	# rolling at LAUNCH_SMOKE_V (on the road; off-road already throws dust).
+	if sim.v < 1.0:
+		_from_stop = true
+	elif sim.v > LAUNCH_SMOKE_V or sim.state != Sim.State.RACE:
+		_from_stop = false
+	var launching := _from_stop and sim.state == Sim.State.RACE and sim.throttle > 0.3 and sim.v >= 0.3 \
+		and sim.spin_t <= 0.0 and not sim.offroad
+	var smoking := sim.drifting or sliding_out or launching or _shift_smoke_t > 0.0 or (sim.spin_t > 0.0 and not sim.stalled()) or (sim.offroad and sim.v > 12.0)
+	_update_puffs(delta, smoking, launching and not (sim.drifting or sliding_out or sim.spin_t > 0.0))
+	_update_skids(sim.drifting or sliding_out or Config.cli.has("rc-skid"), yaw)   # (--rc-skid: dev, always)
 	# Revving on the grid spits fire (D-116): pops while held high, and one as
 	# the revs drop.
 	if sim.state == Sim.State.COUNTDOWN:

@@ -3110,3 +3110,17 @@
 - **The game selection menu (picker):** plays Chillwave Nightdrive (`Audio.MUSIC_PICKER`). The shell's attract keeps `MUSIC_MAIN`.
 - **Files:** converted to `assets/audio/music/racer/turbo_run_original.ogg` (Vorbis q5). Recorded in `assets/CREDITS.md`.
 - **Status:** Accepted
+
+### D-309 — Turbo Run: wheelspin smoke pulling away, black skid marks when drifting
+- **Date:** 2026-11-24
+- **Decision (director):** accelerating from a full stop puts smoke out of the tyres, and drifting leaves black skid marks on the asphalt from the tyres' contact with the road.
+- **Wheelspin smoke:**
+  - From a standstill (under 1 m/s: the start grid, after a crash, a bust), the rear tyres smoke while the car pulls away (throttle on), until it reaches `LAUNCH_SMOKE_V` 9 m/s.
+  - Not off-road, which already throws dust.
+  - It uses the drift smoke's puffs (D-100), thinner and smaller (alpha 0.22, size 0.5–0.9), so it doesn't hide the car.
+- **Skid marks:**
+  - While drifting, and in the drift-brake slide at time up or past the finish, the two rear tyres lay dark strips (near-black, alpha 0.6, 0.26 m wide).
+  - The strips start at where the tyres really are: 1.35 m behind the centre, 0.78 m to each side, turned with the drift angle.
+  - They're built from flat segments about 0.6 m long in a world-space ring of 900 (a MultiMesh), drawn over the road and its puddles. They stay on the road as the car leaves them; the oldest are reused, and a new race clears them.
+- **Dev:** `--rc-skid` lays the marks all the time.
+- **Status:** Accepted
