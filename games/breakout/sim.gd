@@ -122,6 +122,9 @@ var state := State.SERVE
 var score := 0
 var balls_left := 3
 var balls_total := 3   # lives at the start of the game (DMD status dots)
+## D-321: an extra life at each of these scores (once each, per game).
+const EXTRA_LIFE_AT := [20000, 50000]
+var extra_lives_given := 0
 var difficulty := "normal"
 var ball_start_speed := BALL_START_SPEED
 var ball_max_speed := BALL_MAX_SPEED
@@ -210,6 +213,7 @@ var events: Array = []
 func setup(balls: int, diff: String = "normal") -> void:
 	set_difficulty(diff, balls)
 	score = 0
+	extra_lives_given = 0
 	level = 1
 	build_rack()
 	_reset_serve()
@@ -270,6 +274,9 @@ var event_ship: Array = []
 func step_two(dt: float, a: Array, b: Array) -> void:
 	events.clear()
 	event_ship.clear()
+	_check_extra_life()
+	while event_ship.size() < events.size():
+		event_ship.append(0)
 	if state == State.OVER or state == State.LEVEL_CLEAR:
 		return
 	_time += dt
@@ -414,6 +421,7 @@ func player_set(i: int, f: String, v: Variant) -> void:
 ## frame. dash: -1/+1 if a magna save was pressed this frame, else 0.
 func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 	events.clear()
+	_check_extra_life()
 	if state == State.OVER or state == State.LEVEL_CLEAR:
 		return
 	_time += dt
@@ -432,6 +440,19 @@ func step(dt: float, left: bool, right: bool, launch: bool, dash: int) -> void:
 	if state != State.PLAY or freeze_ball:
 		return
 	_step_balls(dt)
+
+
+## D-321: a life for each EXTRA_LIFE_AT score passed (shared in 2 players).
+## Checked at the start of a step, so points from the last step count; the
+## DMD's life dots grow with it.
+func _check_extra_life() -> void:
+	if state == State.OVER:
+		return
+	while extra_lives_given < EXTRA_LIFE_AT.size() and score >= int(EXTRA_LIFE_AT[extra_lives_given]):
+		extra_lives_given += 1
+		balls_left += 1
+		balls_total = maxi(balls_total, balls_left)
+		events.append(["extra_life", balls_left])
 
 
 func _step_balls(dt: float) -> void:

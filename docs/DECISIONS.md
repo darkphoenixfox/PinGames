@@ -3222,3 +3222,13 @@
 - It plays once (`loop` false, D-311), starting as the game-over finale begins, in place of the gameplay music.
 - Converted to `assets/audio/music/breakout/earths_end.ogg`. Recorded in `assets/CREDITS.md`.
 - **Status:** Accepted
+
+### D-321 — Tilt Breaker: an extra charge at 20,000 and 50,000
+- **Date:** 2026-11-24
+- **Decision (director):** Tilt Breaker awards an extra life (a plasma **charge**, in the game's terms) at 20,000 and at 50,000 points, once each per game. The callout reads **EXTRA CHARGE!**, never "life" (director).
+- **Sim:** `EXTRA_LIFE_AT` in `sim.gd`; `_check_extra_life()` runs at the start of each step (1P and 2P; in 2P the score and lives are shared, D-285). `balls_total` grows with it, so the DMD shows the new charge dot. Event `extra_life`.
+- **View:** a bright two-octave arpeggio (`tb_extra_life`, synth), "EXTRA CHARGE!" flashed on the DMD in cyan, and a backglass light chase.
+- **Attract:** the DMD cycle gets an "EXTRA CHARGE AT / 20,000  50,000" page after the title / PRESS START page (director).
+- **Test:** no charge at 19,990; one at 20,000 only once; both by 80,000 and no more after.
+- **Dev:** `--tb-score=N` starts play at N points.
+- **Status:** Accepted

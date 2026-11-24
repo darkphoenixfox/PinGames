@@ -323,6 +323,24 @@ func test_breakout_difficulty(Sim) -> void:
 	pw.next_level()
 	check(not same and is_equal_approx(pw.paddle_x, Sim.FIELD.get_center().x),
 		"no drop of the power-up you have; the ship starts a level in the centre")
+	# D-321: extra lives at 20,000 and 50,000, once each.
+	var xl = Sim.new()
+	xl.setup(3)
+	var l0: int = xl.balls_left
+	xl.score = 19990
+	xl.step(1.0 / 60.0, false, false, false, 0)
+	var none: bool = xl.balls_left == l0
+	xl.score = 20000
+	xl.step(1.0 / 60.0, false, false, false, 0)
+	var got1: bool = xl.balls_left == l0 + 1 and xl.events.any(func(e): return e[0] == "extra_life")
+	xl.step(1.0 / 60.0, false, false, false, 0)
+	var once: bool = xl.balls_left == l0 + 1
+	xl.score = 80000
+	xl.step(1.0 / 60.0, false, false, false, 0)
+	xl.score = 200000
+	xl.step(1.0 / 60.0, false, false, false, 0)
+	check(none and got1 and once and xl.balls_left == l0 + 2 and xl.balls_total == l0 + 2,
+		"extra life at 20,000 and 50,000, once each (lives %d -> %d)" % [l0, xl.balls_left])
 	# D-285: 2-player Tilt Breaker.
 	var tp = Sim.new()
 	tp.setup_two(3)

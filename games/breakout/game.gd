@@ -109,6 +109,18 @@ const SOUNDS := {
 		[{"f": [110.0, 25.0], "t": 1.6, "w": "sine", "v": 0.6}],
 		[{"f": [600.0, 50.0], "t": 1.2, "w": "noise", "v": 0.2, "lp": 0.8}]], "echo": [0.14, 0.4, 0.6], "reverb": [1.4, 0.35]},
 	"tb_dash": {"voices": [[{"f": [400.0, 3000.0], "t": 0.14, "w": "noise", "v": 0.18, "lp": 0.5, "env": "lin"}]]},
+	"tb_extra_life": {"voices": [  # D-321: an extra life: a bright rising arpeggio, twice
+		[{"f": [784.0, 784.0], "t": 0.06, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [988.0, 988.0], "t": 0.06, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [1175.0, 1175.0], "t": 0.06, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [1568.0, 1568.0], "t": 0.06, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [1175.0, 1175.0], "t": 0.06, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [1568.0, 1568.0], "t": 0.06, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [1976.0, 1976.0], "t": 0.06, "w": "pulse25", "v": 0.2, "env": "hold"},
+		 {"f": [2349.0, 2349.0], "t": 0.45, "w": "pulse25", "v": 0.22, "vib": [8.0, 0.35]}],
+		[{"f": [196.0, 196.0], "t": 0.24, "w": "triangle", "v": 0.35, "env": "hold"},
+		 {"f": [294.0, 294.0], "t": 0.24, "w": "triangle", "v": 0.35, "env": "hold"},
+		 {"f": [392.0, 392.0], "t": 0.45, "w": "triangle", "v": 0.35}]], "echo": ECHO},
 	"tb_rack": {"voices": [  # victory jingle
 		[{"f": [523.0, 523.0], "t": 0.08, "w": "pulse25", "v": 0.2, "env": "hold"},
 		 {"f": [659.0, 659.0], "t": 0.08, "w": "pulse25", "v": 0.2, "env": "hold"},
@@ -386,6 +398,9 @@ func _process(delta: float) -> void:
 		return
 	if Config.cli.has("tb-dmd-anim") and not Dmd.is_animating():  # dev: loop one DMD animation
 		_dmd_anim(str(Config.cli["tb-dmd-anim"]))
+	if Config.cli.has("tb-score") and not has_meta("dev_score"):   # dev: start at N points (D-321)
+		set_meta("dev_score", true)
+		sim.score = int(str(Config.cli["tb-score"]))
 	if Config.cli.has("tb-over-at") and _phase_t >= float(str(Config.cli["tb-over-at"])) 			and sim.state != Sim.State.OVER and not has_meta("dev_over"):   # dev: game over at N s (D-319)
 		set_meta("dev_over", true)
 		sim.balls_left = 1
@@ -514,6 +529,11 @@ func _handle_events() -> void:
 				_shield_flash = 0.0
 				_shield_bar_mat.set_shader_parameter("hit_x", clampf(e[1] / (sim.field.size.x * 0.5), -1.0, 1.0))
 				_lights.pulse(BackglassLights.ENGINES + BackglassLights.SHOTS, 0.6, 12.0)
+			"extra_life":   # D-321
+				_sfx("tb_extra_life")
+				Dmd.flash(tr("TB_EXTRA_CHARGE"), 1.8, Dmd.CYAN)
+				_lights.chase(1.2)
+				_refresh_status()
 			"extra_lost":
 				_sfx("tb_explode")
 				_planet.impact(Vector3(e[1], 0.0, Sim.DRAIN_Y), -_cam.global_transform.basis.z)
@@ -1340,6 +1360,9 @@ func _build_attract_steps() -> void:
 	_attract_steps = [
 		[func(): _dmd_anim("logo"), DmdAnims.DURATIONS["logo"]],
 		[func(): Dmd.show_text(title, tr("TB_PRESS_START"), Dmd.CYAN, Dmd.WHITE), 2.0],
+		# D-321: the extra-charge scores
+		[func(): Dmd.show_text(tr("TB_EXTRA_CHARGE_AT"), "  ".join(Sim.EXTRA_LIFE_AT.map(
+			func(v): return ScoreTable.format_score(int(v)))), Dmd.CYAN, Dmd.YELLOW), 2.0],
 		[func(): Dmd.show_text(tr("ATTRACT_HIGH_SCORES"), "", Dmd.YELLOW), 1.4],
 	]
 	var table: Array = HighScores.get_table("breakout")
