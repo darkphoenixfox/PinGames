@@ -116,7 +116,11 @@ const DODGE_RATE := 4.5      # m/s it moves across
 const FINISH_DECEL := 30.0   # m/s^2: the drift-brake after the line (D-222; D-231: doubled, half the slide)
 const FINISH_BONUS := 100000
 const TIME_BONUS_PER_S := 2000
-const CHECKPOINT_BONUS := 34.0   # minus 2 s per checkpoint passed, never below 20
+const CHECKPOINT_BONUS := 34.0   # minus BONUS_DECAY s per checkpoint passed, never below BONUS_FLOOR
+## D-300: a clean stage takes ~30 s in the normal car; the old 2 s decay to a
+## 20 s floor ran a crash-free race out of time by stage 6-7.
+const BONUS_DECAY := 1.0
+const BONUS_FLOOR := 28.0
 ## Traffic
 const CAR_LEN := 4.4
 const CAR_W := 1.95
@@ -431,7 +435,7 @@ func speed_mph() -> int:
 
 func checkpoint_bonus() -> float:
 	var extra := float(CARS[car].bonus)
-	return maxf(20.0 + extra, CHECKPOINT_BONUS + extra - 2.0 * checkpoints)
+	return maxf(BONUS_FLOOR + extra, CHECKPOINT_BONUS + extra - BONUS_DECAY * checkpoints)
 
 
 ## The starting clock for the chosen car (D-183).
@@ -484,12 +488,13 @@ func step(dt: float, left: bool, right: bool, _gas: bool = false, brake: bool = 
 		State.OVER:
 			shift_request = false
 			over_t += dt
-			# Coasting out: still steerable; a checkpoint reached on momentum
-			# puts the time back and the race goes on (D-103).
-			if left and right:
-				left = false
-				right = false
-			_drive(dt, left, right, false, false)
+			# Coasting out: a checkpoint reached on momentum puts the time back
+			# and the race goes on (D-103). D-299 (director): no steering while
+			# it slides to a stop (time up or past the finish), flippers or stick.
+			var axis := steer_axis
+			steer_axis = 0.0
+			_drive(dt, false, false, false, false)
+			steer_axis = axis
 			_update_traffic(dt)
 			_collide_objects()
 			if s >= next_checkpoint and not done and not finished:

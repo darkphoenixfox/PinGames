@@ -3010,3 +3010,25 @@
 - **Decision (director):** in 2P the countdown's REV! hand (D-197, D-209) pointed at thin air: the round tacho it aims at is hidden there (D-293).
 - **Fix:** with the bar tachometer, the hand turns 90° counter-clockwise to point down. Its fingertip sits just above the bar's green start band and pokes down at it, with REV! to its left. 1P is unchanged.
 - **Status:** Accepted
+
+### D-298 — Turbo Run: a police car parked behind each speed camera
+- **Date:** 2026-11-24
+- **Decision (director):** each speed camera has a police car parked behind it, side on with its nose to the road. It's scenery only: chases still start as before when a camera catches you speeding (D-135, D-156).
+- **How:** built with the camera's road chunk. It's the police model (lights off), 4.5 m further out than the camera and 4 m before it along the road.
+- **Dev:** `--rc-at-trap[=N]` starts N m (default 45) before the next speed camera.
+- **Status:** Accepted
+
+### D-299 — Turbo Run: no steering while sliding to a stop
+- **Date:** 2026-11-24
+- **Decision (director):** when time runs out (and past the finish line), the car's slide to a stop ignores the player's steering, flippers and stick. Before, it could be steered and looked like it was sliding sideways on ice.
+- A checkpoint reached on momentum still saves the race (D-103).
+- **Status:** Accepted
+
+### D-300 — Turbo Run: the checkpoint time bonus decays more slowly
+- **Date:** 2026-11-24
+- **Problem (director):** a run with no crashes until city 2 (stage 7), then one crash plus a bust, missed the next checkpoint with the normal car.
+- **Measured:** the sim's autopilot, with traffic contact off (a clean drive), takes about 30 s per stage in the normal car. With the checkpoint bonus at 34 − 2 s per checkpoint and a floor of 20 s (D-101, D-183), the bonuses fell below a stage's time from stage 5. The clean drive ran out of time in stage 6 or 7 with zero crashes, so any mistake there was fatal.
+- **Change:** `BONUS_DECAY` 2 → 1 s per checkpoint, `BONUS_FLOOR` 20 → 28 s. The normal car's bonuses are now 33, 32, 31, 30, 29, then 28.
+- **Result:** the clean drive finishes with 3–5 s to spare (three seeds), with a 9–19 s buffer through the middle stages. A player using nitro and perfect shifts gains more. One crash plus a bust (~15 s) mid-race is survivable; several aren't.
+- **The other cars:** their per-car extras (D-183: easy +10, hard −4) apply to the floor as before.
+- **Status:** Accepted

@@ -855,6 +855,15 @@ func _new_sim() -> void:
 		n = maxi(1, int(str(Config.cli["rc-stage"])))
 	if n > 1:   # the start-stage screen (D-216) or the dev flag
 		sim.start_at_stage(n)
+	if Config.cli.has("rc-at-trap"):   # dev: start N m (default 45) before the next speed camera (D-298)
+		sim.track.ensure(sim.s + 4000.0)
+		var trap: Dictionary = sim.track.next_trap(sim.s)
+		var back := 45.0
+		if str(Config.cli["rc-at-trap"]).is_valid_float():
+			back = str(Config.cli["rc-at-trap"]).to_float()
+		if not trap.is_empty():
+			sim.s = float(trap.s) - back
+			sim.track.ensure(sim.s + 1500.0)
 	if Config.cli.has("rc-time"):  # dev: short clock to test TIME UP
 		sim.time_left = float(str(Config.cli["rc-time"]))
 	for k in _chunks.keys():
@@ -1606,6 +1615,10 @@ func _build_dmd_panel(d: Node) -> void:
 	frame.offset_right = w * 0.5
 	frame.offset_top = 0.0
 	frame.offset_bottom = h
+
+
+const TRAP_COP_BACK := 4.0   # D-298: m before the camera along the road
+const TRAP_COP_OUT := 4.5    # m further from the road than the camera
 
 
 ## The other player's car (D-289): the model and colour they chose.
@@ -3006,6 +3019,14 @@ func _build_chunk(k: int) -> Node3D:
 	City.build_junctions(node, tr_, s0, s0 + CHUNK)
 	by_kind.erase("building")
 	by_kind.erase("tlight")
+	# D-298 (director): a police car parked behind each speed camera, side on,
+	# nose to the road. Scenery only; chases start as before (D-135).
+	for o in by_kind.get("speedtrap", []):
+		var cop := _car_instance(0.0, POLICE_MODEL, POLICE_TEXTURE)
+		var side := signf(float(o.x))
+		var f := tr_.frame(float(o.s) - TRAP_COP_BACK, float(o.x) + side * TRAP_COP_OUT)
+		cop.transform = Transform3D(f.basis * Basis(Vector3.UP, side * PI * 0.5) * MODEL_TURN, f.origin)
+		node.add_child(cop)
 	for kind in by_kind:
 		var list: Array = by_kind[kind]
 		var mm := MultiMesh.new()
