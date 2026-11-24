@@ -91,6 +91,62 @@ static func make_tetrahedron(radius: float, texture: Texture2D, edge_color: Colo
 	return root
 
 
+## D-323: the cube enemy: same look as the tetrahedron (one circuit texture,
+## a random texel-snapped crop per face, glowing edges); circumradius `radius`.
+static func make_cube(radius: float, texture: Texture2D, edge_color: Color) -> Node3D:
+	var root := Node3D.new()
+	root.name = "Cube"
+	var h := radius / sqrt(3.0)
+	var crop := 72.0 / 512.0
+	var normals := [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.BACK, Vector3.FORWARD]
+	for n in normals:
+		var u: Vector3 = Vector3.UP if absf(n.y) < 0.5 else Vector3.RIGHT
+		var w: Vector3 = n.cross(u)
+		var c: Vector3 = n * h
+		var corners := [c - u * h - w * h, c - u * h + w * h, c + u * h + w * h, c + u * h - w * h]
+		var off := Vector2(randi() % 440, randi() % 440) / 512.0
+		var uvs := [off + Vector2(0, 1) * crop, off + Vector2(1, 1) * crop, off + Vector2(1, 0) * crop, off]
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for i in [0, 1, 2, 0, 2, 3]:
+			st.set_normal(n)
+			st.set_uv(uvs[i])
+			st.add_vertex(corners[i])
+		var m := StandardMaterial3D.new()
+		m.albedo_texture = texture
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		m.emission_enabled = true
+		m.emission_texture = texture
+		m.emission_energy_multiplier = 1.4
+		m.roughness = 0.45
+		m.metallic = 0.35
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		var mi := MeshInstance3D.new()
+		mi.mesh = st.commit()
+		mi.material_override = m
+		root.add_child(mi)
+	# Glowing edges: the 12 between corners differing in one axis.
+	var lines := ImmediateMesh.new()
+	lines.surface_begin(Mesh.PRIMITIVE_LINES)
+	for x in [-1.0, 1.0]:
+		for y in [-1.0, 1.0]:
+			for z in [-1.0, 1.0]:
+				var p := Vector3(x, y, z) * h * 1.01
+				for d in [Vector3(x, 0, 0), Vector3(0, y, 0), Vector3(0, 0, z)]:
+					if d.x + d.y + d.z > 0.0:   # each edge once
+						lines.surface_add_vertex(p)
+						lines.surface_add_vertex(p - d * 2.0 * h * 1.01)
+	lines.surface_end()
+	var lm := StandardMaterial3D.new()
+	lm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	lm.albedo_color = edge_color * 2.5
+	var li := MeshInstance3D.new()
+	li.mesh = lines
+	li.material_override = lm
+	root.add_child(li)
+	return root
+
+
 ## Charge-up particles (D-053): glowing square pixels that spawn on a ring around
 ## the emitter and are pulled into its centre, shrinking as they arrive.
 ## Toggle `emitting` while charging.

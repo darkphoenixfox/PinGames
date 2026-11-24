@@ -400,7 +400,7 @@ func _process(delta: float) -> void:
 		_dmd_anim(str(Config.cli["tb-dmd-anim"]))
 	if Config.cli.has("tb-enemy-low") and _phase == "play" and not has_meta("dev_enemy"):   # dev: an enemy at the bottom (D-322)
 		set_meta("dev_enemy", true)
-		var eid: int = sim.spawn_enemy(-3.0)
+		var eid: int = sim.spawn_enemy(-3.0, "cube" if Config.cli.has("tb-cube") else "tetra")
 		sim.enemies[-1].state = "sweep"
 		sim.enemies[-1].pos = Vector2(-3.0, Sim.ENEMY_ORBIT_START_Y + 0.5)
 		sim.events.append(["enemy_ready", eid])
@@ -550,7 +550,7 @@ func _handle_events() -> void:
 				var end_level: int = e[1][2]
 				_explode_brick(Vector3(end_pos.x, 0.0, end_pos.y), LEVEL_COLORS[end_level - 1], 0.8 + 0.3 * end_level)
 			"enemy_spawn":
-				_spawn_enemy_node(e[1][0], e[1][1])
+				_spawn_enemy_node(e[1][0], e[1][1], e[1][2] if e[1].size() > 2 else "tetra")
 				_sfx("tb_wormhole")
 				_dmd_anim("incoming")
 			"enemy_ready":
@@ -1190,6 +1190,10 @@ func warmup_nodes() -> Array[Node]:
 		load("res://assets/textures/breakout/circuit_red.png"), CIRCUIT_GLOW["red"])
 	tet.position = c + Vector3(2.0, 0.0, 0.0)
 	out.append(tet)
+	var cube := Fx.make_cube(Sim.ENEMY_R * 1.5,
+		load("res://assets/textures/breakout/circuit_blue.png"), CIRCUIT_GLOW["blue"])
+	cube.position = c + Vector3(2.0, 0.0, 0.8)
+	out.append(cube)
 	var hole := Fx.make_wormhole(1.7)
 	hole.position = c + Vector3(2.0, -0.05, 0.0)
 	out.append(hole)
@@ -1886,7 +1890,7 @@ func _make_ghost_ship() -> Node3D:
 
 
 # --- tetrahedron enemies (D-052) ------------------------------------------------------
-func _spawn_enemy_node(id: int, pos: Vector2) -> void:
+func _spawn_enemy_node(id: int, pos: Vector2, kind: String = "tetra") -> void:
 	if _circuit_textures.is_empty():
 		for c in ["red", "yellow", "green", "blue"]:
 			_circuit_textures.append(load("res://assets/textures/breakout/circuit_%s.png" % c))
@@ -1895,7 +1899,8 @@ func _spawn_enemy_node(id: int, pos: Vector2) -> void:
 	# One circuit colour per enemy (D-053).
 	var pick := randi() % _circuit_textures.size()
 	var colour: Color = CIRCUIT_GLOW[["red", "yellow", "green", "blue"][pick]]
-	var body := Fx.make_tetrahedron(Sim.ENEMY_R * 1.5, _circuit_textures[pick], colour)
+	var body := Fx.make_cube(Sim.ENEMY_R * 1.5, _circuit_textures[pick], colour) if kind == "cube" \
+		else Fx.make_tetrahedron(Sim.ENEMY_R * 1.5, _circuit_textures[pick], colour)   # D-323
 	body.scale = Vector3.ONE * 0.01
 	root.add_child(body)
 	_root.add_child(root)

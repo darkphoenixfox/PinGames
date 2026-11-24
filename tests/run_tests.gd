@@ -353,6 +353,55 @@ func test_breakout_difficulty(Sim) -> void:
 	dz.enemies[0].pos.y = line - 0.2
 	var held: bool = dz.enemy_in_danger(0.45) and not dz.enemy_in_danger()
 	check(not hole and near and held, "proximity alert: an enemy out of its wormhole in the bottom 20%, with hysteresis")
+	# D-323: the cube enemy heads for the ship more than the tetra.
+	var ag = Sim.new()
+	ag.setup(3)
+	ag.bricks.clear()
+	ag.paddle_x = 3.0
+	ag.spawn_enemy(-3.0, "tetra")
+	ag.spawn_enemy(-3.0, "cube")
+	var kinds_ok: bool = ag.enemies[0].kind == "tetra" and ag.enemies[1].kind == "cube"
+	for en in ag.enemies:
+		en.state = "sweep"
+		en.phase = 0.0
+		en.dir = 1.0
+	var dist := [0.0, 0.0]
+	var cube_low := false
+	for i in 600:
+		ag._update_enemies(1.0 / 60.0)
+		for k in 2:
+			dist[k] += absf(float(ag.enemies[k].pos.x) - ag.paddle_x)
+	cube_low = ag.enemies[1].pos.y > ag.enemies[0].pos.y
+	check(kinds_ok and dist[1] < dist[0] * 0.85 and cube_low,
+		"cube enemy: nearer the ship (%.0f vs %.0f) and lower than a tetra" % [dist[1], dist[0]])
+	# D-323: unstuck. An enemy in a brick cup circles up and out after 10 s.
+	var us = Sim.new()
+	us.setup(3)
+	us.bricks.clear()
+	var cy := -2.0
+	for r in [Rect2(-1.3, cy + 0.4, 2.6, 0.4), Rect2(-1.7, cy - 0.8, 0.4, 1.6), Rect2(1.3, cy - 0.8, 0.4, 1.6)]:
+		us.bricks.append({"rect": r, "hp": 1, "alive": true, "row": 0, "points": 0})
+	us.spawn_enemy(0.0, "tetra")
+	var ue: Dictionary = us.enemies[0]
+	ue.state = "sweep"
+	ue.pos = Vector2(0.0, cy)
+	ue.best_y = cy
+	var circled := -1.0
+	var out := -1.0
+	for i in 60 * 40:
+		us._update_enemies(1.0 / 60.0)
+		if circled < 0.0 and ue.state == "circle":
+			circled = i / 60.0
+		if out < 0.0 and float(ue.pos.y) > cy + 1.0:
+			out = i / 60.0
+		var hit := false
+		for b in us.bricks:
+			hit = hit or not Sim.BP.collide_circle_rect(ue.pos, Sim.ENEMY_R * 0.9, b.rect).is_empty()
+		if hit:
+			out = -2.0
+			break
+	check(circled >= 9.5 and circled < 10.5 and out > circled,
+		"stuck enemy: circles at 10 s (%.1f), gets below the cup (%.1f s), never through a brick" % [circled, out])
 	# D-285: 2-player Tilt Breaker.
 	var tp = Sim.new()
 	tp.setup_two(3)

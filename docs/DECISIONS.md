@@ -3241,3 +3241,13 @@
 - Only during play (not the finale or menus).
 - **Dev:** `--tb-enemy-low` puts an enemy at the bottom (and keeps the ship from colliding with it).
 - **Status:** Accepted
+
+### D-323 — Tilt Breaker: the cube enemy, and unstuck circling
+- **Date:** 2026-11-24
+- **Decision (director):** a cube-shaped enemy in the tetrahedron's texture style, slightly more aggressive towards the player; and enemies that haven't got any lower for 10 s start circling, from a 12 o'clock heading, to go round the bricks.
+- **Cube:** `Fx.make_cube` mirrors `make_tetrahedron` (one circuit texture per enemy, a random crop per face, glowing edges, same circumradius and hitbox). 35% of spawns (`CUBE_CHANCE`, my call). Its sweep's centre drifts towards the nearest ship at 0.9 m/s, it descends 1.3x faster, and at the bottom its orbit follows the ship at 1.1 m/s (on top of the tier steering, D-073). Same points (500).
+- **Unstuck:** in the sweep, `stuck_t` counts time without getting 0.05 m lower than the enemy's lowest so far. At 10 s (`STUCK_TIME`) it starts circling: heading straight up, turning continuously (radius 1 m at 2.2 m/s) towards the side with the nearer clear way down. When the next move is blocked it turns back towards up, so it hugs the bricks and passes over them. As soon as it's lower than ever before, it resumes its sweep from there. After 8 s without success it tries the other way round, then goes back to the sweep (and tries again 10 s later).
+- First try grew a wider circle when blocked; a wider circle has the same heading at that point, so it hit the same brick every frame. A turning heading (wall-follow) replaced it.
+- **Tests:** a cube stays nearer the ship and gets lower than a tetra; an enemy in a brick cup starts circling at 10 s and gets out below it without ever touching a brick.
+- **Dev:** `--tb-cube` with `--tb-enemy-low` makes the low enemy a cube.
+- **Status:** Accepted

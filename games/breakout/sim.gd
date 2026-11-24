@@ -943,7 +943,6 @@ func _end_powerup() -> void:
 
 
 # --- enemies (D-052) ------------------------------------------------------------------
-## Spawns a tetrahedron through a wormhole at x (random if NAN). Public for tests.
 ## D-322: true while an enemy (out of its wormhole) is in the bottom
 ## DANGER_FRAC of the field. `margin` lowers the line (hysteresis: the alert
 ## stays on while an orbit's top dips just above it).
@@ -956,18 +955,111 @@ func enemy_in_danger(margin: float = 0.0) -> bool:
 	return false
 
 
-func spawn_enemy(x: float = NAN) -> int:
+## D-323: the cube, a more aggressive enemy: CUBE_CHANCE of the spawns.
+const CUBE_CHANCE := 0.35
+const CUBE_DESCENT := 1.3            # x the tetra's descent
+const CUBE_SWEEP_PULL := 0.9         # units/s its sweep's centre drifts towards the ship
+const CUBE_ORBIT_PULL := 1.1         # units/s its orbit's centre follows the ship (+ tier steering)
+## D-323: unstuck. An enemy that hasn't got any lower for STUCK_TIME starts
+## circling: it heads up (12 o'clock) and round, over the bricks that stop it,
+## and goes back to its sweep once it is lower than it had ever been.
+const STUCK_TIME := 10.0
+const STUCK_GAIN := 0.05             # m lower that counts as progress
+const CIRCLE_R := 1.0                # m, the loop's radius (it turns at CIRCLE_SPEED / CIRCLE_R)
+const CIRCLE_SPEED := 2.2            # m/s along the loop
+const CIRCLE_GIVE_UP := 8.0          # s each way round before going back to the sweep
+
+
+## Spawns an enemy through a wormhole at x (random if NAN); kind "tetra" or
+## "cube" ("" = random, D-323). Public for tests.
+func spawn_enemy(x: float = NAN, kind: String = "") -> int:
 	var lim := field.size.x * 0.5 - ENEMY_R - 0.2
 	if is_nan(x):
 		x = randf_range(-lim, lim)
+	if kind.is_empty():
+		kind = "cube" if randf() < CUBE_CHANCE else "tetra"
 	var id := _next_enemy_id
 	_next_enemy_id += 1
 	var pos := Vector2(clampf(x, -lim, lim), ENEMY_SPAWN_Y)
-	enemies.append({"id": id, "pos": pos, "state": "wormhole", "t": 0.0,
-		"phase": asin(clampf(pos.x / ENEMY_SWEEP_AMP, -1.0, 1.0)),
-		"dir": 1.0 if randf() < 0.5 else -1.0, "center": Vector2.ZERO, "angle": 0.0})
-	events.append(["enemy_spawn", [id, pos]])
+	enemies.append({"id": id, "kind": kind, "pos": pos, "state": "wormhole", "t": 0.0,
+		"phase": asin(clampf(pos.x / ENEMY_SWEEP_AMP, -1.0, 1.0)), "sweep_x": 0.0,
+		"dir": 1.0 if randf() < 0.5 else -1.0, "center": Vector2.ZERO, "angle": 0.0,
+		"best_y": pos.y, "stuck_t": 0.0, "loop": 0.0, "tries": 0})
+	events.append(["enemy_spawn", [id, pos, kind]])
 	return id
+
+
+## The x an aggressive enemy heads for: the nearest ship (either, in 2P).
+func _ship_x_near(x: float) -> float:
+	if not two_player:
+		return paddle_x
+	var a: float = player_get(0, "paddle_x")
+	var b: float = player_get(1, "paddle_x")
+	return a if absf(a - x) <= absf(b - x) else b
+
+
+## D-323: unstuck circling. The enemy starts heading straight up (12 o'clock)
+## and keeps turning (a loop of radius CIRCLE_R), towards the nearer gap in the
+## bricks below. When its way is blocked it turns back towards up, so it hugs
+## the bricks and goes over them; once it is lower than it had ever been, it
+## goes back to its sweep. CIRCLE_GIVE_UP seconds each way round, then the sweep.
+func _start_circle(en: Dictionary, lim: float) -> void:
+	en.state = "circle"
+	en.angle = 0.0   # heading as a clock angle: 0 = up, PI/2 = right
+	en.loop = 0.0    # seconds this way round
+	en.tries = 0
+	en.dir = _gap_side(en.pos, lim)
+	events.append(["enemy_unstuck", en.id])
+
+
+## +1 if the nearest x with a clear way down is to the right, -1 if left.
+func _gap_side(p: Vector2, lim: float) -> float:
+	var dx := 0.3
+	while dx < field.size.x:
+		for side in ([1.0, -1.0] if p.x <= 0.0 else [-1.0, 1.0]):
+			var x: float = p.x + side * dx
+			if absf(x) <= lim and not _enemy_blocked(Vector2(x, p.y + 0.6)) 					and not _enemy_blocked(Vector2(x, p.y + 1.2)):
+				return side
+		dx += 0.3
+	return 1.0 if p.x <= 0.0 else -1.0
+
+
+func _circle_free(p: Vector2, lim: float) -> bool:
+	return not _enemy_blocked(p) and absf(p.x) <= lim and p.y >= field.position.y + ENEMY_R
+
+
+func _step_circle(en: Dictionary, dt: float, lim: float) -> void:
+	var p: Vector2 = en.pos
+	var v := CIRCLE_SPEED * enemy_speed_mult()
+	var dir: float = en.dir
+	var h: float = float(en.angle) + dir * v / CIRCLE_R * dt
+	var moved := false
+	for k in 8:   # blocked: turn back towards up, a bit at a time
+		var next := p + Vector2(sin(h), -cos(h)) * v * dt
+		if _circle_free(next, lim):
+			p = next
+			moved = true
+			break
+		h -= dir * 0.4
+	en.angle = wrapf(h, -PI, PI)
+	en.pos = p
+	en.loop = float(en.loop) + dt
+	if p.y > float(en.best_y) + STUCK_GAIN * 4.0:   # got lower: back to the sweep
+		en.state = "sweep"
+		en.best_y = p.y
+		en.stuck_t = 0.0
+		en.sweep_x = p.x - sin(float(en.phase)) * ENEMY_SWEEP_AMP   # the sweep carries on from here
+		en.dir = 1.0 if randf() < 0.5 else -1.0
+	elif en.loop >= CIRCLE_GIVE_UP or not moved:
+		if int(en.tries) == 0:   # the other way round
+			en.tries = 1
+			en.loop = 0.0
+			en.angle = 0.0
+			en.dir = -dir
+		else:   # back to the sweep, to try again later
+			en.state = "sweep"
+			en.stuck_t = 0.0
+			en.sweep_x = p.x - sin(float(en.phase)) * ENEMY_SWEEP_AMP
 
 
 func _update_enemies(dt: float) -> void:
@@ -991,22 +1083,37 @@ func _update_enemies(dt: float) -> void:
 					en.state = "sweep"
 					events.append(["enemy_ready", en.id])
 				continue
+			"circle":   # D-323: going round the bricks it was stuck on
+				_step_circle(en, dt, lim)
 			"sweep":
 				var pos: Vector2 = en.pos
+				var cube: bool = en.get("kind", "tetra") == "cube"
 				# Wide horizontal sine sweep; reverse when bricks block the way.
+				# A cube's sweep drifts towards the nearest ship (D-323).
 				var spd := enemy_speed_mult()
+				if cube:
+					var want := clampf(_ship_x_near(pos.x), -lim, lim)
+					en.sweep_x = move_toward(float(en.sweep_x), want, CUBE_SWEEP_PULL * spd * dt)
 				var ph: float = en.phase + ENEMY_SWEEP_SPEED * spd * en.dir * dt
-				var nx := clampf(sin(ph) * ENEMY_SWEEP_AMP, -lim, lim)
+				var nx := clampf(float(en.sweep_x) + sin(ph) * ENEMY_SWEEP_AMP, -lim, lim)
 				if _enemy_blocked(Vector2(nx, pos.y)):
 					en.dir = -en.dir
 				else:
 					en.phase = ph
 					pos.x = nx
 				# Descend only where the way down is clear of bricks.
-				var ny := pos.y + ENEMY_DESCENT * spd * dt
+				var ny := pos.y + ENEMY_DESCENT * spd * (CUBE_DESCENT if cube else 1.0) * dt
 				if not _enemy_blocked(Vector2(pos.x, ny)):
 					pos.y = ny
 				en.pos = pos
+				# D-323: no lower for STUCK_TIME: circle round the bricks.
+				if pos.y > float(en.best_y) + STUCK_GAIN:
+					en.best_y = pos.y
+					en.stuck_t = 0.0
+				else:
+					en.stuck_t = float(en.stuck_t) + dt
+					if en.stuck_t >= STUCK_TIME:
+						_start_circle(en, lim)
 				if pos.y >= ENEMY_ORBIT_START_Y:
 					en.state = "orbit"
 					en.center = Vector2(clampf(pos.x, -lim + ENEMY_ORBIT_R.x, lim - ENEMY_ORBIT_R.x),
@@ -1016,11 +1123,13 @@ func _update_enemies(dt: float) -> void:
 			"orbit":
 				# Wide circles around the bottom (may or may not cross the ship).
 				en.angle += ENEMY_ORBIT_SPEED * enemy_speed_mult() * en.dir * dt
-				# More aggressive tiers steer their orbit towards the ship (D-073).
-				if enemy_tier() >= 1:
+				# More aggressive tiers steer their orbit towards the ship (D-073);
+				# a cube always does, harder (D-323).
+				var pull := 0.8 * enemy_tier() + (CUBE_ORBIT_PULL if en.get("kind", "tetra") == "cube" else 0.0)
+				if pull > 0.0:
 					var c: Vector2 = en.center
 					var lim2 := lim - ENEMY_ORBIT_R.x
-					c.x = move_toward(c.x, clampf(paddle_x, -lim2, lim2), 0.8 * enemy_tier() * dt)
+					c.x = move_toward(c.x, clampf(_ship_x_near(c.x), -lim2, lim2), pull * dt)
 					en.center = c
 				var target: Vector2 = en.center + Vector2(sin(en.angle) * ENEMY_ORBIT_R.x, -cos(en.angle) * ENEMY_ORBIT_R.y)
 				en.pos = en.pos.lerp(target, 1.0 - exp(-6.0 * dt))
