@@ -3449,3 +3449,12 @@
 - **Dodecahedron:** `Fx.make_dodecahedron` paired its face directions' coordinates the wrong way round ((0, ±1, ±φ) instead of (0, ±φ, ±1)), so each "face" took the wrong 5 corners. Fixed (checked numerically: all 12 faces now have 5 equidistant corners) and on screen; no Blender model needed.
 - **Test:** a corrupted paddle ends up under a ball 5 m away within 2 s, never faster than its top speed.
 - **Status:** Accepted
+
+### D-347 — Tilt Breaker: slower corrupted paddles, darker fly-bys, mini-icosahedrons stay up top
+- **Date:** 2026-11-24
+- **Decision (director):** the corrupted paddle's top speed lower, well below the player's; background enemies 20% darker; mini-icosahedrons stay in the top 20% of the screen at all times.
+- Corrupted paddle top speed 3.0 m/s (was 4.5, D-346; the ship's is 11).
+- Fly-bys: transparency 0.78 (was 0.72, so 20% less of them shows) and their thruster colours 20% darker.
+- Mini-icosahedrons: their sweep's descent stops with their centre at the top 20% of the field (`ICO_TOP_FRAC`); they never reach the orbit at the bottom or start unstuck circling (D-323), and fire their torpedoes from up there.
+- **Test:** with no bricks, a mini-icosahedron never goes below the top 20% in 40 s.
+- **Status:** Accepted

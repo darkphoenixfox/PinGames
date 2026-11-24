@@ -2212,7 +2212,7 @@ func _spawn_flyby(hw: float) -> void:
 		_: body = Fx.make_icosahedron(r, tex, Color(1.0, 0.3, 0.3), 0.6)
 	root.add_child(body)
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
-		(mi as GeometryInstance3D).transparency = 0.72   # dimmed: background, not a threat
+		(mi as GeometryInstance3D).transparency = 0.78   # dimmed: background, not a threat (D-347: 20% darker)
 	var p := CPUParticles3D.new()
 	p.amount = 24
 	p.lifetime = 0.7
@@ -2223,9 +2223,9 @@ func _spawn_flyby(hw: float) -> void:
 	p.initial_velocity_min = 0.3
 	p.initial_velocity_max = 0.5
 	var grad := Gradient.new()
-	grad.set_color(0, Color(0.55, 0.5, 0.4, 0.6))
-	grad.set_color(1, Color(0.2, 0.15, 0.12, 0.0))
-	grad.add_point(0.3, Color(0.5, 0.28, 0.1, 0.45))
+	grad.set_color(0, Color(0.44, 0.4, 0.32, 0.6))   # D-347: 20% darker
+	grad.set_color(1, Color(0.16, 0.12, 0.1, 0.0))
+	grad.add_point(0.3, Color(0.4, 0.22, 0.08, 0.45))
 	p.color_ramp = grad
 	var q := QuadMesh.new()
 	q.size = Vector2(0.035, 0.035)

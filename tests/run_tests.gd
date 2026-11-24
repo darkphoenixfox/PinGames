@@ -530,6 +530,19 @@ func test_breakout_difficulty(Sim) -> void:
 		fastest = maxf(fastest, absf(float(ch.darks[0].vx)))
 	check(absf(float(ch.darks[0].pos.x) - 2.5) < 0.3 and fastest <= Sim.DARK_SPEED * ch.enemy_speed_mult() + 0.01 and fastest < Sim.PADDLE_MAX_SPEED,
 		"corrupted paddle chases the ball (x %.2f), slower than the ship" % float(ch.darks[0].pos.x))
+	# D-347: mini-icosahedrons stay in the top 20% (no bricks in the way, a long time).
+	var top = Sim.new()
+	top.setup(3)
+	top.level = 12
+	top.build_rack()
+	top.bricks.clear()
+	top.spawn_enemy(0.0, "ico")
+	var lowest := -INF
+	for i in 60 * 40:
+		top._update_enemies(1.0 / 60.0)
+		lowest = maxf(lowest, float(top.enemies[0].pos.y))
+	check(lowest <= top.field.position.y + top.field.size.y * 0.2 and top.enemies[0].state != "orbit",
+		"mini-icosahedron stays in the top 20%% (lowest %.2f)" % lowest)
 	var dd = Sim.new()
 	dd.setup(3)
 	dd.level = 20

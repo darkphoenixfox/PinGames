@@ -103,13 +103,16 @@ const ICO_FROM_LEVEL := 11
 const ICO_CHANCE := 0.3
 const MINI_FIRE := Vector2(6.0, 10.0)
 const MINI_CHARGE := 0.9
+## D-347: mini-icosahedrons stay in the top 20% of the field: they never sink
+## below this (their centre), never orbit the ship and never circle to get unstuck.
+const ICO_TOP_FRAC := 0.2
 ## D-342: the corrupted paddle (from level 15): a dark copy of the ship that
 ## warps in DARK_Y_FRAC down the field (only where no brick is in the way),
 ## slides side to side and blocks the plasma. 10 HP: a ball hit 1, a weapon 2.
 const DARK_FROM_LEVEL := 15
 const DARK_Y_FRAC := 0.35
 const DARK_HP := 10
-const DARK_SPEED := 4.5               # D-346: top speed chasing the ball (the player's is 11)
+const DARK_SPEED := 3.0               # D-347: top speed chasing the ball (was 4.5; the player's is 11)
 const DARK_ACCEL := 25.0
 const DARK_WARP := 0.8
 const DARK_POINTS := 1500
@@ -1774,6 +1777,8 @@ func _update_enemies(dt: float) -> void:
 					pos.x = nx
 				# Descend only where the way down is clear of bricks.
 				var ny := pos.y + ENEMY_DESCENT * spd * (CUBE_DESCENT if cube else 1.0) * dt
+				if en.get("kind", "") == "ico":   # D-347: it stays up top
+					ny = minf(ny, field.position.y + field.size.y * ICO_TOP_FRAC - ENEMY_R)
 				if not _enemy_blocked(Vector2(pos.x, ny)):
 					pos.y = ny
 				en.pos = pos
@@ -1783,7 +1788,7 @@ func _update_enemies(dt: float) -> void:
 					en.stuck_t = 0.0
 				else:
 					en.stuck_t = float(en.stuck_t) + dt
-					if en.stuck_t >= STUCK_TIME:
+					if en.stuck_t >= STUCK_TIME and en.get("kind", "") != "ico":   # D-347: icos stay up top
 						_start_circle(en, lim)
 				if pos.y >= ENEMY_ORBIT_START_Y:
 					en.state = "orbit"
