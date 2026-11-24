@@ -432,6 +432,9 @@ func _process(delta: float) -> void:
 		set_meta("dev_pu_clear", true)
 		_on_debug_action(&"powerup")
 		_on_debug_action(&"clear_level")
+	if Config.cli.has("tb-boss-hp") and sim.boss_hp > 0 and not has_meta("dev_boss_hp"):   # dev: boss health (D-338)
+		set_meta("dev_boss_hp", true)
+		sim.boss_hp = int(str(Config.cli["tb-boss-hp"]))
 	if Config.cli.has("tb-boss-fire") and _phase == "play" and not has_meta("dev_boss_fire"):   # dev: the boss fires N s in (D-335)
 		set_meta("dev_boss_fire", true)
 		sim.boss_fire_in = float(str(Config.cli["tb-boss-fire"]))
@@ -730,8 +733,8 @@ func _pickup_popup(text: String, at: Vector2, col: Color) -> void:
 	tw.chain().tween_callback(l.queue_free)
 
 
-## D-335: the boss (icosahedron, HAL eye, charge sparks), its rays and its
-## health bar at the top of the TABLE.
+## D-335: the boss (icosahedron, HAL eye, charge sparks) and its rays
+## (D-338: no health bar; the eye's colour shows it).
 const HAL_SHADER := preload("res://games/breakout/shaders/hal_eye.gdshader")
 const BOSS_VIS_R := 1.35   # the icosahedron's circumradius (hitbox: Sim.BOSS_R)
 var _boss_nodes := {}
@@ -764,41 +767,25 @@ func _build_boss_nodes() -> void:
 	charge.position = Vector3(0.0, 0.6, 0.0)
 	root.add_child(charge)
 	_root.add_child(root)
-	# Health bar along the top of the TABLE.
-	var bar := Control.new()
-	bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	bar.offset_top = 18
-	bar.offset_bottom = 62
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var back := ColorRect.new()
-	back.color = Color(0.15, 0.0, 0.02, 0.8)
-	back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	# Over the play field only (the single screen's TABLE is wider): the camera
-	# shows 16 units over the TABLE's height.
-	var base := Vector2(Screens.table_base())
-	var half_px := sim.field.size.x * 0.5 * base.y / 16.0
-	back.offset_left = maxf(150.0, base.x * 0.5 - half_px + 110.0)
-	back.offset_right = -maxf(40.0, base.x * 0.5 - half_px)
-	back.offset_top = 10
-	back.offset_bottom = -10
-	bar.add_child(back)
-	var fill := ColorRect.new()
-	fill.color = Color(1.0, 0.15, 0.2)
-	fill.position = Vector2(2, 2)
-	back.add_child(fill)
-	var name_l := UI.label(tr("TB_BOSS"), 36, UI.RED, HORIZONTAL_ALIGNMENT_LEFT)
-	name_l.position = Vector2(back.offset_left - 120.0, 2)
-	bar.add_child(name_l)
-	add_to_table(bar)
-	_boss_nodes = {"root": root, "body": body, "eye": em, "light": glow, "charge": charge,
-		"bar": bar, "back": back, "fill": fill}
+	_boss_nodes = {"root": root, "body": body, "eye": em, "light": glow, "charge": charge}
+
+
+## D-338: the eye's colour by health left (1 = full): blue, green, yellow,
+## orange, red, blended between the steps.
+const BOSS_EYE_COLS := [Color(1.0, 0.08, 0.04), Color(1.0, 0.45, 0.05), Color(1.0, 0.9, 0.1),
+	Color(0.15, 1.0, 0.2), Color(0.15, 0.4, 1.0)]
+
+
+func _boss_eye_colour(health: float) -> Color:
+	var f := clampf(health, 0.0, 1.0) * (BOSS_EYE_COLS.size() - 1)
+	var i := mini(int(f), BOSS_EYE_COLS.size() - 2)
+	return (BOSS_EYE_COLS[i] as Color).lerp(BOSS_EYE_COLS[i + 1], f - i)
 
 
 func _free_boss_nodes() -> void:
 	if _boss_nodes.is_empty():
 		return
 	(_boss_nodes.root as Node).queue_free()
-	(_boss_nodes.bar as Node).queue_free()
 	_boss_nodes = {}
 
 
@@ -819,10 +806,10 @@ func _animate_boss(delta: float) -> void:
 		(_boss_nodes.light as OmniLight3D).light_energy = 1.5 + charge * 4.0 + _boss_flash * 3.0
 		if _boss_charge_t <= 0.0 and (_boss_nodes.charge as CPUParticles3D).emitting:
 			(_boss_nodes.charge as CPUParticles3D).emitting = false
-		var back: ColorRect = _boss_nodes.back
-		var fill: ColorRect = _boss_nodes.fill
-		fill.size = Vector2(maxf(0.0, (back.size.x - 4.0) * float(sim.boss_hp) / Sim.BOSS_HP), maxf(0.0, back.size.y - 4.0))
-		fill.color = Color(1.0, 0.15, 0.2) if _boss_flash < 0.5 else Color.WHITE
+		# D-338: no health bar: the eye's colour tells it, blue to red.
+		var iris := _boss_eye_colour(float(sim.boss_hp) / Sim.BOSS_HP)
+		(_boss_nodes.eye as ShaderMaterial).set_shader_parameter("iris", iris)
+		(_boss_nodes.light as OmniLight3D).light_color = iris
 	# Rays: a red bolt each, along its flight.
 	var seen := {}
 	for r in sim.rays:

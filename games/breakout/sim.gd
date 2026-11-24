@@ -127,9 +127,9 @@ const BOSS_Y := Vector2(-5.3, -4.85)    # its centre's top and bottom limits (it
 const BOSS_SPEED := 0.35             # rad/s along its Lissajous path
 const BOSS_FIRE := Vector2(10.0, 15.0)
 const BOSS_CHARGE := 1.5
-const RAY_SPEED := 3.4               # m/s: slow enough to see coming
-const RAY_LEN := 1.1                 # m, head to tail
-const RAY_R := 0.16                  # half its thickness
+const RAY_SPEED := 4.25              # m/s: slow enough to see coming (D-338: +25%)
+const RAY_LEN := 0.88                # m, head to tail (D-338: -20%)
+const RAY_R := 0.128                 # half its thickness (D-338: -20%)
 const BOSS_HITS := {"ball": 1, "missile": 3, "ion": 3, "wave": 2}
 
 ## D-327: two slots. Blaster upgrades (atom capsules) replace the plasma cannon:

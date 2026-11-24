@@ -3376,3 +3376,11 @@
 - **Decision (director):** when the Sidekicks are lost by picking up another paddle upgrade, they fly away towards the bottom of the screen.
 - They undock and accelerate down and slightly outwards over 0.7 s (6 m down, 0.8 m out, easing in), burners full on, then disappear. The same happens whenever they're lost during play (a lost charge too); they still vanish at once outside play (level end, menus).
 - **Status:** Accepted
+
+### D-338 — Tilt Breaker boss: health in the eye's colour, faster smaller rays
+- **Date:** 2026-11-24
+- **Decision (director):** no boss energy bar; the eye changes colour as the boss loses health: blue, green, yellow, orange, red, then it dies. Boss shots 25% faster and 20% smaller.
+- The health bar of D-335 is removed (and its `TB_BOSS` string). `hal_eye.gdshader` takes an `iris` colour; the game blends it through blue, green, yellow, orange and red by health left (full = blue), and the eye's light takes the same colour. The charge sparks stay red.
+- Rays: 4.25 m/s (was 3.4), 0.88 m long (was 1.1), 0.128 m half-thickness (was 0.16); the drawn bolt scales with them.
+- **Dev:** `--tb-boss-hp=N` sets its health.
+- **Status:** Accepted
