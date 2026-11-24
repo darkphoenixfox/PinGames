@@ -1339,8 +1339,8 @@ func _enter_players() -> void:
 	Dmd.play(Callable(), 0.0)
 	_players_ui = UI.vstack(70)
 	_players_rows.clear()
-	for k in ["TB_ONE_PLAYER", "TB_TWO_PLAYERS"]:
-		var l := UI.label(tr(k), 96, UI.WHITE)
+	for k in ["one_player", "two_players"]:   # D-351: the director's art (was text)
+		var l := _title_art(k, 620.0)
 		_players_ui.add_child(l)
 		_players_rows.append(l)
 	_players_ui.add_child(UI.label(tr("TB_SELECT_HINT"), 36, UI.CYAN))
@@ -1350,12 +1350,13 @@ func _enter_players() -> void:
 
 func _refresh_players() -> void:
 	for i in _players_rows.size():
-		var l: Label = _players_rows[i]
+		var l: TextureRect = _players_rows[i]
 		var on := i == _players_sel
-		var t := tr(["TB_ONE_PLAYER", "TB_TWO_PLAYERS"][i])
-		l.text = ("> %s <" % t) if on else t
-		l.add_theme_color_override("font_color", UI.YELLOW if on else UI.WHITE)
-		l.modulate.a = 1.0 if on else 0.45
+		# D-351: the chosen one full size and bright; the other smaller and dim.
+		if not l.has_meta("full"):
+			l.set_meta("full", l.custom_minimum_size)
+		l.custom_minimum_size = l.get_meta("full") * (1.0 if on else 0.7)
+		l.modulate = Color.WHITE if on else Color(0.55, 0.55, 0.6, 0.6)
 	Dmd.show_text(tr(["TB_ONE_PLAYER", "TB_TWO_PLAYERS"][_players_sel]), "", Dmd.YELLOW, Dmd.WHITE)
 
 

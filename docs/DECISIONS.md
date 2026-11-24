@@ -3477,3 +3477,9 @@
 - **Decision (director):** the director's EASY, NORMAL and HARD images replace the difficulty names on the difficulty screen.
 - Each row shows its art (up to 620 px wide, within the field on the single screen) above its speed and lives line. The chosen one is full size and bright; the others are 70% size and dimmed. The DMD keeps its dot text. Prepared by `scripts/tools/prepare_breakout_titles.py`; recorded in `assets/CREDITS.md`.
 - **Status:** Accepted
+
+### D-351 — Tilt Breaker: 1 PLAYER / 2 PLAYER art
+- **Date:** 2026-11-24
+- **Decision (director):** the director's 1PLAYER and 2PLAYER images replace the text on the players screen.
+- Same treatment as the difficulty art (D-350): up to 620 px wide within the field, the chosen one full size and bright, the other 70% and dimmed. The DMD keeps its text. The screen only exists where 2 players are possible (the single landscape screen, D-284), so it was checked there. Prepared by `scripts/tools/prepare_breakout_titles.py`; recorded in `assets/CREDITS.md`.
+- **Status:** Accepted
