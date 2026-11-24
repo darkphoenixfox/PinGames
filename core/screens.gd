@@ -294,6 +294,11 @@ func want_side_panels(on: bool, frame_tex: Texture2D = null) -> void:
 	panel_frame = frame_tex
 	if not on:
 		play_half_w = 0.0
+	# D-306: lay the screen out again now. Without this, turning them off
+	# (a game quit early, before anything else re-placed the screen) left the
+	# DMD and BACKGLASS boxes on the menus and the next game.
+	if current_layout == "single" and is_instance_valid(_single_page):
+		_place_single(Vector2(get_window().size))
 
 
 ## D-267: the game says how wide its play area is (half width / TABLE width).

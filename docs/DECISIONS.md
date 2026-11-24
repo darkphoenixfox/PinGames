@@ -3086,3 +3086,11 @@
 - A move restarts the menu's timer, and the ticking with it.
 - Tilt Breaker's menus have no time limit, so they don't tick.
 - **Status:** Accepted
+
+### D-306 — Fix: Tilt Breaker's side panels stayed on after quitting early
+- **Date:** 2026-11-24
+- **Bug (director):** quitting Tilt Breaker early (back/exit soon after choosing it) left its DMD and BACKGLASS side boxes (D-265) on the single screen, over the menus and the next game (Turbo Run).
+- **Cause:** `Screens.want_side_panels()` only set its flags. The single screen was laid out again only when something else asked (e.g. the game reporting its play width each frame). A game quit before that happened turned the panels off without the screen being re-placed.
+- **Fix:** `want_side_panels()` lays the single screen out again at once, as `want_dmd_above()` already did.
+- **Checked:** reproduced (quit 20 steps after starting the game; the boxes stayed on the menu), then fixed in the single layout; the windowed layout is unaffected.
+- **Status:** Accepted
