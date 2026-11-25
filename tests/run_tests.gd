@@ -31,6 +31,8 @@ func _initialize() -> void:
 	test_racer_hd_assets()
 	test_racer_first_nitro()
 	test_racer_police_rams()
+	test_racer_police_backup()
+	test_music_files()
 	test_exported_translation()
 	test_export_includes_data()
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -1273,6 +1275,146 @@ func test_racer_police_rams() -> void:
 	c.step(dt, false, false)
 	check(float(c.police.v) < 30.0 and c.v > 40.0 and int(c.police.get("hits", 0)) == 0,
 		"running into the police car slows it, not a ram (%.0f / %.0f m/s)" % [float(c.police.v), c.v])
+
+
+## D-364: speeding past another camera during a chase calls backup.
+func test_racer_police_backup() -> void:
+	var Sim = load("res://games/racer/sim.gd")
+	var dt := 1.0 / 60.0
+	# A camera passed too fast while chased: one more car, up to MAX_POLICE.
+	var a = Sim.new()
+	a.setup(7)
+	a.state = Sim.State.RACE
+	a.freeze_time = true
+	a.autopilot = true
+	a.call_police()
+	a.track.ensure(20000.0)
+	var trap_s := float(a.track.next_trap(0.0).s)
+	for n in Sim.MAX_POLICE + 1:
+		a.s = trap_s - 1.0   # the same camera again, as if it were the next one
+		a._trap_passed = -1.0
+		a.v = 70.0
+		a.step(dt, false, false)
+		a.step(dt, false, false)
+	check(a.police_cars().size() == Sim.MAX_POLICE, "each camera passed too fast adds a police car, up to %d (%d)" % [Sim.MAX_POLICE, a.police_cars().size()])
+	# The second car comes alongside on the other side from the lead.
+	var b = Sim.new()
+	b.setup(7)
+	b.state = Sim.State.RACE
+	b.freeze_time = true
+	b.autopilot = true
+	b.v = 50.0
+	b.call_police()
+	b.call_backup()
+	b.police.s = b.s - 30.0
+	b.backup[0].s = b.s - 45.0
+	for n in 60 * 3:
+		b.v = 45.0   # a steady cruise the police can keep up with
+		b.step(dt, false, false)
+	check(b.backup.size() == 1 and b.police.state == "chase" and b.backup[0].state == "chase", "both cars are chasing")
+	var lead_ds: float = float(b.police.s) - b.s
+	var flank_ds: float = float(b.backup[0].s) - b.s
+	var lead_dx: float = float(b.police.x) - b.x
+	var flank_dx: float = float(b.backup[0].x) - b.x
+	check(lead_ds > -6.0 and flank_ds > -6.0 and lead_dx * flank_dx < 0.0 and absf(flank_dx) > Sim.CAR_W,
+		"the lead and the second car are alongside, one on each side (%.1f / %.1f m back, %.1f / %.1f m across)" % [lead_ds, flank_ds, lead_dx, flank_dx])
+	# A third car tails behind.
+	b.call_backup()
+	b.backup[1].s = b.s - 40.0
+	for n in 60 * 4:
+		b.v = 45.0
+		b.police.hit_cd = 9.0   # no rams meanwhile
+		b.step(dt, false, false)
+	var tail_ds: float = float(b.backup[1].s) - b.s
+	check(b.backup.size() == 2 and tail_ds < -5.0 and tail_ds > -16.0, "the third car tails behind (%.1f m)" % tail_ds)
+	# Touching a backup car, or steering into the lead's side, is the
+	# player's bump: the police car slows, and it isn't a ram.
+	var tail_v: float = b.backup[0].v
+	b.backup[0].s = b.s - Sim.CAR_LEN * 0.7
+	b.backup[0].x = b.x
+	b.backup[0].hit_cd = 0.0
+	b.police.hit_cd = 9.0
+	b.grace_t = 0.0
+	b.step(dt, false, false)
+	check(float(b.backup[0].v) < tail_v * 0.6 and int(b.backup[0].get("hits", 0)) == 0,
+		"bumping a backup car slows it (%.0f -> %.0f m/s)" % [tail_v, float(b.backup[0].v)])
+	var s2 = Sim.new()
+	s2.setup(7)
+	s2.state = Sim.State.RACE
+	s2.freeze_time = true
+	s2.grace_t = 0.0
+	s2.v = 50.0
+	s2.lat_v = 4.0
+	s2.police = {"s": s2.s - 1.0, "x": s2.x + 1.7, "v": 50.0, "state": "chase", "t": 30.0, "caught": true, "side": 1.0}
+	s2.step(dt, false, false)
+	check(float(s2.police.v) < 30.0 and int(s2.police.get("hits", 0)) == 0,
+		"steering into the police car's side slows it, not a ram (%.0f m/s)" % float(s2.police.v))
+	# D-372: two police cars that touch collide: both slow, the one behind more.
+	var k2 = Sim.new()
+	k2.setup(7)
+	k2.state = Sim.State.RACE
+	k2.freeze_time = true
+	k2.v = 50.0
+	k2.police = {"s": k2.s - 60.0, "x": k2.x, "v": 50.0, "state": "chase", "t": 30.0, "caught": true, "side": 1.0}
+	k2.backup = [{"s": k2.s - 60.0 - Sim.CAR_LEN * 0.6, "x": k2.x + 0.3, "v": 58.0, "state": "chase", "t": 30.0, "caught": true}]
+	k2.step(dt, false, false)
+	var clashed := false
+	for e in k2.events:
+		if e[0] == "police_clash":
+			clashed = true
+	check(clashed and float(k2.backup[0].v) < 40.0 and float(k2.police.v) < 50.0 and float(k2.police.v) > float(k2.backup[0].v),
+		"police cars collide and slow down, the one behind more (%.0f / %.0f m/s)" % [float(k2.police.v), float(k2.backup[0].v)])
+	check(absf(float(k2.police.x) - float(k2.backup[0].x)) > 1.5, "the collision shoves them apart")
+	# Losing one car isn't an escape while another still chases.
+	var c = Sim.new()
+	c.setup(7)
+	c.state = Sim.State.RACE
+	c.freeze_time = true
+	c.v = 60.0
+	c.police = {"s": c.s - 2.0, "x": c.x + 2.8, "v": c.v, "state": "chase", "t": 30.0, "caught": true, "side": 1.0}
+	c.backup = [{"s": c.s - Sim.ESCAPE_GAP - 30.0, "x": c.x, "v": 0.0, "state": "chase", "t": 30.0, "caught": true,
+		"lose_t": Sim.ESCAPE_TIME}]
+	c.step(dt, false, false)
+	var escaped := false
+	for e in c.events:
+		if e[0] == "police_escape":
+			escaped = true
+	check(not escaped and c.police.state == "chase" and c.backup[0].state == "giveup", "one car lost, one still chasing: no escape yet")
+	# A bust: one car makes it, the other stops behind; both leave afterwards.
+	var d = Sim.new()
+	d.setup(7)
+	d.state = Sim.State.RACE
+	d.freeze_time = true
+	d.v = 0.0
+	d.police = {"s": d.s - 3.0, "x": d.x + 2.8, "v": 0.0, "state": "chase", "t": 30.0, "caught": true, "side": 1.0}
+	d.backup = [{"s": d.s - 10.0, "x": d.x, "v": 0.0, "state": "chase", "t": 30.0, "caught": true}]
+	d.step(dt, false, false)
+	check(d.police.state == "bust" and not d.police.get("wing", false) and d.backup[0].state == "bust" and d.backup[0].get("wing", false),
+		"busted: one car makes the bust, the other stops behind")
+	var fines := 0
+	for n in 60 * 30:
+		d.step(dt, false, false)
+		for e in d.events:
+			if e[0] == "busted":
+				fines += 1
+	check(fines == 1, "one fine for the bust, however many cars (%d)" % fines)
+	check(d.busted_t <= 0.0 and d.police_cars().all(func(car: Dictionary) -> bool: return car.state == "leave"),
+		"after the fine every car drives off")
+
+
+## D-362: every radio station has a song, a title, a credit, a frequency and
+## a join point, and both of Tilt Breaker's gameplay tracks are there.
+func test_music_files() -> void:
+	var Racer = load("res://games/racer/game.gd")
+	var n: int = Racer.MUSIC_RACE.size()
+	check(Racer.SONG_KEYS.size() == n and Racer.SONG_BY.size() == n and Racer.SONG_FREQS.size() == n and Racer.MUSIC_SKIP.size() == n,
+		"radio: every list has one entry per station")
+	for path in Racer.MUSIC_RACE:
+		check(ResourceLoader.exists(path), "radio: %s exists" % path)
+	check(ResourceLoader.exists(Racer.MUSIC_PURSUIT), "turbo run: the chase theme exists")   # D-363
+	var Breaker = load("res://games/breakout/game.gd")
+	for path in [Breaker.MUSIC, Breaker.MUSIC_2]:
+		check(ResourceLoader.exists(path), "tilt breaker: %s exists" % path)
 
 
 func test_racer_hd_assets() -> void:

@@ -160,7 +160,8 @@ const CATCH_UP_MAX := 25.0
 const POLICE_HITS := 3          # hits to stop the player
 const HIT_STREAK := 6.0         # D-198: s between rams before the count starts again
 const HIT_RESET_GAP := 40.0     # D-198: m ahead of the police that also clears the count
-const RAMMED_SLOW := 0.55       # D-198: speed the police keeps when the player runs into it
+const RAMMED_SLOW := 0.45       # speed the police keeps when the player runs into it (D-198; D-364: was 0.55)
+const BUMP_LAT := 1.0           # D-364: m/s sideways towards a police car that makes the contact the player's bump
 const RAMMER_SLOW := 0.92       # D-198: speed the player keeps doing it
 const HIT_SLOW := 0.78          # speed kept per hit
 const HIT_BOUNCE := 9.0         # m/s sideways shove
@@ -181,6 +182,19 @@ const ESCAPE_BONUS := 10000.0
 const FLIP_KINDS := ["palm", "rock", "lamp", "truck", "portal"]
 const SCRAPE_DRAG := 9.0        # m/s^2 lost scraping a tunnel wall (D-127)
 const NEAR_MISS_DX := 3.3
+## Backup (D-364): speeding past another camera during a chase calls one more
+## police car, up to MAX_POLICE in the chase. Only the lead car (`police`)
+## swerves in to ram. The second car pulls alongside on the other side, boxing
+## the player in; the third tails TAIL_GAP behind. A backup car takes over as
+## the lead when it gets LEAD_SWAP ahead of it.
+const MAX_POLICE := 3
+## D-372: police cars that touch each other collide: both lose speed (the one
+## behind more) and are shoved apart.
+const CLASH_SLOW_BEHIND := 0.6
+const CLASH_SLOW_AHEAD := 0.85
+const CLASH_SHOVE := 0.9         # m sideways, each
+const TAIL_GAP := 9.0
+const LEAD_SWAP := 6.0
 const YIELD_AHEAD := 350.0      # m ahead of the police where traffic pulls over (D-163)
 const YIELD_SLOW := 0.6         # speed traffic slows to while yielding
 const SIDE_SLOW := 0.93         # speed kept on a side-swipe
@@ -243,6 +257,7 @@ var rpm := 0.0                 # 0..1 (tachometer)
 var shift_hold := 0.0          # s both flippers held (for the shift)
 var _shift_lock := false       # shifted: release both before shifting again
 var police: Dictionary = {}     # {s, x, v, state: chase|bust|leave, t} or empty (D-135)
+var backup: Array = []          # D-364: the other police cars in the chase (each like `police`)
 var busted_t := 0.0            # s left held by the police
 var radar := 0.0               # 0..1 closeness of the next speed camera (0 = none in range)
 var _trap_passed := -1.0       # s of the last camera judged
@@ -284,7 +299,7 @@ const PLAYER_FIELDS := ["state", "countdown", "manual", "shift_request", "autopi
 	"drifting", "drift_dir", "drift_angle", "drift_points", "_drift_entry", "_drift_exit", "boost_t",
 	"boosting", "pickups", "_next_pickup_s", "_next_id_pickups", "car", "gear", "_launch_t",
 	"_rev_lock_l", "_rev_lock_r", "freeze_time", "perfect_t", "rpm", "shift_hold", "_shift_lock",
-	"police", "busted_t", "radar", "_trap_passed", "in_tunnel", "_scrape_t", "grace_t", "finished",
+	"police", "backup", "busted_t", "radar", "_trap_passed", "in_tunnel", "_scrape_t", "grace_t", "finished",
 	"sway", "time_bonus", "spin_t", "flipping", "crash_anim", "crash_slide", "flip_dir", "flip_turns", "veer_x", "veer_id",
 	"time_left", "next_checkpoint", "checkpoints", "score", "_score_f", "over_t", "done"]
 const P2_START_X := 1.9          # the two cars start side by side, either side of the line
@@ -297,6 +312,8 @@ var event_player: Array = []     # 2P: the player each event of the last step be
 var winner := -1                 # 2P: the first player across the finish line
 var race_over := false           # 2P: both done, or WIN_WAIT after the winner
 var _win_t := 0.0
+var _car_i := 0                  # D-364: the police car being updated (0 = the lead)
+var _cars: Array = []            # D-364: every police car of the live player, during their update
 
 
 ## Starts a 2-player race: both cars on the grid side by side (cars[i] =
@@ -674,8 +691,11 @@ func _update_traps() -> void:
 		_trap_passed = trap.s
 		var caught := v * MPH > TRAP_MPH   # D-156: over 100 mph on the speedometer
 		events.append(["trap", caught])
-		if caught and police.is_empty() and busted_t <= 0.0:
-			call_police()
+		if caught and busted_t <= 0.0:
+			if police.is_empty():
+				call_police()
+			elif police.state == "chase" and backup.size() < MAX_POLICE - 1:
+				call_backup()   # D-364
 
 
 ## Calls a police car from behind (D-156; public for the --rc-police dev flag).
@@ -684,7 +704,76 @@ func call_police() -> void:
 	events.append(["police_spawn"])
 
 
+## One more police car joins the chase from behind (D-364).
+func call_backup() -> void:
+	backup.append({"s": s - POLICE_BEHIND, "x": x, "v": v, "state": "chase", "t": 0.0})
+	events.append(["police_backup", backup.size() + 1])
+
+
+## Every police car around the live player: the lead first, then the backup.
+func police_cars() -> Array:
+	var out := []
+	if not police.is_empty():
+		out.append(police)
+	out.append_array(backup)
+	return out
+
+
+## Whether a police car's light bar and siren are on (see `police_lights`).
+static func car_lights(c: Dictionary) -> bool:
+	return not c.is_empty() and (c.state == "chase" or (c.state == "bust" and not c.get("fined", false)))
+
+
+## Steps every police car (D-364). Each runs the one-car code as `police` in
+## turn; afterwards the car that matters most is made the lead.
 func _update_police(dt: float) -> void:
+	if backup.is_empty():
+		_car_i = 0
+		_cars = [police]
+		_update_car(dt)
+		return
+	var lead := police
+	_cars = [lead] + backup
+	for k in _cars.size():
+		_car_i = k
+		police = _cars[k]
+		_update_car(dt)
+		_cars[k] = police   # {} once it has gone
+	_car_i = 0
+	_cars = _cars.filter(func(c: Dictionary) -> bool: return not c.is_empty())
+	_police_clashes(dt)   # D-372
+	# The lead: the car making the bust, else the chasing car furthest up the
+	# road (a tail car must be LEAD_SWAP clear of the lead to take over).
+	var best := 0
+	for k in range(1, _cars.size()):
+		var rk := _car_rank(_cars[k])
+		var rb := _car_rank(_cars[best])
+		if rk > rb or (rk == 2 and rb == 2 and float(_cars[k].s) > float(_cars[best].s) + LEAD_SWAP):
+			best = k
+	if best > 0:
+		var c: Dictionary = _cars[best]
+		_cars.remove_at(best)
+		_cars.push_front(c)
+		for k in range(1, _cars.size()):
+			_cars[k].ram_t = 0.0
+	police = _cars[0] if not _cars.is_empty() else {}
+	backup = _cars.slice(1)
+
+
+func _car_rank(c: Dictionary) -> int:
+	if c.state == "bust":
+		return 1 if c.get("wing", false) else 3
+	return 2 if c.state == "chase" else 0
+
+
+func _others_chasing() -> bool:
+	for c in _cars:
+		if not is_same(c, police) and not c.is_empty() and c.state == "chase":
+			return true
+	return false
+
+
+func _update_car(dt: float) -> void:
 	if police.is_empty():
 		return
 	police.t += dt
@@ -698,7 +787,24 @@ func _update_police(dt: float) -> void:
 			police.ram_t = float(police.get("ram_t", 0.0))
 			var want_ds := -1.0
 			var want_x := x + side * 2.8
-			if ds < -12.0:
+			if _car_i == 1:
+				# D-364: the second car flanks the player on the side the lead
+				# isn't on, and doesn't swerve in. To change sides it drops
+				# back and crosses behind the player.
+				var lead: Dictionary = _cars[0]
+				if lead.get("state", "") == "chase" and lead.has("side"):
+					side = -float(lead.side)
+				police.side = side
+				want_x = x + side * 2.8
+				if (float(police.x) - x) * side < CAR_W:
+					want_ds = minf(want_ds, -(CAR_LEN + 3.0))
+				police.ram_t = 0.0
+			elif _car_i > 1:
+				# D-364: any further car tails the player, in line behind.
+				want_ds = -TAIL_GAP * (_car_i - 1)
+				want_x = x
+				police.ram_t = 0.0
+			elif ds < -12.0:
 				want_x = x                       # chase down the player's line
 				police.ram_t = 0.0
 			else:
@@ -720,8 +826,13 @@ func _update_police(dt: float) -> void:
 				police.hits = 0
 				events.append(["police_hits_reset"])
 			if spin_t <= 0.0 and grace_t <= 0.0 and police.hit_cd <= 0.0 and absf(ds) < CAR_LEN * 0.9 					and absf(police.x - x) < CAR_W * 0.95:
-				if ds > CAR_LEN * 0.3:
-					_hit_police()       # we ran into it from behind (D-198)
+				# D-364: it's the player's bump, which slows the police car, when
+				# we run into it from behind (D-198), when it's a backup car
+				# (they tail, they don't ram), or when we steer into the lead
+				# car's side while it isn't swerving in.
+				var steered_in: bool = (float(police.x) - x) * lat_v > 0.0 and absf(lat_v) > BUMP_LAT 						and float(police.ram_t) <= RAM_WINDUP
+				if ds > CAR_LEN * 0.3 or _car_i > 0 or steered_in:
+					_hit_police()
 				else:
 					_police_hit()
 			var close := ds > -BUST_NEAR
@@ -732,8 +843,26 @@ func _update_police(dt: float) -> void:
 				police.lose_t = float(police.get("lose_t", 0.0)) + dt if ds < -ESCAPE_GAP and not catching else 0.0
 			if police.state == "chase" and float(police.get("lose_t", 0.0)) >= ESCAPE_TIME:
 				police.state = "giveup"   # D-145: falls back, lights off
-				_add_score(ESCAPE_BONUS)
-				events.append(["police_escape"])
+				if not _others_chasing():   # D-364: escaped once every car is lost
+					_add_score(ESCAPE_BONUS)
+					events.append(["police_escape"])
+		"bust" when police.get("wing", false):
+			# D-364: another car is making the bust. This one stops in line
+			# behind the player, lights on until the fine, then drives off too.
+			_police_follow(dt, -(4.0 + 6.5 * maxi(_car_i, 1)), 30.0, 90.0, 18.0)
+			if ds < 0.0 and ds > -(CAR_LEN + 1.5) and absf(float(police.x) - x) < CAR_W:
+				police.v = minf(float(police.v), v)   # never through the stopped player
+			police.x = move_toward(police.x, x, 7.0 * dt)
+			for c in _cars:
+				if not c.is_empty() and c.state != "chase" and not c.get("wing", false) and c.get("fined", false):
+					police.fined = true
+			var buster := false
+			for c in _cars:
+				if not c.is_empty() and c.state == "bust" and not c.get("wing", false):
+					buster = true
+			if not buster and busted_t <= 0.0 and spin_t <= 0.0:
+				police.fined = true
+				police.state = "leave"
 		"bust":
 			# Hurry up beside the stopped player, swing across and park there
 			# (D-139). The player is held until it has stood parked PARK_HOLD s.
@@ -779,7 +908,7 @@ func _update_police(dt: float) -> void:
 func police_lights() -> bool:
 	# On while chasing and through the bust, off once you're fined (D-147,
 	# D-230), and after it gives up or drives off.
-	return not police.is_empty() and (police.state == "chase" or (police.state == "bust" and not police.get("fined", false)))
+	return car_lights(police)
 
 
 ## Speed control towards a spot `want_ds` metres from the player (negative =
@@ -792,6 +921,39 @@ func _police_follow(dt: float, want_ds: float, close: float, rate: float = 40.0,
 	# a nitro burst gets away.
 	target = minf(target, top_speed() * top_k)
 	police.v = move_toward(police.v, maxf(target, -back), rate * dt)
+
+
+## D-372: police cars collide with each other (while moving: not during the
+## bust's parking). Both slow down, the one behind more, and they are shoved
+## apart sideways. (Supersedes D-364's holding back.)
+func _police_clashes(dt: float) -> void:
+	for c in _cars:
+		c.clash_cd = maxf(0.0, float(c.get("clash_cd", 0.0)) - dt)
+	for i in _cars.size():
+		for j in range(i + 1, _cars.size()):
+			var a: Dictionary = _cars[i]
+			var b: Dictionary = _cars[j]
+			if a.state == "bust" or b.state == "bust" or float(a.clash_cd) > 0.0 or float(b.clash_cd) > 0.0:
+				continue
+			var ds: float = float(a.s) - float(b.s)
+			var dx: float = float(a.x) - float(b.x)
+			if absf(ds) >= CAR_LEN * 0.9 or absf(dx) >= CAR_W * 0.95:
+				continue
+			var front: Dictionary = a if ds >= 0.0 else b
+			var back: Dictionary = b if ds >= 0.0 else a
+			var slower: float = minf(float(front.v), float(back.v))
+			back.v = slower * CLASH_SLOW_BEHIND
+			front.v = float(front.v) * CLASH_SLOW_AHEAD
+			var away := signf(dx) if absf(dx) > 0.05 else 1.0
+			a.x = float(a.x) + away * CLASH_SHOVE
+			b.x = float(b.x) - away * CLASH_SHOVE
+			a.sway = away * SWAY * 0.7
+			b.sway = -away * SWAY * 0.7
+			a.clash_cd = 0.8
+			b.clash_cd = 0.8
+			a.ram_t = 0.0
+			b.ram_t = 0.0
+			events.append(["police_clash", (float(a.s) + float(b.s)) * 0.5, (float(a.x) + float(b.x)) * 0.5, slower])
 
 
 ## Running into a police car that isn't ramming us (D-198).
@@ -857,6 +1019,10 @@ func _police_obstacles(dt: float) -> void:
 
 func _bust() -> void:
 	police.state = "bust"
+	for c in _cars:   # D-364: the other cars stop behind
+		if not c.is_empty() and not is_same(c, police) and c.state == "chase":
+			c.state = "bust"
+			c.wing = true
 	police.swing = -1.0 if x < 0.0 else 1.0   # which way it turns across the lane (D-161)
 	busted_t = BUST_TIME + maxf(spin_t, 0.0)
 	_end_drift()

@@ -196,6 +196,12 @@ func current_music() -> String:
 	return _music_path
 
 
+## Where the current song is, in seconds (D-363), to pick it up there later
+## with `crossfade_music`.
+func music_position() -> float:
+	return _music.get_playback_position() if _music.playing else 0.0
+
+
 func _fade_to(then: Callable, fade: float) -> void:
 	if _music_tween:
 		_music_tween.kill()

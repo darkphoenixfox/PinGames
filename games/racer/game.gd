@@ -241,7 +241,7 @@ const GFX_NAMES := {"nes": "RC_GFX_NES", "retro": "RC_GFX_RETRO", "hd": "RC_GFX_
 const GFX_DESC := {"nes": "RC_GFX_NES_DESC", "retro": "RC_GFX_RETRO_DESC", "hd": "RC_GFX_HD_DESC"}
 
 const ACCENT := Color("ffd23e")
-const TITLE_FONT := "sunset"
+const TITLE_FONT := "sunset_metal"  # D-366: the director's sunset chrome (was "sunset", D-062)
 ## Music (D-226, director): the five Bogart VGM songs (CC BY 3.0), one for
 ## every two stages. Attract plays the first, and the race carries it on from
 ## the start; each new song crossfades in over MUSIC_XFADE s, starting
@@ -249,15 +249,17 @@ const TITLE_FONT := "sunset"
 ## D-308 (director): Turbo Run's own theme (the director's) is the main tune
 ## and station 1; the Bogart VGM songs follow; Chillwave Nightdrive moved to
 ## the game selection menu.
+## D-362 (director): the director's Full Throttle and Coastal Drive are
+## stations 2 and 3; Maximum Overdrive and One More Round move to 4 and 5.
 const MUSIC_RACE := [
 	"res://assets/audio/music/racer/turbo_run_original.ogg",
-	"res://assets/audio/music/racer/bogart_maximum_overdrive.ogg",
+	"res://assets/audio/music/racer/full_throttle.ogg",
+	"res://assets/audio/music/racer/turbo_run_out_of_the_park.ogg",   # D-373 (was Coastal Drive, D-362)
+	"res://assets/audio/music/racer/high_tide.ogg",   # D-377 (was Maximum Overdrive)
 	"res://assets/audio/music/racer/bogart_one_more_round.ogg",
-	"res://assets/audio/music/racer/bogart_nightlife.ogg",
-	"res://assets/audio/music/racer/bogart_dreamstate.ogg",
 ]
 ## Who made each song, for the radio's LCD (D-308).
-const SONG_BY := ["RC_CREDIT_ORIGINAL", "RC_CREDIT_BOGART", "RC_CREDIT_BOGART", "RC_CREDIT_BOGART", "RC_CREDIT_BOGART"]
+const SONG_BY := ["RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL", "RC_CREDIT_BOGART"]
 const MUSIC_STAGES := 2
 ## D-301: the radio's stations, one per song (MUSIC_RACE's order).
 const SONG_KEYS := ["RC_SONG_1", "RC_SONG_2", "RC_SONG_3", "RC_SONG_4", "RC_SONG_5"]
@@ -270,8 +272,10 @@ var _spec_idx := -1           # the spectrum analyser on the music bus while the
 const MUSIC_XFADE := 6.0
 ## Where each song comes in on a crossfade (D-227), measured: past each one's
 ## quiet opening, to where it's at full strength (One More Round builds for
-## 17 s, Dreamstate swells at 34 s).
-const MUSIC_SKIP := [3.0, 0.5, 16.5, 5.5, 31.0]   # D-308: Turbo Run's theme is full from ~3 s
+## 17 s). D-308: Turbo Run's theme is full from ~3 s. D-362: Full Throttle is
+## full from its first note. D-373: the Out of the Park Mix from ~7 s. D-377:
+## High Tide from ~1.5 s.
+const MUSIC_SKIP := [3.0, 0.5, 7.0, 1.5, 16.5]
 const PASSERS := 2          # traffic engine voices (D-134)
 ## Oncoming horns (D-213): a dual-tone electric car horn (low and high tones a
 ## dissonant interval apart, buzzy diaphragm harmonics with a nasal resonance,
@@ -284,6 +288,10 @@ const HORN_RANGE := 260.0          # m where it fades out
 ## Honk pattern (s): [start, length] presses. D-214: always a clear BEEP BEEP,
 ## two equal presses with a gap, so it reads as "they're honking at me".
 const HORN_PATTERNS := [[[0.0, 0.3], [0.45, 0.3]]]
+## D-369 (director): each oncoming car's horn has its own pitch, from deep to
+## shrill (x the tones above), and never the same as the honk before.
+const HORN_PITCHES := [0.76, 0.84, 0.92, 1.0, 1.09, 1.19, 1.3]
+const HORN_PITCHES_TRUCK := [0.5, 0.55, 0.6, 0.66]   # D-370: trucks are always deeper than any car
 const HORN_DUCK_DB := 6.0    # engine and wind dip while a horn sounds (D-214)
 const PASS_RANGE := 70.0    # m: how far a car can be heard (D-192: was 45)
 const SOUND_SPEED := 85.0   # m/s, exaggerated so the Doppler shift is obvious (D-192: was 110)
@@ -295,6 +303,14 @@ const PASS_DUCK_RANGE := 15.0   # m
 const JINGLE_GOAL := "res://assets/audio/music/racer/racing_goal.ogg"
 const JINGLE_TIME_OVER := "res://assets/audio/music/racer/time_over.ogg"
 const MUSIC_ATTRACT := "res://assets/audio/music/racer/start_your_engines.ogg"   # D-315: the director's attract and menu track
+## D-363 (director): the director's chase theme. It cuts in from its start
+## while a police car is chasing, and the radio's song crossfades back, from
+## where it left off, at the bust or once the police car is lost.
+const COPS_FONT := "cops_metal"   # D-371: the director's blue/red version of the title font, for police messages
+const MUSIC_PURSUIT := "res://assets/audio/music/racer/in_pursuit.ogg"
+const PURSUIT_IN := 0.4     # s: the quick change to the chase theme
+const PURSUIT_OUT := 3.0    # s: the crossfade back to the radio's song
+var _song_pos := 0.0        # where the radio's song was when the chase began
 const CHUNK := 100.0             # metres of road per mesh chunk
 const VIEW_AHEAD := 900.0
 const VIEW_BEHIND := 60.0
@@ -379,8 +395,7 @@ const SOUNDS := {
 		[{"f": [294.0, 294.0], "t": 0.22, "w": "saw", "v": 0.16, "lp": 0.6, "a": 0.01}],
 		[{"f": [370.0, 370.0], "t": 0.22, "w": "saw", "v": 0.14, "lp": 0.6, "a": 0.01}],
 		[{"f": [440.0, 440.0], "t": 0.22, "w": "saw", "v": 0.12, "lp": 0.6, "a": 0.01}],
-		[{"f": [3000.0, 800.0], "t": 0.3, "w": "noise", "v": 0.2, "lp": 0.5}],
-		[{"f": [100.0, 55.0], "t": 0.2, "w": "sine", "v": 0.4}]], "reverb": [0.6, 0.22]},
+		[{"f": [3000.0, 800.0], "t": 0.3, "w": "noise", "v": 0.2, "lp": 0.5}]], "reverb": [0.6, 0.22]},   # D-375: no low thump under it
 	# Low-time clock: a woodblock "tock" with a soft body (D-112).
 	"rc_tick": {"voices": [[{"f": [1900.0, 1600.0], "t": 0.05, "w": "triangle", "v": 0.35}],
 		[{"f": [950.0, 900.0], "t": 0.09, "w": "sine", "v": 0.25}],
@@ -439,6 +454,25 @@ func _crossfade(path: String, t: float, skip: float = 0.0) -> void:
 		Audio.crossfade_music(path, t, skip)
 
 
+## D-363: the chase theme while a police car is chasing (2P: either player's),
+## in place of the radio's song. Only those two songs swap: a jingle playing
+## (finish, time over) is left alone.
+func _pursuit_music() -> void:
+	var chased := false
+	for i in (2 if _two else 1):
+		var pol: Dictionary = sim.player_get(i, "police")
+		if not pol.is_empty() and pol.state == "chase":
+			chased = true
+	var now := Audio.current_music()
+	if chased and now == MUSIC_RACE[_song]:
+		_song_pos = Audio.music_position()
+		_crossfade(MUSIC_PURSUIT, PURSUIT_IN)
+		DebugTools.mark("pursuit_music_on")
+	elif not chased and now == MUSIC_PURSUIT:
+		_crossfade(MUSIC_RACE[_song], PURSUIT_OUT, _song_pos)
+		DebugTools.mark("pursuit_music_off")
+
+
 ## 2P: this view's nodes go into its half of the TABLE.
 func add_to_table(node: Node) -> Node:
 	if _host != null:
@@ -462,6 +496,12 @@ var _weather: Node3D            # D-217
 var _ui_vp: SubViewport
 var _ui_root: Control
 var _ui_view: TextureRect
+## D-368: the dark backdrop behind the menus and the results. One rectangle
+## over the whole TABLE, under the UI layer (which is a fixed 16:9 shape in
+## landscape and so can't cover a wider TABLE itself), the same for every menu.
+const MENU_DIM := 0.5
+const DIM_PHASES := ["players", "gfx", "stage", "radio"]
+var _dim: ColorRect
 var _ui_px := 1.0                # target pixels per base pixel of the UI
 var _puddle_mat: ShaderMaterial
 var _wx := {"rain": 0.0, "snow": 0.0, "fog": 0.0, "haze": 0.0}   # smoothed weather weights
@@ -493,12 +533,11 @@ var _gfx_rows: Array = []
 var _gfx_index := 0
 var _gfx_hint: Label
 var _police: Node3D          # D-135
-var _flashers: Array = []
-var _police_night: Node3D       # D-198: its head/tail lights at night
-var _siren_lights: Array = []   # D-198: [red, blue] OmniLight3D from the light bar
-var _siren_pools: Array = []    # D-198: [red, blue] glow pools on the road around it
+## D-364: one rig per police car {node, flashers, night, lights, pools, swing,
+## wheel}: flashers = the light bar's [red, blue]; night = its head/tail lights
+## (D-198); lights / pools = [red, blue] siren light and road glow (D-198).
+var _police_rigs: Array = []
 var _washes: Array = []
-var _police_swing := 0.0     # 0..1 of the 90-degree stop turn (D-139)      # red / blue screen-edge glows (D-137)
 var _siren: AudioStreamPlayer
 var _radar_bar: Control
 var _radar_led := 0.0
@@ -539,7 +578,6 @@ var _shift_flame_t := 0.0   # upshift exhaust flame left
 var _bg_flash := 0.0    # s of backglass light flashing left (D-109)
 var _bg_dark := 0.0     # s of crash flicker left
 var _wheel_phase := 0.0
-var _police_wheel := 0.0       # D-246
 const SHADOW_DISTANCE := 140.0   # m of real shadows ahead of the camera (D-253)
 const SHADOW_STRENGTH := 0.75
 var _blob_mat: StandardMaterial3D   # soft round ground shadows under sprites (D-253)
@@ -584,6 +622,8 @@ var _pass_duck := 0.0       # dB the hero's engine and wind dip for a passing ca
 var _horn: AudioStreamPlayer      # D-213
 var _horn_waves: Array = []       # one AudioStreamWAV per pattern
 var _horn_id := -1                # traffic id honking
+var _horn_pitch := 1.0            # D-369: this car's horn pitch
+var _horn_pick := -1.0            # D-369: the last pitch used
 var _skid: AudioStreamPlayer
 var _engine_hi: AudioStreamPlayer
 var _wind: AudioStreamPlayer
@@ -785,6 +825,9 @@ func _process(delta: float) -> void:
 	if _two:
 		sim._use(_role)   # D-289: this view's car is the live one
 	_phase_t += delta
+	if _dim != null:   # D-368
+		var dim_on: bool = _phase in DIM_PHASES or (_phase == "finale" and is_instance_valid(_finale_ui))
+		_dim.color.a = move_toward(_dim.color.a, MENU_DIM if dim_on else 0.0, delta * 3.0)
 	if _main:
 		_update_backglass(delta)
 	_update_night(delta)
@@ -846,6 +889,8 @@ func _process(delta: float) -> void:
 			_update_hud(delta)
 			if sim.done and _finale_t < 0.0:
 				_begin_finale()
+		if _main:
+			_pursuit_music()
 		_watch_quality(delta)
 	elif _phase == "finale":
 		if not _two:
@@ -1194,14 +1239,14 @@ func _begin_gfx() -> void:
 	_gfx_index = maxi(GFX_OPTIONS.find(_gfx_mode), 0)
 	_gfx_ui = Control.new()
 	_gfx_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_gfx_ui.add_child(UI.fill(Color(0, 0, 0, 0.35)))
 	var col := UI.vstack(60)
 	col.add_child(UI.styled_label(tr("RC_GFX_TITLE"), TITLE_FONT, 2))
 	_gfx_rows.clear()
 	for g in GFX_OPTIONS:
 		var row := VBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
-		var name_l := UI.label("", 96, UI.WHITE)
+		# D-367: in the game's title font; the choice shows by brightness.
+		var name_l := UI.styled_label(tr(GFX_NAMES[g]), TITLE_FONT, 3)
 		row.add_child(name_l)
 		row.add_child(UI.label(tr(GFX_DESC[g]), 36, UI.WHITE))
 		col.add_child(row)
@@ -1228,10 +1273,7 @@ func _refresh_gfx() -> void:
 	for i in _gfx_rows.size():
 		var on := i == _gfx_index
 		var name_l: Label = _gfx_rows[i][0]
-		var g: String = GFX_OPTIONS[i]
-		name_l.text = ("> %s <" % tr(GFX_NAMES[g])) if on else tr(GFX_NAMES[g])
-		name_l.add_theme_color_override("font_color", ACCENT if on else UI.WHITE)
-		(_gfx_rows[i][1] as Control).modulate.a = 1.0 if on else 0.45
+		(_gfx_rows[i][1] as Control).modulate = Color.WHITE if on else Color(0.55, 0.55, 0.55, 0.7)
 	var cur: String = GFX_OPTIONS[_gfx_index]
 	_dmd.show_text(tr("RC_GFX_TITLE"), tr(GFX_NAMES[cur]), Dmd.CYAN, Dmd.YELLOW)
 
@@ -1263,12 +1305,21 @@ func _begin_stage_select() -> void:
 	_start_stage = 1
 	_stage_ui = Control.new()
 	_stage_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_stage_ui.add_child(UI.fill(Color(0, 0, 0, 0.35)))
 	var col := UI.vstack(40)
 	col.add_child(UI.styled_label(tr("RC_STAGE_TITLE"), TITLE_FONT, 2))
-	_stage_num = UI.label("", 96, ACCENT)
-	col.add_child(_stage_num)
-	_stage_area = UI.label("", 48, UI.WHITE)
+	# D-367: the stage and its area in the game's title font, between plain
+	# arrows (the font has none). The stage keeps the widest text's width, so
+	# the arrows don't move (D-352).
+	var pick := HBoxContainer.new()
+	pick.alignment = BoxContainer.ALIGNMENT_CENTER
+	pick.add_theme_constant_override("separation", 36)
+	pick.add_child(UI.label("<", 96, ACCENT))
+	_stage_num = UI.styled_label(tr("RC_STAGE") % STAGE_PICK_MAX, TITLE_FONT, 3)
+	_stage_num.custom_minimum_size.x = _stage_num.get_minimum_size().x
+	pick.add_child(_stage_num)
+	pick.add_child(UI.label(">", 96, ACCENT))
+	col.add_child(pick)
+	_stage_area = UI.styled_label("", TITLE_FONT, 2)
 	col.add_child(_stage_area)
 	_stage_hint = UI.label("", 36, UI.WHITE)
 	col.add_child(_stage_hint)
@@ -1288,7 +1339,7 @@ func _move_stage(d: int) -> void:
 
 
 func _refresh_stage() -> void:
-	_stage_num.text = "< %s >" % (tr("RC_STAGE") % _start_stage)
+	_stage_num.text = tr("RC_STAGE") % _start_stage
 	_stage_area.text = tr(AREA_NAMES[Track.stage_area(_start_stage)])
 	_dmd.show_text(tr("RC_STAGE_TITLE"), tr("RC_STAGE") % _start_stage, Dmd.CYAN, Dmd.YELLOW)
 
@@ -1445,8 +1496,6 @@ func _finale(delta: float) -> void:
 		if is_instance_valid(_center):   # D-234: the results title replaces the banner
 			_center.queue_free()
 		_finale_ui = UI.vstack(40)
-		var dim := UI.fill(Color(0, 0, 0, 0.55))
-		_add_ui(dim)
 		if _two:   # D-289: each half shows its player's place
 			var won: bool = sim.winner == _role
 			_finale_ui.add_child(UI.styled_label(tr("RC_WINNER") if won else tr("RC_SECOND"), TITLE_FONT, 3))
@@ -1486,7 +1535,6 @@ func _begin_radio() -> void:
 	_radio_ui = Control.new()
 	_radio_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_radio_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_radio_ui.add_child(UI.fill(Color(0, 0, 0, 0.55)))
 	var col := UI.vstack(36)
 	col.add_child(UI.styled_label(tr("RC_RADIO_TITLE"), TITLE_FONT, 2))
 	_radio = Radio.new()
@@ -1575,11 +1623,12 @@ func _begin_players() -> void:
 	_sfx("start")
 	_players_ui = Control.new()
 	_players_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_players_ui.add_child(UI.fill(Color(0, 0, 0, 0.35)))
 	var col := UI.vstack(60)
 	_players_rows.clear()
 	for k in ["RC_ONE_PLAYER", "RC_TWO_PLAYERS"]:
-		var l := UI.label(tr(k), 96, UI.WHITE)
+		# D-367: in the game's title font. The choice is shown by brightness
+		# (the font has no arrows and keeps its own colours).
+		var l := UI.styled_label(tr(k), TITLE_FONT, 3)
 		col.add_child(l)
 		_players_rows.append(l)
 	_players_ui.add_child(col)
@@ -1591,10 +1640,7 @@ func _refresh_players() -> void:
 	for i in _players_rows.size():
 		var l: Label = _players_rows[i]
 		var on := i == _players_sel
-		var t := tr(["RC_ONE_PLAYER", "RC_TWO_PLAYERS"][i])
-		l.text = ("> %s <" % t) if on else t
-		l.add_theme_color_override("font_color", ACCENT if on else UI.WHITE)
-		l.modulate.a = 1.0 if on else 0.45
+		l.modulate = Color.WHITE if on else Color(0.55, 0.55, 0.55, 0.7)
 	_dmd.show_text(tr(["RC_ONE_PLAYER", "RC_TWO_PLAYERS"][_players_sel]), "", Dmd.CYAN, Dmd.YELLOW)
 
 
@@ -1973,6 +2019,10 @@ func _collision_fx(e: Array, who: int) -> void:
 			var pol: Dictionary = sim.player_get(who, "police")
 			if not pol.is_empty():
 				other = Vector2(float(pol.s), float(pol.x))
+		"police_clash":   # D-372: two police cars, at the point between them
+			if absf(float(e[1]) - sim.s) < 300.0:
+				_burst(sim.track.point(float(e[1]), float(e[2]), 0.45), false, who, float(e[3]))
+			return
 	if other == Vector2.INF or absf(ps - sim.s) > 300.0:
 		return
 	# D-303: the contact is on this car's body, on the side or end facing the
@@ -2104,6 +2154,10 @@ func _handle_events() -> void:
 			"go":
 				if Config.cli.has("rc-police") and sim.police.is_empty():   # dev: a chase straight away (D-246)
 					sim.call_police()
+					for n in int(str(Config.cli.get("rc-backup", "0"))):   # dev: --rc-backup=N more cars, all close behind (D-364)
+						sim.call_backup()
+						sim.police.s = sim.s - 30.0
+						sim.backup[-1].s = sim.s - 30.0 - 15.0 * (n + 1)
 				_center_message(tr("RC_GO"), 1.0)
 				_sfx("rc_go")
 				_dmd.flash(tr("RC_GO"), 1.0, Dmd.GREEN)
@@ -2182,25 +2236,27 @@ func _handle_events() -> void:
 			"bump":
 				_sfx("rc_bump")
 				_shake = maxf(_shake, 0.25)
-			"police_spawn":
-				_center_message(tr("RC_POLICE"), 1.4)
+			"police_spawn":   # (D-365: no notice for a backup car joining)
+				_center_message(tr("RC_POLICE"), 1.4, COPS_FONT)
 				_cops_flash = true   # red/blue flashing text (D-158)
 				_dmd.flash(tr("RC_POLICE"), 1.4, Dmd.RED)
 			"police_ram":
 				_sfx("rc_bump")
 				_shake = 0.45
 				_bg_dark = 0.3
+			"police_clash":   # D-372: two police cars hit each other
+				_sfx("rc_bump")
 			"police_bumped":   # we ran into the police car (D-198)
 				_sfx("rc_bump")
 				_shake = 0.3
 			"police_hits_reset":   # its rams start counting again (D-198)
 				_dmd.flash(tr("RC_RAMS_RESET"), 1.0, Dmd.GREEN)
 			"busted":
-				_center_message(tr("RC_BUSTED"), 2.5)
+				_center_message(tr("RC_BUSTED"), 2.5, COPS_FONT)
 				_dmd_anim("fine", [tr("RC_BUSTED"), tr("RC_FINE"), "-" + ScoreTable.format_score(int(e[1]))])
 				_sfx("rc_time_up")
 			"police_escape":
-				_center_message(tr("RC_ESCAPED"), 1.4)
+				_center_message(tr("RC_ESCAPED"), 1.4, COPS_FONT)
 				_dmd.flash(tr("RC_ESCAPED"), 1.2, Dmd.GREEN)
 				_sfx("rc_perfect")
 			"crash":
@@ -2330,6 +2386,9 @@ func _build_ui_layer() -> void:
 	_ui_root.size = Vector2(Screens.TABLE_BASE)
 	_ui_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ui_vp.add_child(_ui_root)
+	_dim = UI.fill(Color(0, 0, 0, 0))   # D-368: before the UI view, so under it
+	_dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_to_table(_dim)
 	_ui_view = TextureRect.new()
 	_ui_view.texture = _ui_vp.get_texture()
 	_ui_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -2951,9 +3010,29 @@ func _obj_area(o: Dictionary, h: int) -> String:
 ## Police car (D-135): the director's model with a light bar of flashing red
 ## and blue glows, plus a looping two-tone siren.
 func _build_police() -> void:
-	_police = _car_instance(0.0, POLICE_MODEL, POLICE_TEXTURE)
-	_police.visible = false
-	_root.add_child(_police)
+	for k in Sim.MAX_POLICE:   # D-364: the lead car and its backup
+		_build_police_car()
+	_police = _police_rigs[0].node
+	_siren = AudioStreamPlayer.new()
+	_siren.bus = "SFX"
+	_siren.stream = _loop_wav("siren", func(t: float) -> float:
+		var f := 700.0 if fmod(t, 1.0) < 0.5 else 960.0
+		var ph := fmod(t * f, 1.0)
+		return ((1.0 if ph < 0.5 else -1.0) * 0.25 + sin(TAU * f * t) * 0.2), 1.0, 0.0)
+	_siren.volume_db = -80.0
+	add_child(_siren)
+	_siren.play()
+	_radar_beep_t = 0.0
+
+
+## One police car (D-135) with its light bar, night lights and siren lights.
+func _build_police_car() -> void:
+	var car := _car_instance(0.0, POLICE_MODEL, POLICE_TEXTURE)
+	car.visible = false
+	_root.add_child(car)
+	var flashers := []
+	var lights := []
+	var pools := []
 	for c in [Color(1.0, 0.1, 0.1), Color(0.15, 0.35, 1.0)]:
 		var q := QuadMesh.new()
 		q.size = Vector2(1.1, 1.1)
@@ -2971,11 +3050,11 @@ func _build_police() -> void:
 		# Over the model's painted bar (D-147): seen from behind, red is on the
 		# right and blue on the left (model space is turned 180 degrees).
 		f.position = Vector3(-0.35 if c.r > 0.5 else 0.35, 1.52, 0.15)
-		_police.add_child(f)
-		_flashers.append(f)
+		car.add_child(f)
+		flashers.append(f)
 	# Night lights like the other cars (D-198).
-	_police_night = Night.add_car_lights(_police, "car", _puff_texture(), TAIL_AT["police"])
-	_place_tails(_police, _police_night, POLICE_MODEL)
+	var night: Node3D = Night.add_car_lights(car, "car", _puff_texture(), TAIL_AT["police"])
+	_place_tails(car, night, POLICE_MODEL)
 	# Siren light (D-198): the light bar lights the road and the cars around it,
 	# red and blue in turn, strongest at night: a coloured light each, plus a
 	# soft glow pool on the road (the fake-light look of the lamp pools).
@@ -2986,8 +3065,8 @@ func _build_police() -> void:
 		l.light_energy = 0.0
 		l.shadow_enabled = false
 		l.position = Vector3(-0.35 if c.r > 0.5 else 0.35, 1.9, 0.15)
-		_police.add_child(l)
-		_siren_lights.append(l)
+		car.add_child(l)
+		lights.append(l)
 		var pool := MeshInstance3D.new()
 		var pq := PlaneMesh.new()
 		pq.size = Vector2(11.0, 11.0)
@@ -3002,31 +3081,54 @@ func _build_police() -> void:
 		pool.mesh = pq
 		pool.position = Vector3(-1.2 if c.r > 0.5 else 1.2, 0.08, 0.0)
 		pool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_police.add_child(pool)
-		_siren_pools.append(pool)
-	_siren = AudioStreamPlayer.new()
-	_siren.bus = "SFX"
-	_siren.stream = _loop_wav("siren", func(t: float) -> float:
-		var f := 700.0 if fmod(t, 1.0) < 0.5 else 960.0
-		var ph := fmod(t * f, 1.0)
-		return ((1.0 if ph < 0.5 else -1.0) * 0.25 + sin(TAU * f * t) * 0.2), 1.0, 0.0)
-	_siren.volume_db = -80.0
-	add_child(_siren)
-	_siren.play()
-	_radar_beep_t = 0.0
+		car.add_child(pool)
+		pools.append(pool)
+	_police_rigs.append({"node": car, "flashers": flashers, "night": night, "lights": lights, "pools": pools,
+		"swing": 0.0, "wheel": 0.0})
 
 
 func _animate_police(delta: float, cam_yaw: float) -> void:
+	var cars: Array = sim.police_cars()   # D-364: the lead first, then its backup
+	var wash_b := 0.0
+	var wash_r := 0.0
+	var siren_db := -80.0
+	var siren_pitch := 1.0
+	for k in _police_rigs.size():
+		var rig: Dictionary = _police_rigs[k]
+		if k >= cars.size():
+			(rig.node as Node3D).visible = false
+			rig.swing = 0.0
+			continue
+		var pd: Dictionary = cars[k]
+		var lit := _animate_police_car(rig, pd, delta, cam_yaw)
+		if not Sim.car_lights(pd):
+			continue
+		# Screen wash while it's close (D-137): up to 45 % within 25 m.
+		# Same sides as the light bar seen from behind (D-147): blue left, red right.
+		var d: float = absf(pd.s - sim.s)
+		var near := 1.0 - clampf((d - 25.0) / 100.0, 0.0, 1.0)
+		wash_r = maxf(wash_r, 0.45 * near if lit.x > 0.0 else 0.0)
+		wash_b = maxf(wash_b, 0.45 * near if lit.y > 0.0 else 0.0)
+		# One siren, from the nearest car with its lights on.
+		var db := -4.0 - 26.0 * clampf(d / 200.0, 0.0, 1.0)
+		if db > siren_db:
+			siren_db = db
+			var closing: float = (pd.v - sim.v) * (1.0 if pd.s < sim.s else -1.0)
+			siren_pitch = clampf(SOUND_SPEED / maxf(SOUND_SPEED - closing, 20.0), 0.7, 1.5)
+	(_washes[0] as CanvasItem).modulate.a = wash_b
+	(_washes[1] as CanvasItem).modulate.a = wash_r
+	if siren_db > -80.0:
+		_siren.pitch_scale = siren_pitch
+	_siren.volume_db = lerpf(_siren.volume_db, siren_db, 0.2 if siren_db > -80.0 else 0.1)
+
+
+## Places and lights one police car. Returns which lights are on this frame
+## (x = red, y = blue), for the screen wash.
+func _animate_police_car(rig: Dictionary, pd: Dictionary, delta: float, cam_yaw: float) -> Vector2:
 	var tr_ := sim.track
-	if sim.police.is_empty():
-		_police.visible = false
-		for w in _washes:
-			(w as CanvasItem).modulate.a = 0.0
-		_siren.volume_db = lerpf(_siren.volume_db, -80.0, 0.1)
-		return
-	var pd: Dictionary = sim.police
-	_police.visible = true
-	_police.transform = tr_.frame(pd.s, pd.x)
+	var car := rig.node as Node3D
+	car.visible = true
+	car.transform = tr_.frame(pd.s, pd.x)
 	var h := tr_.heading(pd.s)
 	# Swerving in on the hero car: the nose turns towards it (the T-bone).
 	# While chasing, its nose points at the hero car (D-142).
@@ -3035,55 +3137,48 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 		var ahead := maxf(sim.s - float(pd.s) + 6.0, 4.0)
 		lean = clampf(atan2(sim.x - float(pd.x), ahead), -0.9, 0.9)
 	# Busted (D-139): it swings 90 degrees across as it stops beside you, in
-	# stepped frames, and straightens again as it drives off.
+	# stepped frames, and straightens again as it drives off. (D-364: a car
+	# that stops behind stays straight.)
 	var swing_to := 0.0
-	if pd.state == "bust":
+	if pd.state == "bust" and not pd.get("wing", false):
 		swing_to = clampf(1.0 - absf(float(pd.v)) / 12.0, 0.0, 1.0)
-	_police_swing = move_toward(_police_swing, swing_to, delta * 2.5)
+	rig.swing = move_toward(float(rig.swing), swing_to, delta * 2.5)
 	# Across the lane in front (D-161): it swings the way it cut in.
 	var side: float = pd.get("swing", 1.0)
-	lean += roundf(_police_swing * 4.0) / 4.0 * PI * 0.5 * side
-	_police.basis = _police.basis * Basis(Vector3.UP, _sprite_yaw(h - lean + float(pd.get("sway", 0.0)), cam_yaw) - h) * MODEL_TURN
+	lean += roundf(float(rig.swing) * 4.0) / 4.0 * PI * 0.5 * side
+	car.basis = car.basis * Basis(Vector3.UP, _sprite_yaw(h - lean + float(pd.get("sway", 0.0)), cam_yaw) - h) * MODEL_TURN
 	# Its wheels turn with its own speed (D-246), stepped like the player's.
 	# D-248: seen side-on, a flat blurred disc reads as wheels standing still,
 	# so the spokes stay visible: their turning is capped at a rate the eye
 	# can follow (like film of a fast wheel) and only half blurred.
-	_police_wheel = fmod(_police_wheel + minf(absf(float(pd.v)) / 0.37, WHEEL_MAX) * delta, TAU * 100.0)
-	var pstep := _police_wheel if _anim_mult <= 0.0 else floorf(_police_wheel * 3.0 * _anim_mult) / (3.0 * _anim_mult)
-	for m in _police.find_children("*", "MeshInstance3D", true, false):
+	rig.wheel = fmod(float(rig.wheel) + minf(absf(float(pd.v)) / 0.37, WHEEL_MAX) * delta, TAU * 100.0)
+	var wheel: float = rig.wheel
+	var pstep := wheel if _anim_mult <= 0.0 else floorf(wheel * 3.0 * _anim_mult) / (3.0 * _anim_mult)
+	for m in car.find_children("*", "MeshInstance3D", true, false):
 		var pmi := m as MeshInstance3D
 		if pmi.material_override != null:
 			InstParam.set_param(pmi, "spin", 1.0)
 			InstParam.set_param(pmi, "wheel_phase", pstep)
 			InstParam.set_param(pmi, "wheel_blur", clampf((absf(float(pd.v)) - 6.0) / 20.0, 0.0, 1.0) * 0.45)
 	var ph := fmod(_phase_t, 0.5)
-	var lights := sim.police_lights()   # off once it has given up or is driving off (D-145)
-	var red_on := lights and ph < 0.25 and (ph < 0.08 or ph > 0.15)
-	var blue_on := lights and ph >= 0.25 and (ph < 0.33 or ph > 0.4)
-	(_flashers[0] as Node3D).visible = red_on
-	(_flashers[1] as Node3D).visible = blue_on
+	var lights := Sim.car_lights(pd)   # off once it has given up or is driving off (D-145)
+	var red_on: bool = lights and ph < 0.25 and (ph < 0.08 or ph > 0.15)
+	var blue_on: bool = lights and ph >= 0.25 and (ph < 0.33 or ph > 0.4)
+	(rig.flashers[0] as Node3D).visible = red_on
+	(rig.flashers[1] as Node3D).visible = blue_on
 	# Its own head/tail lights at night (D-198), like every other car.
-	for m in _police.find_children("*", "MeshInstance3D", true, false):
+	for m in car.find_children("*", "MeshInstance3D", true, false):
 		if (m as MeshInstance3D).material_override is ShaderMaterial:
 			InstParam.set_param(m as MeshInstance3D, "lamps", _lamps)
-	_police_night.visible = _lamps > 0.0
+	(rig.night as Node3D).visible = _lamps > 0.0
 	# Siren light around the car (D-198), red and blue in turn, stronger at night.
 	var glow := lerpf(0.7, 2.6, _night)
 	for i in 2:
 		var on: bool = red_on if i == 0 else blue_on
-		(_siren_lights[i] as OmniLight3D).light_energy = glow if on else 0.0
-		var pm := ((_siren_pools[i] as MeshInstance3D).mesh as PlaneMesh).material as StandardMaterial3D
+		(rig.lights[i] as OmniLight3D).light_energy = glow if on else 0.0
+		var pm := ((rig.pools[i] as MeshInstance3D).mesh as PlaneMesh).material as StandardMaterial3D
 		pm.albedo_color.a = lerpf(0.18, 0.7, _night) if on else 0.0
-	# Screen wash while it's close (D-137): up to 45 % within 25 m.
-	var near := 1.0 - clampf((absf(pd.s - sim.s) - 25.0) / 100.0, 0.0, 1.0)
-	# Same sides as the light bar seen from behind (D-147): blue left, red right.
-	(_washes[0] as CanvasItem).modulate.a = 0.45 * near if blue_on else 0.0
-	(_washes[1] as CanvasItem).modulate.a = 0.45 * near if red_on else 0.0
-	var d: float = absf(pd.s - sim.s)
-	var closing: float = (pd.v - sim.v) * (1.0 if pd.s < sim.s else -1.0)
-	_siren.pitch_scale = clampf(SOUND_SPEED / maxf(SOUND_SPEED - closing, 20.0), 0.7, 1.5)
-	var siren_db := -4.0 - 26.0 * clampf(d / 200.0, 0.0, 1.0) if lights else -80.0
-	_siren.volume_db = lerpf(_siren.volume_db, siren_db, 0.2)
+	return Vector2(1.0 if red_on else 0.0, 1.0 if blue_on else 0.0)
 
 
 ## Radar detector (D-135): beeps faster as a speed camera gets closer, with a
@@ -3914,11 +4009,11 @@ func _show_mode() -> void:
 	_mode_label.text = tr("RC_MODE_MANUAL") if sim.manual else tr("RC_MODE_AUTO")
 
 
-func _center_message(text: String, seconds: float) -> void:
+func _center_message(text: String, seconds: float, font: String = TITLE_FONT) -> void:
 	if is_instance_valid(_center):
 		_center.queue_free()
 	_cops_flash = false
-	var l := UI.styled_label(text, TITLE_FONT, 4)
+	var l := UI.styled_label(text, font, 4)
 	l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.offset_bottom = -300
@@ -3995,7 +4090,8 @@ func _update_hud(delta: float) -> void:
 	_nitro_pop.modulate.a = 1.0 if _nitro_pop_t > 0.0 and fmod(_nitro_pop_t, 0.2) > 0.06 else 0.0
 	if _cops_flash and is_instance_valid(_center):
 		var red := fmod(_phase_t, 0.24) < 0.12
-		_center.self_modulate = Color(1.0, 0.25, 0.2) if red else Color(0.35, 0.5, 1.0)
+		# D-371: a light tint, so the police font's own blue and red still show.
+		_center.self_modulate = Color(1.0, 0.72, 0.7) if red else Color(0.72, 0.82, 1.0)
 	if _center_t > 0.0:
 		_center_t -= delta
 		if _center_t <= 0.0 and is_instance_valid(_center):
@@ -4033,6 +4129,11 @@ func _draw_dmd_chase(p) -> void:
 	var px := 108.0 - 24.0 - clampf(d / 150.0, 0.0, 1.0) * 78.0
 	_anims._police(p, px, 24, t)
 	var red := fmod(t, 0.24) < 0.12
+	# D-375, D-376: over the police car, how many police cars are in the
+	# chase: nothing for one, then x2, x3.
+	if not sim.backup.is_empty():
+		var more := "x%d" % (sim.backup.size() + 1)
+		p.text(more, px + 6.5 - p.text_width(more) * 0.5, 12, 1, Dmd.CYAN)
 	# Speed lines behind the police car.
 	for i in 3:
 		p.line(px - 6 - i * 2, 24 + i * 2, px - 10 - i * 4 - fmod(t * 40.0, 4.0), 24 + i * 2, Color(0.35, 0.35, 0.4))
@@ -4379,7 +4480,7 @@ func _on_debug_action(action: StringName) -> void:
 		# Debug O (D-138): a police car comes from behind right away.
 		if sim != null and _phase == "race" and sim.state == Sim.State.RACE and sim.police.is_empty():
 			sim.police = {"s": sim.s - Sim.POLICE_BEHIND, "x": sim.x, "v": sim.v, "state": "chase", "t": 0.0}
-			_center_message(tr("RC_POLICE"), 1.4)
+			_center_message(tr("RC_POLICE"), 1.4, COPS_FONT)
 			_cops_flash = true   # red/blue flashing text (D-158)
 			_dmd.flash(tr("RC_POLICE"), 1.4, Dmd.RED)
 		return
@@ -4493,7 +4594,7 @@ func _build_audio_loops() -> void:
 	_skid = AudioStreamPlayer.new()
 	_skid.bus = "SFX"
 	_skid.stream = _loop_wav("skid", func(t: float) -> float:
-		return sin(TAU * 950.0 * t + sin(TAU * 25.0 * t) * 2.0) * 0.25, 0.4, 0.5)
+		return sin(TAU * 950.0 * t + sin(TAU * 25.0 * t) * 2.0) * 0.25, 1.2, 0.5)   # D-376: 1.2 s (was 0.4): its hiss repeats less often
 	_skid.volume_db = -80.0
 	add_child(_skid)
 	_build_horn()   # D-213: synthesised up front, not at the first honk
@@ -4514,6 +4615,15 @@ func _honk(id: int) -> void:
 	if _horn == null:
 		_build_horn()
 	_horn_id = id
+	var pitches: Array = HORN_PITCHES
+	for c in sim.traffic:   # D-370: a truck's horn is deep
+		if int(c.id) == id and str(c.get("kind", "car")) == "truck":
+			pitches = HORN_PITCHES_TRUCK
+	var pick := randi() % pitches.size()
+	if is_equal_approx(float(pitches[pick]), _horn_pick):   # D-369: not the same horn twice running
+		pick = (pick + 1 + randi() % (pitches.size() - 1)) % pitches.size()
+	_horn_pitch = pitches[pick]
+	_horn_pick = _horn_pitch
 	_horn.stream = _horn_waves[randi() % _horn_waves.size()]
 	_horn_volume_pitch(true)
 	_horn.play()
@@ -4542,10 +4652,10 @@ func _horn_volume_pitch(snap: bool) -> void:
 	# from 170 m away still cuts through the engine (was 6 dB: about -24 dB there).
 	var vol := 0.0 - 8.0 * log(maxf(d, 15.0) / 15.0) / log(10.0) - 20.0 * clampf((d - HORN_RANGE) / 60.0, 0.0, 1.0)
 	if snap:
-		_horn.pitch_scale = pitch
+		_horn.pitch_scale = pitch * _horn_pitch
 		_horn.volume_db = vol
 	else:
-		_horn.pitch_scale = lerpf(_horn.pitch_scale, pitch, 0.35)
+		_horn.pitch_scale = lerpf(_horn.pitch_scale, pitch * _horn_pitch, 0.35)
 		_horn.volume_db = lerpf(_horn.volume_db, vol, 0.35)
 
 
@@ -4657,10 +4767,21 @@ func _loop_wav(key: String, gen: Callable, seconds: float, noise: float) -> Audi
 	data.resize(n * 2)
 	var rng := RandomNumberGenerator.new()
 	var lp := 0.0
+	# D-376: the noise runs a little past the loop's end, and that tail is
+	# blended into the start, so the loop joins without a click (the noise
+	# used to jump at the join, once per loop).
+	var fade := mini(int(0.03 * rate), n / 2)
+	var hiss := PackedFloat32Array()
+	hiss.resize(n + fade)
+	for i in n + fade:
+		lp = lerpf(lp, rng.randf_range(-1.0, 1.0), 0.25)
+		hiss[i] = lp
+	for i in fade:
+		var w := float(i) / fade
+		hiss[i] = hiss[i] * w + hiss[n + i] * (1.0 - w)
 	for i in n:
 		var t := float(i) / rate
-		lp = lerpf(lp, rng.randf_range(-1.0, 1.0), 0.25)
-		var smp := clampf(float(gen.call(t)) + lp * noise, -1.0, 1.0)
+		var smp := clampf(float(gen.call(t)) + hiss[i] * noise, -1.0, 1.0)
 		data.encode_s16(i * 2, int(smp * 32000.0))
 	var wav := AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS

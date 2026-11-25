@@ -3554,3 +3554,170 @@
 - When the last level (`Sim.LEVEL_FILES.size()`, now 20) is cleared, the game skips the level outro and runs the game-over finale (D-044: fade, GAME OVER, FINAL SCORE, then high-score entry or the picker) with its music (D-320). The boss's death explosions play first. Levels no longer loop after 20 in normal play.
 - **Dev:** `--tb-win-at=N` clears the bricks and kills the boss at N s.
 - **Status:** Accepted
+
+### D-362 — New director's music: Tilt Breaker levels 11–20, Turbo Run stations 2 and 3
+- **Date:** 2026-11-25
+- **Decision (director):**
+  - "Tilt Breaker 2" (`tilt_breaker_2-original.m4a`, 2:21) is the gameplay music for Tilt Breaker's levels 11–20.
+  - "Full Throttle" (2:46) and "Coastal Drive" (3:15) are Turbo Run's radio stations 2 and 3. The songs that were there (Maximum Overdrive, One More Round) move to stations 4 and 5.
+  - M4A files are converted to MP3 before use.
+- **Tilt Breaker:** `_level_music()` picks the track by level: levels 11–20 of each 20 (the same rule as the space backdrop, D-343) play `MUSIC_2`, the others `MUSIC` (D-318). It changes with a fade while the screen is black between levels 10 and 11, and a game started at level 11 or later (level select, `--tb-level`) opens with it.
+- **Turbo Run's radio (supersedes D-308's station list):** 1 Turbo Run, 2 Full Throttle, 3 Coastal Drive, 4 Maximum Overdrive, 5 One More Round. The radio keeps five stations, so Nightlife and Dreamstate leave it; their files stay in the repo and credits, unused. The LCD credits the two new songs as "ORIGINAL SOUNDTRACK".
+- **Join points (D-227), measured:** Full Throttle is at full strength from its first note (0.5 s); Coastal Drive from about 4.5 s.
+- **Files:** each M4A (Opus) became an MP3 (LAME V0) beside the original in the director's asset folder, and the MP3 became the game's OGG (Vorbis q5) as usual: `racer/full_throttle.ogg`, `racer/coastal_drive.ogg`, `breakout/tilt_breaker_2_original.ogg`. Recorded in `assets/CREDITS.md`.
+- **Test:** every station has a song file, title, credit, frequency and join point; both Tilt Breaker gameplay tracks exist.
+- **Status:** Accepted
+
+### D-363 — Turbo Run: "In Pursuit" plays during a police chase
+- **Date:** 2026-11-25
+- **Decision (director):** the director's "In Pursuit" (`In_Pursuit.m4a`, 3:10) plays while the police are chasing. It comes in quickly, from its start; at the bust, or once the police car is lost, it crossfades back to the song chosen on the radio.
+- **When:** while a police car is in its `chase` state. It ends as the bust begins (not at the fine) and on `police_escape`. In 2P the music is shared, so it plays while either player is being chased.
+- **In:** a 0.4 s crossfade (`PURSUIT_IN`) to the theme's first note. Its first 2 s are a quiet lead-in, and it is at full strength from about 2.4 s (measured).
+- **Out:** a 3 s crossfade (`PURSUIT_OUT`) back to the radio's song, which picks up where it was when the chase began (`Audio.music_position()`, new) and not from its start.
+- **Jingles:** only the radio's song and the chase theme swap. The finish and time-over jingles (D-311) are left alone, and take over from the chase theme as they did from the song.
+- **How:** player 1's view (which owns the music) checks each frame of the race (`_pursuit_music`), so it needs no extra simulation events. The siren, lights and POLICE notices are unchanged.
+- **Files:** `assets/audio/music/racer/in_pursuit.ogg`, converted as in D-362 (M4A→MP3→OGG Vorbis q5). Recorded in `assets/CREDITS.md`.
+- **Checked:** silent dev runs with `--rc-police --rc-crash-at=12 --log-spikes`, 1P and 2P: the theme starts as the police car appears and the song returns at the bust. Not listened to. The escape path uses the same check and wasn't run.
+- **Test:** the chase theme's file exists.
+- **Status:** Accepted
+
+### D-364 — Turbo Run: police backup, and bumped police cars slow more
+- **Date:** 2026-11-25
+- **Decisions (director):**
+  - While the police are chasing, breaking the speed limit at another camera adds another police car to the pursuit.
+  - Bumping into a police car slows it down, more than before.
+- **Backup:**
+  - **When:** a camera passed over 100 mph (D-156) while the lead car is in `chase` calls one more car from 140 m behind, as the first was. Up to `MAX_POLICE` 3 cars in a chase (lead developer's cap; the view builds that many cars).
+  - **The lead car** (`police`, as before) pulls alongside and swerves in to ram.
+  - **The second car** pulls alongside on the other side from the lead and holds there without swerving in, boxing the player in. To change sides it drops back and crosses behind the player.
+  - **The third car** tails 9 m behind.
+  - **Taking over:** a backup car becomes the lead when it gets `LEAD_SWAP` 6 m further up the road than the lead (the lead was bumped or held up), or when the lead gives up. Ram counts stay per car.
+  - **Escaping:** each car gives up on its own (D-200). LOST THEM! and the bonus come only when the last chasing car is lost.
+  - **A bust:** any car can make it. That car parks across the lane and gives the one fine as before (D-161, D-230); the others stop in line behind with their lights on, and all drive off after the fine.
+  - **Police cars keep apart:** one right behind another holds back.
+- **Bumps:**
+  - A police car the player runs into now keeps 45 % of its speed (`RAMMED_SLOW`, was 55 %, D-198).
+  - More contacts count as the player's bump (the police car slows and is shoved aside, no ram counted): any contact with a backup car, and steering into the lead car's side (over 1 m/s sideways towards it) while it isn't swerving in. Before, only running into it from behind did (D-198); a side contact was always a police ram.
+- **How:** `Sim.backup` holds the extra cars per player. `_update_police` runs the existing one-car code for each car in turn as `police`, then picks the lead. The view has one rig per car (`_police_rigs`); the screen wash and the single siren follow the nearest car with its lights on. The DMD chase frame, the traffic's yielding and the chase music (D-363) follow the lead.
+- **Notice:** each car that joins shows the same THE COPS! notice; no new text.
+- **Dev:** `--rc-police --rc-backup=N` starts a chase with N backup cars close behind.
+- **Tests:** a camera adds a car up to the cap; the two cars sit one on each side and the third behind; one car lost isn't an escape; a bust gives one fine and every car leaves; bumping a backup car or the lead's side slows it without a ram.
+- **Checked:** screenshots of a three-car chase in the windowed and single layouts (the lead and the second car either side of the hero car). The bust and escape with several cars were tested in the simulation, not watched.
+- **Status:** Accepted (amends D-135, D-198)
+
+### D-365 — Turbo Run: no notice when a backup police car joins
+- **Date:** 2026-11-25
+- **Decision (director):** nothing is shown for extra police cars: no THE COPS!, no backup line. Supersedes D-364's "Notice".
+- A backup car joining (`police_backup`) shows no TABLE message and no DMD flash. THE COPS! still shows for the first car of a chase (D-158).
+- **The cap of three cars (D-364) stays.** The director's view: reaching it would mean the cameras come too often. For reference, cameras are 1,200–2,000 m apart (`Track.TRAP_GAP`), so a third car needs a chase that lasts past two more cameras, each passed over 100 mph. Camera spacing is unchanged.
+- **Status:** Accepted
+
+### D-366 — Turbo Run: the director's sunset chrome font
+- **Date:** 2026-11-25
+- **Decision (director):** a font cut from the director's `sunset_font.png` sheet (the same layout as Tilt Breaker's, D-358: A–M, N–Z, 0–9 ! ? & . , -) replaces the retro pixel title font ("sunset", D-062) everywhere in Turbo Run. All glyphs are one height except Q and the comma, whose tails hang below.
+- **Where:** `TITLE_FONT` is "sunset_metal": PRESS START, the menu titles (graphics, start stage, car select, radio), the big race messages (3-2-1, GO!, THE COPS!, BUSTED!, …), NITRO, the rev hint, the finale, and the game's name in the picker and attract (via the game's info). PinPixel UI text and the DMD are unchanged.
+- **Font:** `scripts/tools/gen_metal_font.py` now builds both painted fonts from a `FONTS` table (`python scripts/tools/gen_metal_font.py [name]`). Tilt Breaker's output is byte-for-byte the same.
+- **Italic sheet:** the letters lean into each other's columns, so they can't be cut at transparent column gaps. A sheet marked `slant` is cut as connected shapes instead: specks are dropped, a small shape lying within a bigger one's span along the slant joins it (the dots of ! and ?), and each glyph keeps its place within its row. Then as D-357: one scale for all (capitals 132 px), top-aligned. Checked: every capital, digit and ! ? & is 131–132 px tall; Q reaches 145 and the comma 153.
+- **Spacing:** no extra advance between letters (`gap` 0; the metal font uses 6), since italic boxes already leave air. `display_size` 29, by the same rule as D-354. `:` is built from two periods; anything else falls back to the old "sunset" pixel font.
+- **Files:** `assets/fonts/title_sunset_metal.png/.json`; original in `assets/source/racer/`; recorded in `assets/CREDITS.md`.
+- **Checked:** screenshots of attract (PRESS START), the radio (CHOOSE YOUR MUSIC) and the race start (GO!) in the windowed and single layouts.
+- **Status:** Accepted
+
+### D-367 — Turbo Run: menu choices in the sunset chrome font
+- **Date:** 2026-11-25
+- **Decision (director):** the new font (D-366) is also used for 1 PLAYER / 2 PLAYERS, for 8-BIT / 16-BIT / HD, and for the start stage ("STAGE 1", "BEACH", …).
+- **The choice:** these rows were PinPixel text with "> <" markers and an accent colour. The painted font has no arrows and keeps its own colours, so the chosen row is at full brightness and the others are dimmed (55 % brightness, 70 % opacity). Nothing changes size or moves (D-352).
+- **Start stage:** "STAGE n" sits between two plain "<" ">" arrows (PinPixel). It keeps the width of the widest text ("STAGE 10"), so the arrows stay put. The area name is in the font at scale 2.
+- **Unchanged:** the small descriptions and hints (PinPixel) and the DMD.
+- **Checked:** screenshots of the three screens (windowed and single layouts).
+- **Status:** Accepted
+
+### D-368 — Turbo Run: one dark backdrop for every menu, over the whole TABLE
+- **Date:** 2026-11-25
+- **Bug (director):** the effect that darkens the background behind menus and the results didn't cover the whole screen, and differed between screens.
+- **Cause:** each menu added its own dark rectangle inside the UI layer. In landscape that layer is a fixed 16:9 shape centred on the TABLE (D-254), so on a wider window a strip at each side stayed bright. The strengths differed too: 35 % for players, graphics and start stage, 55 % for the radio and the results.
+- **Fix:** one rectangle (`_dim`) on the TABLE itself, under the UI layer, filling it whatever its shape. It fades to `MENU_DIM` 50 % in the players, graphics, start stage and radio screens and behind the results, and fades out otherwise. The per-menu rectangles are gone. In 2P each half has its own.
+- **Not dimmed, as before:** attract (PRESS START) and car select (its own showroom backdrop).
+- **Checked:** screenshots at 2000x1047 (the director's window shape) of the players, graphics and radio screens: dark edge to edge.
+- **Status:** Accepted
+
+### D-369 — Turbo Run: oncoming horns at different pitches
+- **Date:** 2026-11-25
+- **Decision (director):** the oncoming cars' horns shouldn't all sound the same.
+- Each honk picks one of seven pitches (`HORN_PITCHES`, 0.76x to 1.3x of the two horn tones, D-213), never the same as the honk before. It multiplies the Doppler pitch (D-213), so the approach and pass-by shift still works. The beeps get a little shorter or longer with the pitch.
+- **Checked:** tests only; not listened to.
+- **Status:** Accepted
+
+### D-370 — Turbo Run: trucks have deeper horns
+- **Date:** 2026-11-25
+- **Decision (director):** trucks' horns are deeper by default.
+- A honking truck picks from its own set (`HORN_PITCHES_TRUCK`, 0.5x to 0.66x), all below the deepest car horn (0.76x, D-369). The no-repeat rule still applies. Its beeps are longer, as the pitch stretches them.
+- **Checked:** tests only; not listened to.
+- **Status:** Accepted
+
+### D-371 — Turbo Run: a blue/red font for police messages
+- **Date:** 2026-11-25
+- **Decision (director):** `cops_font.png`, the sunset font (D-366) in blue and red, is used for police-related messages.
+- **Messages:** THE COPS!, BUSTED! and LOST THEM! (`_center_message(text, seconds, COPS_FONT)`). Every other big message keeps the sunset font. The DMD is unchanged.
+- **Font:** "cops_metal", built by `gen_metal_font.py` with the same settings as "sunset_metal" (italic sheet cut as shapes, no extra letter gap, `display_size` 29). Files: `assets/fonts/title_cops_metal.png/.json`; original in `assets/source/racer/`; recorded in `assets/CREDITS.md`.
+- **The flash (amends D-158):** THE COPS! still flashes red and blue, but as a light tint (was a full red or blue), so the font's own blue top and red bottom still show in both phases.
+- **Checked:** screenshots of THE COPS! in the windowed and single layouts (debug key O). BUSTED! and LOST THEM! use the same call and weren't captured.
+- **Status:** Accepted
+
+### D-372 — Turbo Run: police cars collide with each other; a count over the lead car
+- **Date:** 2026-11-25
+- **Decisions (director):**
+  - A number above the chasing police car shows how many more cars are coming behind it.
+  - Police cars collide with each other, and slow down when they do.
+- **The count:** a 3D number in the police font (D-371) floats above the lead car while it is chasing and at least one more car is in the chase. It shows the number of other police cars (1 or 2, D-364's cap). It is part of the 3D view, so it scales with distance and pixelates in the 8-BIT and 16-BIT modes like the car.
+- **Collisions (supersedes D-364's "police cars keep apart"):** two police cars that overlap (the same box as the other car contacts) collide: the one behind drops to 60 % of the slower car's speed, the one ahead to 85 % of its own, and each is shoved 0.9 m sideways, turning away (D-239). A pair can't collide again for 0.8 s. Not during a bust, while they park. Event `police_clash` (position, speed): sparks and dust at the contact (D-292) and the bump sound.
+- **Test:** a faster police car running into another slows both, the one behind more, and they end up apart.
+- **Checked:** screenshots of the count over the lead car in a three-car chase (windowed and single layouts). The collisions were tested in the simulation, not watched.
+- **Status:** Accepted
+
+### D-373 — Turbo Run: "Turbo Run (Out of the Park Mix)" on station 3
+- **Date:** 2026-11-25
+- **Decision (director):** `Turbo_Run_(Out of the Park Mix).m4a` (3:26) replaces song number 3 on the radio.
+- **Stations now:** 1 Turbo Run, 2 Full Throttle, 3 Turbo Run (Out of the Park Mix), 4 Maximum Overdrive, 5 One More Round. Coastal Drive (D-362) leaves the radio; its file stays in the repo and credits, unused.
+- **Join point (D-227), measured:** at full strength from about 7 s.
+- **Files:** `assets/audio/music/racer/turbo_run_out_of_the_park.ogg`, converted as in D-362 (M4A→MP3→OGG Vorbis q5). Recorded in `assets/CREDITS.md`.
+- **Status:** Accepted
+
+### D-374 — Turbo Run: "PICK YOUR RIDE"
+- **Date:** 2026-11-25
+- **Decision (director):** the car select title reads PICK YOUR RIDE (was CHOOSE YOUR CAR).
+- Both texts change: the title (`RC_CHOOSE_CAR`) and the 2-player line, now "PLAYER n: PICK YOUR RIDE" (`RC_CHOOSE_P`).
+- **Status:** Accepted
+
+### D-375 — Turbo Run: the backup count moves to the DMD; no thump when a drift ends
+- **Date:** 2026-11-25
+- **Bugs (director):**
+  - The number over the police car belongs on the DMD's police car, not on the car in the gameplay view. (Lead developer's reading of "the number on top of police car is in the DMD car, not the gameplay car": D-372's number was over the 3D car only.)
+  - While drifting, besides the skid and the engine, a short deep noise sounds whenever the car changes angle; it should go.
+- **The count (supersedes D-372's count):** the DMD's chase frame (D-162) shows "+N" in cyan over its police car, N being the other police cars in the chase. Nothing floats over the 3D cars any more.
+- **The noise:** the drift-points sound (`rc_drift_bank`, D-121) plays each time a drift ends with points, which is whenever the car straightens or swings the other way. Its lowest part was a 100→55 Hz thump; that part is removed. The brass stab and the tyre swoosh stay. (Lead developer's diagnosis from the code; not confirmed by ear.)
+- **Checked:** a screenshot of the DMD in a three-car chase. The sound was not listened to.
+- **Status:** Accepted
+
+### D-376 — Turbo Run: police count as x2 / x3; the skid loop no longer clicks
+- **Date:** 2026-11-25
+- **Decision (director):** the DMD's police count shows nothing for one car, "x2" for two and "x3" for three (was "+1", "+2", D-375).
+- **Bug (director):** a periodic clicking noise while drifting.
+- **Cause:** the skid sound is a short loop of a tone plus filtered noise. The tone joins up at the loop point but the noise didn't: its level jumped where the loop restarted, a click every 0.4 s, and the same 0.4 s of hiss repeating gave it a pulse.
+- **Fix:** `_loop_wav` generates the noise a little past the loop's end and blends that tail (30 ms) into the start, so every loop joins smoothly (skid, engine, wind, rain, siren, passing cars). The skid loop is 1.2 s long (was 0.4 s), so its hiss repeats a third as often. (Lead developer's diagnosis from the code; not confirmed by ear.)
+- **Status:** Accepted
+
+### D-377 — Turbo Run: "High Tide" on station 4
+- **Date:** 2026-11-25
+- **Decision (director):** `High_Tide.m4a` replaces song number 4 on the radio.
+- **Stations now:** 1 Turbo Run, 2 Full Throttle, 3 Turbo Run (Out of the Park Mix), 4 High Tide, 5 One More Round. Maximum Overdrive (Bogart VGM) leaves the radio; its file stays in the repo and credits, unused. Station 4's LCD credit is now ORIGINAL SOUNDTRACK.
+- **Length:** the M4A's header says 2:42, but it holds 5:21 of continuous audio (no silent gap); the whole 5:21 is used.
+- **Join point (D-227), measured:** at full strength from about 1.5 s.
+- **Files:** `assets/audio/music/racer/high_tide.ogg`, converted as in D-362 (M4A→MP3→OGG Vorbis q5). Recorded in `assets/CREDITS.md`.
+- **Status:** Accepted
+
+### D-378 — Turbo Run: High Tide re-supplied at 2:42
+- **Date:** 2026-11-25
+- **Decision (director):** `High_Tide.m4a` was replaced with a 2:42 file; use that one (supersedes D-377's 5:21 length note).
+- **Change:** `high_tide.ogg` reconverted from the new file (M4A→MP3→OGG Vorbis q5), 2:42. The inbox's `High_Tide.mp3` was regenerated from it too. Station 4 and its ~1.5 s join point (measured again) are unchanged.
+- **Status:** Accepted

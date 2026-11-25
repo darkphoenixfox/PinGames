@@ -64,6 +64,7 @@ const POWERUP_COLORS := {"T": Color(0.3, 0.55, 1.0), "P": Color(1.0, 0.25, 0.2),
 	"W": Color(0.2, 1.0, 0.9), "H": Color(0.65, 1.0, 0.2), "K": Color(0.55, 0.75, 1.0)}   # D-327
 const ATOM_ICON := preload("res://assets/textures/breakout/pu_atom.png")   # D-326
 const MUSIC := "res://assets/audio/music/breakout/tilt_breaker_original.ogg"   # D-318: the director's own (was n-Dimensions)
+const MUSIC_2 := "res://assets/audio/music/breakout/tilt_breaker_2_original.ogg"   # D-362: the director's, for levels 11-20
 const MUSIC_ATTRACT := "res://assets/audio/music/breakout/dead_ship_attract.ogg"  # D-082
 const MUSIC_GAME_OVER := "res://assets/audio/music/breakout/earths_end.ogg"   # D-320: the director's, after the last life
 const ION_SHADER = preload("res://games/breakout/shaders/ion_beam.gdshader")
@@ -314,7 +315,7 @@ func start(_players: int) -> void:
 	if Config.cli.has("tb-2p"):   # dev: a 2-player game (D-286)
 		_go_two()
 	if Config.cli.has("tb-skip-intro"):  # dev: straight into play
-		Audio.play_music(MUSIC)
+		Audio.play_music(_level_music())
 		_enter_play()
 	else:
 		_enter_attract()
@@ -2204,6 +2205,12 @@ func _build_space_backdrop(basis: Basis, target: Vector3) -> void:
 	_apply_backdrop()
 
 
+## The gameplay music for the current level (D-362): levels 11-20 (of each
+## 20, like the space backdrop) have their own track.
+func _level_music() -> String:
+	return MUSIC_2 if (sim.level - 1) % 20 >= 10 else MUSIC
+
+
 ## Levels 11-20 (of each 20) use the space backdrop; the others the horizon.
 func _apply_backdrop() -> void:
 	if _planet_space == null:
@@ -2323,8 +2330,8 @@ func _spawn_flyby(hw: float) -> void:
 
 
 func _begin_intro() -> void:
-	# Game music (D-081): "n-Dimensions (Retro)" by Matthew Pablo, CC BY 3.0.
-	Audio.play_music(MUSIC)
+	# Game music: the director's own (D-318), by level (D-362).
+	Audio.play_music(_level_music())
 	_phase = "intro"
 	_phase_t = 0.0
 	_landed = 0
@@ -2476,6 +2483,7 @@ func _load_next_level() -> void:
 	DebugTools.mark("next_level")
 	sim.next_level()
 	_apply_backdrop()   # D-343
+	Audio.play_music(_level_music())   # D-362: changes going into level 11
 	_build_bricks()
 	for n in _brick_nodes:
 		n.visible = false
