@@ -12,6 +12,7 @@ const GameMode = preload("res://shell/modes/game_mode.gd")
 const Initials = preload("res://shell/modes/initials.gd")
 const Operator = preload("res://shell/modes/operator.gd")
 const Viewer = preload("res://shell/modes/viewer.gd")
+const Setup = preload("res://shell/modes/setup.gd")
 const Dev = preload("res://shell/dev.gd")
 const FocusPause = preload("res://shell/focus_pause.gd")
 
@@ -36,7 +37,23 @@ func _ready() -> void:
 		JavaScriptBridge.pwa_update_available.connect(_on_pwa_update)
 		if JavaScriptBridge.pwa_needs_update():
 			_on_pwa_update()
+	# D-379: the first run starts with the controls setup.
+	if Setup.wanted():
+		switch_to(Setup.new())
+		return
+	_start()
 
+
+## The setup is done (D-379): on to what the app was started for.
+func setup_finished() -> void:
+	_start(true)
+
+
+func open_setup() -> void:
+	switch_to(Setup.new(true))
+
+
+func _start(after_setup: bool = false) -> void:
 	var requested := Config.requested_game()
 	if not requested.is_empty():
 		if not Registry.has(requested):
@@ -51,6 +68,8 @@ func _ready() -> void:
 			open_operator()
 		"attract":
 			goto_attract()
+		"setup" when not after_setup:   # dev: show the setup (D-379)
+			switch_to(Setup.new())
 		"viewer":
 			switch_to(Viewer.new(str(Config.cli.get("model", ""))))
 		"initials":

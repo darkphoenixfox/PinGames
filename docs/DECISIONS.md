@@ -3721,3 +3721,31 @@
 - **Decision (director):** `High_Tide.m4a` was replaced with a 2:42 file; use that one (supersedes D-377's 5:21 length note).
 - **Change:** `high_tide.ogg` reconverted from the new file (M4A→MP3→OGG Vorbis q5), 2:42. The inbox's `High_Tide.mp3` was regenerated from it too. Station 4 and its ~1.5 s join point (measured again) are unchanged.
 - **Status:** Accepted
+
+### D-379 — First-run controls setup
+- **Date:** 2026-11-25
+- **Decision (director):** the first time the game runs, it asks the player for the keys and buttons:
+  1. Instructions: first run, set up your keys/buttons, ESC skips optional buttons, any key or button continues.
+  2. Left (required), Right (required), Start (required), left magna save (optional), right magna save (optional), Exit.
+  3. If magna saves weren't given, explain that LEFT + RIGHT held together provide their functions.
+  4. Explain how to reach the operator menu; any key starts the game.
+  The operator menu can run it again. Also (director): "our Launch and Start buttons are redundant".
+- **Screen:** `shell/modes/setup.gd`, a shell mode on the TABLE (BACKGLASS: title; DMD: the button asked for). It reads raw presses with CabinetInput's capture, so it works whatever the bindings are. Nothing is stored until the last page is confirmed; then each button replaces that action's binding of the same kind (key or pad) and `operator.setup_done` is saved.
+- **Lead developer's choices (open to the director):**
+  - **Start and Launch:** the setup asks for one START button and stores it as the `launch` action. Every screen accepts LAUNCH wherever it accepts START, and only LAUNCH charges Tilt Breaker's shot, so that one button does everything. The two actions still exist separately in the code and in the operator's CONTROLS page; merging them fully is a separate decision.
+  - **Exit is required:** the operator menu (hold EXIT 5 s) and leaving a game depend on it.
+  - **Hints say what the buttons do today:** left magna = brake (Turbo Run), dash left (Tilt Breaker), fire (Sky Striker); right magna = shift gear, dash right, fire. (The request had shift on the left and brake on the right, and "launch ball" on both; the games aren't wired that way.)
+  - **The LEFT + RIGHT note** is shown as asked. Today holding both shifts gear in Turbo Run and sets off the bomb in Sky Striker; Tilt Breaker has no dash without magna saves.
+  - A key already given to another button in the same run is refused. ESC on a required button is refused.
+- **Single-screen layout:** gamepads have a fixed layout there (D-256), so only keys can be set. A gamepad press on the first page skips straight to the last one.
+- **When it shows:** at startup while `operator.setup_done` is false. Not on touch-only devices, in VR, headless, or in automated runs (`--press`, `--screenshot`, `--mode`, `--skip-setup`). `--mode=setup` shows it for testing. Existing installs have no `setup_done` yet, so they see it once.
+- **Operator menu:** CONTROLS > RUN SETUP AGAIN (returns to the operator menu).
+- **Test:** the pages in order; required and optional skips; a repeated key; START stored as launch; the magna note; the single-screen gamepad cases.
+- **Status:** Accepted
+
+### D-380 — Correction to D-379: Tilt Breaker's blaster is on LEFT + RIGHT
+- **Date:** 2026-11-25
+- **Correction (director):** in Tilt Breaker, holding LEFT + RIGHT charges and fires the blaster. D-379 was wrong to say only LAUNCH charges the shot: both flippers do it on every layout (D-074), and LAUNCH held does the same on a single screen (D-264).
+- **So the setup's LEFT + RIGHT note holds in all three games:** Turbo Run shifts gear, Sky Striker sets off the bomb, Tilt Breaker fires the blaster. What the magna saves add in Tilt Breaker is the dash, which has no two-button equivalent.
+- No code change.
+- **Status:** Accepted

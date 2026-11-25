@@ -33,6 +33,7 @@ func _initialize() -> void:
 	test_racer_police_rams()
 	test_racer_police_backup()
 	test_music_files()
+	test_setup_wizard()
 	test_exported_translation()
 	test_export_includes_data()
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -1400,6 +1401,48 @@ func test_racer_police_backup() -> void:
 	check(fines == 1, "one fine for the bust, however many cars (%d)" % fines)
 	check(d.busted_t <= 0.0 and d.police_cars().all(func(car: Dictionary) -> bool: return car.state == "leave"),
 		"after the fine every car drives off")
+
+
+## D-379: the first-run controls setup, page by page.
+func test_setup_wizard() -> void:
+	var Setup = load("res://shell/modes/setup.gd")
+	var w = Setup.new()
+	w.feed("key:X")
+	check(w.stage == "step" and w.step == 0, "setup: any key leaves the intro")
+	w.feed("key:Escape")
+	check(w.step == 0 and w.picked.is_empty(), "setup: a required button can't be skipped")
+	w.feed("key:A")
+	w.feed("key:A")
+	check(w.step == 1 and w.picked.size() == 1, "setup: a key already used is refused")
+	w.feed("key:D")
+	w.feed("key:Space")
+	check(w.picked.get(&"launch", "") == "key:Space" and not w.picked.has(&"start"), "setup: START is stored as launch")
+	w.feed("key:Q")
+	w.feed("key:Escape")
+	check(w.step == 5 and w.skipped == [&"magna_r"] and w.picked.get(&"magna_l", "") == "key:Q", "setup: an optional button can be skipped")
+	w.feed("joy:3")
+	check(w.stage == "magna" and w.picked.get(&"exit", "") == "joy:3", "setup: a skipped magna save shows the note")
+	w.feed("key:X")
+	check(w.stage == "done" and w.feed("key:X"), "setup: the last page ends it")
+	w.free()
+	var w2 = Setup.new()
+	w2.feed("key:X")
+	for b in ["key:A", "key:D", "key:Space", "key:Q", "key:E", "key:Backspace"]:
+		w2.feed(b)
+	check(w2.stage == "done", "setup: with both magna saves set there is no note")
+	w2.free()
+	# Single screen: a gamepad has a fixed layout, so it skips the setup.
+	var w3 = Setup.new()
+	w3.fixed_pad = true
+	w3.feed("joy:0")
+	check(w3.stage == "done" and w3.pad_only and w3.picked.is_empty(), "setup: single screen, a gamepad skips to the end")
+	w3.free()
+	var w4 = Setup.new()
+	w4.fixed_pad = true
+	w4.feed("key:X")
+	w4.feed("joy:0")
+	check(w4.step == 0 and w4.picked.is_empty(), "setup: single screen, only keys can be set")
+	w4.free()
 
 
 ## D-362: every radio station has a song, a title, a credit, a frequency and

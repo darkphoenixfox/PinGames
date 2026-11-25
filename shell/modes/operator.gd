@@ -185,7 +185,10 @@ func _pending(key: String, setting: String, options: Array, labels: Array) -> Di
 
 
 func _controls_items() -> Array:
-	var items: Array = []
+	# D-379: the first-run setup, again.
+	var items: Array = [_action("OP_RUN_SETUP", func():
+		Config.save()
+		shell.open_setup())]
 	for a in CabinetInput.ACTIONS:
 		var action: StringName = a
 		items.append(_action(_action_key(action), func(): _start_capture(action),

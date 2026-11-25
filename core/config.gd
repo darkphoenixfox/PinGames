@@ -50,6 +50,8 @@ const DEFAULTS := {
 		"volume_master": 8,
 		"volume_music": 7,
 		"volume_sfx": 8,
+		# D-379: the first-run controls setup has been completed.
+		"setup_done": false,
 	},
 	"input": {},  # filled from CabinetInput.DEFAULT_BINDINGS when missing
 }
