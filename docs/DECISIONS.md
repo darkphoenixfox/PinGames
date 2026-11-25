@@ -3489,3 +3489,11 @@
 - **Decision (director):** a new pillar in the GDD vision: adding, removing or modifying UI elements while playing can't cause other existing elements on the screen to move or drift. Users expect consistency.
 - Generalises D-096 (blink with `modulate.a`, never `visible`, so containers don't reflow). In practice: elements that come and go keep their space reserved or are overlays outside layout containers; changing text or size mustn't re-centre neighbours; DMD status lines keep fixed positions.
 - **Status:** Accepted
+
+### D-353 — Tilt Breaker: stable menus and DMD lives (pillar 6); smaller title art
+- **Date:** 2026-11-25
+- **Decision (director):** fix the pillar-6 breaks; on the DMD, more than 4 lives show as a number and one ball ("5 o"); PRESS START, READY! and GAME OVER at 60% of their size; no DIFFICULTY heading; "SLOW BALL" instead of "BALL SLOW" and so on.
+- **Menus:** the players and difficulty screens no longer shrink unselected options (that reflowed their columns on every move); every option keeps one size and the choice shows by brightness only (others at 45%, 55% alpha). The level select's "BOSS LEVEL" line keeps its space and fades in and out. DIFFICULTY heading removed (the art says it). `TB_DIFF_INFO` is "%s BALL - %d LIVES".
+- **DMD lives:** the lives row is at most 4 dots wide (`LIVES_SLOTS`); with more than 4 lives it shows the number and one dot in that space. The level text and the 2P power bars are placed after 4 slots, so an extra charge never moves them.
+- **Sizes:** PRESS START up to 312 px (was 520), READY! up to 456 px (was 760), GAME OVER up to 432 px (was 720), each within the field on the single screen.
+- **Status:** Accepted

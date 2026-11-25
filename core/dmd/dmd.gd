@@ -129,7 +129,7 @@ func show_status(score: int, lives: int, max_lives: int, power: float, segments:
 		"color": CYAN})
 	if level > 0:
 		var lv := "LV%d" % level
-		var lx := maxf((2 + max_lives * 7 + 3) * _unit, (size.x - DotFont.measure(lv, _unit)) / 2.0 - 12 * _unit)
+		var lx := maxf((2 + LIVES_SLOTS * 7 + 3) * _unit, (size.x - DotFont.measure(lv, _unit)) / 2.0 - 12 * _unit)
 		_elements.append({"type": "text_at", "text": lv, "x": lx, "y": y, "color": DIM})
 	_elements.append({"type": "bar", "y": y + _unit, "value": clampf(power, 0.0, 1.0),
 		"segments": segments, "color": power_color if power_color != null else YELLOW,
@@ -150,7 +150,7 @@ func show_status_two(score: int, lives: int, max_lives: int, level: int, bars: A
 	var cell := 7 * u
 	var bar_w := 3 * cell + 2 * u
 	# P1's bar right after the lives, P2's at the right edge (badges left of each).
-	var rights := [(2 + max_lives * 7 + 2) * u + 10 * u + bar_w, size.x - 2 * u]
+	var rights := [(2 + LIVES_SLOTS * 7 + 2) * u + 10 * u + bar_w, size.x - 2 * u]   # D-353: fixed
 	if level > 0:
 		var lv := "L%d" % level
 		var lx: float = (rights[0] + (rights[1] - bar_w - 10 * u) - DotFont.measure(lv, u)) / 2.0
@@ -328,25 +328,41 @@ func _on_draw() -> void:
 
 
 ## Plasma-ball dots: 5x5 rounded pixels with a white core (spent = dim outline).
+## D-353: the lives row never grows past LIVES_SLOTS dots: more lives than
+## that show as a number and one dot ("5 o") in the same space, so nothing
+## beside it moves (pillar 6).
+const LIVES_SLOTS := 4
+
+
 func _draw_lives(el: Dictionary) -> void:
 	var u := _unit
+	var lives := int(el.lives)
+	var col: Color = el.color
+	if lives > LIVES_SLOTS:
+		var num := str(lives)
+		DotFont.draw(_canvas, num, Vector2(2 * u, el.y - u), u, col)
+		_draw_life_dot(2 * u + (DotFont.measure(num, 1) + 2) * u, el.y, true, col)
+		return
+	for i in mini(int(el.max), LIVES_SLOTS):
+		_draw_life_dot(2 * u + i * 7 * u, el.y, i < lives, col)
+
+
+func _draw_life_dot(x0: float, y: float, alive: bool, base: Color) -> void:
+	var u := _unit
 	const DOT := ["01110", "11111", "11111", "11111", "01110"]
-	for i in int(el.max):
-		var x0 := 2 * u + i * 7 * u
-		var alive := i < int(el.lives)
-		for r in 5:
-			for c in 5:
-				if DOT[r][c] == "0":
+	for r in 5:
+		for c in 5:
+			if DOT[r][c] == "0":
+				continue
+			var edge := r == 0 or r == 4 or c == 0 or c == 4
+			var col: Color
+			if alive:
+				col = Color.WHITE if (r == 2 and c == 2) else base
+			else:
+				if not edge:
 					continue
-				var edge := r == 0 or r == 4 or c == 0 or c == 4
-				var col: Color
-				if alive:
-					col = Color.WHITE if (r == 2 and c == 2) else el.color
-				else:
-					if not edge:
-						continue
-					col = el.color * 0.35
-				_canvas.draw_rect(Rect2(x0 + c * u, el.y + r * u, u, u), col)
+				col = base * 0.35
+			_canvas.draw_rect(Rect2(x0 + c * u, y + r * u, u, u), col)
 
 
 ## Segmented power bar anchored to the right edge; the partly filled cell blinks

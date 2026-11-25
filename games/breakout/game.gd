@@ -1114,7 +1114,7 @@ func _finale(delta: float) -> void:
 	if before < FINALE_TEXT_AT and _finale_t >= FINALE_TEXT_AT:
 		_lights.set_dark(true)
 		var col := UI.vstack(40)
-		col.add_child(_title_art("game_over", 720.0))   # D-349: the director's art (was text)
+		col.add_child(_title_art("game_over", 432.0))   # D-349 (D-353: 60%, was 720)
 		col.add_child(UI.spacer(40))
 		col.add_child(UI.styled_label(tr("TB_FINAL_SCORE"), TITLE_FONT, 2))
 		col.add_child(UI.styled_label(ScoreTable.format_score(sim.score), TITLE_FONT, 2))
@@ -1309,7 +1309,8 @@ func _move_level(step: int) -> void:
 func _refresh_level() -> void:
 	_level_num.text = "< %d >" % _level_sel
 	var boss := _level_sel % Sim.BOSS_EVERY == 0
-	_level_info.text = tr("TB_BOSS_LEVEL") if boss else ""
+	_level_info.text = tr("TB_BOSS_LEVEL")
+	_level_info.modulate.a = 1.0 if boss else 0.0   # D-353: keeps its space
 	_level_info.add_theme_color_override("font_color", UI.RED)
 	Dmd.show_text(tr("TB_LEVEL") % _level_sel, tr("TB_BOSS_LEVEL") if boss else tr("TB_SELECT_HINT_DMD"),
 		Dmd.YELLOW, Dmd.RED if boss else Dmd.WHITE)
@@ -1340,7 +1341,7 @@ func _enter_players() -> void:
 	_players_ui = UI.vstack(70)
 	_players_rows.clear()
 	for k in ["one_player", "two_players"]:   # D-351: the director's art (was text)
-		var l := _title_art(k, 620.0)
+		var l := _title_art(k, 560.0)
 		_players_ui.add_child(l)
 		_players_rows.append(l)
 	_players_ui.add_child(UI.label(tr("TB_SELECT_HINT"), 36, UI.CYAN))
@@ -1352,11 +1353,9 @@ func _refresh_players() -> void:
 	for i in _players_rows.size():
 		var l: TextureRect = _players_rows[i]
 		var on := i == _players_sel
-		# D-351: the chosen one full size and bright; the other smaller and dim.
-		if not l.has_meta("full"):
-			l.set_meta("full", l.custom_minimum_size)
-		l.custom_minimum_size = l.get_meta("full") * (1.0 if on else 0.7)
-		l.modulate = Color.WHITE if on else Color(0.55, 0.55, 0.6, 0.6)
+		# D-353: the choice shows by brightness only: sizes never change, so
+		# nothing on the screen moves (pillar 6).
+		l.modulate = Color.WHITE if on else Color(0.45, 0.45, 0.5, 0.55)
 	Dmd.show_text(tr(["TB_ONE_PLAYER", "TB_TWO_PLAYERS"][_players_sel]), "", Dmd.YELLOW, Dmd.WHITE)
 
 
@@ -1904,7 +1903,7 @@ func _build_hud() -> void:
 	rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rt.set_anchors_preset(Control.PRESET_CENTER)
 	var base := Vector2(Screens.table_base())
-	var w := minf(760.0, sim.field.size.x * base.y / 16.0 * 0.9)   # within the play field
+	var w := minf(456.0, sim.field.size.x * base.y / 16.0 * 0.54)   # D-353: 60% (was 760; 0.9 of the field)
 	var h := w * 347.0 / 1200.0
 	rt.offset_left = -w * 0.5
 	rt.offset_right = w * 0.5
@@ -2016,7 +2015,7 @@ func _enter_attract() -> void:
 	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	logo.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_attract_ui.add_child(logo)
-	_attract_blink = _title_art("press_start", 520.0)   # D-349: the director's art (was text)
+	_attract_blink = _title_art("press_start", 312.0)   # D-353: 60% (was 520)   # D-349: the director's art (was text)
 	_attract_ui.add_child(_attract_blink)
 	add_to_table(_attract_ui)
 	_build_attract_steps()
@@ -2089,12 +2088,11 @@ func _enter_select() -> void:
 	Dmd.play(Callable(), 0.0)   # stop the attract animation so the choice shows
 	_select_index = maxi(0, Sim.DIFFICULTY_ORDER.find(_start_difficulty()))
 	_select_ui = UI.vstack(70)
-	_select_ui.add_child(UI.styled_label(tr("TB_DIFFICULTY"), TITLE_FONT, 2))
 	_select_rows.clear()
 	for d in Sim.DIFFICULTY_ORDER:
 		var row := VBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
-		var name_l := _title_art(d, 620.0)   # D-350: the director's art (was text)
+		var name_l := _title_art(d, 480.0)   # D-350 (D-353: one fixed size): the director's art (was text)
 		var info_l := UI.label(tr("TB_DIFF_INFO") % [tr(DIFF_SPEED[d]), _lives_for(d)], 36, UI.WHITE)
 		row.add_child(name_l)
 		row.add_child(info_l)
@@ -2120,12 +2118,8 @@ func _refresh_select() -> void:
 	for i in _select_rows.size():
 		var d: String = Sim.DIFFICULTY_ORDER[i]
 		var on := i == _select_index
-		var name_l: TextureRect = _select_rows[i][0]
-		# D-350: the chosen one full size and bright; the others smaller and dim.
-		if not name_l.has_meta("full"):
-			name_l.set_meta("full", name_l.custom_minimum_size)
-		name_l.custom_minimum_size = name_l.get_meta("full") * (1.0 if on else 0.7)
-		(_select_rows[i][2] as Control).modulate = Color.WHITE if on else Color(0.55, 0.55, 0.6, 0.6)
+		# D-353: the choice shows by brightness only (pillar 6: nothing moves).
+		(_select_rows[i][2] as Control).modulate = Color.WHITE if on else Color(0.45, 0.45, 0.5, 0.55)
 	var cur: String = Sim.DIFFICULTY_ORDER[_select_index]
 	# The DMD line is short: the lives only (the speed is on the TABLE).
 	Dmd.show_text(tr(DIFF_NAME[cur]), tr("TB_DIFF_DMD") % _lives_for(cur), Dmd.YELLOW, Dmd.WHITE)
