@@ -438,6 +438,18 @@ func _process(delta: float) -> void:
 		set_meta("dev_pu_clear", true)
 		_on_debug_action(&"powerup")
 		_on_debug_action(&"clear_level")
+	if Config.cli.has("tb-win-at") and _phase == "play" and _phase_t >= float(str(Config.cli["tb-win-at"])) 			and not has_meta("dev_win"):   # dev: clear the bricks and kill the boss at N s (D-361)
+		set_meta("dev_win", true)
+		sim.events.clear()
+		for j in sim.bricks.size():
+			if sim.bricks[j].alive and not sim.bricks[j].metal:
+				sim.bricks[j].alive = false
+				_brick_nodes[j].visible = false
+		if sim.boss_hp > 0:
+			sim._hurt_boss(sim.boss_hp)
+		else:
+			sim.debug_clear_level()
+		_handle_events()
 	if Config.cli.has("tb-dark") and _phase == "play" and not has_meta("dev_dark"):   # dev: a corrupted paddle now (D-342)
 		set_meta("dev_dark", true)
 		sim.events.clear()
@@ -741,7 +753,15 @@ func _handle_events() -> void:
 				if not nuked:   # a nuke's own DMD clip plays instead (D-328)
 					_dmd_anim("rack_clear")
 				_trail.clear()
-				_begin_outro()
+				if sim.level >= Sim.LEVEL_FILES.size():
+					# D-361: the last level beaten: the game ends here (until there
+					# are more levels): the game-over finale with the score.
+					sim.state = Sim.State.OVER
+					_finale_t = 0.0
+					Audio.play_music(MUSIC_GAME_OVER, 0.5, true, false)
+					_hint.visible = false
+				else:
+					_begin_outro()
 			"lost":
 				var last := sim.state == Sim.State.OVER
 				_sfx("tb_explode_big" if last else "tb_explode")

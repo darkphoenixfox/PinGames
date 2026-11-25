@@ -3547,3 +3547,10 @@
 - On a sunk ball that costs a charge, every enemy (out of its wormhole) below y 2.0 (the bottom third of the field) goes into a new `retreat` state: straight up at 9 m/s, through the bricks, harmless meanwhile, to just under its spawn height, then back to its sweep. Enemies higher up carry on. (A ship destroyed by an enemy already removes that enemy.)
 - **Test:** an orbiting enemy by the ship is back near the top within 2 s and sweeping; one higher up is untouched.
 - **Status:** Accepted
+
+### D-361 — Tilt Breaker ends after level 20's boss
+- **Date:** 2026-11-25
+- **Decision (director):** after defeating the level-20 boss, show the GAME OVER screen with the score, until more levels are added.
+- When the last level (`Sim.LEVEL_FILES.size()`, now 20) is cleared, the game skips the level outro and runs the game-over finale (D-044: fade, GAME OVER, FINAL SCORE, then high-score entry or the picker) with its music (D-320). The boss's death explosions play first. Levels no longer loop after 20 in normal play.
+- **Dev:** `--tb-win-at=N` clears the bricks and kills the boss at N s.
+- **Status:** Accepted
