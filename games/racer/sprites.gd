@@ -78,6 +78,13 @@ static func _mat(kind: String) -> ShaderMaterial:
 	return (_meshes[kind] as QuadMesh).material
 
 
+## Rocks every sprite of this kind about its middle (D-408: the nitro tanks).
+static func set_roll(kind: String, angle: float) -> void:
+	mesh(kind)
+	_mat(kind).set_shader_parameter("roll", angle)
+	_mat(kind).set_shader_parameter("roll_pivot", float(KINDS[kind][1]) * 0.5)
+
+
 static func has(kind: String) -> bool:
 	return KINDS.has(kind)
 

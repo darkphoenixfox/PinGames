@@ -15,8 +15,14 @@ uniform float levels = 12.0;                   // colour steps per channel in RE
 uniform vec4 tint : source_color = vec4(1.0);  // night tint (Sprites.set_night)
 uniform bool flip = false;                     // mirrored (left-turn curve sign)
 uniform bool billboard = true;
+uniform float roll = 0.0;                      // radians, about the view axis (D-408: the nitro tank rocks)
+uniform float roll_pivot = 0.0;                // height of the point it turns about
 
 void vertex() {
+	if (roll != 0.0) {
+		vec2 p = VERTEX.xy - vec2(0.0, roll_pivot);
+		VERTEX.xy = vec2(p.x * cos(roll) - p.y * sin(roll), p.x * sin(roll) + p.y * cos(roll)) + vec2(0.0, roll_pivot);
+	}
 	if (billboard) {
 		// Face the camera around Y (like BILLBOARD_FIXED_Y with keep scale).
 		MODELVIEW_MATRIX = VIEW_MATRIX * mat4(

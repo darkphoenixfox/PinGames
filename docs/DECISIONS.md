@@ -3903,3 +3903,119 @@
 - **Decision (director):** make the houses beside the beach 25 % bigger.
 - **Change:** `house_1` 5.5 → 6.9 m, `house_2` 8.0 → 10.0 m, `house_3` 5.0 → 6.25 m tall (widths follow). The lifeguard tower is unchanged. They stand 16–26 m from the kerb, so none reaches the road.
 - **Status:** Accepted
+
+### D-400 — Turbo Run HUD: score under the stage, clock higher
+- **Date:** 2026-11-25
+- **Decision (director):** move the score under the STAGE and push the timer a bit up.
+- **Change:** the SCORE caption, the score and the drift points sit under the stage text at the top right, right-aligned, in both layouts. The clock starts 16 px higher (46 px from the top, was 62), just under the radar lights; in landscape it is now the first thing at the top left, where the score was. Supersedes D-389's portrait row of score left / stage right.
+- **Status:** Accepted
+
+### D-401 — Turbo Run HUD: TIME and SCORE in the title font; the two blocks placed
+- **Date:** 2026-11-25
+- **Decision (director, marked screenshot):** TIME in the sunset font, centred over its number; SCORE in the sunset font too. A green square marked the time block (top left, under the radar lights) and a red one the stage + score block (top right).
+- **Change:** both captions use the title font (the pixel fonts in 8-BIT / 16-BIT). The time block is as wide as its widest line with TIME centred over the number. Both blocks start 78 px from the top, clear of the radar lights (supersedes D-400's 46 px), and in landscape 82 px in from the sides, as marked. Portrait keeps the clock in the middle and 40 px side margins.
+- **Status:** Accepted
+
+### D-402 — Turbo Run: "Turbo Pixel" on station 5; no Bogart VGM credit in Turbo Run
+- **Date:** 2026-11-25
+- **Decision (director):** `Turbo_pixel.m4a` replaces the fifth song; remove Bogart VGM from the credits.
+- **Stations now:** 1 Turbo Run, 2 Full Throttle, 3 Turbo Run (Out of the Park Mix), 4 High Tide, 5 Turbo Pixel: all the director's, all credited ORIGINAL SOUNDTRACK on the radio. One More Round leaves the radio; its file stays in the repo and in `assets/CREDITS.md`, unused.
+- **Credits:** the two Bogart VGM pages are gone from Turbo Run's title-screen DMD cycle (now logo, hints, high scores), and their strings are removed.
+- **Length:** the M4A's header says 1:57, but it holds 2:17 of continuous audio (no silent gap), as High Tide's first file did (D-377); the whole 2:17 is used.
+- **Join point (D-227), measured:** at full strength from the start (0.5 s).
+- **Files:** `assets/audio/music/racer/turbo_pixel.ogg`, converted as in D-362 (M4A→MP3→OGG Vorbis q5).
+- **Open (lead developer):** the game selection menu still plays Bogart VGM's Chillwave Nightdrive (D-308), which is CC BY 3.0 and needs a credit shown with the game. The Turbo Run DMD pages were the only in-game credit. Until the director decides (another menu track, or a credit kept somewhere), builds made from this state would play that track uncredited.
+- **Status:** Accepted
+
+### D-403 — The game selection menu plays the director's "Start Menu"
+- **Date:** 2026-11-25
+- **Decision (director):** replace Chillwave Nightdrive with `Start_menu.m4a`. Supersedes D-308's choice of song, and closes D-402's open point.
+- **File:** `assets/audio/music/shell/start_menu.ogg` (33 s, looped; M4A→MP3→OGG Vorbis q5). Its length matches its header and it has no silent lead-in.
+- **Result:** the game no longer plays any Bogart VGM track, so no CC BY credit is owed in the game. The five `bogart_*.ogg` files stay in the repo with their rows in `assets/CREDITS.md`, unused.
+- **Status:** Accepted
+
+### D-404 — Turbo Run HUD: drift points in the title font
+- **Date:** 2026-11-25
+- **Decision (director):** the drift score notification at the right of the screen must use the sunset font.
+- **Change:** the DRIFT line under the score uses the title font at its smallest size (the pixel fonts in 8-BIT / 16-BIT). `--rc-drift-show` (dev) keeps it on screen.
+- **Status:** Accepted
+
+### D-405 — Turbo Run: out of time under 50 mph, the car just stops
+- **Date:** 2026-11-25
+- **Decision (director):** when running out of time, if the car is going under 50 mph don't do the sideways drift, just stop it.
+- **Change:** the view decides at the moment time runs out: below 50 mph shown, the car brakes to a stop facing ahead, with no sideways turn, tyre smoke or squeal (D-105's slide is for 50 mph and over). The slide past the finish line (D-222) is unchanged. The simulation is unchanged: the car slows the same way, and a checkpoint reached on momentum still saves the run.
+- **Status:** Accepted
+
+### D-406 — Turbo Run: the time-over slide starts at 100 mph
+- **Date:** 2026-11-25
+- **Decision (director):** make it under 100. Supersedes D-405's 50 mph: out of time below 100 mph shown, the car just brakes to a stop facing ahead; at 100 mph and over it slides sideways as before.
+- **Status:** Accepted
+
+### D-407 — Turbo Run: the skid squeal no longer flutters
+- **Date:** 2026-11-25
+- **Bug (director):** turning and drifting still plays a repetitive noise that should not be there; only the skid and the engine should be heard. D-376's fix did not remove it.
+- **Measured this time:**
+  - The simulation holds the drift steadily (no on/off flicker of the drift or the auto-brake), and no one-shot sound repeats during a drift.
+  - The skid loop recorded through the game's mixer has no click where it joins, so the join was not the noise; D-376's diagnosis was wrong.
+  - The squeal's tone had its pitch wobbled 25 times a second (883–1017 Hz), a constant rapid flutter over the hiss. It is the only repeating thing in the drift sound.
+- **Fix:** the 25 Hz wobble is gone. The squeal's pitch now wanders slowly (three sweeps of 0.4, 0.8 and 1.2 Hz, 904–1006 Hz in all), with a little second harmonic, at the same loudness. The loop is 2.4 s (was 1.2 s), so the hiss repeats half as often. The recording confirms no pitch movement faster than 1.2 Hz and no click.
+- **Not confirmed by ear:** test runs are silent (D-100); the director's ear is the check. D-376's smooth loop joins stay.
+- **Status:** Accepted
+
+### D-408 — Turbo Run: nitro tanks rock, cast a shadow, and are easier to collect
+- **Date:** 2026-11-25
+- **Decision (director):** the nitro pick-ups wobble, get a shadow, and their collision area grows 10 % on each side.
+- **Wobble (lead developer's reading of "wobble horizontally up and down"):** the tank rocks like a seesaw, one end up as the other goes down, 0.2 rad (about 11°) each way, about once every 1.3 s, about its middle. It keeps its up-and-down bob (D-103) and the stepped frames of the retro modes.
+  - The sprite shader faces the camera and ignores a node's rotation, so `sprite.gdshader` has a `roll` (and `roll_pivot`) value, set once per frame for the nitro sprite through `Sprites.set_roll`. Every tank rocks in step.
+- **Shadow:** a soft dark blob on the road under each tank, 2.4 m wide and 3.6 m along the road (long, because the chase camera sees it nearly edge-on), shrinking 15 % as the tank rises. It is darker than the scenery's blobs (D-253) so it reads on asphalt, and fades at night and in tunnels as they do.
+- **Collision:** the reach is 1.87 m to each side (was 1.7) and 0.66 of a car length ahead and behind (was 0.6): `Sim.PICKUP_DX`, `Sim.PICKUP_DS`.
+- **Checked:** screenshots in the windowed and single layouts.
+- **Status:** Accepted
+
+### D-409 — Turbo Run: D-407's skid squeal reverted
+- **Date:** 2026-11-25
+- **Decision (director):** the new skid sound is worse, and the repetitive noise is still there. Supersedes D-407.
+- **Change:** the skid loop is back to what it was before D-407 (950 Hz squeal with its 25 Hz wobble, 1.2 s loop). D-376's smooth loop joins stay.
+- **What this rules out:** the noise is not the skid loop. The director describes it as close to the upshift sound, repeated.
+- **Open (lead developer):** the next suspect is the engine's rev limiter (D-112), which drops the engine's pitch 18 times a second while the revs are in the red, as in L gear at its top speed. In a simulated run it was active in 15 % of drift frames when bends were taken in L and never in H. Not changed yet: waiting for the director to say whether the noise comes with the needle in the red.
+- **Status:** Accepted
+
+### D-410 — Turbo Run: the director's sound for menu selections
+- **Date:** 2026-11-25
+- **Decision (director):** use `start_sfx.m4a` for menu selections in the racing game.
+- **Change:** converted M4A→MP3→OGG (D-023), to `assets/audio/sfx/racer/start_sfx.ogg` (2.0 s, not looped). Turbo Run plays it as `rc_menu_ok` wherever it played the shared synth `start` jingle: entering the players, graphics, car select and radio screens, and confirming the radio song to start the race. Moving between options keeps `rc_shift`; an invalid pick keeps `error`. Other games and the shell keep the synth `start`.
+- **Status:** Accepted
+
+### D-411 — Turbo Run: the director's checkpoint sound; menu and checkpoint sounds restart instead of overlapping
+- **Date:** 2026-11-25
+- **Decision (director):** play `checkpoint.m4a` when crossing a checkpoint. If menu selections are pressed quickly, stop the previous sound for the new one.
+- **Change:** converted M4A→MP3→OGG (D-023), to `assets/audio/sfx/racer/checkpoint.ogg` (3.2 s, not looped). It is registered as `rc_checkpoint` and replaces the synth brass fanfare, which is removed. `rc_menu_ok` (D-410) and `rc_checkpoint` are now in `RESTART_SFX`: starting either stops its own previous play if it is still sounding. The checkpoint is included because at 3.2 s two close checkpoints would overlap (lead developer's call).
+- **Status:** Accepted
+
+### D-412 — Turbo Run: the checkpoint sound doesn't restart
+- **Date:** 2026-11-25
+- **Decision (director):** checkpoints are far apart, so two can't be crossed within the 3.2 s of the sound. Supersedes D-411's inclusion of `rc_checkpoint` in `RESTART_SFX`.
+- **Change:** `RESTART_SFX` holds only `rc_menu_ok`. The checkpoint sound always plays to the end.
+- **Status:** Accepted
+
+### D-413 — Turbo Run: the menu selection sound fades out
+- **Date:** 2026-11-25
+- **Decision (director):** fade out the end of the `start_sfx` jingle (D-410).
+- **Change:** `start_sfx.ogg` is re-made from the MP3 with a 0.55 s quarter-sine fade-out from 0.6 s (just after the peak at 0.45 s) and cut at 1.2 s, dropping the near-silent tail. It was 2.0 s. The MP3 and M4A in the asset inbox are unchanged.
+- **Status:** Accepted
+
+### D-414 — Turbo Run: the director's edited checkpoint sound
+- **Date:** 2026-11-25
+- **Decision (director):** the director edited `checkpoint.mp3` in the asset inbox.
+- **Change:** `checkpoint.ogg` is re-made from the edited MP3 (OGG Vorbis q5). It is 1.7 s (was 3.2 s), with no leading silence. The M4A is no longer the source.
+- **Status:** Accepted
+
+### D-415 — Turbo Run: gates are cloth banners hanging from poles
+- **Date:** 2026-11-25
+- **Decision (director):** make the checkpoints more like cloth banners hanging from poles, as sprites if needed.
+- **Change:** the START, CHECKPOINT and FINISH! gates are no longer 3D boxes (posts, a solid beam and a floating `Label3D`). Each gate is one painted sprite (`games/racer/gate_art.gd`): two poles with red bands, a base plate and a gold finial, a rope between their tops, and a cloth banner hung from it by loops, with the gate's `tr()` text in PinPixel (shrunk in steps of 12 to fit long translations). Checkpoint and start banners are red with cream piping; FINISH! keeps D-223's deeper red and bigger yellow letters, with chequered hems, and the chequered line on the road.
+- **How:** the art is drawn once per text into a `SubViewport` (`_gate_texture`, cached per game) and shown on a 48 × 20 divided quad by `shaders/banner.gdshader`. The rope and banner sag 0.35 m in the middle. The cloth ripples up to 0.32 m with gusts, still at the rope, freest at the hem, pinned at its ends, and the poles never move. The gates are unshaded like the sprites, so the ripple also shades the folds. RETRO pixelates the gate at 20 texels per metre (finer than the sprites' ~12 so the text reads) and bands colours; the wave moves in stepped frames (10 or 20 fps, D-098), smoothly in HD. At night the gates take half the sprites' moonlit tint, because the old beam glowed and the text must stay readable.
+- **Sizes:** the poles stand where the old posts did (9.5 m from the road's centre); the banner is 3.0 m deep (FINISH! 3.8 m), its top 9 m up; letters are about 1.8 m tall.
+- **Dev flag:** `--rc-at-gate[=N]` starts the race N m (default 60) before the next checkpoint gate.
+- **Checked:** screenshots of CHECKPOINT in 16-BIT and HD, FINISH! in the windowed layout, START at night in 8-BIT in the single layout.
+- **Status:** Accepted

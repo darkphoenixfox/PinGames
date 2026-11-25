@@ -266,10 +266,10 @@ const MUSIC_RACE := [
 	"res://assets/audio/music/racer/full_throttle.ogg",
 	"res://assets/audio/music/racer/turbo_run_out_of_the_park.ogg",   # D-373 (was Coastal Drive, D-362)
 	"res://assets/audio/music/racer/high_tide.ogg",   # D-377 (was Maximum Overdrive)
-	"res://assets/audio/music/racer/bogart_one_more_round.ogg",
+	"res://assets/audio/music/racer/turbo_pixel.ogg",   # D-402 (was One More Round)
 ]
 ## Who made each song, for the radio's LCD (D-308).
-const SONG_BY := ["RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL", "RC_CREDIT_BOGART"]
+const SONG_BY := ["RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL"]
 const MUSIC_STAGES := 2
 ## D-301: the radio's stations, one per song (MUSIC_RACE's order).
 const SONG_KEYS := ["RC_SONG_1", "RC_SONG_2", "RC_SONG_3", "RC_SONG_4", "RC_SONG_5"]
@@ -285,7 +285,7 @@ const MUSIC_XFADE := 6.0
 ## 17 s). D-308: Turbo Run's theme is full from ~3 s. D-362: Full Throttle is
 ## full from its first note. D-373: the Out of the Park Mix from ~7 s. D-377:
 ## High Tide from ~1.5 s.
-const MUSIC_SKIP := [3.0, 0.5, 7.0, 1.5, 16.5]
+const MUSIC_SKIP := [3.0, 0.5, 7.0, 1.5, 0.5]   # D-402: Turbo Pixel is full from its first note
 const PASSERS := 2          # traffic engine voices (D-134)
 ## Oncoming horns (D-213): a dual-tone electric car horn (low and high tones a
 ## dissonant interval apart, buzzy diaphragm harmonics with a nasal resonance,
@@ -349,15 +349,6 @@ const SOUNDS := {
 		[{"f": [330.0, 330.0], "t": 0.6, "w": "saw", "v": 0.12, "lp": 0.6, "a": 0.02}],
 		[{"f": [440.0, 440.0], "t": 0.6, "w": "saw", "v": 0.1, "lp": 0.6, "a": 0.02}],
 		[{"f": [90.0, 45.0], "t": 0.4, "w": "sine", "v": 0.5}]], "reverb": [0.9, 0.3]},
-	# Checkpoint: a rising brass fanfare over a timpani boom.
-	"rc_checkpoint": {"voices": [
-		[{"f": [262.0, 262.0], "t": 0.08, "w": "saw", "v": 0.18, "lp": 0.55, "env": "hold"},
-		 {"f": [330.0, 330.0], "t": 0.08, "w": "saw", "v": 0.18, "lp": 0.55, "env": "hold"},
-		 {"f": [392.0, 392.0], "t": 0.08, "w": "saw", "v": 0.18, "lp": 0.55, "env": "hold"},
-		 {"f": [523.0, 523.0], "t": 0.6, "w": "saw", "v": 0.2, "lp": 0.5, "vib": [5.5, 0.15]}],
-		[{"f": [131.0, 131.0], "t": 0.24, "w": "saw", "v": 0.14, "lp": 0.7, "env": "hold"},
-		 {"f": [196.0, 196.0], "t": 0.6, "w": "saw", "v": 0.14, "lp": 0.7}],
-		[{"f": [95.0, 50.0], "t": 0.5, "w": "sine", "v": 0.55}]], "reverb": [1.1, 0.3]},
 	# Crash: an impact boom, crunching metal and breaking glass.
 	"rc_crash": {"voices": [
 		[{"f": [3000.0, 90.0], "t": 0.9, "w": "lfsr", "v": 0.42, "lp": 0.45}],
@@ -592,11 +583,14 @@ const SHADOW_DISTANCE := 140.0   # m of real shadows ahead of the camera (D-253)
 const SHADOW_STRENGTH := 0.75
 var _blob_mat: StandardMaterial3D   # soft round ground shadows under sprites (D-253)
 var _blob_mesh: QuadMesh
+var _pickup_blob_mat: StandardMaterial3D   # the nitro tanks' darker blob (D-408)
 var _used_gas := false          # D-252: R2 has been pressed this race
 var _pad_brake := false
 const WHEEL_MAX := 25.0   # rad/s the wheels are seen to turn at most (~4 turns a second, D-249)
 var _travel := 0.0         # eased nose angle from sideways travel (D-128)
 var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
+var _over_slide := true   # D-405: false = too slow to slide, it just stops
+const OVER_SLIDE_MPH := 100   # (director: was 50)
 var _over_dir := 0.0
 var _traffic_pool := {"car": [], "hatch": [], "hothatch": [], "truck": [], "truck2": []}   # pools of Node3D per model
 ## Tyre smoke / dust (D-100): our own pooled billboard puffs in one MultiMesh.
@@ -674,6 +668,8 @@ var _redline_t := 0.0       # s held at the redline in L (D-116)
 var _nitro_label: Label
 var _nitro_strip: ColorRect
 var _pickup_nodes: Array = []   # pooled nitro canisters
+const PICKUP_ROCK := 0.2         # rad each way (D-408)
+const PICKUP_ROCK_RATE := 5.0    # rad/s of the rocking's phase
 var _drift_label: Label
 var _center: Control             # big centre message (styled font)
 var _center_t := 0.0
@@ -704,6 +700,8 @@ func start(_players: int) -> void:
 		{&"magna_l": "brake", &"magna_r": "shift"})   # D-279: their icons
 	for s in SOUNDS:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
+	Audio.register_sfx("rc_menu_ok", load(SFX_MENU_OK))   # D-410: the director's menu selection sound
+	Audio.register_sfx("rc_checkpoint", load(SFX_CHECKPOINT))   # D-411: the director's checkpoint sound
 	_manual_locked = str(Config.get_value("operator", "cabinet_buttons")) == "4" and not _touch_play()
 	# Cel shading (D-091); --rc-no-toon shows the plain look for comparison.
 	Toon.enabled = not Config.cli.has("rc-no-toon")
@@ -994,7 +992,14 @@ func _read_input() -> Array:
 ## D-302, D-304 (director): on the attract and selection screens only the
 ## menu sounds play (choosing, confirming, a blocked move), never the gameplay
 ## behind them. Every effect in this game goes through here.
-const MENU_SFX := ["start", "select", "move", "error", "rc_shift", "rc_tick"]
+## The director's sound for a menu selection (D-410); replaces the shared "start" jingle here.
+const SFX_MENU_OK := "res://assets/audio/sfx/racer/start_sfx.ogg"
+## The director's checkpoint sound (D-411); replaces the synth brass fanfare.
+const SFX_CHECKPOINT := "res://assets/audio/sfx/racer/checkpoint.ogg"
+## Sounds that cut their own previous play short when they start again (D-411),
+## so fast menu presses don't pile up. D-412: menus only.
+const RESTART_SFX := ["rc_menu_ok"]
+const MENU_SFX := ["start", "rc_menu_ok", "select", "move", "error", "rc_shift", "rc_tick"]
 const QUIET_PHASES := ["attract", "players", "gfx", "stage", "select", "radio"]
 
 
@@ -1015,9 +1020,17 @@ func _menu_tick() -> void:
 		_sfx("rc_tick")
 
 
+var _restart_players := {}   # sound name -> its last player (D-411)
+
+
 func _sfx(sound_name: String) -> AudioStreamPlayer:
 	if _phase in QUIET_PHASES and not (sound_name in MENU_SFX):
 		return null
+	if sound_name in RESTART_SFX:
+		Audio.stop_sfx(_restart_players.get(sound_name), sound_name)
+		var p := Audio.sfx(sound_name)
+		_restart_players[sound_name] = p
+		return p
 	return Audio.sfx(sound_name)
 
 
@@ -1062,6 +1075,12 @@ func _new_sim() -> void:
 		if not trap.is_empty():
 			sim.s = float(trap.s) - back
 			sim.track.ensure(sim.s + 1500.0)
+	if Config.cli.has("rc-at-gate"):   # dev: start N m (default 60) before the next checkpoint gate (D-415)
+		var back_g := 60.0
+		if str(Config.cli["rc-at-gate"]).is_valid_float():
+			back_g = str(Config.cli["rc-at-gate"]).to_float()
+		sim.s = maxf(sim.s, sim.next_checkpoint - back_g)
+		sim.track.ensure(sim.s + 1500.0)
 	if Config.cli.has("rc-time"):  # dev: short clock to test TIME UP
 		sim.time_left = float(str(Config.cli["rc-time"]))
 	for k in _chunks.keys():
@@ -1186,16 +1205,14 @@ func _attract_tick() -> void:
 	# Blink by alpha, not visibility: a hidden label collapses in its VBox and
 	# makes the text below it jump (D-096).
 	_attract_blink.modulate.a = 1.0 if fmod(_phase_t, 1.0) < 0.6 else 0.0
-	# DMD cycle; music credits (CC BY attribution, D-129) mixed in.
-	var step := int(_phase_t / 3.0) % 5
-	if step != int((_phase_t - get_process_delta_time()) / 3.0) % 5 or _phase_t < 0.05:
+	# DMD cycle. (D-402: no music credits; every Turbo Run song is the director's.)
+	var step := int(_phase_t / 3.0) % 3
+	if step != int((_phase_t - get_process_delta_time()) / 3.0) % 3 or _phase_t < 0.05:
 		match step:
 			0: _dmd.show_image(load(DMD_LOGO))
 			1: _dmd.show_text(tr("RC_SHIFT_HINT_4") if _four_buttons() else tr("RC_SHIFT_HINT"),
 				tr("RC_NITRO_HINT"), Dmd.CYAN, Dmd.WHITE)
-			2: _dmd.show_text(tr("RC_CREDIT_MUSIC"), tr("RC_CREDIT_BOGART"), Dmd.DIM, Dmd.YELLOW)
-			3: _dmd.show_text(tr("ATTRACT_HIGH_SCORES"), _top_score_line(), Dmd.YELLOW, Dmd.WHITE)
-			4: _dmd.show_text(tr("RC_CREDIT_BOGART"), tr("RC_CREDIT_BOGART_URL"), Dmd.YELLOW, Dmd.WHITE)
+			2: _dmd.show_text(tr("ATTRACT_HIGH_SCORES"), _top_score_line(), Dmd.YELLOW, Dmd.WHITE)
 
 
 func _top_score_line() -> String:
@@ -1236,6 +1253,7 @@ func _apply_gfx(mode: String) -> void:
 	_world_view.material = null if on else _retro_post
 	_world_view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if on else CanvasItem.TEXTURE_FILTER_NEAREST
 	Sprites.set_hd(on)
+	_style_gates()   # D-415
 	if _road_mat != null:
 		_road_mat.set_shader_parameter("hd", on)
 		_puddle_mat.set_shader_parameter("hd", on)
@@ -1290,7 +1308,7 @@ func _begin_gfx() -> void:
 		_attract_ui.queue_free()
 	_phase = "gfx"
 	_phase_t = 0.0
-	_sfx("start")
+	_sfx("rc_menu_ok")
 	_gfx_index = maxi(GFX_OPTIONS.find(_gfx_mode), 0)
 	_gfx_ui = Control.new()
 	_gfx_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1413,7 +1431,7 @@ func _begin_select() -> void:
 		_attract_ui.queue_free()
 	_phase = "select"
 	_phase_t = 0.0
-	_sfx("start")
+	_sfx("rc_menu_ok")
 	_world_view.visible = false
 	_showroom = Showroom.new()
 	_showroom.hd = _gfx_hd
@@ -1521,7 +1539,7 @@ func _begin_race() -> void:
 	# The start stage's song (D-226): stage 1 carries on attract's from where it
 	# is; a later start stage (testing) plays its own from the top.
 	_music(MUSIC_RACE[_song], 0.0, true)   # D-301: the radio's song, for the whole run; D-307: from its first note
-	_sfx("start")
+	_sfx("rc_menu_ok")
 	_hud.visible = true
 	_show_mode()
 	_center_message("3", 1.0)
@@ -1586,7 +1604,7 @@ func _begin_radio() -> void:
 		_attract_ui.queue_free()
 	_phase = "radio"
 	_phase_t = 0.0
-	_sfx("start")
+	_sfx("rc_menu_ok")
 	_radio_ui = Control.new()
 	_radio_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_radio_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1675,7 +1693,7 @@ func _begin_players() -> void:
 		_attract_ui.queue_free()
 	_phase = "players"
 	_phase_t = 0.0
-	_sfx("start")
+	_sfx("rc_menu_ok")
 	_players_ui = Control.new()
 	_players_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var col := UI.vstack(60)
@@ -2364,7 +2382,6 @@ func _hud_layout() -> void:
 	if land and not in_left:
 		_hud_col.remove_child(_hud_mid)
 		_hud_left.add_child(_hud_mid)
-		_hud_left.move_child(_hud_mid, 2)
 	elif not land and in_left:
 		_hud_left.remove_child(_hud_mid)
 		_hud_col.add_child(_hud_mid)
@@ -2374,8 +2391,11 @@ func _hud_layout() -> void:
 	# Landscape: the left column hugs the left edge, clear of the DMD.
 	for l in _hud_left.find_children("*", "Label", true, false):
 		(l as Label).horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	for l in _hud_mid.find_children("*", "Label", true, false):
-		(l as Label).horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if land else HORIZONTAL_ALIGNMENT_CENTER
+	# D-401: TIME centred over the number; the block at the left in landscape,
+	# in the middle in portrait. Landscape keeps the blocks in from the edges.
+	_hud_mid.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN if land else Control.SIZE_SHRINK_CENTER
+	_hud_col.offset_left = 82 if land else 40
+	_hud_col.offset_right = -82 if land else -40
 	if is_instance_valid(_radar_bar):
 		var w := float(_ui_base().x)
 		_radar_bar.size = Vector2(w, _radar_bar.custom_minimum_size.y)
@@ -3337,6 +3357,18 @@ func _build_pickup() -> Node3D:
 	mi.mesh = Sprites.mesh("nitro")
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	n.add_child(mi)
+	# D-408: a blob shadow on the road under it (placed each frame in _animate).
+	var sh := MeshInstance3D.new()
+	sh.mesh = _blob_quad()
+	# Darker than the scenery's blobs: it has to read on dark asphalt from far.
+	if _pickup_blob_mat == null:
+		_pickup_blob_mat = _blob_mat.duplicate()
+		_pickup_blob_mat.albedo_color = Color(0, 0, 0, 0.85)
+	sh.material_override = _pickup_blob_mat
+	sh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	sh.top_level = true
+	n.add_child(sh)
+	n.set_meta("shadow", sh)
 	return n
 
 
@@ -3370,24 +3402,7 @@ func _finish_line(parent: Node3D, s: float) -> void:
 ## prop, sized from the sprite's height, a little towards the side away from
 ## the sun's usual direction.
 func _add_blobs(node: Node3D, list: Array, kind: String) -> void:
-	if _blob_mat == null:
-		var n := 64
-		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
-		for y in n:
-			for x in n:
-				var d := Vector2(x - n * 0.5 + 0.5, y - n * 0.5 + 0.5).length() / (n * 0.5)
-				var a := clampf(1.0 - d, 0.0, 1.0)
-				img.set_pixel(x, y, Color(1, 1, 1, a * a * (3.0 - 2.0 * a)))
-		_blob_mat = StandardMaterial3D.new()
-		_blob_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_blob_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_blob_mat.albedo_texture = ImageTexture.create_from_image(img)
-		_blob_mat.albedo_color = Color(0, 0, 0, 0.45)
-		_blob_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-		_blob_mesh = QuadMesh.new()
-		_blob_mesh.size = Vector2.ONE
-		_blob_mesh.orientation = PlaneMesh.FACE_Y
-		_blob_mesh.material = _blob_mat
+	_blob_quad()
 	var h: float = float(Sprites.KINDS[kind][1]) if Sprites.KINDS.has(kind) else 3.0
 	if h > 30.0:
 		return   # distant buttes: no shadow
@@ -3406,6 +3421,29 @@ func _add_blobs(node: Node3D, list: Array, kind: String) -> void:
 	mi.multimesh = mm
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	node.add_child(mi)
+
+
+## The blob shadows' shared quad and material, made on first use.
+func _blob_quad() -> QuadMesh:
+	if _blob_mat == null:
+		var n := 64
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		for y in n:
+			for x in n:
+				var d := Vector2(x - n * 0.5 + 0.5, y - n * 0.5 + 0.5).length() / (n * 0.5)
+				var a := clampf(1.0 - d, 0.0, 1.0)
+				img.set_pixel(x, y, Color(1, 1, 1, a * a * (3.0 - 2.0 * a)))
+		_blob_mat = StandardMaterial3D.new()
+		_blob_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_blob_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_blob_mat.albedo_texture = ImageTexture.create_from_image(img)
+		_blob_mat.albedo_color = Color(0, 0, 0, 0.45)
+		_blob_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		_blob_mesh = QuadMesh.new()
+		_blob_mesh.size = Vector2.ONE
+		_blob_mesh.orientation = PlaneMesh.FACE_Y
+		_blob_mesh.material = _blob_mat
+	return _blob_mesh
 
 
 ## Round pixel puff (16 px, hard steps) for tyre smoke and dust.
@@ -3568,55 +3606,76 @@ func _build_chunk(k: int) -> Node3D:
 	return node
 
 
+## Gates are cloth banners hung between two poles (D-415): one painted sprite
+## (gate_art.gd) on a divided quad, waved by shaders/banner.gdshader.
+const GateArt = preload("res://games/racer/gate_art.gd")
+const BANNER_SHADER = preload("res://games/racer/shaders/banner.gdshader")
+const GATE_RETRO_PER_M := 20.0   # RETRO texels per metre (the sprites' ~12; finer so the text reads)
+var _gate_textures := {}   # text + finish -> the SubViewport it is painted in
+var _gate_mats: Array[ShaderMaterial] = []
+var _gate_night := -1.0
+
+
+func _gate_texture(text: String, finish: bool, w_m: float) -> Texture2D:
+	var key := "%s|%s" % [text, finish]
+	if not _gate_textures.has(key):
+		var vp := SubViewport.new()
+		vp.size = GateArt.size_px(w_m)
+		vp.transparent_bg = true
+		vp.disable_3d = true
+		vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+		var art: Control = GateArt.new()
+		art.text = text
+		art.finish = finish
+		art.width_m = w_m
+		art.size = Vector2(vp.size)
+		vp.add_child(art)
+		add_child(vp)
+		_gate_textures[key] = vp
+	return (_gate_textures[key] as SubViewport).get_texture()
+
+
 func _build_gate(parent: Node3D, s: float, text: String, finish := false) -> void:
 	var f := sim.track.frame(s)
 	f.basis = Basis(Vector3.UP, sim.track.heading(s))
-	var gate := Node3D.new()
-	gate.transform = f
-	parent.add_child(gate)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.15, 0.15, 0.2)
-	var w := Track.ROAD_HALF + 2.0
-	for side in [-1.0, 1.0]:
-		var post := MeshInstance3D.new()
-		var b := BoxMesh.new()
-		b.size = Vector3(0.8, 8.0, 0.8)
-		b.material = mat
-		post.mesh = b
-		post.position = Vector3(side * w, 4.0, 0.0)
-		gate.add_child(post)
-	var beam := MeshInstance3D.new()
-	var bb := BoxMesh.new()
-	bb.size = Vector3(w * 2.0 + 0.8, 2.0, 0.5)
-	var bm := StandardMaterial3D.new()
-	bm.albedo_color = Color(0.9, 0.1, 0.2)
-	bm.emission_enabled = true
-	bm.emission = Color(0.5, 0.05, 0.1)
-	if finish:   # D-223: a deep red banner, chequered line on the road below
-		bb.size = Vector3(w * 2.0 + 0.8, 3.4, 0.5)
-		bm.albedo_color = Color(0.85, 0.05, 0.08)
-		bm.emission = Color(0.55, 0.02, 0.04)
+	var w_m := (Track.ROAD_HALF + 2.0) * 2.0 + 2.0 * GateArt.POLE_IN   # poles where the old posts stood
+	var m := ShaderMaterial.new()
+	m.shader = BANNER_SHADER
+	m.set_shader_parameter("tex", _gate_texture(text, finish, w_m))
+	var uv: Array = GateArt.uv_layout(w_m, finish)
+	m.set_shader_parameter("poles", Vector2(uv[0], uv[1]))
+	m.set_shader_parameter("cloth_u", Vector2(uv[2], uv[3]))
+	m.set_shader_parameter("cloth_v", Vector2(uv[4], uv[5]))
+	m.set_shader_parameter("retro_size", Vector2(roundf(w_m * GATE_RETRO_PER_M), roundf(GateArt.HEIGHT * GATE_RETRO_PER_M)))
+	_style_gate(m)
+	_gate_mats = _gate_mats.filter(func(x): return x.get_reference_count() > 2)   # drop chunks that are gone
+	_gate_mats.append(m)
+	var q := QuadMesh.new()
+	q.size = Vector2(w_m, GateArt.HEIGHT)
+	q.center_offset = Vector3(0, GateArt.HEIGHT * 0.5, 0)
+	q.subdivide_width = 48
+	q.subdivide_depth = 20
+	q.material = m
+	var mi := MeshInstance3D.new()
+	mi.mesh = q
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.transform = f
+	parent.add_child(mi)
+	if finish:   # D-223: the chequered line on the road below
 		_finish_line(parent, s)
-	bb.material = bm
-	beam.mesh = bb
-	beam.position = Vector3(0, 8.0, 0)
-	gate.add_child(beam)
-	var label := Label3D.new()
-	label.text = text
-	label.font = load("res://assets/fonts/pinpixel.ttf")
-	label.font_size = 192
-	label.pixel_size = 0.009
-	label.modulate = Color(1.0, 0.9, 0.3)
-	label.outline_size = 24
-	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	label.position = Vector3(0, 8.0, 0.3)
-	if finish:   # big yellow letters (D-223)
-		label.pixel_size = 0.0145
-		label.modulate = Color(1.0, 0.86, 0.1)
-		label.outline_modulate = Color(0.35, 0.0, 0.02)
-		label.outline_size = 32
-		label.position = Vector3(0, 8.2, 0.3)
-	gate.add_child(label)
+
+
+## The gate banners follow the graphics mode and the night like the sprites.
+func _style_gate(m: ShaderMaterial) -> void:
+	m.set_shader_parameter("retro", not _gfx_hd)
+	m.set_shader_parameter("step_fps", ANIM_FPS * _anim_mult)
+	# Half the sprites' moonlit tint: the old beam glowed, and the text must read at night.
+	m.set_shader_parameter("tint", Color.WHITE.lerp(Sprites.NIGHT_TINT, _night * 0.5))
+
+
+func _style_gates() -> void:
+	for m in _gate_mats:
+		_style_gate(m)
 
 
 # --- per-frame visuals ----------------------------------------------------------------
@@ -3697,7 +3756,10 @@ func _animate(delta: float) -> void:
 		if _over_dir == 0.0:
 			var c := sim.track.curvature(sim.s)
 			_over_dir = signf(c) if absf(c) > 1e-4 else (-1.0 if sim.x > 0.0 else 1.0)
-		_over_turn = move_toward(_over_turn, 1.0, delta / OVER_TURN_TIME)
+			# D-405: out of time below OVER_SLIDE_MPH the car just brakes to a
+			# stop, facing ahead: no sideways slide, smoke or squeal.
+			_over_slide = sim.finished or sim.speed_mph() >= OVER_SLIDE_MPH
+		_over_turn = move_toward(_over_turn, 1.0 if _over_slide else 0.0, delta / OVER_TURN_TIME)
 	else:
 		_over_turn = move_toward(_over_turn, 0.0, delta / OVER_TURN_TIME)
 		if _over_turn == 0.0:
@@ -3741,7 +3803,7 @@ func _animate(delta: float) -> void:
 	var pivot := Vector3(0, 0.65, 0)             # roll around the body's middle
 	var rb := Basis(Vector3.UP, yaw) * Basis(Vector3.FORWARD, roll)
 	_car_body.transform = Transform3D(rb * MODEL_TURN, Vector3(0, lift, 0) + pivot - rb * pivot)
-	var sliding_out := sim.state == Sim.State.OVER and sim.v > 3.0
+	var sliding_out := sim.state == Sim.State.OVER and sim.v > 3.0 and _over_slide
 	_shift_smoke_t = maxf(0.0, _shift_smoke_t - delta)
 	_shift_flame_t = maxf(0.0, _shift_flame_t - delta)
 	# Immune after a crash (D-125): the car blinks, arcade style.
@@ -3862,14 +3924,25 @@ func _animate(delta: float) -> void:
 	_animate_rival(delta, cam_yaw)
 	_animate_police(delta, cam_yaw)
 	_update_radar(delta)
-	# Nitro tanks bob on stepped frames (D-103, D-115).
+	# Nitro tanks bob on stepped frames (D-103, D-115) and rock from side to
+	# side, one end up as the other goes down (D-408), over a blob shadow that
+	# shrinks a little as the tank rises.
+	var pk_t := _phase_t if _anim_mult <= 0.0 else floorf(_phase_t * ANIM_FPS * _anim_mult) / (ANIM_FPS * _anim_mult)
+	Sprites.set_roll("nitro", sin(pk_t * PICKUP_ROCK_RATE) * PICKUP_ROCK)
 	for i in _pickup_nodes.size():
 		var pk: Node3D = _pickup_nodes[i]
+		var pk_sh: MeshInstance3D = pk.get_meta("shadow")
+		pk_sh.visible = i < sim.pickups.size()
 		if i < sim.pickups.size():
 			var pd: Dictionary = sim.pickups[i]
 			pk.visible = true
-			var st := _phase_t if _anim_mult <= 0.0 else floorf(_phase_t * ANIM_FPS * _anim_mult) / (ANIM_FPS * _anim_mult)
-			pk.transform = Transform3D(Basis.IDENTITY, tr_.point(pd.s, pd.x, 0.35 + 0.3 * absf(sin(st * 4.0))))
+			var bob := absf(sin(pk_t * 4.0))
+			pk.transform = Transform3D(Basis.IDENTITY, tr_.point(pd.s, pd.x, 0.35 + 0.3 * bob))
+			var sf := tr_.frame(pd.s, pd.x, 0.06)
+			# Long along the road: the chase camera sees it nearly edge-on.
+			var sw := 2.4 * (1.0 - 0.15 * bob)
+			sf.basis = Basis(Vector3.UP, tr_.heading(pd.s)).scaled(Vector3(sw, 1.0, sw * 1.5))
+			pk_sh.global_transform = sf
 		else:
 			pk.visible = false
 	# Chase camera: behind and above, looking down the road; FOV opens with speed.
@@ -3907,7 +3980,7 @@ func _build_hud() -> void:
 	_hud_col = VBoxContainer.new()
 	_hud_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hud_col.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	_hud_col.offset_top = 62   # below the radar bar (D-139)
+	_hud_col.offset_top = 78   # D-401: clear of the radar lights (D-139)
 	_hud_col.offset_left = 40
 	_hud_col.offset_right = -40
 	_hud_col.add_theme_constant_override("separation", 0)
@@ -3916,21 +3989,13 @@ func _build_hud() -> void:
 	_hud_col.add_child(top)
 	var left := UI.vstack(4)
 	left.alignment = BoxContainer.ALIGNMENT_BEGIN
-	left.add_child(UI.label(tr("RC_SCORE"), 36, UI.CYAN))
-	_score_label = UI.styled_label("0", TITLE_FONT, 2)   # D-389: the title font
-	left.add_child(_score_label)
-	# Drift points under the score (D-146); fades by alpha, so its slot stays.
-	_drift_label = UI.label("", 36, UI.YELLOW)
-	_drift_label.custom_minimum_size.y = 44
-	_drift_label.modulate.a = 0.0
-	left.add_child(_drift_label)
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(left)
 	_hud_top = top
 	_hud_left = left
 	var mid := UI.vstack(0)
 	mid.alignment = BoxContainer.ALIGNMENT_BEGIN
-	_time_caption = UI.label(tr("RC_POSITION" if _two else "RC_TIME"), 36, UI.YELLOW)
+	_time_caption = UI.styled_label(tr("RC_POSITION" if _two else "RC_TIME"), TITLE_FONT, 1)   # D-401
 	mid.add_child(_time_caption)
 	_time_label = UI.styled_label("45", TITLE_FONT, 5)   # D-389
 	mid.add_child(_time_label)
@@ -3941,6 +4006,16 @@ func _build_hud() -> void:
 	right.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_stage_label = UI.styled_label("", TITLE_FONT, 2, HORIZONTAL_ALIGNMENT_RIGHT)   # D-389
 	right.add_child(_stage_label)
+	# D-400: the score under the stage, at the right.
+	var score_cap := UI.styled_label(tr("RC_SCORE"), TITLE_FONT, 1, HORIZONTAL_ALIGNMENT_RIGHT)   # D-401
+	right.add_child(score_cap)
+	_score_label = UI.styled_label("0", TITLE_FONT, 2, HORIZONTAL_ALIGNMENT_RIGHT)   # D-389: the title font
+	right.add_child(_score_label)
+	# Drift points under the score (D-146); fades by alpha, so its slot stays.
+	_drift_label = UI.styled_label("", TITLE_FONT, 1, HORIZONTAL_ALIGNMENT_RIGHT)   # D-404: the title font
+	_drift_label.custom_minimum_size.y = 44
+	_drift_label.modulate.a = 0.0
+	right.add_child(_drift_label)
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(right)
 
@@ -4184,8 +4259,8 @@ func _update_hud(delta: float) -> void:
 			_nag_lever.set_gear(true)
 	_nitro_label.modulate.a = 1.0 if sim.boosting else 0.0
 	_nitro_strip.size.x = roundf((_nitro_strip.get_parent() as Control).custom_minimum_size.x * sim.boost_t / Sim.NITRO_TIME)
-	if sim.drifting:
-		_drift_label.text = tr("RC_DRIFT_POINTS") % ScoreTable.format_score(int(sim.drift_points / 10.0) * 10)
+	if sim.drifting or Config.cli.has("rc-drift-show"):   # (--rc-drift-show: dev, always shown)
+		_drift_label.text = tr("RC_DRIFT_POINTS") % ScoreTable.format_score(int(sim.drift_points / 10.0) * 10 + (1230 if Config.cli.has("rc-drift-show") else 0))
 		_drift_label.modulate.a = 1.0
 	else:
 		_drift_label.modulate.a = maxf(0.0, _drift_label.modulate.a - delta * 0.8)
@@ -4453,6 +4528,9 @@ func _update_night(delta: float) -> void:
 		Night.set_level(_lamps)
 		get_tree().call_group(NIGHT_GROUP, "set_visible", _lamps > 0.0)
 		Sprites.set_night(_night)
+	if absf(_night - _gate_night) > 0.002:   # each view's own banners (D-415)
+		_gate_night = _night
+		_style_gates()
 	var pal := TimeOfDay.palette(el)
 	var fog: Color = (pal.horizon as Color).lerp(pal.ridge_far, 0.35)
 	if _sky_mat != null:
@@ -4521,6 +4599,8 @@ func _update_night(delta: float) -> void:
 		(1.0 - 0.6 * float(_wx.get("rain", 0.0)) - 0.6 * float(_wx.get("snow", 0.0)) - 0.8 * float(_wx.get("fog", 0.0)))
 	if _blob_mat != null:
 		_blob_mat.albedo_color = Color(0, 0, 0, 0.45 * _sun.shadow_opacity / SHADOW_STRENGTH + 0.12)
+		if _pickup_blob_mat != null:
+			_pickup_blob_mat.albedo_color = Color(0, 0, 0, 0.6 * _sun.shadow_opacity / SHADOW_STRENGTH + 0.25)
 
 
 ## Race progress for the time of day: stages played plus how far into this one.
@@ -4700,7 +4780,7 @@ func _build_audio_loops() -> void:
 	_skid = AudioStreamPlayer.new()
 	_skid.bus = "SFX"
 	_skid.stream = _loop_wav("skid", func(t: float) -> float:
-		return sin(TAU * 950.0 * t + sin(TAU * 25.0 * t) * 2.0) * 0.25, 1.2, 0.5)   # D-376: 1.2 s (was 0.4): its hiss repeats less often
+		return sin(TAU * 950.0 * t + sin(TAU * 25.0 * t) * 2.0) * 0.25, 1.2, 0.5)   # D-376: 1.2 s (was 0.4): its hiss repeats less often. D-409: D-407's squeal reverted
 	_skid.volume_db = -80.0
 	add_child(_skid)
 	_build_horn()   # D-213: synthesised up front, not at the first honk
@@ -4914,7 +4994,7 @@ func _update_audio() -> void:
 	_update_passers()
 	_update_horn()
 	_wind.volume_db = -46.0 + clampf(sim.v / Sim.MAX_SPEED, 0.0, 1.3) * 28.0 - _pass_duck
-	var squeal := sim.drifting or (sim.state == Sim.State.OVER and sim.v > 3.0) 		or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
+	var squeal := sim.drifting or (sim.state == Sim.State.OVER and sim.v > 3.0 and _over_slide) 		or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
 	_skid.volume_db = lerpf(_skid.volume_db, -10.0 if squeal else -60.0, 0.2)
 	# D-235: the attract demo (and the menus over it) is music only.
 	if _phase in QUIET_PHASES:   # D-236: car select too; D-302: every menu

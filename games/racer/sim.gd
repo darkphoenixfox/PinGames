@@ -64,7 +64,8 @@ const DRIFT_ANGLE := 32.0        # degrees (visual + score feel)
 const NITRO_TIME := 5.0          # s of boost per canister
 const PICKUP_GAP_MIN := 700.0    # m between canisters
 const PICKUP_GAP_MAX := 1200.0
-const PICKUP_DX := 1.7           # lateral reach to collect
+const PICKUP_DX := 1.87          # lateral reach to collect (D-408: 10 % more, was 1.7)
+const PICKUP_DS := CAR_LEN * 0.66   # reach along the road (D-408: 10 % more, was 0.6 of a car)
 ## Gears (D-103): L = strong pull, low top speed; H = weak pull, full speed.
 ## rpm 0..1 is v / the gear's top speed; the tachometer's red zone is >= REDLINE.
 enum Gear { LOW, HIGH }
@@ -1071,7 +1072,7 @@ func _update_pickups() -> void:
 		var ds: float = p.s - s
 		if ds < -10.0:
 			pickups.remove_at(i)
-		elif absf(ds) < CAR_LEN * 0.6 and absf(p.x - x) < PICKUP_DX and spin_t <= 0.0:
+		elif absf(ds) < PICKUP_DS and absf(p.x - x) < PICKUP_DX and spin_t <= 0.0:
 			pickups.remove_at(i)
 			boost_t = NITRO_TIME
 			if not boosting:
