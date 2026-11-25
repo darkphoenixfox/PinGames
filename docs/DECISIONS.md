@@ -3540,3 +3540,10 @@
 - The torpedo starts just under the brick, where the ball that hit it still is, so it was usually blocked at once. Brick torpedoes now carry a 0.2 s `grace` during which no ball (main or extra) stops them; boss and mini-icosahedron torpedoes are unchanged.
 - **Test:** a ball hitting a charged brick from below sets off a torpedo that is still flying the next step.
 - **Status:** Accepted
+
+### D-360 — Enemies near the ship retreat to the top after a lost charge
+- **Date:** 2026-11-25
+- **Decision (director):** if an enemy is in the ship's area when the last ball sinks (a lost charge), it flies quickly back to the top of the screen.
+- On a sunk ball that costs a charge, every enemy (out of its wormhole) below y 2.0 (the bottom third of the field) goes into a new `retreat` state: straight up at 9 m/s, through the bricks, harmless meanwhile, to just under its spawn height, then back to its sweep. Enemies higher up carry on. (A ship destroyed by an enemy already removes that enemy.)
+- **Test:** an orbiting enemy by the ship is back near the top within 2 s and sweeping; one higher up is untouched.
+- **Status:** Accepted

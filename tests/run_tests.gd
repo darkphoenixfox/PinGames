@@ -605,6 +605,21 @@ func test_breakout_difficulty(Sim) -> void:
 	var fired_now: bool = gt.rays.size() == 1
 	gt.step(1.0 / 60.0, false, false, false, 0)
 	check(fired_now and gt.rays.size() == 1, "a charged brick's torpedo survives the ball that set it off")
+	# D-360: a lost charge sends enemies near the ship back to the top.
+	var rt2 = Sim.new()
+	rt2.setup(3)
+	rt2.spawn_enemy(0.0, "tetra")
+	rt2.enemies[0].state = "orbit"
+	rt2.enemies[0].pos = Vector2(1.0, Sim.PADDLE_Y - 0.6)
+	rt2.spawn_enemy(2.0, "tetra")
+	rt2.enemies[1].state = "sweep"
+	rt2.enemies[1].pos = Vector2(2.0, -3.0)
+	rt2._lose_ball()
+	var went: bool = rt2.enemies[0].state == "retreat" and rt2.enemies[1].state == "sweep"
+	for i in 120:
+		rt2._update_enemies(1.0 / 60.0)
+	check(went and float(rt2.enemies[0].pos.y) < -5.0 and rt2.enemies[0].state == "sweep",
+		"after a lost charge an enemy by the ship flies back to the top (y %.1f)" % float(rt2.enemies[0].pos.y))
 	# D-355: torpedoes pass the Sidekicks; only the ship itself is hit.
 	var sk2 = Sim.new()
 	sk2.setup(3)

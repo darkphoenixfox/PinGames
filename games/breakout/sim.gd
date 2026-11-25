@@ -1770,6 +1770,15 @@ func _update_enemies(dt: float) -> void:
 					en.state = "sweep"
 					events.append(["enemy_ready", en.id])
 				continue
+			"retreat":   # D-360: flying back up after a lost charge, fast, ignoring bricks
+				var goal := Vector2(en.pos.x, RETREAT_Y)
+				en.pos = Vector2(en.pos).move_toward(goal, RETREAT_SPEED * dt)
+				if Vector2(en.pos).distance_to(goal) < 0.05:
+					en.state = "sweep"
+					en.best_y = en.pos.y
+					en.stuck_t = 0.0
+					en.sweep_x = float(en.pos.x) - sin(float(en.phase)) * ENEMY_SWEEP_AMP
+				continue
 			"circle":   # D-323: going round the bricks it was stuck on
 				_step_circle(en, dt, lim)
 			"sweep":
@@ -1860,6 +1869,20 @@ func _destroy_enemy(i: int, award: bool = true) -> void:
 	events.append(["enemy_destroyed", [en.id, en.pos, award]])  # award = shot down
 
 
+## D-360: after a lost charge, enemies down by the ship fly straight back to
+## the top (fast, through the bricks), so the new ship isn't met by one.
+const RETREAT_FROM_Y := 2.0      # enemies below this (the bottom ~third) retreat
+const RETREAT_Y := ENEMY_SPAWN_Y + 0.4
+const RETREAT_SPEED := 9.0
+
+
+func _retreat_enemies() -> void:
+	for en in enemies:
+		if en.state != "wormhole" and float(en.pos.y) > RETREAT_FROM_Y:
+			en.state = "retreat"
+			events.append(["enemy_retreat", en.id])
+
+
 func _destroy_ship() -> void:
 	events.append(["ship_destroyed", Vector2(paddle_x, paddle_y)])
 	_end_powerup()
@@ -1890,6 +1913,7 @@ func _lose_ball() -> void:
 		_end_powerup()
 	balls_left -= 1
 	events.append(["lost", ball_pos.x])
+	_retreat_enemies()   # D-360
 	if balls_left <= 0:
 		state = State.OVER
 		events.append(["over", score])
