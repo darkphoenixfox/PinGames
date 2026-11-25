@@ -1,11 +1,12 @@
 """Tilt Breaker's metallic blue title font (D-354), cut from the director's
-sheet (assets/source/breakout/metallic_blue_font.png: A-M, N-Z, then 0-9 ! ? &).
+sheet (assets/source/breakout/metallic_blue_font2.png: A-M, N-Z, then
+0-9 ! ? & . , -; D-358).
 
 Each glyph is cut at its transparent gaps, all glyphs of a row share the row's
 top and bottom (so they sit on one baseline), and everything is scaled so a
 row is GLYPH_H atlas pixels tall. Lower case maps to the capitals. A few marks
-the sheet lacks are made from its own pieces: . , : from the "!" dot, - from
-the "!" bar turned on its side. Anything else falls back to the old font.
+the sheet lacks: ":" from two of its periods. Anything else falls back to the
+old font.
 
 Writes assets/fonts/title_metal.png + .json in the styled-font format (D-062),
 with "smooth": true (scaled freely, not by whole multiples) and
@@ -18,11 +19,11 @@ import os
 from PIL import Image
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
-SRC = os.path.join(ROOT, "assets", "source", "breakout", "metallic_blue_font.png")
+SRC = os.path.join(ROOT, "assets", "source", "breakout", "metallic_blue_font2.png")   # D-358: with . , -
 OUT = os.path.join(ROOT, "assets", "fonts")
-ROWS = ["ABCDEFGHIJKLM", "NOPQRSTUVWXYZ", "0123456789!?&"]
+ROWS = ["ABCDEFGHIJKLM", "NOPQRSTUVWXYZ", "0123456789!?&.,-"]
 GLYPH_H = 132        # atlas px per row (capitals + their outline)
-CELL = 150           # font size in atlas px (ascent + descent)
+CELL = 162           # font size in atlas px (ascent + descent: room for Q and comma tails)
 ASCENT = 132
 GAP = 6              # extra advance between letters
 SPACE = 46
@@ -57,7 +58,7 @@ def main():
         # merge pieces closer than 6 px (none expected, but safe)
         merged = []
         for s in segs:
-            if merged and s[0] - merged[-1][1] < 6:
+            if merged and s[0] - merged[-1][1] < 3:
                 merged[-1] = (merged[-1][0], s[1])
             else:
                 merged.append(s)
@@ -68,34 +69,15 @@ def main():
     # D-357: one scale for every glyph (rows differ in height: N-Z holds Q's
     # tail), all top-aligned, so capitals are equal and Q's tail hangs below.
     scaled = {c: g.resize((max(1, round(g.width * k)), max(1, round(g.height * k))), Image.LANCZOS) for c, g in glyphs.items()}
-    # Extra marks from the "!": its bar and its dot (split at the empty rows).
-    ex = scaled["!"]
-    ea = ex.getchannel("A")
-    rows = [any(ea.getpixel((x, y)) > ALPHA for x in range(ex.width)) for y in range(ex.height)]
-    parts = bands(rows, 3)
-    bar = ex.crop((0, parts[0][0], ex.width, parts[0][1]))
-    dot = ex.crop((0, parts[-1][0], ex.width, parts[-1][1]))
-    dot = dot.crop(dot.getchannel("A").point(lambda v: 255 if v > ALPHA else 0).getbbox())
-    def on_cell(img, y_bottom, width=None):
-        c = Image.new("RGBA", (width or img.width, GLYPH_H), (0, 0, 0, 0))
-        c.alpha_composite(img, ((c.width - img.width) // 2, y_bottom - img.height))
-        return c
-    scaled["."] = on_cell(dot, GLYPH_H - 4)
-    # Comma: the dot with a slanted tail under it (the dot stretched down and leaned).
-    tail = dot.resize((max(4, dot.width * 2 // 3), dot.height * 2), Image.LANCZOS).rotate(-18, expand=True, resample=Image.BICUBIC)
-    cm = Image.new("RGBA", (max(dot.width, tail.width) + 4, GLYPH_H + 16), (0, 0, 0, 0))
-    cm.alpha_composite(tail, (0, GLYPH_H - 4 - dot.height // 2))
-    cm.alpha_composite(dot, (cm.width - dot.width, GLYPH_H - 4 - dot.height))
-    scaled[","] = cm.crop((0, 0, cm.width, GLYPH_H + 16))
-    colon = Image.new("RGBA", (dot.width, GLYPH_H), (0, 0, 0, 0))
-    colon.alpha_composite(dot, (0, GLYPH_H - 4 - dot.height))
-    colon.alpha_composite(dot, (0, GLYPH_H // 2 - dot.height // 2 - 6))
+    # Colon (not on the sheet): two of the sheet's own periods, one on the
+    # baseline (where "." sits) and one at mid-height.
+    per_img = scaled["."]
+    pbb = per_img.getchannel("A").point(lambda v: 255 if v > ALPHA else 0).getbbox()
+    dot = per_img.crop(pbb)
+    colon = Image.new("RGBA", (dot.width + 4, per_img.height), (0, 0, 0, 0))
+    colon.alpha_composite(dot, (2, pbb[1]))
+    colon.alpha_composite(dot, (2, GLYPH_H // 2 - dot.height // 2 + 4))
     scaled[":"] = colon
-    hb = bar.crop(bar.getchannel("A").point(lambda v: 255 if v > ALPHA else 0).getbbox()).rotate(90, expand=True)
-    hb = hb.resize((round(GLYPH_H * 0.42), max(8, round(hb.height * 0.8))), Image.LANCZOS)
-    hy = Image.new("RGBA", (hb.width, GLYPH_H), (0, 0, 0, 0))
-    hy.alpha_composite(hb, (0, GLYPH_H // 2 - hb.height // 2 + 6))
-    scaled["-"] = hy
     # Atlas: one row per 16 glyphs.
     order = list(scaled)
     per = 16

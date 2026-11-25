@@ -3527,3 +3527,9 @@
 - **Cause:** `gen_metal_font.py` squeezed every row to the same height, but the N–Z row is taller on the sheet (it includes Q's tail), so its letters came out about 8% shorter.
 - **Fix:** every glyph is scaled by one factor and top-aligned, so all capitals and digits are the same height and Q's tail hangs below. Font regenerated.
 - **Status:** Accepted
+
+### D-358 — Metallic font from the director's second sheet (with . , -)
+- **Date:** 2026-11-25
+- **Decision (director):** `metallic_blue_font2.png` adds `.`, `,` and `-` after `& `; all letters share one height (only parts like Q's tail go past the baseline).
+- `gen_metal_font.py` now reads the second sheet (row 3: 0–9 ! ? & . , -) and uses its own period, comma and hyphen, in their drawn positions (glyphs keep their place within the row, top-aligned, one scale for all, D-357). The made-up marks of D-354 are gone except `:`, built from two of the sheet's periods. The glyph cell grew to 162 px so the Q and comma tails aren't clipped (display size follows, 31). Original in `assets/source/breakout/`; credits updated.
+- **Status:** Accepted
