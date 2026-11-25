@@ -49,6 +49,8 @@ const PIXEL_POST = preload("res://games/racer/shaders/pixel_post.gdshader")
 const SKY_SHADER = preload("res://games/racer/shaders/sky.gdshader")   # D-193
 const TimeOfDay = preload("res://games/racer/sky.gd")
 const LOGO := "res://assets/textures/racer/logo.png"
+## D-390: the logo as pixel art in the 8-BIT and 16-BIT modes.
+const LOGOS := {"nes": "res://assets/textures/racer/logo_8.png", "retro": "res://assets/textures/racer/logo_16.png"}
 const BG_DIR := "res://assets/textures/racer/"
 ## Shared lit-backglass shader (D-058; generic: off art + on art + group masks).
 const BACKGLASS_SHADER = preload("res://games/breakout/shaders/backglass_lights.gdshader")
@@ -62,7 +64,15 @@ const SPRITE_ANGLES := 32
 ## Nose turn at full steer (rad): ~1.5 sprite steps, visible on straights.
 const SHIFT_RISE := 36.0    # px the SHIFT word rises each loop (D-158)
 const SHIFT_NAG := 3.0      # s at the redline in L before the big SHIFT (D-116)
-const REV_HAND := "res://assets/textures/racer/rev_hand.png"   # D-197
+## D-381: the director's painted hand, one version per graphics mode. All
+## square, the fingertip at the left edge half-way down; the 16-BIT and 8-BIT
+## ones are drawn at those modes' own UI pixels.
+const REV_HANDS := {
+	"hd": "res://assets/textures/racer/rev_hand_hd.png",
+	"retro": "res://assets/textures/racer/rev_hand_16.png",
+	"nes": "res://assets/textures/racer/rev_hand_8.png",
+}
+const REV_HAND_SIZE := Vector2(108, 108)
 const REV_HAND_GAP := 44.0     # px from the tacho's band to the fingertip at rest (D-209)
 const REV_POKES := 3.0         # pokes at the band, then still (D-209)
 const REV_POKE_RATE := 9.0     # rad/s
@@ -631,6 +641,7 @@ var _passers: Array = []    # AudioStreamPlayers for nearby traffic (D-134)
 var _hud: Control
 ## D-254: HUD pieces that move between the portrait and landscape layouts.
 var _hud_top: HBoxContainer
+var _hud_col: VBoxContainer   # D-389
 var _hud_left: VBoxContainer
 var _hud_mid: VBoxContainer
 var _hud_bottom: HBoxContainer
@@ -645,6 +656,8 @@ var _tacho: Control
 var _rev_hint: Control       # D-197: pointing hand + REV! during the countdown
 var _rev_label: Control
 var _rev_hand: TextureRect
+var _rev_hand_mode := ""
+var _scan: ColorRect        # D-387
 var _gear_lever: Control
 var _shift_big: Label
 var _shift_slot: Control
@@ -661,7 +674,6 @@ var _redline_t := 0.0       # s held at the redline in L (D-116)
 var _nitro_label: Label
 var _nitro_strip: ColorRect
 var _pickup_nodes: Array = []   # pooled nitro canisters
-var _mode_label: Label
 var _drift_label: Label
 var _center: Control             # big centre message (styled font)
 var _center_t := 0.0
@@ -716,6 +728,8 @@ func start(_players: int) -> void:
 		_set_reverb(false)
 	if Config.cli.has("rc-car"):   # dev: race with car 0 (easy) / 1 / 2 (hard), D-122
 		_chosen_car = clampi(int(str(Config.cli["rc-car"])), 0, Sim.CARS.size() - 1)
+	if Config.cli.has("rc-paint"):   # dev: that car in paint N of PAINTS (D-391)
+		_car_paint[_chosen_car] = clampi(int(str(Config.cli["rc-paint"])), 0, PAINTS.size() - 1)
 	if Config.cli.has("rc-2p"):   # dev: a 2-player race (D-289); --rc-car2=N is player 2's car
 		_two = true
 		CabinetInput.set_two_player(true)
@@ -817,6 +831,47 @@ func on_action(action: StringName, pressed: bool) -> void:
 		_dmd.flash(tr("RC_MANUAL"), 1.2, Dmd.CYAN)
 	if action == &"magna_r" and _phase == "race":
 		sim.shift_request = true
+
+
+## D-388: EXIT / BACK in the menus steps back one menu (true = done). From
+## the first menu it returns to the title; from the title EXIT leaves.
+func back() -> bool:
+	match _phase:
+		"players":
+			_players_ui.queue_free()
+			_enter_attract()
+		"gfx":
+			_gfx_ui.queue_free()
+			if CabinetInput.two_player_possible():
+				if _two:   # the choice is made again
+					_two = false
+					CabinetInput.set_two_player(false)
+				_begin_players()
+			else:
+				_enter_attract()
+		"stage":
+			_stage_ui.queue_free()
+			_begin_gfx()
+		"select":
+			_showroom.queue_free()
+			_showroom = null
+			if _select_p2:   # back to player 1's choice
+				_select_p2 = false
+				_begin_select()
+			else:
+				_world_view.visible = true
+				_set_ui_res.call_deferred()
+				_begin_stage_select()
+		"radio":
+			_spectrum_on(false)
+			_radio_ui.queue_free()
+			_radio = null
+			_crossfade(MUSIC_ATTRACT, 1.0)
+			_select_p2 = _two
+			_begin_select()
+		_:
+			return false
+	return true
 
 
 func _process(delta: float) -> void:
@@ -2307,17 +2362,19 @@ func _hud_layout() -> void:
 	var land := _landscape()
 	var in_left := _hud_mid.get_parent() == _hud_left
 	if land and not in_left:
-		_hud_top.remove_child(_hud_mid)
+		_hud_col.remove_child(_hud_mid)
 		_hud_left.add_child(_hud_mid)
 		_hud_left.move_child(_hud_mid, 2)
 	elif not land and in_left:
 		_hud_left.remove_child(_hud_mid)
-		_hud_top.add_child(_hud_mid)
-		_hud_top.move_child(_hud_mid, 1)
+		_hud_col.add_child(_hud_mid)
+		_hud_col.move_child(_hud_mid, 0)
 	_hud_mid.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_hud_gap.visible = land
 	# Landscape: the left column hugs the left edge, clear of the DMD.
 	for l in _hud_left.find_children("*", "Label", true, false):
+		(l as Label).horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	for l in _hud_mid.find_children("*", "Label", true, false):
 		(l as Label).horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if land else HORIZONTAL_ALIGNMENT_CENTER
 	if is_instance_valid(_radar_bar):
 		var w := float(_ui_base().x)
@@ -2396,6 +2453,14 @@ func _build_ui_layer() -> void:
 	_ui_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_ui_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_to_table(_ui_view)
+	# D-387: scanlines over the world and the UI, in 8-BIT / 16-BIT only.
+	_scan = UI.fill(Color.WHITE)
+	_scan.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var scan_mat := ShaderMaterial.new()
+	scan_mat.shader = load("res://games/racer/shaders/scanlines.gdshader")
+	_scan.material = scan_mat
+	_scan.visible = false
+	add_to_table(_scan)
 	get_tree().node_added.connect(_on_ui_node_added)
 	_set_ui_res()
 
@@ -2415,6 +2480,9 @@ func _set_ui_res() -> void:
 	if _ui_vp == null:
 		return
 	var low := _gfx_mode != "hd"
+	if _scan != null:   # D-387: the operator's SCANLINES setting
+		_scan.visible = low and bool(Config.get_value("operator", "scanlines"))
+		(_scan.material as ShaderMaterial).set_shader_parameter("rows", float(_low_res(_gfx_mode).y))
 	var base := _ui_base()   # D-254
 	_ui_vp.size_2d_override = base
 	_ui_root.size = Vector2(base)
@@ -2438,10 +2506,38 @@ func _set_ui_res() -> void:
 	for n in _ui_root.find_children("*", "Label", true, false):
 		_refont(n as Label)
 
+## D-384: the pixel-art versions of each painted font, per graphics mode:
+## [for titles and smaller text (HD scale 1-2), for bigger text].
+const PIXEL_FONTS := {
+	"sunset_metal": {"nes": ["sunset_8", "sunset_8"], "retro": ["sunset_16s", "sunset_16"]},
+	"cops_metal": {"nes": ["cops_8", "cops_8"], "retro": ["cops_16s", "cops_16"]},
+}
+## A label takes the whole multiple of the pixel font nearest its HD size,
+## leaning down by this much (the art is bigger than the HD text it replaces).
+const PIXEL_FONT_BIAS := 0.2
+
 
 func _refont(l: Label) -> void:
 	if l.has_meta("dot_size"):
 		l.add_theme_font_override("font", DotText.font(int(l.get_meta("dot_size")), _ui_px))
+	if l.has_meta("styled"):
+		# D-384: in 8-BIT / 16-BIT the painted fonts give way to the director's
+		# pixel-art versions, one art pixel per screen pixel (or 2, 3...).
+		var st: Array = l.get_meta("styled")
+		var smooth: FontFile = UI.StyledFonts.get_font(str(st[0]))
+		var unit := int(smooth.get_meta("display_size", smooth.fixed_size)) * int(st[1])
+		var pix: FontFile = null
+		if _gfx_mode != "hd" and PIXEL_FONTS.has(st[0]):
+			pix = UI.StyledFonts.get_font(str(PIXEL_FONTS[st[0]][_gfx_mode][0 if int(st[1]) <= 2 else 1]))
+		if pix != null:
+			var k := maxi(1, roundi(unit * _ui_px / float(pix.fixed_size) - PIXEL_FONT_BIAS))
+			l.add_theme_font_override("font", pix)
+			l.add_theme_font_size_override("font_size", roundi(pix.fixed_size * k / _ui_px))
+			l.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		else:
+			l.add_theme_font_override("font", smooth)
+			l.add_theme_font_size_override("font_size", unit)
+			l.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 
 func _on_ui_node_added(n: Node) -> void:
@@ -2961,6 +3057,10 @@ func _prop_kind(o: Dictionary) -> String:
 				"desert":
 					return "cactus_1"
 				"forest":
+					# D-396: the director's broadleaf tree among the pines, in
+					# the back rows only (its crown is 12 m wide).
+					if float(o.get("dir", 1.0)) >= 2.0 and h % 4 == 1:
+						return "tree_forest"
 					return "pine_1" if h % 3 != 0 else "pine_2"
 				"snow":
 					return "pine_snow"
@@ -3424,7 +3524,7 @@ func _build_chunk(k: int) -> Node3D:
 			f.basis = Basis(Vector3.UP, tr_.heading(o.s))
 			var h := fmod(absf(o.s * 7.13 + o.x * 3.1), 1.0)
 			match kind:
-				"pine_1", "pine_2":
+				"pine_1", "pine_2", "tree_forest":
 					# Forest lines (D-218): tall, taller in the back rows.
 					f.basis = Basis.from_scale(Vector3.ONE * (1.05 + h * 0.4 + 0.1 * clampf(float(o.dir) - 1.0, 0.0, 2.0)))
 				"palm_1", "palm_2", "pine_snow", "tree_oak", "tree_cypress", "cactus_1":
@@ -3802,16 +3902,22 @@ func _build_hud() -> void:
 	_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_add_ui(_hud)
 	_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# D-389: portrait = the clock alone on the first row, score and stage on
+	# the row under it (the title font is too wide for three in a row).
+	_hud_col = VBoxContainer.new()
+	_hud_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hud_col.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_hud_col.offset_top = 62   # below the radar bar (D-139)
+	_hud_col.offset_left = 40
+	_hud_col.offset_right = -40
+	_hud_col.add_theme_constant_override("separation", 0)
+	_hud.add_child(_hud_col)
 	var top := HBoxContainer.new()
-	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	top.offset_top = 62   # below the radar bar (D-139)
-	top.offset_left = 40
-	top.offset_right = -40
-	_hud.add_child(top)
+	_hud_col.add_child(top)
 	var left := UI.vstack(4)
 	left.alignment = BoxContainer.ALIGNMENT_BEGIN
 	left.add_child(UI.label(tr("RC_SCORE"), 36, UI.CYAN))
-	_score_label = UI.label("0", 48)
+	_score_label = UI.styled_label("0", TITLE_FONT, 2)   # D-389: the title font
 	left.add_child(_score_label)
 	# Drift points under the score (D-146); fades by alpha, so its slot stays.
 	_drift_label = UI.label("", 36, UI.YELLOW)
@@ -3826,19 +3932,15 @@ func _build_hud() -> void:
 	mid.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_time_caption = UI.label(tr("RC_POSITION" if _two else "RC_TIME"), 36, UI.YELLOW)
 	mid.add_child(_time_caption)
-	_time_label = UI.label("45", 144, UI.YELLOW)
+	_time_label = UI.styled_label("45", TITLE_FONT, 5)   # D-389
 	mid.add_child(_time_label)
-	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top.add_child(mid)
+	_hud_col.add_child(mid)
+	_hud_col.move_child(mid, 0)
 	_hud_mid = mid
 	var right := UI.vstack(4)
 	right.alignment = BoxContainer.ALIGNMENT_BEGIN
-	_stage_label = UI.label("", 36, UI.CYAN)
-	_stage_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_stage_label = UI.styled_label("", TITLE_FONT, 2, HORIZONTAL_ALIGNMENT_RIGHT)   # D-389
 	right.add_child(_stage_label)
-	_mode_label = UI.label("", 36, UI.GREY)
-	_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	right.add_child(_mode_label)
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(right)
 
@@ -4005,8 +4107,9 @@ func _touch_play() -> bool:
 	return false
 
 
+## (D-389: the 2 BUTTONS / 4 BUTTONS text is gone from the HUD.)
 func _show_mode() -> void:
-	_mode_label.text = tr("RC_MODE_MANUAL") if sim.manual else tr("RC_MODE_AUTO")
+	pass
 
 
 func _center_message(text: String, seconds: float, font: String = TITLE_FONT) -> void:
@@ -4025,11 +4128,11 @@ func _center_message(text: String, seconds: float, font: String = TITLE_FONT) ->
 func _update_hud(delta: float) -> void:
 	if _two:   # D-289: no clock; the race position instead
 		_time_label.text = tr("RC_FIRST") if _leading() else tr("RC_SECOND")
-		UI.set_color(_time_label, UI.YELLOW if _leading() else UI.WHITE)
 	else:
 		_time_label.text = str(ceili(sim.time_left))
 	var low := sim.time_left < 10.0 and not _two
-	UI.set_color(_time_label, UI.RED if low and fmod(sim.time_left, 0.5) < 0.25 else UI.YELLOW)
+	# D-389: the font keeps its own colours; low time flashes it red.
+	UI.set_color(_time_label, UI.RED if low and fmod(sim.time_left, 0.5) < 0.25 else Color.WHITE)
 	if low and sim.state == Sim.State.RACE and ceili(sim.time_left) != _last_tick:
 		_last_tick = ceili(sim.time_left)
 		_sfx("rc_tick")
@@ -4185,16 +4288,18 @@ func _update_rev_hint(countdown: bool) -> void:
 		_rev_hint = Control.new()
 		_rev_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_rev_hand = TextureRect.new()
-		_rev_hand.texture = load(REV_HAND)
-		_rev_hand.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_rev_hand.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		_rev_hand.size = Vector2(_rev_hand.texture.get_size()) * 2.0
+		_rev_hand.size = REV_HAND_SIZE
 		_rev_hint.add_child(_rev_hand)
 		var lab := UI.styled_label(tr("RC_REV_HINT"), TITLE_FONT, 2)
-		lab.position = Vector2(4, -94)
+		lab.position = Vector2(4, -52)
 		_rev_hint.add_child(lab)
 		_rev_label = lab
 		_hud.add_child(_rev_hint)
+	if _rev_hand_mode != _gfx_mode:   # D-381
+		_rev_hand_mode = _gfx_mode
+		_rev_hand.texture = load(REV_HANDS[_gfx_mode])
+		_rev_hand.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if _gfx_mode == "hd" 			else CanvasItem.TEXTURE_FILTER_NEAREST
 	var show := countdown and _phase == "race"
 	_rev_hint.modulate.a = 1.0 if show else 0.0
 	if not show:
@@ -4534,9 +4639,10 @@ func _update_backglass(delta: float) -> void:
 
 
 func _logo_rect(width: float) -> TextureRect:
-	var tex: Texture2D = load(LOGO)
+	var tex: Texture2D = load(LOGOS.get(_gfx_mode, LOGO))   # D-390
 	var r := TextureRect.new()
 	r.texture = tex
+	r.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if LOGOS.has(_gfx_mode) else CanvasItem.TEXTURE_FILTER_PARENT_NODE
 	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	r.custom_minimum_size = Vector2(width, width * tex.get_height() / tex.get_width())

@@ -21,9 +21,10 @@ const KINDS := {
 	"nitro": ["nitro", 2.6, true, false, 80],                # pick-up (D-115; D-208: as chunky as the other sprites)
 	"speedtrap": ["speedtrap", 8.0, true, false, 126],       # speed camera (D-135; oversized like the palms, D-137)
 	# Beach stage (D-204): small buildings on the right, a lifeguard tower on the sand.
-	"house_1": ["house_1", 5.5, true, false, 132],
-	"house_2": ["house_2", 8.0, true, false, 192],
-	"house_3": ["house_3", 5.0, true, false, 120],
+	# D-399: the three houses 25 % bigger (were 5.5, 8.0, 5.0 m).
+	"house_1": ["house_1", 6.9, true, false, 132],
+	"house_2": ["house_2", 10.0, true, false, 192],
+	"house_3": ["house_3", 6.25, true, false, 120],
 	"lifeguard": ["lifeguard", 6.5, true, false, 156],
 	# Grass fields, stage 2 (D-204): trees instead of palms.
 	"tree_oak": ["tree_oak", 10.0, true, false, 240],
@@ -35,6 +36,7 @@ const KINDS := {
 	"mesa": ["mesa", 45.0, true, false, 300],
 	"pine_1": ["pine_1", 17.0, true, false, 300],
 	"pine_2": ["pine_2", 13.0, true, false, 260],
+	"tree_forest": ["tree_forest", 14.0, true, false, 280],   # D-396: the director's broadleaf tree
 	"fern": ["fern", 1.4, true, false, 60],
 	"pine_snow": ["pine_snow", 13.0, true, false, 260],
 	"snow_rock": ["snow_rock", 3.0, true, false, 90],

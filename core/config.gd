@@ -50,6 +50,8 @@ const DEFAULTS := {
 		"volume_master": 8,
 		"volume_music": 7,
 		"volume_sfx": 8,
+		# D-387: CRT scanlines in the games' 8-BIT / 16-BIT graphics modes.
+		"scanlines": false,
 		# D-379: the first-run controls setup has been completed.
 		"setup_done": false,
 	},

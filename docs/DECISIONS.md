@@ -3749,3 +3749,157 @@
 - **So the setup's LEFT + RIGHT note holds in all three games:** Turbo Run shifts gear, Sky Striker sets off the bomb, Tilt Breaker fires the blaster. What the magna saves add in Tilt Breaker is the dash, which has no two-button equivalent.
 - No code change.
 - **Status:** Accepted
+
+### D-381 — Turbo Run: the director's painted hand for the REV! hint
+- **Date:** 2026-11-25
+- **Decision (director):** `hand-sign.png` replaces the REV! hand icon (D-197). It is too high-res as supplied, and needs 16-BIT and 8-BIT versions.
+- **Versions** (`scripts/tools/gen_hand_sign.py`, from `assets/source/racer/hand_sign.png`, 2048×2048):
+  - **HD:** 216×216, smooth.
+  - **16-BIT:** 48×48 pixel art, 20 colours.
+  - **8-BIT:** 27×27 pixel art, 6 colours.
+  The pixel versions have a hard edge and a dark 1 px outline, and are sized to that mode's own UI pixels (D-233), so each of their pixels is one screen pixel of the mode.
+- **In game:** all three are square, with the fingertip at the left edge half-way down, and shown at 108×108 UI px (the hand itself is about 108×56; D-230's was 118×70). The game picks the version for the current graphics mode. Position, pokes (D-209) and the 2P downward-pointing form (D-297) are unchanged; REV! sits just above the hand.
+- **Removed:** the drawn hand `rev_hand.png` and its generator `gen_rev_hand.py`.
+- **Checked:** screenshots of the countdown in HD, 16-BIT and 8-BIT, windowed and single layouts. The 2P form wasn't captured.
+- **Status:** Accepted
+
+### D-382 — Turbo Run: painted fonts drawn with nearest-neighbour in 8-BIT and 16-BIT
+- **Date:** 2026-11-25
+- **Bug (director):** the racer's fonts are blurry in the 16-BIT and 8-BIT modes. Reduce them with nearest-neighbour instead, keeping the solid colours.
+- **Cause:** the painted fonts (D-366, D-371) are large atlases shrunk with smooth, mipmapped filtering (D-354). That is right in HD, but in the low-resolution UI (D-233) it blended the colours into a soft smear.
+- **Fix:** in 8-BIT and 16-BIT, every label in a painted font is sampled with nearest-neighbour from the full-size atlas, through `games/racer/shaders/hard_text.gdshader`, which also makes each glyph pixel fully solid or fully clear (no half-transparent edge). HD keeps the smooth filtering. The game switches them when the graphics mode changes (`_refont`; `UI.styled_label` marks such labels with `smooth_font`).
+- **Applies to:** all the racer's text in those fonts: menus, PICK YOUR RIDE, REV!, GO!, the police messages, the finale.
+- **Checked:** screenshots in 8-BIT and 16-BIT (graphics menu, car select, countdown; single layout, and the 16-BIT countdown windowed), and HD unchanged.
+- **Status:** Accepted
+
+### D-383 — Windows remember where they were left
+- **Date:** 2026-11-25
+- **Decision (director):** the game remembers the last window position and size, in case the windows are moved by hand.
+- **Which windows:** the windowed layout's three (TABLE, BACKGLASS, DMD) and the single-screen layout's one. The cabinet layouts (2 and 3 screens) fill their monitors and are unchanged; the browser and Android have no window to place.
+- **What is kept:** position, size and whether it was maximised, per window and per `windowed_monitor` setting (so choosing another monitor in the operator menu still starts from that monitor's default). Stored in `pingames.cfg` under `[windows]`, about a second after a window stops moving.
+- **Coming back:** a stored place is used only if the window's top strip would still be on a connected monitor (and the size is sane); otherwise the default layout is used.
+- **Dev runs:** off whenever a run places or sizes the windows itself or is automated (`--dev-offscreen`, `--screenshot`, `--press`, `--single-size`, `--single-portrait`, the preview flags), so test runs stay repeatable and never write to the real settings.
+- **Test:** reading a stored place back; a place off every monitor, above the screen, or malformed is ignored.
+- **Not checked live:** moving a real window and restarting needs the game in the foreground on the director's desktop; only the stored-place logic is tested.
+- **Status:** Accepted
+
+### D-384 — Turbo Run: the director's pixel-art fonts for 8-BIT and 16-BIT
+- **Date:** 2026-11-25
+- **Decision (director):** `sunset_font_8bit.png` and `sunset_font_16bit.png` are the title font for the 8-BIT and 16-BIT modes; the police fonts can be recolours of them. (This follows a test of a dark inner line drawn by shader on the painted font, which came out uneven because the painting has its own edge; that test is removed.)
+- **Reading the sheets** (`scripts/tools/gen_pixel_font.py`): each sheet is pixel art enlarged on a grey card (2730×1536; one art pixel is 10.66 px on the 8-bit sheet, 5.33 px on the 16-bit one). Every art pixel is read back from the middle of its cell, the card and the soft glow round the letters are removed, and the colours are snapped to the art's most used ones (4 for 8-bit, 14 for 16-bit). Letters are found by their bright fill, since neighbours touch through their dark lines. ":" is two of the sheet's periods; marks the sheet lacks fall back to the old pixel font.
+- **Fonts** (`assets/fonts/title_*.png/.json`, marked `"pixel": true`): `sunset_8` (21 px tall), `sunset_16` (42 px), and `sunset_16s`, the 16-bit art at half size (21 px), made by the script. Police versions `cops_8`, `cops_16`, `cops_16s`: the yellows turn blue and the reds stay red, the dark line unchanged.
+- **In game (supersedes D-382 for these fonts):** in 8-BIT and 16-BIT every label in the painted sunset or police font switches to the pixel version, drawn one art pixel per screen pixel, unfiltered; HD keeps the painted fonts. `UI.styled_label` records each label's style and scale so the game can switch when the graphics mode changes. The D-382 shader is removed.
+- **Sizes:** pixel fonts only come in whole sizes, so text sizes differ from HD in these modes:
+  - 8-BIT: all text uses the one 21 px font (84 UI px tall). Titles and REV! are about 45 % taller than in HD, menu choices about the same, the big centre messages (GO!, THE COPS!) smaller.
+  - 16-BIT: titles and smaller text use the half-size font (47 UI px, a little smaller than HD's 58); menu choices and centre messages use the full 42 px font (94 UI px).
+- **Lead developer's note:** the half-size 16-bit font is a machine reduction of the director's art and is rougher than the two drawn sheets; a drawn sheet at that size would replace it directly.
+- **Checked:** screenshots of the menus, car select, radio, countdown and THE COPS! in both modes, windowed and single layouts; HD unchanged.
+- **Status:** Accepted
+
+### D-385 — Turbo Run: the pixel fonts are hand-finished by the director
+- **Date:** 2026-11-25
+- **Decision (director):** the six pixel-font images of D-384 (`assets/fonts/title_sunset_8/16/16s.png`, `title_cops_8/16/16s.png`) were cleaned by hand: stray pixels removed, missing pixels filled. These files are now the masters.
+- **Consequence:** `scripts/tools/gen_pixel_font.py` would overwrite them, so it refuses to run without `--force`. The `.json` glyph boxes are unchanged.
+- **Checked:** all six keep their size, have no half-transparent pixels, nothing outside a glyph's box, and the same number of colours as before.
+- **Status:** Accepted
+
+### D-386 — Turbo Run: police pixel fonts re-made from the cleaned sunset ones
+- **Date:** 2026-11-25
+- **Context:** the director fixed the remaining holes in the sunset pixel fonts (D-385). The three police images hadn't been updated with those fixes, and the two 16-bit ones had turned pink over purple.
+- **Change (lead developer, following D-384's "the police fonts can be recolours"):** `title_cops_8/16/16s.png` are recoloured again from the current sunset images: yellows and light oranges to blue, everything warmer to red, the dark line unchanged. `gen_pixel_font.py --police` does only this, so it can be repeated after any further hand edit of the sunset images.
+- **Kept:** the director's previous police images are in `exports/font_backup/` (not in the repo).
+- **Status:** Accepted
+
+### D-387 — Scanlines for the 8-BIT and 16-BIT modes, an operator option
+- **Date:** 2026-11-25
+- **Decision (director):** add a scanline effect to Turbo Run's 8-BIT and 16-BIT modes, in the manner of MAME's scanline pass; it must be optional, switched on in the operator menu.
+- **Effect** (`games/racer/shaders/scanlines.gdshader`, written for this game; MAME's file was the reference for the idea only, no code taken): one bright line per low-resolution row (270 or 480 rows on the short side) with a darker gap between rows. Bright pixels spread into the gap and dark ones leave it wider, as on a tube. A small brightness boost makes up for the light the gaps take. It covers the 3D view and the UI layer alike. Under about two screen pixels per row it fades out, since the lines can't be drawn evenly that small.
+- **Option:** `operator.scanlines`, **off by default**; operator menu, first page: SCANLINES (8-BIT / 16-BIT) ON / OFF. HD is never affected.
+- **Checked:** off by default; on in 8-BIT and 16-BIT, windowed and single layouts; the menu entry.
+- **Status:** Accepted
+
+### D-388 — EXIT steps back one menu inside a game's menus
+- **Date:** 2026-11-25
+- **Decision (director):** in menus the quit button should just go back one menu.
+- **Rule:** game modules get `back() -> bool` (`core/game_module.gd`). On EXIT or BACK the shell asks the game first; a game showing one of its menus steps back and returns true. Otherwise EXIT does what it did (leaves; on a single screen asks QUIT GAME?, D-260) and BACK does nothing.
+- **Turbo Run:** music → car select (2P: player 2's car → player 1's car) → start stage → graphics → players (when two can play) → title. From the title EXIT leaves the game. Stepping back from the music select returns to the title music; stepping back to the players menu undoes the 2-player choice.
+- **Tilt Breaker:** difficulty → start level → players (when two can play) → title. To make this possible the 2-player game is now set up when the last menu is confirmed, not when 2 PLAYERS is picked. The start level keeps its value when stepped back to.
+- **Sky Striker:** has no menus; unchanged.
+- **Checked:** step-back sequences in both games by scripted runs (single layout).
+- **Status:** Accepted
+
+### D-389 — Turbo Run HUD: score, clock and stage in the title font; no buttons text
+- **Date:** 2026-11-25
+- **Decision (director):** use the new fonts for the timer, the stage text and the score; remove the "4 BUTTONS / 2 BUTTONS" text.
+- **Change:** those three labels use the title font (painted in HD, the pixel fonts of D-384 in 8-BIT / 16-BIT). The SCORE and TIME captions stay in the UI font. The buttons text and its two strings are removed.
+- **Low time:** the font keeps its own colours, so the clock no longer turns yellow; it still flashes red under 10 s. In 2P the position (1ST / 2ND) no longer changes colour.
+- **Portrait layout (lead developer):** the title font is much wider than the old one (in 8-BIT every label is 84 UI px tall), and score + clock + stage no longer fit in one row at high scores. In portrait the clock is alone on the first row and score (left) and stage (right) share the row under it. Landscape is unchanged (clock under the score, stage at the right).
+- **Status:** Accepted
+
+### D-390 — Turbo Run: pixel-art logos for 8-BIT and 16-BIT
+- **Date:** 2026-11-25
+- **Decision (director):** the director wants to edit the 8-bit and 16-bit logos.
+- **Files:** `assets/textures/racer/logo_8.png` (225 px wide, 8 colours) and `logo_16.png` (400 px wide, 24 colours): first drafts reduced from the painted logo by `scripts/tools/gen_racer_logo_pixel.py`, one image pixel per screen pixel of the mode, hard edge. The title screen shows them unfiltered in those modes; HD keeps `logo.png`. The director finishes them by hand; the script refuses to run again without `--force`.
+- **Status:** Accepted
+
+### D-391 — Turbo Run: a repaint leaves the car's lamps their own colours
+- **Date:** 2026-11-25
+- **Decision (director):** the car recolouring should not affect the lights of the car.
+- **Change** (`car.gdshader`): inside each model's lamp areas (the same boxes that light up at night and when braking, D-144) the texture keeps its own colour. On the models whose tail box is wider than the lamps, only lens colours are kept there (reds and the dark housings), so the paint round them is still repainted.
+- **Dev:** `--rc-paint=N` races the chosen car in paint N.
+- **Status:** Accepted
+
+### D-392 — Turbo Run: white rim removed from the tall forest trees
+- **Date:** 2026-11-25
+- **Bug (director, screenshot):** the tall trees had white borders.
+- **Cause:** the cut-outs kept a pale rim of their white background along the edge (about 15 % of `pine_1`'s edge pixels, 8 % of `pine_2`'s).
+- **Fix:** `scripts/tools/defringe_sprites.py`: pale, colourless pixels within 5 px of the edge, and the half-clear ones, take the colour of the nearest proper pixel. The shape is unchanged. Applied to `sprites/racer/hd/pine_1.png` and `pine_2.png`.
+- **Not changed:** `tree_cypress`, `tree_oak`, `fern` and `palm_1` measure a similar rim; left until the director asks (the snow spruce's white is its snow).
+- **Status:** Accepted
+
+### D-393 — Test windows open on the second monitor
+- **Date:** 2026-11-25
+- **Decision (director):** open the Godot windows on the second screen. Supersedes D-355's off-the-desktop default.
+- `scripts/dev_run.sh` starts the window centred on monitor 1 (counted from 0; `PINGAMES_DEV_MONITOR` changes it) and passes `--dev-screen=N`, which makes `Screens` move every window it opens onto that monitor, keeping each one's place within it. They still never take focus. With no such monitor they go off the desktop as in D-355, and `PINGAMES_DEV_HIDDEN=1` asks for that.
+- Window places are not remembered in these runs (D-383).
+- **Status:** Accepted
+
+### D-394 — Turbo Run: rim clean-up on four more sprites; 8-bit font updated
+- **Date:** 2026-11-25
+- **Decision (director):** fix `tree_cypress`, `tree_oak`, `fern` and `palm_1` as well (the "not changed" list of D-392).
+- **Done:** `scripts/tools/defringe_sprites.py` applied to those four files in `sprites/racer/hd/`. Shapes unchanged.
+- **Font:** the director updated `title_sunset_8.png` again; `title_cops_8.png` re-made from it (`gen_pixel_font.py --police`, D-386).
+- **Status:** Accepted
+
+### D-395 — Turbo Run: the snow spruce's snow was see-through
+- **Date:** 2026-11-25
+- **Bug (director):** `pine_snow` had transparent pixels where it should be white, inside the outline.
+- **Cause:** removing the white background had also removed the white snow.
+- **Fix:** `scripts/tools/fill_sprite_holes.py`: every clear or half-clear pixel that the outside can't reach becomes solid, laid over snow white (244, 248, 255). The outline is unchanged. Applied to `sprites/racer/hd/pine_snow.png`.
+- **Status:** Accepted
+
+### D-397 — Test windows: on the monitor that isn't the main one, never flashing on the main
+- **Date:** 2026-11-25
+- **Bug (director):** after D-393 the test windows appeared in the middle of the main screen. Monitor 1 is the main one on the director's PC, and the window was opened centred on it.
+- **Fix (supersedes D-393's placement):** the windows start off the desktop again (D-355). `Screens` then puts them on the first monitor that is not the main one (`--dev-screen=other`), by its top-left corner. A window bigger than that monitor runs off its far edges, not onto the main monitor. A test window is never put on the main monitor: with a single monitor it stays off the desktop.
+- **Status:** Accepted
+
+### D-396 — Turbo Run forest: the director's broadleaf tree
+- **Date:** 2026-11-25
+- **Decision (director):** `tree.png` (asset folder) is another tree for the forest.
+- **Asset:** copied to `assets/source/racer/tree_forest.png`; `scripts/tools/prepare_forest_tree.py` writes `sprites/racer/hd/tree_forest.png` (trimmed, 1000 px tall, its soft pale glow removed, rim cleaned as in D-392).
+- **In the forest (lead developer's choices):** sprite kind `tree_forest`, 14 m tall (the pines are 17 m and 13 m), sized like the pines. About one tree in four in the two back rows; none in the row nearest the road, because its crown is 12 m wide and would hang over the tarmac.
+- **Status:** Accepted
+
+### D-398 — Turbo Run: the snowy rock's snow cap was see-through
+- **Date:** 2026-11-25
+- **Bug (director):** `snow_rock` had transparent pixels inside the outline.
+- **Cause:** as with the snow spruce (D-395), the white snow went with the white background; here only a thin, broken line of the cap's edge was left, so the cap was not enclosed.
+- **Fix:** `fill_sprite_holes.py --gap 6` thickens the outline while tracing the outside, so breaks up to about 12 px don't let it in; the cap is filled with snow white. Applied to `sprites/racer/hd/snow_rock.png`.
+- **Status:** Accepted
+
+### D-399 — Turbo Run: beach houses 25 % bigger
+- **Date:** 2026-11-25
+- **Decision (director):** make the houses beside the beach 25 % bigger.
+- **Change:** `house_1` 5.5 → 6.9 m, `house_2` 8.0 → 10.0 m, `house_3` 5.0 → 6.25 m tall (widths follow). The lifeguard tower is unchanged. They stand 16–26 m from the kerb, so none reaches the road.
+- **Status:** Accepted

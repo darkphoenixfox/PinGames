@@ -39,6 +39,8 @@ uniform vec3 head_min = vec3(0.45, 0.55, 1.85);
 uniform vec3 head_max = vec3(0.82, 0.8, 9.0);
 // D-144: per model. Non-red cars light only the red texels in the tail box.
 uniform bool tail_red_only = false;
+// D-391: how far inside the lamp boxes a repaint leaves the texture alone.
+uniform float keep_inset = 0.035;
 
 varying vec3 mp;
 
@@ -106,6 +108,21 @@ void fragment() {
 	} else {
 		painted = hue_rotate(c, hue * 6.2831853);
 	}
+	float redness = (c.r > 0.3 && c.r > c.g * 1.8 && c.r > c.b * 1.8) ? 1.0 : 0.0;
+	// D-391: a repaint leaves the lamps their own colours: the tail lamps
+	// (the same area that lights up when braking) and the head lamps.
+	float tail_mask = soft_box(mp, tail_min, tail_max, 0.06) * (tail_red_only ? redness : 1.0);
+	// The kept area is the tail box drawn in a little (keep_inset), so the
+	// paint round the lenses is still repainted. Where the box is wider than
+	// the lamps (tail_red_only), only lens colours stay: strong reds (colours
+	// are linear here, so orange and yellow paint is well below 5:1) and the
+	// dark housings.
+	float c_hi = max(c.r, max(c.g, c.b));
+	float lens = (c.r > 0.05 && c.r > c.g * 5.0 && c.r > c.b * 5.0) ? 1.0 : 1.0 - smoothstep(0.1, 0.18, c_hi);
+	vec3 inset = vec3(keep_inset, keep_inset, 0.0);
+	float lamp_keep = max(soft_box(mp, tail_min + inset, tail_max - inset, 0.012) * (tail_red_only ? lens : 1.0),
+		soft_box(mp, head_min + inset, head_max - inset, 0.012));
+	painted = mix(painted, c, lamp_keep);
 	ALBEDO = painted * bright;
 	float lum = dot(c, vec3(0.3, 0.59, 0.11));
 	if (spin > 0.5 && wheel_n > 0 && abs(mp.x) > 0.5 && mn.x * sign(mp.x) > 0.3) {
@@ -127,10 +144,8 @@ void fragment() {
 			}
 		}
 	}
-	float redness = (c.r > 0.3 && c.r > c.g * 1.8 && c.r > c.b * 1.8) ? 1.0 : 0.0;
 	// Tail lamps (D-198): a dim running glow at night, full brightness braking
 	// (with a hot core), instead of one flat level.
-	float tail_mask = soft_box(mp, tail_min, tail_max, 0.06) * (tail_red_only ? redness : 1.0);
 	float tail = tail_mask * max(lamps * 0.3, brake);
 	float head = soft_box(mp, head_min, head_max, 0.05) * lamps;
 	float top_k = clamp((mp.y - 0.3) / 0.9, 0.0, 1.0);   // the roof catches it most

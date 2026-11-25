@@ -59,6 +59,8 @@ static func styled_label(text: String, style: String, scale: int = 2,
 	l.add_theme_font_size_override("font_size", unit * maxi(1, scale))
 	if f.has_meta("smooth"):
 		l.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		l.set_meta("smooth_font", true)   # D-382: a game may redraw it hard-edged
+		l.set_meta("styled", [style, maxi(1, scale)])   # D-384: or swap in a pixel version
 	l.add_theme_color_override("font_color", Color.WHITE)
 	l.add_theme_constant_override("outline_size", 0)
 	return l

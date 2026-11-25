@@ -1,188 +1,271 @@
-"""Generates PinPixel, the bundle's pixel-art UI font (D-060), as a TrueType file.
+"""Turbo Run's 8-BIT and 16-BIT title fonts (D-384) from the director's
+pixel-art sheets (A-M, N-Z, then 0-9 ! ? & . , -), and their police recolours.
 
-Style: 16-bit sci-fi arcade — chunky 2-pixel strokes, squared letters with
-chamfered corners, 9-pixel cap height, uppercase design (lowercase maps to the
-same glyphs). Covers A-Z, 0-9, common punctuation and Latin accents for
-translations (accents sit in 3 rows above the caps; cedilla below).
+The sheets are pixel art blown up on a grey card (2730x1536: one art pixel is
+10.66 px on the 8-bit sheet, 5.33 px on the 16-bit one). Each art pixel is
+read back from the middle of its cell, the grey is removed, the colours are
+snapped to a small palette, and the glyphs are cut as connected shapes (the
+letters are italic). ":" is two of the sheet's periods.
 
-Each glyph is drawn on a pixel grid: rows top->bottom, '#' = on. Row 0 is the
-cap top; negative rows (accents) and rows 9-10 (cedilla) are handled by the
-accent tables. One font pixel = 100 font units; UPM 1200, so at font size N px
-one font pixel = N/12 screen pixels (use multiples of 12 for crisp pixels).
-
-Output: assets/fonts/pinpixel.ttf
-Usage:  python scripts/tools/gen_pixel_font.py
+Writes assets/fonts/title_<name>.png + .json for
+  sunset_8, sunset_16    the sheets as drawn
+  sunset_16s             the 16-bit art at half size, for smaller text
+  cops_8, cops_16, cops_16s   the same glyphs in police blue over red
+in the styled-font format (D-062) with "pixel": true: drawn 1:1 on the
+low-resolution UI, never smoothed.
+The director has since cleaned the six images by hand (stray pixels, missing
+pixels; D-385). Running this again would overwrite that work, so it refuses
+unless --force is given.
+Usage: python scripts/tools/gen_pixel_font.py --force
+       python scripts/tools/gen_pixel_font.py --police   (only re-make the
+           three police images from the current sunset images)
 """
+import colorsys
+import json
 import os
 
-from fontTools.fontBuilder import FontBuilder
-from fontTools.pens.ttGlyphPen import TTGlyphPen
+import numpy as np
+from PIL import Image
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUT = os.path.join(ROOT, "assets", "fonts", "pinpixel.ttf")
-PX = 100
-UPM = 1200
-CAP = 9          # rows 0..8
-ASCENT = 1200    # room for accents (3 rows above caps)
-DESCENT = 200    # room for the cedilla (2 rows below)
-
-G = {
-    "A": [".####.", "##..##", "##..##", "##..##", "######", "##..##", "##..##", "##..##", "##..##"],
-    "B": ["#####.", "##..##", "##..##", "##..##", "#####.", "##..##", "##..##", "##..##", "#####."],
-    "C": [".#####", "##....", "##....", "##....", "##....", "##....", "##....", "##....", ".#####"],
-    "D": ["#####.", "##..##", "##..##", "##..##", "##..##", "##..##", "##..##", "##..##", "#####."],
-    "E": ["######", "##....", "##....", "##....", "#####.", "##....", "##....", "##....", "######"],
-    "F": ["######", "##....", "##....", "##....", "#####.", "##....", "##....", "##....", "##...."],
-    "G": [".#####", "##....", "##....", "##....", "##.###", "##..##", "##..##", "##..##", ".#####"],
-    "H": ["##..##", "##..##", "##..##", "##..##", "######", "##..##", "##..##", "##..##", "##..##"],
-    "I": ["######", "..##..", "..##..", "..##..", "..##..", "..##..", "..##..", "..##..", "######"],
-    "J": ["....##", "....##", "....##", "....##", "....##", "....##", "....##", "##..##", ".####."],
-    "K": ["##..##", "##.##.", "####..", "###...", "###...", "####..", "##.##.", "##..##", "##..##"],
-    "L": ["##....", "##....", "##....", "##....", "##....", "##....", "##....", "##....", "######"],
-    "M": ["##...##", "###.###", "#######", "##.#.##", "##...##", "##...##", "##...##", "##...##", "##...##"],
-    "N": ["##..##", "###.##", "###.##", "######", "##.###", "##.###", "##..##", "##..##", "##..##"],
-    "O": [".####.", "##..##", "##..##", "##..##", "##..##", "##..##", "##..##", "##..##", ".####."],
-    "P": ["#####.", "##..##", "##..##", "##..##", "#####.", "##....", "##....", "##....", "##...."],
-    "Q": [".####.", "##..##", "##..##", "##..##", "##..##", "##..##", "##..##", "##.###", ".#####"],
-    "R": ["#####.", "##..##", "##..##", "##..##", "#####.", "####..", "##.##.", "##..##", "##..##"],
-    "S": [".#####", "##....", "##....", "##....", ".####.", "....##", "....##", "....##", "#####."],
-    "T": ["######", "..##..", "..##..", "..##..", "..##..", "..##..", "..##..", "..##..", "..##.."],
-    "U": ["##..##", "##..##", "##..##", "##..##", "##..##", "##..##", "##..##", "##..##", ".####."],
-    "V": ["##..##", "##..##", "##..##", "##..##", "##..##", "##..##", "##..##", ".####.", "..##.."],
-    "W": ["##...##", "##...##", "##...##", "##...##", "##...##", "##.#.##", "#######", "###.###", "##...##"],
-    "X": ["##..##", "##..##", ".####.", "..##..", "..##..", "..##..", ".####.", "##..##", "##..##"],
-    "Y": ["##..##", "##..##", "##..##", ".####.", "..##..", "..##..", "..##..", "..##..", "..##.."],
-    "Z": ["######", "....##", "...###", "..###.", ".###..", "###...", "##....", "##....", "######"],
-    "0": [".####.", "##..##", "##.###", "##.###", "###.##", "###.##", "##..##", "##..##", ".####."],
-    "1": ["..##..", ".###..", "####..", "..##..", "..##..", "..##..", "..##..", "..##..", "######"],
-    "2": [".####.", "##..##", "....##", "....##", ".####.", "##....", "##....", "##....", "######"],
-    "3": ["#####.", "....##", "....##", "....##", ".####.", "....##", "....##", "....##", "#####."],
-    "4": ["##..##", "##..##", "##..##", "##..##", "######", "....##", "....##", "....##", "....##"],
-    "5": ["######", "##....", "##....", "##....", "#####.", "....##", "....##", "....##", "#####."],
-    "6": [".#####", "##....", "##....", "##....", "#####.", "##..##", "##..##", "##..##", ".####."],
-    "7": ["######", "....##", "....##", "...##.", "..##..", "..##..", "..##..", "..##..", "..##.."],
-    "8": [".####.", "##..##", "##..##", "##..##", ".####.", "##..##", "##..##", "##..##", ".####."],
-    "9": [".####.", "##..##", "##..##", "##..##", ".#####", "....##", "....##", "....##", "#####."],
-    ".": ["..", "..", "..", "..", "..", "..", "..", "##", "##"],
-    ",": ["..", "..", "..", "..", "..", "..", "..", "##", "##", ".#", "#."],  # tail below the baseline
-    ":": ["..", "..", "##", "##", "..", "..", "##", "##", ".."],
-    ";": ["..", "..", "##", "##", "..", "..", "..", "##", "##", ".#", "#."],
-    "!": ["##", "##", "##", "##", "##", "##", "..", "##", "##"],
-    "?": [".####.", "##..##", "....##", "...##.", "..##..", "..##..", "......", "..##..", "..##.."],
-    "-": ["....", "....", "....", "....", "####", "....", "....", "....", "...."],
-    "+": ["......", "......", "..##..", "..##..", "######", "######", "..##..", "..##..", "......"],
-    "'": ["##", "##", "#.", "..", "..", "..", "..", "..", ".."],
-    "\"": ["##.##", "##.##", "#..#.", ".....", ".....", ".....", ".....", ".....", "....."],
-    "/": ["....##", "....##", "...##.", "...##.", "..##..", ".##...", ".##...", "##....", "##...."],
-    "%": ["##...##", "##..##.", "...##..", "..##...", ".##....", "##.....", ".....##", "....###", "....###"],
-    "#": [".......", ".##.##.", "#######", ".##.##.", ".##.##.", "#######", ".##.##.", ".......", "......."],
-    "(": [".##", "##.", "##.", "##.", "##.", "##.", "##.", "##.", ".##"],
-    ")": ["##.", ".##", ".##", ".##", ".##", ".##", ".##", ".##", "##."],
-    "<": [".....", "...##", "..##.", ".##..", "##...", ".##..", "..##.", "...##", "....."],
-    ">": [".....", "##...", ".##..", "..##.", "...##", "..##.", ".##..", "##...", "....."],
-    "=": ["......", "......", "######", "######", "......", "######", "######", "......", "......"],
-    "_": ["......", "......", "......", "......", "......", "......", "......", "......", "######"],
-    "*": ["......", "#.##.#", ".####.", "######", ".####.", "#.##.#", "......", "......", "......"],
-    "&": [".###...", "##.##..", "##.##..", ".###...", ".####.#", "##.####", "##..##.", "##..###", ".####.#"],
-    "¡": ["##", "##", "..", "##", "##", "##", "##", "##", "##"],
-    "¿": ["..##..", "..##..", "......", "..##..", "..##..", ".##...", "##....", "##..##", ".####."],
+SRC = os.path.join(ROOT, "assets", "source", "racer")
+OUT = os.path.join(ROOT, "assets", "fonts")
+ROWS = ["ABCDEFGHIJKLM", "NOPQRSTUVWXYZ", "0123456789!?&.,-"]
+SHEETS = {
+    "8": {"file": "sunset_font_8bit.png", "grid": (256, 144), "colours": 4},
+    "16": {"file": "sunset_font_16bit.png", "grid": (512, 288), "colours": 14},
 }
-
-# Accent marks: (rows above the cap top, as list from top), width matches base.
-ACCENTS = {
-    "acute": ["...##.", "..##.."],
-    "grave": [".##...", "..##.."],
-    "diaeresis": ["##..##", "##..##"],
-    "circumflex": [".####.", "##..##"],
-    "tilde": [".###.#", "#.###."],
-}
-ACCENTED = {
-    "Á": ("A", "acute"), "É": ("E", "acute"), "Í": ("I", "acute"), "Ó": ("O", "acute"), "Ú": ("U", "acute"),
-    "À": ("A", "grave"), "È": ("E", "grave"), "Ì": ("I", "grave"), "Ò": ("O", "grave"), "Ù": ("U", "grave"),
-    "Ä": ("A", "diaeresis"), "Ë": ("E", "diaeresis"), "Ï": ("I", "diaeresis"), "Ö": ("O", "diaeresis"),
-    "Ü": ("U", "diaeresis"), "Â": ("A", "circumflex"), "Ê": ("E", "circumflex"), "Î": ("I", "circumflex"),
-    "Ô": ("O", "circumflex"), "Û": ("U", "circumflex"), "Ñ": ("N", "tilde"), "Ã": ("A", "tilde"),
-    "Õ": ("O", "tilde"),
-}
-CEDILLA = ["..##..", ".##..."]  # rows 9..10 below the cap baseline
+SLANT = 0.17
 
 
-def glyph_rows(ch: str):
-    """Returns {row: pattern} with row 0 = cap top (negative = above)."""
-    if ch in G:
-        return {r: line for r, line in enumerate(G[ch])}
-    if ch in ACCENTED:
-        base, mark = ACCENTED[ch]
-        rows = {r: line for r, line in enumerate(G[base])}
-        acc = ACCENTS[mark]
-        w = len(G[base][0])
-        for i, line in enumerate(acc):  # rows -3, -2 (row -1 left blank)
-            pad = (w - len(line)) // 2
-            rows[-3 + i] = ("." * pad + line).ljust(w, ".")[:w]
-        return rows
-    if ch == "Ç":
-        rows = {r: line for r, line in enumerate(G["C"])}
-        rows[9], rows[10] = CEDILLA
-        return rows
-    return None
-
-
-def draw(rows: dict):
-    pen = TTGlyphPen(None)
-    for r, line in rows.items():
-        y_top = (CAP - r) * PX  # baseline at the bottom of row 8
-        for c, cell in enumerate(line):
-            if cell != "#":
+def art_pixels(path, grid, colours):
+    """The sheet's own pixels: RGBA array at `grid` size, grey card cleared."""
+    a = np.array(Image.open(path).convert("RGB")).astype(np.float32)
+    h, w, _ = a.shape
+    gw, gh = grid
+    cw, ch = w / gw, h / gh
+    bg = np.median(a.reshape(-1, 3), axis=0)
+    out = np.zeros((gh, gw, 4), np.uint8)
+    for gy in range(gh):
+        y0, y1 = int((gy + 0.3) * ch), max(int((gy + 0.7) * ch), int((gy + 0.3) * ch) + 1)
+        for gx in range(gw):
+            x0, x1 = int((gx + 0.3) * cw), max(int((gx + 0.7) * cw), int((gx + 0.3) * cw) + 1)
+            c = np.median(a[y0:y1, x0:x1].reshape(-1, 3), axis=0)
+            if np.abs(c - bg).sum() <= 75:
                 continue
-            x0, x1 = c * PX, (c + 1) * PX
-            y1, y0 = y_top, y_top - PX
-            pen.moveTo((x0, y0))  # clockwise (TrueType outer contour)
-            pen.lineTo((x0, y1))
-            pen.lineTo((x1, y1))
-            pen.lineTo((x1, y0))
-            pen.closePath()
-    return pen.glyph()
+            # The soft dark glow round each letter on the card: dull and
+            # mid-dark (the letters' own dark line is a strong purple).
+            hi, lo = float(c.max()), float(c.min())
+            if hi < 153 and (hi - lo) / max(hi, 1.0) < 0.35 and hi > 56:
+                continue
+            out[gy, gx] = (int(c[0]), int(c[1]), int(c[2]), 255)
+    solid = out[..., 3] > 0
+    # Snap the colours to a small palette (solid pixels only).
+    # The most used colours (in steps of 24, so near-identical ones count
+    # together) are the art's palette; every pixel takes the nearest.
+    cols = out[solid][:, :3].astype(np.int32)
+    keys, inv, counts = np.unique(cols // 24, axis=0, return_inverse=True, return_counts=True)
+    inv = inv.reshape(-1)
+    top = np.argsort(-counts)[:colours]
+    pal = np.array([np.median(cols[inv == k], axis=0) for k in top])
+    near = np.argmin(((cols[:, None, :] - pal[None, :, :]) ** 2).sum(axis=2), axis=1)
+    out[solid, :3] = pal[near].astype(np.uint8)
+    return out
+
+
+def bands(flags, n_min):
+    res, start = [], None
+    for i, v in enumerate(list(flags) + [False]):
+        if v and start is None:
+            start = i
+        elif not v and start is not None:
+            if i - start >= n_min:
+                res.append((start, i))
+            start = None
+    return res
+
+
+def shapes(px, y0, y1, min_area):
+    """One row's glyphs, left to right, each [x0, x1) with its own pixels only.
+
+    Neighbours touch through their dark lines and shadows, so the letters are
+    found by their bright fill (which never touches), a small piece within a
+    bigger one's span along the slant joining it (the dots of ! and ?). Every
+    dark pixel then goes to the letter whose fill it is nearest to.
+    """
+    solid = px[y0:y1, :, 3] > 0
+    fill = solid & (px[y0:y1, :, :3].max(axis=2) > 110)
+    hh, w = solid.shape
+    label = np.zeros((hh, w), np.int32)
+    comps = []
+    for sy in range(hh):
+        for sx in range(w):
+            if label[sy, sx] or not fill[sy, sx]:
+                continue
+            n = len(comps) + 1
+            area = 0
+            stack = [(sx, sy)]
+            label[sy, sx] = n
+            while stack:
+                x, y = stack.pop()
+                area += 1
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < w and 0 <= ny < hh and not label[ny, nx] and fill[ny, nx]:
+                        label[ny, nx] = n
+                        stack.append((nx, ny))
+            comps.append(area)
+    spans = {}
+    for sy in range(hh):
+        shift = SLANT * (sy - hh)
+        for sx in np.nonzero(label[sy])[0]:
+            n = int(label[sy, sx])
+            v = sx + shift
+            lo, hi = spans.get(n, (v, v))
+            spans[n] = (min(lo, v), max(hi, v))
+    keep = sorted([n for n in range(1, len(comps) + 1) if comps[n - 1] >= min_area], key=lambda n: -comps[n - 1])
+    groups = []
+    for n in keep:
+        lo, hi = spans[n]
+        for g in groups:
+            if min(hi, g[2]) - max(lo, g[1]) >= 0.7 * (hi - lo):
+                g[0].append(n)
+                break
+        else:
+            groups.append([[n], lo, hi])
+    groups.sort(key=lambda g: g[1])
+    # Letter number per pixel: the fills first, then outwards through the dark.
+    owner = np.zeros((hh, w), np.int32)
+    for k, g in enumerate(groups):
+        owner[np.isin(label, g[0])] = k + 1
+    frontier = list(zip(*np.nonzero(owner)))
+    while frontier:
+        nxt = []
+        for y, x in frontier:
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < w and 0 <= ny < hh and solid[ny, nx] and not owner[ny, nx]:
+                    owner[ny, nx] = owner[y, x]
+                    nxt.append((ny, nx))
+        frontier = nxt
+    out = []
+    for k in range(1, len(groups) + 1):
+        xs = np.nonzero((owner == k).any(axis=0))[0]
+        x0, x1 = int(xs.min()), int(xs.max()) + 1
+        g = px[y0:y1, x0:x1].copy()
+        g[owner[:, x0:x1] != k] = 0
+        out.append(g)
+    return out
+
+
+def halved(px):
+    """The 16-bit art at half size, for smaller text: each 2x2 block becomes
+    one pixel. A block that is mostly empty is clear; one with two or more
+    dark pixels keeps the dark line; otherwise its most used colour."""
+    h, w, _ = px.shape
+    out = np.zeros((h // 2, w // 2, 4), np.uint8)
+    for y in range(h // 2):
+        for x in range(w // 2):
+            blk = px[y * 2:y * 2 + 2, x * 2:x * 2 + 2].reshape(4, 4)
+            sol = blk[blk[:, 3] > 0]
+            if len(sol) < 2:
+                continue
+            dark = sol[sol[:, :3].max(axis=1) <= 110]
+            pick = dark if len(dark) >= 2 else sol[sol[:, :3].max(axis=1) > 110]
+            cols, counts = np.unique(pick, axis=0, return_counts=True)
+            out[y, x] = cols[np.argmax(counts)]
+    return out
+
+
+def police(px):
+    """The sunset colours as police blue (top) over red: yellows and oranges
+    turn blue, the reds and pinks turn pure red, the dark line stays."""
+    out = px.copy()
+    seen = {}
+    for y, x in zip(*np.nonzero(px[..., 3])):
+        c = tuple(int(v) for v in px[y, x, :3])
+        if c not in seen:
+            h, s, v = colorsys.rgb_to_hsv(c[0] / 255, c[1] / 255, c[2] / 255)
+            deg = h * 360
+            if v < 0.4:
+                n = c
+            elif 26 <= deg <= 75:      # yellow, light orange -> blue, paler where it was lighter
+                n = colorsys.hsv_to_rgb(0.60, max(0.35, min(1.0, 1.25 - s * 0.55 + (1.0 - v))), min(1.0, v + 0.05))
+            else:                      # deep orange, red, pink, magenta -> red
+                n = colorsys.hsv_to_rgb(0.99, min(1.0, s + 0.25), v)
+            seen[c] = tuple(int(round(k * 255)) for k in n) if not isinstance(n[0], int) else n
+        out[y, x, :3] = seen[c]
+    return out
+
+
+def build(tag, px, name, half=False):
+    solid = px[..., 3] > 0
+    rows = bands(solid.sum(axis=1) > 0, 6)
+    assert len(rows) == 3, rows
+    cell = max(y1 - y0 for y0, y1 in rows)
+    ascent = rows[0][1] - rows[0][0]
+    glyphs = {}
+    for (y0, y1), chars in zip(rows, ROWS):
+        cut = shapes(px, y0, y1, 14 if tag == "16" else 3)
+        assert len(cut) == len(chars), (name, chars, len(cut))
+        for g, ch in zip(cut, chars):
+            if half:   # each letter on its own, so none merge
+                pad = np.zeros((g.shape[0] + g.shape[0] % 2, g.shape[1] + g.shape[1] % 2, 4), np.uint8)
+                pad[:g.shape[0], :g.shape[1]] = g
+                g = halved(pad)
+            glyphs[ch] = g
+    if half:
+        cell = (cell + 1) // 2
+        ascent = (ascent + 1) // 2
+    dot = glyphs["."]
+    ys = np.nonzero(dot[..., 3].sum(axis=1))[0]
+    d = dot[ys.min():ys.max() + 1]
+    colon = np.zeros((cell, dot.shape[1], 4), np.uint8)
+    colon[ys.min():ys.max() + 1] = d
+    mid = ascent // 2 - d.shape[0] // 2
+    colon[mid:mid + d.shape[0]] = d
+    glyphs[":"] = colon
+    order = list(glyphs)
+    per = 16
+    cw = max(g.shape[1] for g in glyphs.values()) + 2
+    atlas = np.zeros(((cell + 2) * ((len(order) + per - 1) // per), cw * per, 4), np.uint8)
+    caps = [glyphs[c].shape[1] for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
+    meta = {"size": cell, "ascent": ascent, "descent": cell - ascent, "space": round(sum(caps) / len(caps) * 0.45),
+            "pixel": True, "fallback": "sunset", "glyphs": []}
+    for i, ch in enumerate(order):
+        g = glyphs[ch]
+        x, y = (i % per) * cw, (i // per) * (cell + 2)
+        atlas[y:y + g.shape[0], x:x + g.shape[1]] = g
+        for code in {ord(ch), ord(ch.lower())}:
+            meta["glyphs"].append({"code": code, "x": x, "y": y, "w": int(g.shape[1]), "h": cell, "adv": int(g.shape[1])})
+    Image.fromarray(atlas, "RGBA").save(os.path.join(OUT, "title_%s.png" % name))
+    with open(os.path.join(OUT, "title_%s.json" % name), "w", encoding="utf-8", newline="\n") as f:
+        json.dump(meta, f)
+    print(name, "glyphs", len(order), "cell", cell, "ascent", ascent, "atlas", atlas.shape[1], atlas.shape[0])
+
+
+def recolour_police():
+    """The police images again from the hand-finished sunset ones (D-386)."""
+    for t in ("8", "16s", "16"):
+        a = np.array(Image.open(os.path.join(OUT, "title_sunset_%s.png" % t)).convert("RGBA"))
+        Image.fromarray(police(a), "RGBA").save(os.path.join(OUT, "title_cops_%s.png" % t))
+    print("police fonts recoloured from the sunset images")
 
 
 def main():
-    chars = list(G.keys()) + list(ACCENTED.keys()) + ["Ç"]
-    names = {ch: f"uni{ord(ch):04X}" for ch in chars}
-    glyph_order = [".notdef", "space"] + [names[c] for c in chars]
-    cmap = {32: "space", 0xA0: "space"}
-    glyphs = {}
-    metrics = {}
-    empty = TTGlyphPen(None).glyph()
-    # .notdef: hollow box
-    nd = {r: ("######" if r in (0, 8) else "##..##") for r in range(9)}
-    glyphs[".notdef"] = draw(nd)
-    metrics[".notdef"] = (7 * PX, 0)
-    glyphs["space"] = empty
-    metrics["space"] = (4 * PX, 0)
-    for ch in chars:
-        rows = glyph_rows(ch)
-        w = max(len(line) for line in rows.values())
-        glyphs[names[ch]] = draw(rows)
-        metrics[names[ch]] = ((w + 1) * PX, 0)
-        cmap[ord(ch)] = names[ch]
-        low = ch.lower()
-        if low != ch and len(low) == 1:
-            cmap[ord(low)] = names[ch]  # lowercase -> same (uppercase) design
-    fb = FontBuilder(UPM, isTTF=True)
-    fb.setupGlyphOrder(glyph_order)
-    fb.setupCharacterMap(cmap)
-    fb.setupGlyf(glyphs)
-    fb.setupHorizontalMetrics(metrics)
-    fb.setupHorizontalHeader(ascent=ASCENT, descent=-DESCENT)
-    fb.setupNameTable({"familyName": "PinPixel", "styleName": "Regular",
-                       "uniqueFontIdentifier": "PinPixel-Regular", "fullName": "PinPixel Regular",
-                       "psName": "PinPixel-Regular", "version": "Version 1.0",
-                       "copyright": "PinGames project (in-house)"})
-    fb.setupOS2(sTypoAscender=ASCENT, sTypoDescender=-DESCENT, usWinAscent=ASCENT, usWinDescent=DESCENT,
-                sCapHeight=CAP * PX, sxHeight=CAP * PX)
-    fb.setupPost()
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    fb.save(OUT)
-    print(f"wrote {OUT} ({len(chars)} glyphs)")
+    import sys
+    if "--police" in sys.argv:
+        recolour_police()
+        return
+    if "--force" not in sys.argv:
+        raise SystemExit("The font images were edited by hand (D-385); --force overwrites them.")
+    for tag, cfg in SHEETS.items():
+        px = art_pixels(os.path.join(SRC, cfg["file"]), cfg["grid"], cfg["colours"])
+        build(tag, px, "sunset_%s" % tag)
+        build(tag, police(px), "cops_%s" % tag)
+        if tag == "16":
+            build(tag, px, "sunset_16s", True)
+            build(tag, police(px), "cops_16s", True)
 
 
 if __name__ == "__main__":

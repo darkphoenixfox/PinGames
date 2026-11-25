@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dn0fl27trtanp"
-path="res://.godot/imported/rev_hand.png-0f3067c49b1bb7579bf9baa921ff6765.ctex"
+uid="uid://bwfjm2rhqrfty"
+path="res://.godot/imported/title_sunset_16.png-ad913bc64e423e61df4f83eead095a39.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/textures/racer/rev_hand.png"
-dest_files=["res://.godot/imported/rev_hand.png-0f3067c49b1bb7579bf9baa921ff6765.ctex"]
+source_file="res://assets/fonts/title_sunset_16.png"
+dest_files=["res://.godot/imported/title_sunset_16.png-ad913bc64e423e61df4f83eead095a39.ctex"]
 
 [params]
 

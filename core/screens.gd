@@ -57,6 +57,7 @@ func setup(layout_name: String) -> void:
 	for o in _outputs:
 		o.queue_free()
 	_outputs.clear()
+	_placed.clear()   # D-383
 	current_layout = layout_name
 	backglass.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	var sink := str(Config.get_value("display", "dmd_sink"))
@@ -82,7 +83,10 @@ func setup(layout_name: String) -> void:
 				push_warning("Screens: unknown layout '%s', using windowed" % layout_name)
 				current_layout = "windowed"
 			_setup_windowed()
-	if Config.cli.has("dev-offscreen"):
+	if Config.cli.has("dev-screen"):
+		var want := str(Config.cli["dev-screen"])
+		_move_to_screen.call_deferred(int(want) if want.is_valid_int() else -1)
+	elif Config.cli.has("dev-offscreen"):
 		_move_offscreen.call_deferred()
 	print("Screens: layout '%s' ready" % current_layout)
 
@@ -90,6 +94,37 @@ func setup(layout_name: String) -> void:
 ## Dev test runs (D-355): every window goes far off the desktop, so a test never
 ## shows over the director's work. Screenshots read the viewports, not the screen.
 func _move_offscreen() -> void:
+	for w in _all_windows():
+		w.position = Vector2i(-32000, -32000) + Vector2i(w.position.x % 4000, w.position.y % 4000)
+
+
+## Dev test runs (D-393): every window on monitor `n` (-1 = the first one
+## that isn't the main monitor), keeping its place within the monitor it was
+## laid out for. Without such a monitor they go off the desktop.
+func _move_to_screen(n: int) -> void:
+	var main := DisplayServer.get_primary_screen()
+	if n < 0:
+		for i in DisplayServer.get_screen_count():
+			if i != main:
+				n = i
+				break
+	if n < 0 or n >= DisplayServer.get_screen_count() or (n == main and not Config.cli.has("dev-main-ok")):
+		_move_offscreen()   # never on the main monitor
+		return
+	print("Screens: dev windows on monitor %d %s (main is %d)" % [n, DisplayServer.screen_get_usable_rect(n), main])
+	var area := DisplayServer.screen_get_usable_rect(n)
+	for w in _all_windows():
+		# (The windows start off the desktop, so their place is taken from the
+		# main monitor's corner.)
+		var from := DisplayServer.screen_get_position(main)
+		var at := area.position + Vector2i(posmod(w.position.x - from.x, 4000), posmod(w.position.y - from.y, 4000))
+		# Its title bar stays on that monitor, whatever its size.
+		at.x = clampi(at.x, area.position.x, maxi(area.position.x, area.end.x - 200))
+		at.y = clampi(at.y, area.position.y + 30, maxi(area.position.y + 30, area.end.y - 100))
+		w.position = at
+
+
+func _all_windows() -> Array[Window]:
 	var wins: Array[Window] = [get_window()]
 	for c in get_window().get_children():
 		if c is Window:
@@ -97,8 +132,7 @@ func _move_offscreen() -> void:
 	for c in get_children():
 		if c is Window:
 			wins.append(c)
-	for w in wins:
-		w.position = Vector2i(-32000, -32000) + Vector2i(w.position.x % 4000, w.position.y % 4000)
+	return wins
 
 
 # --- windowed: 3 separate windows side by side on one monitor -----------------
@@ -118,16 +152,18 @@ func _setup_windowed() -> void:
 	var x0 := area.position.x + (area.size.x - table_size.x) / 2
 	var y0 := area.position.y + TITLE_BAR
 
-	_scale_render(table_size)
 	var root := get_window()
 	root.mode = Window.MODE_WINDOWED
 	root.title = "PinGames - TABLE"
 	root.size = table_size
 	root.position = Vector2i(x0, y0)
+	_recall(root, "windowed_table@%d" % mon)   # D-383
+	_scale_render(root.size)
 	_add_view(root, table.get_texture(), 0, false)
 
 	var right_x := x0 + table_size.x + 12   # right of the TABLE (D-197)
 	var bgw := _make_window("PinGames - BACKGLASS", Rect2i(Vector2i(right_x, y0), bg_size), false)
+	_recall(bgw, "windowed_backglass@%d" % mon)
 	_add_view(bgw, backglass.get_texture(), 0, false)
 	if dmd_in_backglass:  # preview of the 2-screen cabinet look (D-080)
 		_add_framed_dmd(bgw)
@@ -136,7 +172,98 @@ func _setup_windowed() -> void:
 		return
 	var dmw := _make_window("PinGames - DMD",
 		Rect2i(Vector2i(right_x, y0 + bg_size.y + TITLE_BAR), dmd_size), false)
+	_recall(dmw, "windowed_dmd@%d" % mon)
 	_add_view(dmw, Dmd.texture(), 0, true)
+
+
+# --- remembered window places (D-383) -----------------------------------------
+## In the windowed and single layouts each window comes back where the player
+## left it (position, size, maximised), per monitor setting. A window moved or
+## resized by hand is stored in the settings about a second after it settles.
+## Not in dev runs that place or size the windows themselves, so those stay
+## repeatable and never write to the real settings.
+const PLACE_DEV_FLAGS := ["dev-offscreen", "dev-screen", "screenshot", "press", "single-size", "single-portrait", "single-preview", "web-preview"]
+var _placed: Array = []      # [key, Window]
+var _place_seen := {}        # key -> "x,y,w,h,max" as last stored or first seen
+var _place_rect := {}        # key -> Rect2i while not maximised
+var _place_poll := 0.0
+var _place_dirty := -1.0
+
+
+func _places_on() -> bool:
+	if is_headless():
+		return false
+	for f in PLACE_DEV_FLAGS:
+		if Config.cli.has(f):
+			return false
+	return true
+
+
+## "x,y,w,h,max" -> [Rect2i, maximised], or [] if it isn't a usable place.
+static func parse_place(text: String, screens: Array) -> Array:
+	var p := text.split(",")
+	if p.size() != 5:
+		return []
+	for v in p:
+		if not v.is_valid_int():
+			return []
+	var r := Rect2i(int(p[0]), int(p[1]), int(p[2]), int(p[3]))
+	if r.size.x < 120 or r.size.y < 40:
+		return []
+	# Its top strip (what you grab to move it) must still be on a monitor.
+	var grip := Rect2i(r.position, Vector2i(r.size.x, 60))
+	for sc in screens:
+		var seen := (sc as Rect2i).intersection(grip)
+		if seen.size.x >= 100 and seen.size.y >= 30:
+			return [r, int(p[4]) == 1]
+	return []
+
+
+## Puts `win` back where it was last left, and starts watching it.
+func _recall(win: Window, key: String) -> void:
+	if not _places_on():
+		return
+	_placed.append([key, win])
+	var screens: Array = []
+	for i in DisplayServer.get_screen_count():
+		screens.append(DisplayServer.screen_get_usable_rect(i))
+	var got := parse_place(str(Config.get_value("windows", key, "")), screens)
+	if got.is_empty():
+		return
+	var r: Rect2i = got[0]
+	win.size = r.size
+	win.position = r.position
+	_place_rect[key] = r
+	if got[1]:
+		win.mode = Window.MODE_MAXIMIZED
+
+
+func _process(delta: float) -> void:
+	if _placed.is_empty():
+		return
+	_place_poll -= delta
+	if _place_poll <= 0.0:
+		_place_poll = 0.5
+		for pw in _placed:
+			var key: String = pw[0]
+			var win := pw[1] as Window
+			if not is_instance_valid(win) or win.mode == Window.MODE_MINIMIZED:
+				continue
+			var big := win.mode == Window.MODE_MAXIMIZED or win.mode == Window.MODE_FULLSCREEN
+			if not big:
+				_place_rect[key] = Rect2i(win.position, win.size)
+			var r: Rect2i = _place_rect.get(key, Rect2i(win.position, win.size))
+			var now := "%d,%d,%d,%d,%d" % [r.position.x, r.position.y, r.size.x, r.size.y, 1 if big else 0]
+			if not _place_seen.has(key):
+				_place_seen[key] = now   # where it opened: nothing to store yet
+			elif _place_seen[key] != now:
+				_place_seen[key] = now
+				Config.set_value("windows", key, now)
+				_place_dirty = 1.0
+	if _place_dirty > 0.0:
+		_place_dirty -= delta
+		if _place_dirty <= 0.0:
+			Config.save()
 
 
 # --- web: all three screens on one page (D-173, D-176, D-177) -----------------
@@ -445,6 +572,7 @@ func _setup_single() -> void:
 				want = Vector2i(int(wh[0]), int(wh[1]))
 		root.size = Vector2i(mini(want.x, area.size.x - 40), mini(want.y, area.size.y - 80))
 		root.position = area.position + (area.size - root.size) / 2
+		_recall(root, "single@%d" % mon)   # D-383
 	_single_page = Control.new()
 	_single_page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_single_page.mouse_filter = Control.MOUSE_FILTER_IGNORE

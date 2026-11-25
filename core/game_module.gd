@@ -30,6 +30,12 @@ func on_action(_action: StringName, _pressed: bool) -> void:
 	pass
 
 
+## D-388: EXIT (or BACK) was pressed. A game showing one of its menus steps
+## back one menu and returns true; false lets EXIT leave the game. Override.
+func back() -> bool:
+	return false
+
+
 func add_to_table(node: Node) -> Node:
 	return _own(Screens.table, node)
 

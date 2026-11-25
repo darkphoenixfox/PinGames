@@ -1308,7 +1308,7 @@ func _enter_level() -> void:
 		_attract_ui.queue_free()
 	_sfx("select")
 	Dmd.play(Callable(), 0.0)
-	_level_sel = 1
+	_level_sel = maxi(sim.level, 1)   # D-388: kept when stepping back
 	_level_ui = UI.vstack(50)
 	_level_ui.add_child(UI.styled_label(tr("TB_START_LEVEL"), TITLE_FONT, 2))
 	_level_num = UI.label("", 192, UI.YELLOW)
@@ -1340,6 +1340,11 @@ func _refresh_level() -> void:
 func _confirm_level() -> void:
 	if is_instance_valid(_level_ui):
 		_level_ui.queue_free()
+	_apply_level()
+	_enter_select()
+
+
+func _apply_level() -> void:
 	if _level_sel != sim.level:
 		sim.level = _level_sel
 		sim.build_rack()
@@ -1348,7 +1353,6 @@ func _confirm_level() -> void:
 		for n in _brick_nodes:   # the intro drops them in
 			n.visible = false
 		_apply_backdrop()   # D-343
-	_enter_select()
 
 
 # --- 2 players (D-286) ------------------------------------------------------------------
@@ -1380,12 +1384,33 @@ func _refresh_players() -> void:
 	Dmd.show_text(tr(["TB_ONE_PLAYER", "TB_TWO_PLAYERS"][_players_sel]), "", Dmd.YELLOW, Dmd.WHITE)
 
 
+## D-388: the 2-player game is set up at the last menu (_confirm_select), so
+## the menus before it can be stepped back through.
 func _confirm_players() -> void:
 	if is_instance_valid(_players_ui):
 		_players_ui.queue_free()
-	if _players_sel == 1:
-		_go_two()
 	_enter_level()   # D-336
+
+
+## D-388: EXIT / BACK in the menus steps back one menu (true = done). From
+## the first menu it returns to the title; from the title EXIT leaves.
+func back() -> bool:
+	match _phase:
+		"players":
+			_players_ui.queue_free()
+			_enter_attract()
+		"level":
+			_level_ui.queue_free()
+			if CabinetInput.two_player_possible():
+				_enter_players()
+			else:
+				_enter_attract()
+		"select":
+			_select_ui.queue_free()
+			_enter_level()
+		_:
+			return false
+	return true
 
 
 ## Switches to a 2-player game: player 2's controls, the 2P simulation on the
@@ -2147,6 +2172,9 @@ func _refresh_select() -> void:
 
 
 func _confirm_select() -> void:
+	if _players_sel == 1 and not _two and CabinetInput.two_player_possible():   # D-388
+		_go_two()
+		_apply_level()
 	var d: String = Sim.DIFFICULTY_ORDER[_select_index]
 	sim.set_difficulty(d, int(Config.get_value("operator", "balls_per_game")))
 	# Remembered for next time (not from scripted test runs, which mustn't save).

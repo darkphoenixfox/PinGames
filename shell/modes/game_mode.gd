@@ -510,15 +510,24 @@ func on_action(action: StringName, pressed: bool) -> void:
 	if is_instance_valid(_quit_box):
 		_quit_action(action, pressed)
 		return
+	# D-388: in a game's menus EXIT and BACK step back one menu.
+	if (action == &"exit" or action == &"back") and pressed and not _loading() and module.back():
+		CabinetInput.mute_until_release()
+		Audio.sfx("back")
+		return
 	if action == &"exit" and pressed:
 		if Screens.current_layout == "single":
 			_open_quit()   # D-260: ask first
 		else:
 			shell.abort_game()
 		return
-	if is_instance_valid(_overlay) and not _overlay.is_queued_for_deletion():
+	if _loading():
 		return   # D-259: still behind the loading screen
 	module.on_action(action, pressed)
+
+
+func _loading() -> bool:
+	return is_instance_valid(_overlay) and not _overlay.is_queued_for_deletion()
 
 
 # --- quit confirmation (D-260) -----------------------------------------------------

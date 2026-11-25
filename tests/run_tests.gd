@@ -34,6 +34,7 @@ func _initialize() -> void:
 	test_racer_police_backup()
 	test_music_files()
 	test_setup_wizard()
+	test_window_places()
 	test_exported_translation()
 	test_export_includes_data()
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -1401,6 +1402,19 @@ func test_racer_police_backup() -> void:
 	check(fines == 1, "one fine for the bust, however many cars (%d)" % fines)
 	check(d.busted_t <= 0.0 and d.police_cars().all(func(car: Dictionary) -> bool: return car.state == "leave"),
 		"after the fine every car drives off")
+
+
+## D-383: a remembered window place is used only if it is still reachable.
+func test_window_places() -> void:
+	var Scr = load("res://core/screens.gd")
+	var mons := [Rect2i(0, 0, 1920, 1040), Rect2i(1920, 0, 1280, 984)]
+	var a: Array = Scr.parse_place("100,80,1280,720,0", mons)
+	check(a.size() == 2 and a[0] == Rect2i(100, 80, 1280, 720) and a[1] == false, "window place: read back")
+	check(Scr.parse_place("2200,50,800,600,1", mons)[1] == true, "window place: maximised, on the second monitor")
+	check(Scr.parse_place("5000,80,1280,720,0", mons).is_empty(), "window place: off every monitor is ignored")
+	check(Scr.parse_place("100,-700,1280,720,0", mons).is_empty(), "window place: title bar above the screen is ignored")
+	check(Scr.parse_place("100,80,10,10,0", mons).is_empty() and Scr.parse_place("", mons).is_empty()
+		and Scr.parse_place("a,b,c,d,e", mons).is_empty(), "window place: nonsense is ignored")
 
 
 ## D-379: the first-run controls setup, page by page.

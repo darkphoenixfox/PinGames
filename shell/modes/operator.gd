@@ -211,6 +211,7 @@ func _gameplay_items() -> Array:
 			["30 s", "60 s", "120 s", "300 s"]),
 		_cfg_choice("OP_DMD_STYLE", "dmd", "mono", [false, true],
 			[tr("VAL_DMD_COLOR"), tr("VAL_DMD_MONO")], func(v): _set_dmd_mono(v)),
+		_cfg_choice("OP_SCANLINES", "operator", "scanlines", [true, false], _on_off()),   # D-387
 	]
 
 
