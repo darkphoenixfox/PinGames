@@ -64,7 +64,7 @@ const DRIFT_ANGLE := 32.0        # degrees (visual + score feel)
 const NITRO_TIME := 5.0          # s of boost per canister
 const PICKUP_GAP_MIN := 700.0    # m between canisters
 const PICKUP_GAP_MAX := 1200.0
-const PICKUP_DX := 1.87          # lateral reach to collect (D-408: 10 % more, was 1.7)
+const PICKUP_DX := 2.4           # lateral reach to collect (D-416; D-408 had 1.87, was 1.7)
 const PICKUP_DS := CAR_LEN * 0.66   # reach along the road (D-408: 10 % more, was 0.6 of a car)
 ## Gears (D-103): L = strong pull, low top speed; H = weak pull, full speed.
 ## rpm 0..1 is v / the gear's top speed; the tachometer's red zone is >= REDLINE.

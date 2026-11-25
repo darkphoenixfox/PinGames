@@ -4019,3 +4019,9 @@
 - **Dev flag:** `--rc-at-gate[=N]` starts the race N m (default 60) before the next checkpoint gate.
 - **Checked:** screenshots of CHECKPOINT in 16-BIT and HD, FINISH! in the windowed layout, START at night in 8-BIT in the single layout.
 - **Status:** Accepted
+
+### D-416 — Turbo Run: nitro tanks are collected from further to the sides
+- **Date:** 2026-11-25
+- **Decision (director):** the nitro pick-up's collision is too small; collect them from a bit further away on the sides.
+- **Change:** the side reach (`Sim.PICKUP_DX`, car centre to tank centre) is 2.4 m, up from D-408's 1.87 m (+28 %). A lane is 3.75 m wide, so a car still has to move towards the tank's lane rather than collect it from the middle of the next lane. The reach along the road (0.66 of a car length) is unchanged.
+- **Status:** Accepted
