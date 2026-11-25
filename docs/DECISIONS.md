@@ -3533,3 +3533,10 @@
 - **Decision (director):** `metallic_blue_font2.png` adds `.`, `,` and `-` after `& `; all letters share one height (only parts like Q's tail go past the baseline).
 - `gen_metal_font.py` now reads the second sheet (row 3: 0–9 ! ? & . , -) and uses its own period, comma and hyphen, in their drawn positions (glyphs keep their place within the row, top-aligned, one scale for all, D-357). The made-up marks of D-354 are gone except `:`, built from two of the sheet's periods. The glyph cell grew to 162 px so the Q and comma tails aren't clipped (display size follows, 31). Original in `assets/source/breakout/`; credits updated.
 - **Status:** Accepted
+
+### D-359 — Charged bricks' torpedoes ignore the ball for 0.2 s
+- **Date:** 2026-11-25
+- **Decision (director):** when a red charged brick is hit, its torpedo ignores plasma-ball collisions for its first 0.2 s.
+- The torpedo starts just under the brick, where the ball that hit it still is, so it was usually blocked at once. Brick torpedoes now carry a 0.2 s `grace` during which no ball (main or extra) stops them; boss and mini-icosahedron torpedoes are unchanged.
+- **Test:** a ball hitting a charged brick from below sets off a torpedo that is still flying the next step.
+- **Status:** Accepted

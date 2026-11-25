@@ -95,6 +95,7 @@ const CHARGED_POINTS := 200   # D-342
 const PLASMA_POINTS := 150    # D-342
 ## D-342: torpedoes (the boss's ray, D-335, generalised): {id, pos, vel, r, len}.
 ## They pass through bricks; a plasma ball stops them; they cost the ship a charge.
+const BRICK_TORP_GRACE := 0.2   # D-359: s a charged brick's torpedo ignores balls
 const TORP_BRICK := {"speed": 4.0, "r": 0.1, "len": 0.6}     # from a charged brick, straight down
 const TORP_MINI := {"speed": 4.25, "r": 0.08, "len": 0.5}    # from a mini-icosahedron
 ## D-342: the mini-icosahedron enemy (from level 11): moves like the others,
@@ -872,6 +873,7 @@ func _damage_brick(i: int) -> bool:
 	if b.get("charged", false) and b.hp == 1:   # D-342: the first hit fires it
 		var bottom := Vector2(b.rect.get_center().x, b.rect.end.y + 0.1)
 		_spawn_torpedo(bottom, Vector2.DOWN, TORP_BRICK)
+		rays[-1].grace = BRICK_TORP_GRACE   # D-359: the ball that fired it can't stop it at once
 		events.append(["brick_torpedo", [i, bottom]])
 	if b.hp > 0:
 		events.append(["brick_hit", i])
@@ -1062,7 +1064,7 @@ func _ball_substep(b: Dictionary, h: float) -> int:
 			_hurt_dark(k, 1, (pos.x - float(dkk.pos.x)) / (PADDLE_W * 0.5), signf(pos.y - float(dkk.pos.y)))
 			break
 	for k in range(rays.size() - 1, -1, -1):
-		if _ray_touches(rays[k], pos, BALL_R):
+		if float(rays[k].get("grace", 0.0)) <= 0.0 and _ray_touches(rays[k], pos, BALL_R):
 			events.append(["ray_blocked", rays[k].pos])
 			rays.remove_at(k)
 	# Enemies: the plasma destroys them and rebounds.
@@ -1360,9 +1362,11 @@ func _update_boss(dt: float) -> void:
 	for k in range(rays.size() - 1, -1, -1):
 		var r: Dictionary = rays[k]
 		r.pos = Vector2(r.pos) + Vector2(r.vel) * dt
+		r.grace = maxf(0.0, float(r.get("grace", 0.0)) - dt)
 		var blocked := _ray_touches(r, ball_pos, BALL_R) and state == State.PLAY
 		for e in extra_balls:
 			blocked = blocked or _ray_touches(r, e.pos, BALL_R)
+		blocked = blocked and float(r.grace) <= 0.0
 		if blocked:
 			events.append(["ray_blocked", r.pos])
 			rays.remove_at(k)

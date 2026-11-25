@@ -583,6 +583,28 @@ func test_breakout_difficulty(Sim) -> void:
 		if mk2.missiles.is_empty():
 			break
 	check(mk2.darks.is_empty() or int(mk2.darks[0].hp) < dhp, "homing missile targets and hits a corrupted paddle")
+	# D-359: a charged brick's torpedo isn't stopped by the ball that just fired it.
+	var gt = Sim.new()
+	gt.setup(3)
+	gt.level = 11
+	gt.build_rack()
+	gt.step(1.0 / 60.0, false, false, true, 0)
+	var cj := -1
+	for j in gt.bricks.size():
+		if gt.bricks[j].get("charged", false):
+			cj = j
+			break
+	var cr: Rect2 = gt.bricks[cj].rect
+	for j in gt.bricks.size():   # clear the way below it
+		if j != cj and gt.bricks[j].rect.position.y > cr.position.y:
+			gt.bricks[j].alive = false
+	gt.ball_pos = Vector2(cr.get_center().x, cr.end.y + Sim.BALL_R + 0.02)
+	gt.ball_vel = Vector2(0.0, -8.0)
+	gt.ball_speed = 8.0
+	gt.step(1.0 / 60.0, false, false, false, 0)
+	var fired_now: bool = gt.rays.size() == 1
+	gt.step(1.0 / 60.0, false, false, false, 0)
+	check(fired_now and gt.rays.size() == 1, "a charged brick's torpedo survives the ball that set it off")
 	# D-355: torpedoes pass the Sidekicks; only the ship itself is hit.
 	var sk2 = Sim.new()
 	sk2.setup(3)
