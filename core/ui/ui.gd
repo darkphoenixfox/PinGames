@@ -54,7 +54,11 @@ static func styled_label(text: String, style: String, scale: int = 2,
 	if f == null:
 		return label(text, 48 * scale, WHITE, align)
 	l.add_theme_font_override("font", f)
-	l.add_theme_font_size_override("font_size", f.fixed_size * maxi(1, scale))
+	# D-354: smooth (painted) fonts are sized by their display size and filtered.
+	var unit: int = int(f.get_meta("display_size", f.fixed_size))
+	l.add_theme_font_size_override("font_size", unit * maxi(1, scale))
+	if f.has_meta("smooth"):
+		l.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	l.add_theme_color_override("font_color", Color.WHITE)
 	l.add_theme_constant_override("outline_size", 0)
 	return l

@@ -24,7 +24,7 @@ const BACKGLASS_SHADER = preload("res://games/breakout/shaders/backglass_lights.
 const STARFIELD_SHADER = preload("res://games/breakout/shaders/starfield.gdshader")
 
 const ACCENT := Color("3ec7ff")
-const TITLE_FONT := "nano"  # D-062
+const TITLE_FONT := "metal"  # D-354: the director's metallic blue (was "nano", D-062)
 const PADDLE_MODEL := "res://assets/models/breakout/paddle.glb"
 const SIDE_THRUST_BRIGHTNESS := 0.22   # D-344: the side thrusters, dimmed so the ship's ends read
 const MODEL_PADDLE_WIDTH := 1.9  # paddle.glb's native length along X
@@ -2259,8 +2259,18 @@ func _spawn_flyby(hw: float) -> void:
 		1: body = Fx.make_cube(r, tex, Color(0.4, 0.7, 0.9))
 		_: body = Fx.make_icosahedron(r, tex, Color(1.0, 0.3, 0.3), 0.6)
 	root.add_child(body)
+	# D-354: panels lit enough to read, edges toned right down (they were the
+	# brightest thing on them and drew the eye).
 	for mi in body.find_children("*", "MeshInstance3D", true, false):
-		(mi as GeometryInstance3D).transparency = 0.78   # dimmed: background, not a threat (D-347: 20% darker)
+		var m := mi as MeshInstance3D
+		if m.mesh is ImmediateMesh:   # the glowing edge lines
+			var em := (m.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+			em.albedo_color = em.albedo_color * 0.18
+			em.albedo_color.a = 1.0
+			m.material_override = em
+			m.transparency = 0.6
+		else:
+			m.transparency = 0.55
 	var p := CPUParticles3D.new()
 	p.amount = 24
 	p.lifetime = 0.7

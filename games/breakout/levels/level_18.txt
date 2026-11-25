@@ -1,7 +1,8 @@
-# Level 18: a hive ringed with plasma (D-342).
-...PPPPP...
-..PRRRRRP..
+# Level 18: a hive ringed with plasma and charged bricks (D-342; D-354: half
+# the plasma ring is charged now, it was too easy).
+...PCPCP...
+..CRRRRRC..
 .PRYYCYYRP.
-.PRYGGGYRP.
+.CRYGGGYRC.
 ..PRYYYRP..
-...PPPPP...
+...CPCPC...

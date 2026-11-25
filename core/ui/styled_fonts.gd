@@ -21,8 +21,23 @@ static func get_font(style: String) -> FontFile:
 	var key := Vector2i(size, 0)
 	var f := FontFile.new()
 	f.fixed_size = size
-	f.fixed_size_scale_mode = TextServer.FIXED_SIZE_SCALE_INTEGER_ONLY
-	f.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+	# D-354: a "smooth" font is painted art (not pixels): it scales freely, from
+	# mipmaps, and is sized by its "display_size" (styled_label's scale 1).
+	var smooth: bool = meta.get("smooth", false)
+	if smooth:
+		img.generate_mipmaps()
+		f.fixed_size_scale_mode = TextServer.FIXED_SIZE_SCALE_ENABLED
+		f.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
+		f.set_meta("display_size", int(meta.get("display_size", size)))
+		f.set_meta("smooth", true)
+		# Marks it lacks come from the game's old pixel font.
+		if meta.has("fallback"):
+			var fb := get_font(str(meta.fallback))
+			if fb != null:
+				f.fallbacks = [fb]
+	else:
+		f.fixed_size_scale_mode = TextServer.FIXED_SIZE_SCALE_INTEGER_ONLY
+		f.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 	f.set_texture_image(0, key, 0, img)
 	f.set_cache_ascent(0, size, float(meta.ascent))
 	f.set_cache_descent(0, size, float(meta.descent))

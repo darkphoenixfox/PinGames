@@ -1370,7 +1370,7 @@ func _update_boss(dt: float) -> void:
 		var hit_ship := -1
 		for ship in (2 if two_player else 1):
 			_use(ship)
-			if ship_invulnerable <= 0.0 and not BP.collide_circle_rect(r.pos, float(r.get("r", RAY_R)), catch_rect()).is_empty():
+			if ship_invulnerable <= 0.0 and not BP.collide_circle_rect(r.pos, float(r.get("r", RAY_R)), paddle_rect()).is_empty():   # D-355: the ship only, not its Sidekicks
 				hit_ship = ship
 				break
 		if hit_ship >= 0:

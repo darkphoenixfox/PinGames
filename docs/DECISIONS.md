@@ -3497,3 +3497,18 @@
 - **DMD lives:** the lives row is at most 4 dots wide (`LIVES_SLOTS`); with more than 4 lives it shows the number and one dot in that space. The level text and the 2P power bars are placed after 4 slots, so an extra charge never moves them.
 - **Sizes:** PRESS START up to 312 px (was 520), READY! up to 456 px (was 760), GAME OVER up to 432 px (was 720), each within the field on the single screen.
 - **Status:** Accepted
+
+### D-354 — Tilt Breaker: the director's metallic blue font; level 18 harder; quieter fly-bys
+- **Date:** 2026-11-25
+- **Decision (director):** a font cut from the director's `metallic_blue_font.png` sheet (A–M, N–Z, 0–9 ! ? &) replaces the retro pixel title font ("nano") everywhere in Tilt Breaker. Level 18 was far too easy: half its plasma bricks become charged bricks. The background fly-bys' panels were too dark and their edge lines too bright.
+- **Font:** `scripts/tools/gen_metal_font.py` cuts each glyph at its transparent gaps (rows share a top and bottom, so one baseline), scales rows to 132 px, and writes `assets/fonts/title_metal.png/.json` in the styled-font format (D-062). Lower case maps to the capitals. Marks the sheet lacks are made from its own pieces: `.` and `:` from the "!" dot, `,` from the dot with a slanted tail, `-` from the "!" bar on its side; anything else falls back to the nano font. New font flags: `smooth` (painted art: mipmapped, scaled freely, linear filtered) and `display_size` (29: letters about as wide as the old font's at the same scale). `StyledFonts` and `UI.styled_label` honour them. `TITLE_FONT` is "metal" (the picker/attract title text too, via the game's info). Original in `assets/source/breakout/`; recorded in `assets/CREDITS.md`.
+- **Level 18:** 9 of its 18 plasma bricks are now charged bricks, alternating around the ring (1P and 2P).
+- **Fly-bys:** panels 55% transparent (were 78%), edge lines at 18% brightness and 60% transparent.
+- **Status:** Accepted
+
+### D-355 — Test windows off the desktop; torpedoes ignore the Sidekicks
+- **Date:** 2026-11-25
+- **Decision (director):** test runs mustn't pop the game window up over the director's screen; torpedoes don't collide with the Sidekicks (only balls do).
+- `scripts/dev_run.sh` starts every window at (-32000, -32000) (override.cfg's initial position) and passes `--dev-offscreen`, which makes `Screens` move all its windows off the desktop after laying them out. Screenshots read the viewports, so they still work. `PINGAMES_DEV_VISIBLE=1` shows them as before.
+- Torpedoes and boss rays now test the ship's own rect (`paddle_rect`), not the catch width with the Sidekicks (`catch_rect`). **Test:** a torpedo through a Sidekick costs nothing.
+- **Status:** Accepted

@@ -566,6 +566,19 @@ func test_breakout_difficulty(Sim) -> void:
 	for i in 70:
 		sl2.step(1.0 / 60.0, false, false, true, 0)
 	check(still and sl2.state == Sim.State.PLAY, "after a lost charge the plasma can't be launched for 2 s")
+	# D-355: torpedoes pass the Sidekicks; only the ship itself is hit.
+	var sk2 = Sim.new()
+	sk2.setup(3)
+	sk2.step(1.0 / 60.0, false, false, true, 0)
+	sk2.freeze_ball = true
+	sk2.ball_pos = Vector2(-3.5, -2.0)
+	sk2.apply_powerup("K")
+	var side_x: float = sk2.paddle_x + Sim.PADDLE_W * 0.5 + Sim.SIDEKICK_W * 0.5
+	sk2._spawn_torpedo(Vector2(side_x, sk2.paddle_y - 1.0), Vector2.DOWN, Sim.TORP_BRICK)
+	var lives_k: int = sk2.balls_left
+	for i in 90:
+		sk2.step(1.0 / 60.0, false, false, false, 0)
+	check(sk2.balls_left == lives_k, "a torpedo through a Sidekick doesn't cost a charge")
 	# D-339: every 4 damage to the boss drops a capsule.
 	var bd = Sim.new()
 	bd.setup(3)

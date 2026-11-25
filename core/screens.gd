@@ -82,7 +82,23 @@ func setup(layout_name: String) -> void:
 				push_warning("Screens: unknown layout '%s', using windowed" % layout_name)
 				current_layout = "windowed"
 			_setup_windowed()
+	if Config.cli.has("dev-offscreen"):
+		_move_offscreen.call_deferred()
 	print("Screens: layout '%s' ready" % current_layout)
+
+
+## Dev test runs (D-355): every window goes far off the desktop, so a test never
+## shows over the director's work. Screenshots read the viewports, not the screen.
+func _move_offscreen() -> void:
+	var wins: Array[Window] = [get_window()]
+	for c in get_window().get_children():
+		if c is Window:
+			wins.append(c)
+	for c in get_children():
+		if c is Window:
+			wins.append(c)
+	for w in wins:
+		w.position = Vector2i(-32000, -32000) + Vector2i(w.position.x % 4000, w.position.y % 4000)
 
 
 # --- windowed: 3 separate windows side by side on one monitor -----------------
