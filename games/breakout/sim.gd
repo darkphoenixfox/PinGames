@@ -1523,7 +1523,7 @@ func _update_shots(dt: float) -> void:
 		m.pos = p
 		var boom := not field.grow(0.5).has_point(p) or (tp != null and p.distance_to(tp) < 0.35) \
 			or _enemy_hit_by_rect(Rect2(p - Vector2.ONE * MISSILE_R, Vector2.ONE * MISSILE_R * 2.0)) != -1 \
-			or (boss_hp > 0 and p.distance_to(boss_pos) < BOSS_R + MISSILE_R)
+			or (boss_hp > 0 and p.distance_to(boss_pos) < BOSS_R + MISSILE_R) 			or _dark_hit_by_rect(Rect2(p - Vector2.ONE * MISSILE_R, Vector2.ONE * MISSILE_R * 2.0)) != -1   # D-356
 		if not boom:
 			for b in bricks:
 				if b.alive and not BP.collide_circle_rect(p, MISSILE_R, b.rect).is_empty():
@@ -1546,6 +1546,10 @@ func _missile_target(from: Vector2) -> Array:
 		if en.state != "wormhole" and from.distance_to(en.pos) < best_d:
 			best_d = from.distance_to(en.pos)
 			best = ["enemy", en.id]
+	for d in darks:   # D-356: corrupted paddles are targets too
+		if d.state == "live" and from.distance_to(d.pos) < best_d:
+			best_d = from.distance_to(d.pos)
+			best = ["dark", d.id]
 	for j in bricks.size():
 		var b: Dictionary = bricks[j]
 		if b.alive and not b.get("metal", false) and from.distance_to(b.rect.get_center()) < best_d:
@@ -1559,6 +1563,11 @@ func _target_pos(t: Array) -> Variant:
 		return null
 	if t[0] == "boss":
 		return boss_pos if boss_hp > 0 else null
+	if t[0] == "dark":
+		for d in darks:
+			if d.id == t[1] and d.state == "live":
+				return d.pos
+		return null
 	if t[0] == "enemy":
 		for en in enemies:
 			if en.id == t[1] and en.state != "wormhole":

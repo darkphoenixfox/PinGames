@@ -566,6 +566,23 @@ func test_breakout_difficulty(Sim) -> void:
 	for i in 70:
 		sl2.step(1.0 / 60.0, false, false, true, 0)
 	check(still and sl2.state == Sim.State.PLAY, "after a lost charge the plasma can't be launched for 2 s")
+	# D-356: a missile homes on a corrupted paddle and blows up on it.
+	var mk2 = Sim.new()
+	mk2.setup(3)
+	mk2.level = 15
+	mk2.build_rack()
+	mk2.bricks.clear()
+	mk2.bricks.append({"rect": Rect2(3.0, -6.0, 0.7, 0.35), "hp": 1, "alive": true, "row": 0, "col": 0, "points": 10, "metal": false})
+	mk2.spawn_dark(-2.0)
+	mk2.darks[0].state = "live"
+	var dhp: int = mk2.darks[0].hp
+	mk2.missiles.append({"id": 900, "pos": Vector2(0.0, 4.0), "vel": Vector2.UP * Sim.MISSILE_SPEED, "target": mk2._missile_target(Vector2(0.0, 4.0))})
+	for i in 120:
+		mk2._update_shots(1.0 / 60.0)
+		mk2._update_darks(0.0)
+		if mk2.missiles.is_empty():
+			break
+	check(mk2.darks.is_empty() or int(mk2.darks[0].hp) < dhp, "homing missile targets and hits a corrupted paddle")
 	# D-355: torpedoes pass the Sidekicks; only the ship itself is hit.
 	var sk2 = Sim.new()
 	sk2.setup(3)

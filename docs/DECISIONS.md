@@ -3512,3 +3512,11 @@
 - `scripts/dev_run.sh` starts every window at (-32000, -32000) (override.cfg's initial position) and passes `--dev-offscreen`, which makes `Screens` move all its windows off the desktop after laying them out. Screenshots read the viewports, so they still work. `PINGAMES_DEV_VISIBLE=1` shows them as before.
 - Torpedoes and boss rays now test the ship's own rect (`paddle_rect`), not the catch width with the Sidekicks (`catch_rect`). **Test:** a torpedo through a Sidekick costs nothing.
 - **Status:** Accepted
+
+### D-356 — Fix: homing missiles ignored corrupted paddles
+- **Date:** 2026-11-25
+- **Bug (director):** rockets ignored the corrupted paddle.
+- **Cause:** D-342 added corrupted paddles without adding them to the missile's targets or to what sets it off (its blast already hurt them if they happened to be inside it).
+- **Fix:** a live corrupted paddle is a homing target (nearest wins, as with enemies and bricks), and a missile touching one explodes, its blast giving the usual weapon hit (2 of its 10).
+- **Test:** a missile aimed from below with a far-off brick goes for the paddle and hits it.
+- **Status:** Accepted
