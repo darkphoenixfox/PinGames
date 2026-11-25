@@ -65,7 +65,9 @@ def main():
         for (x0, x1), ch in zip(merged, chars):
             glyphs[ch] = im.crop((x0, y0, x1, y1))
     k = GLYPH_H / glyphs["A"].height
-    scaled = {c: g.resize((max(1, round(g.width * k)), GLYPH_H), Image.LANCZOS) for c, g in glyphs.items()}
+    # D-357: one scale for every glyph (rows differ in height: N-Z holds Q's
+    # tail), all top-aligned, so capitals are equal and Q's tail hangs below.
+    scaled = {c: g.resize((max(1, round(g.width * k)), max(1, round(g.height * k))), Image.LANCZOS) for c, g in glyphs.items()}
     # Extra marks from the "!": its bar and its dot (split at the empty rows).
     ex = scaled["!"]
     ea = ex.getchannel("A")

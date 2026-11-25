@@ -3520,3 +3520,10 @@
 - **Fix:** a live corrupted paddle is a homing target (nearest wins, as with enemies and bricks), and a missile touching one explodes, its blast giving the usual weapon hit (2 of its 10).
 - **Test:** a missile aimed from below with a far-off brick goes for the paddle and hits it.
 - **Status:** Accepted
+
+### D-357 — Fix: metallic font letters of uneven height
+- **Date:** 2026-11-25
+- **Bug (director):** in START LEVEL, S, T, R and V were shorter than A, L and E.
+- **Cause:** `gen_metal_font.py` squeezed every row to the same height, but the N–Z row is taller on the sheet (it includes Q's tail), so its letters came out about 8% shorter.
+- **Fix:** every glyph is scaled by one factor and top-aligned, so all capitals and digits are the same height and Q's tail hangs below. Font regenerated.
+- **Status:** Accepted
