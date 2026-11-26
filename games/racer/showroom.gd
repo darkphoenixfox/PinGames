@@ -26,6 +26,7 @@ const ROW_COLS := [Color("4fff7a"), Color("ffd23e"), Color("ff3b4f")]   # easy, 
 var selected := Sim.DEFAULT_CAR
 var hd := false        # set before build() (D-195)
 var nes := false       # 8-BIT palette (D-207), set before build()
+var pursuit := false   # D-460: choosing the speeder to chase (CHOOSE YOUR TARGET), set before build()
 ## D-255: landscape: the three cars side by side, each card under its car.
 var landscape := false
 const LAND_X := [-6.6, 0.0, 6.6]
@@ -158,7 +159,7 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 		view.material = post
 	_stage.add_child(view)
 	# Title + a stats card beside each car (fixed slots: nothing moves, D-096).
-	var title := UI.styled_label(tr("RC_CHOOSE_CAR"), title_font, 2)
+	var title := UI.styled_label(tr("RC_CHOOSE_TARGET" if pursuit else "RC_CHOOSE_CAR"), title_font, 2)
 	title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	title.offset_top = 30 + (Screens.dmd_cover() if landscape else 0.0)   # D-255: clear of the DMD
 	_stage.add_child(title)
@@ -210,7 +211,11 @@ func _stats_box(i: int) -> Control:
 	box.add_child(UI.spacer(4))
 	_stat_row(box, tr("RC_STAT_SPEED"), speed_pips(i), tr("RC_STAT_MPH") % roundi(float(spec.top) * Sim.MPH), col)
 	_stat_row(box, tr("RC_STAT_CORNER"), corner_pips(i), "", col)
-	_stat_row(box, tr("RC_STAT_CLOCK"), time_pips(i), tr("RC_STAT_SECONDS") % roundi(float(spec.time)), col)
+	if pursuit:   # D-460: how many rams it takes to stop it, not the race clock
+		var rams := ceili(1.0 / float(Sim.TARGETS[i].dmg))
+		_stat_row(box, tr("RC_STAT_RAMS"), clampi(roundi(rams / 4.0), 1, PIPS), str(rams), col)
+	else:
+		_stat_row(box, tr("RC_STAT_CLOCK"), time_pips(i), tr("RC_STAT_SECONDS") % roundi(float(spec.time)), col)
 	_stage.add_child(panel)
 	# Level with its turntable: centre the card on the car's row.
 	var mid := _cam.unproject_position(_car_pos(i)) * (_base().y / _res.y)

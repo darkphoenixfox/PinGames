@@ -269,6 +269,15 @@ Rules:
 - **DMD:** each player has their own DMD at the top of their half, with the full 1P content (D-291). There are no radar lights. At the bottom right of each half: a half-size speedo (full-size text), smaller gears beside it, and the tachometer as a yellow/green/red bar under the speedo (D-293).
 - **Controls:** P1 uses the arrows, Space and Ctrl, or their own pad. P2 uses A/D (steer), W (launch) and Q/E (brake / shift), or their own pad.
 
+**Pursuit (D-460).** A 1-player mode, the third choice after 1 PLAYER / 2 PLAYERS (the menu now always shows, with 2 PLAYERS only where possible). The player drives the police car after a speeding car.
+- **Menus (D-476: graphics first, then the mode):** graphics, then 1 PLAYER / 2 PLAYERS / PURSUIT, then CHOOSE YOUR TARGET (the three race cars are the difficulty; each card shows how many rams stop it, and its paint is the speeder's), then the radio. No start-stage menu.
+- **Road:** no checkpoints or gates, no START banner (D-466); the stages loop (after the two snow stages, a forest stage, then the beach of stage 1 again), with the day running round with them. No speed cameras, no finish town.
+- **Clock:** 90 s; reaching each speeder (the chase coming on) adds 30 s, like a checkpoint (D-465), and stopping it adds 60 s. The run ends when time is up.
+- **The chase:** the speeder starts 800 m ahead (the next ones 1,000 m), cruising at 0.78 of its top (D-465); the player closes in flat out with nitro. Within 160 m the chase is on: lights and siren, IN PURSUIT!, the chase theme, and traffic pulls over. The speeder then drives a little under the police car's top speed (D-463): flat out the player gains slowly, with nitro much faster; it slows for bends like the player, and waits if it gets more than 90 m ahead, so it stays in sight. If the player crashes, it gets away for a while. A red arrow bounces on it the first time the player gets within 45 m (D-464). Nitro can't carry the police car far past it. Past 450 m the chase is off (SUSPECT LOST) until the player closes in again.
+- **Stopping it:** ram it (from behind or the side) to fill its damage meter; it smokes from half damage. At 100 % it's wrecked: BUSTED! and +60 s; it stops in its lane, the police car drives round it and parks across the lane in front, the fine (the points), then it turns back into the road and the clock runs again (D-466). The police radio then calls in the next speeder, 1,000 m up the road.
+- **Police radio (D-466):** at the start and after each bust, the DMD shows a radio with DISPATCH and a scrolling call: the speeder's colour and kind and the speed it was clocked at.
+- **HUD:** SUSPECT and the distance (feet up close, miles further off), and the damage meter during the chase. The DMD shows the police car and the speeder side on at the real gap, with the damage bar.
+
 ### 3D models (D-020)
 - **Source:** Meshy. Export **.glb** with PBR textures, and use Meshy's remesh or reduced polycount.
 - **Location:** `assets/models/<breakout|shmup|racer|shared>/<snake_case_name>.glb`. Commit it, and Git LFS handles the file.

@@ -143,8 +143,9 @@ const SUPERCAR_TEXTURE := "res://assets/models/racer/supercar_albedo.png"
 const CAR_MODELS := [SALOON_MODEL, CAR_MODEL, SUPERCAR_MODEL]   # D-432: easy = saloon
 ## Each player model's albedo, and its key in TAIL_AT / NIGHT light spots.
 const MODEL_TEXTURES := {CAR_MODEL: CAR_TEXTURE, HOTHATCH_MODEL: HOTHATCH_TEXTURE, SUPERCAR_MODEL: SUPERCAR_TEXTURE,
-	SALOON_MODEL: SALOON_TEXTURE}
-const MODEL_LIGHTS := {CAR_MODEL: "car", HOTHATCH_MODEL: "hothatch", SUPERCAR_MODEL: "supercar", SALOON_MODEL: "saloon"}
+	SALOON_MODEL: SALOON_TEXTURE, POLICE_MODEL: POLICE_TEXTURE}   # D-460: the police car is the player's in a pursuit
+const MODEL_LIGHTS := {CAR_MODEL: "car", HOTHATCH_MODEL: "hothatch", SUPERCAR_MODEL: "supercar", SALOON_MODEL: "saloon",
+	POLICE_MODEL: "police"}
 ## Exhaust tips per model (model space, rear is -Z): where the nitro and
 ## backfire flames come out. The hot hatch has two pipes together on its left.
 const EXHAUSTS := {
@@ -256,6 +257,16 @@ const LAMP_BOXES := {
 		"tail_red_only": true,
 		"head_min": Vector3(0.35, 0.45, 1.6), "head_max": Vector3(0.85, 0.82, 9.0),
 	},
+	# D-474: the police car (the shader's default box lit its bodywork in the
+	# rain): a wide rear box, red lenses only, so the lamps' own shape lights.
+	"res://assets/models/racer/police2.glb": {
+		# D-478 (director's marks): the thin strip right across the back, at
+		# the tail glows' height (TAIL_AT), not red in the texture, so all of it.
+		"tail_min": Vector3(0.0, 0.79, -9.0), "tail_max": Vector3(0.98, 0.86, -2.05),
+		"tail_red_only": false,
+		"tail_soft": 0.012,
+		"head_min": Vector3(0.55, 0.55, 2.0), "head_max": Vector3(0.82, 0.72, 9.0),
+	},
 }
 ## Director's police car (D-135).
 const POLICE_MODEL := "res://assets/models/racer/police2.glb"   # D-140: not modelled on a real car
@@ -357,6 +368,9 @@ const SKIRT_DROP := 250.0  # m it falls: a gentle slope into the haze, not a wal
 const LATERAL := [-140.0, -70.0, -36.0, -18.0, -11.7, -8.7, -7.5, -3.75, 0.0, 3.75, 7.5, 8.7, 11.7, 18.0, 36.0, 70.0, 140.0]
 const TRAFFIC_POOL := 16
 const CAM_BACK := 8.0
+const ARREST_CAM_BACK := 14.0      # D-472: m further back while arresting
+const ARREST_CAM_UP := 5.0         # D-472: and higher
+var _arrest_cam := 0.0
 const CAM_HEIGHT := 2.3            # low, close to the road (D-098; was 3.6)
 ## The car sits this far below the screen centre (degrees), whatever the
 ## camera height: the old 3.6 m camera's framing (D-098).
@@ -386,10 +400,14 @@ const SOUNDS := {
 		 {"f": [2960.0, 2960.0], "t": 0.04, "w": "triangle", "v": 0.07, "gap": 0.05},
 		 {"f": [4186.0, 4186.0], "t": 0.05, "w": "triangle", "v": 0.06, "gap": 0.04},
 		 {"f": [3136.0, 3136.0], "t": 0.06, "w": "triangle", "v": 0.05}]], "reverb": [0.9, 0.3]},
-	# Bump: a body thud with a metal clank.
-	"rc_bump": {"voices": [[{"f": [130.0, 45.0], "t": 0.22, "w": "sine", "v": 0.6}],
-		[{"f": [1800.0, 500.0], "t": 0.1, "w": "noise", "v": 0.25, "lp": 0.6}],
-		[{"f": [620.0, 540.0], "t": 0.12, "w": "triangle", "v": 0.1}]], "reverb": [0.3, 0.15]},
+	# Bump: D-474, metal on metal (was a bouncy thud): a hard crunch of noise,
+	# a short dull body knock and inharmonic panel rings that die quickly.
+	"rc_bump": {"voices": [[{"f": [4200.0, 900.0], "t": 0.16, "w": "lfsr", "v": 0.38, "lp": 0.5}],
+		[{"f": [6500.0, 2500.0], "t": 0.09, "w": "noise", "v": 0.22}],
+		[{"f": [95.0, 60.0], "t": 0.08, "w": "sine", "v": 0.35}],
+		[{"f": [1460.0, 1390.0], "t": 0.22, "w": "triangle", "v": 0.07}],
+		[{"f": [2310.0, 2250.0], "t": 0.16, "w": "triangle", "v": 0.05}],
+		[{"f": [3170.0, 3120.0], "t": 0.12, "w": "triangle", "v": 0.04}]], "reverb": [0.35, 0.18]},
 	# Nitro (D-121): an ignition "fwoomp" - a noise burst falling through a low
 	# pass, a growling engine roar and a sub boom; no tonal lead.
 	"rc_nitro": {"voices": [
@@ -453,6 +471,31 @@ var _rival: Node3D = null   # the other player's car
 var _rival_wheel := 0.0
 var _rival_tag: Node3D = null   # "P1"/"P2" and a down triangle over the other car while it's ahead
 var _time_caption: Label    # TIME, or POSITION in 2P
+## PURSUIT (D-460): the player drives the police car after a speeder (1P only).
+var _pursuit := false
+var _target_car := Sim.DEFAULT_CAR   # the speeder's car: the difficulty
+var _hero_bar: Dictionary = {}       # the player's light bar (flashers, lights, pools)
+var _speeder_node: Node3D = null
+var _wreck_node: Node3D = null
+var _speeder_wheel := 0.0
+var _speeder_sprite: Image = null    # its DMD picture
+var _target_tag: Node3D = null       # D-462: a red arrow over it as the chase starts
+var _target_tag_t := 0.0
+var _target_tagged := false
+var _target_lost := false            # D-475: it got away; the arrow comes back as we catch up
+var _speeder_cars: Array = []        # D-468: a car per model for the speeder...
+var _wreck_cars: Array = []          # ...and for the wreck
+var _dispatch_msg := ""              # D-466: the police radio's message on the DMD
+var _dispatch_t := -1.0              # its start (_phase_t), -1 = none
+const DISPATCH_SPEED := 42.0         # DMD dots per s it scrolls          # D-464: shown once per speeder, when we reach it
+const TARGET_TAG_NEAR := 45.0        # m: "reached"
+const TARGET_TAG_TIME := 2.2   # D-464: three bounces, then it fades
+const TARGET_ARROW := "res://assets/textures/racer/target_arrow.png"   # D-464: replaceable (tip at the bottom centre)
+var _pursuit_box: Control            # HUD: SUSPECT, the distance and the damage meter
+var _pursuit_dist: Label
+var _pursuit_dmg_box: Control
+var _pursuit_dmg: ColorRect
+var _players_keys: Array = []        # the players menu's rows (string keys)
 
 
 ## A custom DMD frame: in 2P drawn from this view's player (the DMD draws
@@ -481,7 +524,7 @@ func _crossfade(path: String, t: float, skip: float = 0.0) -> void:
 ## in place of the radio's song. Only those two songs swap: a jingle playing
 ## (finish, time over) is left alone.
 func _pursuit_music() -> void:
-	var chased := false
+	var chased: bool = sim.pursuit and sim.engaged   # D-460: our own chase
 	for i in (2 if _two else 1):
 		var pol: Dictionary = sim.player_get(i, "police")
 		if not pol.is_empty() and pol.state == "chase":
@@ -731,6 +774,7 @@ func start(_players: int) -> void:
 		Audio.register_sfx(s, Synth.make(SOUNDS[s]))
 	Audio.register_sfx("rc_menu_ok", load(SFX_MENU_OK))   # D-410: the director's menu selection sound
 	Audio.register_sfx("rc_checkpoint", load(SFX_CHECKPOINT))   # D-411: the director's checkpoint sound
+	Audio.register_sfx("rc_dispatch", load(SFX_DISPATCH))   # D-467
 	_manual_locked = str(Config.get_value("operator", "cabinet_buttons")) == "4" and not _touch_play()
 	# Cel shading (D-091); --rc-no-toon shows the plain look for comparison.
 	Toon.enabled = not Config.cli.has("rc-no-toon")
@@ -755,6 +799,9 @@ func start(_players: int) -> void:
 		_set_reverb(false)
 	if Config.cli.has("rc-car"):   # dev: race with car 0 (easy) / 1 / 2 (hard), D-122
 		_chosen_car = clampi(int(str(Config.cli["rc-car"])), 0, Sim.CARS.size() - 1)
+	if Config.cli.has("rc-pursuit"):   # dev: a pursuit (D-460); --rc-target=N picks the speeder's car
+		_pursuit = true
+		_target_car = clampi(int(str(Config.cli.get("rc-target", "1"))), 0, Sim.CARS.size() - 1)
 	if Config.cli.has("rc-paint"):   # dev: that car in paint N of PAINTS (D-391)
 		_car_paint[_chosen_car] = clampi(int(str(Config.cli["rc-paint"])), 0, PAINTS.size() - 1)
 	if Config.cli.has("rc-2p"):   # dev: a 2-player race (D-289); --rc-car2=N is player 2's car
@@ -790,15 +837,16 @@ func on_action(action: StringName, pressed: bool) -> void:
 		return
 	if _phase == "attract":
 		if action == &"start" or action == &"launch":
-			if CabinetInput.two_player_possible():
-				_begin_players()   # D-289: 1 PLAYER / 2 PLAYERS first
-			else:
-				_begin_gfx()
+			_begin_gfx()   # D-476: graphics first, then 1 PLAYER / 2 PLAYERS / PURSUIT
 		return
 	if _phase == "players":
 		match action:
-			&"flip_l", &"flip_r", &"magna_l", &"magna_r":
-				_players_sel = 1 - _players_sel
+			&"flip_l", &"magna_l":
+				_players_sel = posmod(_players_sel - 1, _players_keys.size())
+				_sfx("rc_shift")
+				_refresh_players()
+			&"flip_r", &"magna_r":
+				_players_sel = posmod(_players_sel + 1, _players_keys.size())
 				_sfx("rc_shift")
 				_refresh_players()
 			&"launch", &"start":
@@ -864,21 +912,19 @@ func on_action(action: StringName, pressed: bool) -> void:
 ## the first menu it returns to the title; from the title EXIT leaves.
 func back() -> bool:
 	match _phase:
-		"players":
+		"players":   # D-476: back to the graphics
 			_players_ui.queue_free()
-			_enter_attract()
+			if _two:   # the choice is made again
+				_two = false
+				CabinetInput.set_two_player(false)
+			_pursuit = false
+			_begin_gfx()
 		"gfx":
 			_gfx_ui.queue_free()
-			if CabinetInput.two_player_possible():
-				if _two:   # the choice is made again
-					_two = false
-					CabinetInput.set_two_player(false)
-				_begin_players()
-			else:
-				_enter_attract()
+			_enter_attract()
 		"stage":
 			_stage_ui.queue_free()
-			_begin_gfx()
+			_begin_players()
 		"select":
 			_showroom.queue_free()
 			_showroom = null
@@ -888,7 +934,10 @@ func back() -> bool:
 			else:
 				_world_view.visible = true
 				_set_ui_res.call_deferred()
-				_begin_stage_select()
+				if _pursuit:   # D-460: no start-stage menu in a pursuit
+					_begin_players()
+				else:
+					_begin_stage_select()
 		"radio":
 			_spectrum_on(false)
 			_radio_ui.queue_free()
@@ -997,6 +1046,10 @@ func _process(delta: float) -> void:
 		else:
 			sim._crash("truck" if Config.cli.has("rc-crash-flip") else "car", 1.0)   # --rc-crash-flip: a roll-over
 		_handle_events()
+	if Config.cli.has("rc-bust-at") and _phase == "race" and sim.pursuit and not sim.speeder.is_empty() 			and _phase_t >= float(str(Config.cli["rc-bust-at"])) and not has_meta("dev_bust"):   # dev: wreck the speeder at N s (D-466)
+		set_meta("dev_bust", true)
+		sim._bust_speeder()
+		_handle_events()
 	if Config.cli.has("rc-burst") and _phase == "race" and fmod(_phase_t, 0.5) < delta:   # dev: collision FX (D-292)
 		_burst(sim.track.point(sim.s, sim.x + Sim.CAR_W * 0.5, 0.45), int(_phase_t) % 2 == 0, _role, sim.v)
 	if Config.cli.has("rc-traffic-show") and _phase == "race" and not has_meta("dev_traffic"):   # dev (D-432): one car of each traffic model ahead, each in another paint
@@ -1042,6 +1095,7 @@ func _read_input() -> Array:
 const SFX_MENU_OK := "res://assets/audio/sfx/racer/start_sfx.ogg"
 ## The director's checkpoint sound (D-411); replaces the synth brass fanfare.
 const SFX_CHECKPOINT := "res://assets/audio/sfx/racer/checkpoint.ogg"
+const SFX_DISPATCH := "res://assets/audio/sfx/racer/calling_all_units.ogg"   # D-467: the director's voice, with the DMD radio
 ## Sounds that cut their own previous play short when they start again (D-411),
 ## so fast menu presses don't pile up. D-412: menus only.
 const RESTART_SFX := ["rc_menu_ok"]
@@ -1186,6 +1240,12 @@ func _new_sim() -> void:
 			back_g = str(Config.cli["rc-at-gate"]).to_float()
 		sim.s = maxf(sim.s, sim.next_checkpoint - back_g)
 		sim.track.ensure(sim.s + 1500.0)
+	if _pursuit and _phase == "race":   # D-460
+		sim.setup_pursuit(_target_car)
+		if Config.cli.has("rc-speeder-near"):   # dev: the speeder 60 m ahead
+			sim.speeder.s = sim.s + 60.0
+		if Config.cli.has("rc-speeder-dmg"):   # dev: the speeder already damaged (0..1)
+			sim.speeder.dmg = float(str(Config.cli["rc-speeder-dmg"]))
 	if Config.cli.has("rc-time"):  # dev: short clock to test TIME UP
 		sim.time_left = float(str(Config.cli["rc-time"]))
 	for k in _chunks.keys():
@@ -1474,7 +1534,7 @@ func _confirm_gfx() -> void:
 		Config.save()
 	if is_instance_valid(_gfx_ui):
 		_gfx_ui.queue_free()
-	_begin_stage_select()
+	_begin_players()   # D-476: then the mode
 
 
 # --- start stage (D-216, for testing) ------------------------------------------------
@@ -1550,8 +1610,9 @@ func _begin_select() -> void:
 	_showroom.hd = _gfx_hd
 	_showroom.landscape = _landscape()   # D-255: the cars side by side
 	_showroom.nes = _gfx_mode == "nes"
+	_showroom.pursuit = _pursuit   # D-460: CHOOSE YOUR TARGET
 	_add_ui(_showroom)
-	_showroom.selected = _p2_car if _select_p2 else _chosen_car
+	_showroom.selected = _target_car if _pursuit else (_p2_car if _select_p2 else _chosen_car)
 	if _two:   # D-289: whose choice it is
 		var who := UI.label(tr("RC_CHOOSE_P") % (2 if _select_p2 else 1), 48, UI.YELLOW if not _select_p2 else UI.CYAN)
 		who.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)   # (the DMD covers the top)
@@ -1588,6 +1649,8 @@ func _confirm_car() -> void:
 		if _p2_car == _chosen_car and is_equal_approx(_hues[1], _hues[0]):
 			_hues[1] = _turn_hue(_hues[0], float(PAINTS[1]))   # never two identical cars
 		_select_p2 = false
+	elif _pursuit:
+		_target_car = _showroom.selected   # D-460: the speeder's car
 	else:
 		_chosen_car = _showroom.selected
 	_showroom.queue_free()
@@ -1637,10 +1700,14 @@ func _draw_dmd_select(p) -> void:
 func _begin_race() -> void:
 	if is_instance_valid(_attract_ui):
 		_attract_ui.queue_free()
-	_build_body(CAR_MODELS[_chosen_car])   # the hot hatch for the easy car (D-205)
+	_build_body(POLICE_MODEL if _pursuit else CAR_MODELS[_chosen_car])   # the hot hatch for the easy car (D-205); D-460
 	if _anims.police_sprite == null:   # D-245
 		_anims.police_sprite = _dmd_image("res://assets/textures/racer/dmd_car_police.png")
-	_anims.player_sprite = _painted(_dmd_sprite(CAR_MODELS[_chosen_car]), _car_hue(_chosen_car))   # D-243, D-244
+	if _pursuit:
+		_anims.player_sprite = _anims.police_sprite
+		_build_speeder_nodes()
+	else:
+		_anims.player_sprite = _painted(_dmd_sprite(CAR_MODELS[_chosen_car]), _car_hue(_chosen_car))   # D-243, D-244
 	_phase = "race"
 	_phase_t = 0.0
 	_new_sim()
@@ -1654,6 +1721,7 @@ func _begin_race() -> void:
 	_music(MUSIC_RACE[_song], 0.0, true)   # D-301: the radio's song, for the whole run; D-307: from its first note
 	_sfx("rc_menu_ok")
 	_hud.visible = true
+	_hud_layout()   # D-461: a pursuit's HUD sits differently in portrait
 	_show_mode()
 	_center_message("3", 1.0)
 	_sfx("rc_count")
@@ -1663,7 +1731,7 @@ func _begin_race() -> void:
 
 ## The hero car in the chosen car's colour (D-122; 2P: each player's, D-289).
 func _paint_hero() -> void:
-	var hue: float = _hues[_role] if _two else _car_hue(_chosen_car)
+	var hue: float = _hues[_role] if _two else (0.0 if _pursuit else _car_hue(_chosen_car))
 	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
 		var gi := m as MeshInstance3D
 		if gi.material_override != null:
@@ -1690,6 +1758,8 @@ func _finale(delta: float) -> void:
 		else:
 			_finale_ui.add_child(UI.styled_label(tr("RC_FINISH") if sim.finished else tr("DMD_GAME_OVER"), TITLE_FONT, 3))
 		_finale_ui.add_child(UI.spacer(30))
+		if sim.pursuit:   # D-460: how many were caught
+			_finale_ui.add_child(UI.styled_label(tr("RC_BUSTS") % sim.busts, TITLE_FONT, 2))
 		if sim.finished and not _two:   # D-221
 			_finale_ui.add_child(UI.styled_label(tr("RC_TIME_BONUS") % ScoreTable.format_score(sim.time_bonus), TITLE_FONT, 2))
 		if not _two:   # (2P: a race, not a score, D-289)
@@ -1811,7 +1881,13 @@ func _begin_players() -> void:
 	_players_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var col := UI.vstack(60)
 	_players_rows.clear()
-	for k in ["RC_ONE_PLAYER", "RC_TWO_PLAYERS"]:
+	# D-460: PURSUIT (1 player) after them; 2 PLAYERS only where it's possible.
+	_players_keys = ["RC_ONE_PLAYER"]
+	if CabinetInput.two_player_possible():
+		_players_keys.append("RC_TWO_PLAYERS")
+	_players_keys.append("RC_PURSUIT")
+	_players_sel = clampi(_players_sel, 0, _players_keys.size() - 1)
+	for k in _players_keys:
 		# D-367: in the game's title font. The choice is shown by brightness
 		# (the font has no arrows and keeps its own colours).
 		var l := UI.styled_label(tr(k), TITLE_FONT, 3)
@@ -1827,16 +1903,22 @@ func _refresh_players() -> void:
 		var l: Label = _players_rows[i]
 		var on := i == _players_sel
 		l.modulate = Color.WHITE if on else Color(0.55, 0.55, 0.55, 0.7)
-	_dmd.show_text(tr(["RC_ONE_PLAYER", "RC_TWO_PLAYERS"][_players_sel]), "", Dmd.CYAN, Dmd.YELLOW)
+	_dmd.show_text(tr(_players_keys[_players_sel]), "", Dmd.CYAN, Dmd.YELLOW)
 
 
 func _confirm_players() -> void:
 	if is_instance_valid(_players_ui):
 		_players_ui.queue_free()
-	if _players_sel == 1:
+	var pick: String = _players_keys[_players_sel]
+	_pursuit = pick == "RC_PURSUIT"
+	if pick == "RC_TWO_PLAYERS":
 		_two = true
 		CabinetInput.set_two_player(true)
-	_begin_gfx()
+	if _pursuit:   # D-460: a pursuit always starts on stage 1, no stage menu
+		_start_stage = 1
+		_begin_select()
+	else:
+		_begin_stage_select()
 
 
 ## Splits the TABLE in two halves (once): this view moves into the left one,
@@ -2111,7 +2193,14 @@ func _build_rival_tag() -> void:
 	lab.alpha_cut = Label3D.ALPHA_CUT_DISCARD
 	lab.offset = Vector2(0, 62)     # above the triangle (in label pixels)
 	_rival_tag.add_child(lab)
-	# The triangle: a small picture drawn here, pointing down.
+	_rival_tag.add_child(_tag_triangle())
+	_rival_tag.visible = false
+	_root.add_child(_rival_tag)
+
+
+## The tag's triangle (D-290): a small red picture pointing down, its tip at
+## the node's position, constant size on screen.
+func _tag_triangle(scale_k := 1.0) -> Sprite3D:
 	var img := Image.create(15, 9, false, Image.FORMAT_RGBA8)
 	for y in 9:
 		for x in 15:
@@ -2121,7 +2210,7 @@ func _build_rival_tag() -> void:
 				img.set_pixel(x, y, Color(0.1, 0.0, 0.0) if edge else TAG_RED)
 	var tri := Sprite3D.new()
 	tri.texture = ImageTexture.create_from_image(img)
-	tri.pixel_size = 0.0042
+	tri.pixel_size = 0.0042 * scale_k
 	tri.fixed_size = true
 	tri.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	tri.shaded = false
@@ -2129,9 +2218,7 @@ func _build_rival_tag() -> void:
 	tri.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	tri.centered = true
 	tri.offset = Vector2(0, 5)      # tip at the node's position
-	_rival_tag.add_child(tri)
-	_rival_tag.visible = false
-	_root.add_child(_rival_tag)
+	return tri
 
 
 ## Draws the other player's car where the shared race has it: yawed by its
@@ -2273,7 +2360,7 @@ func _burst(pos: Vector3, big: bool, who: int = -1, car_v: float = 0.0) -> void:
 	dust.color_ramp = dg
 	var dq := QuadMesh.new()
 	dq.size = Vector2(0.7, 0.7)
-	dq.material = _fx_material(_puff_texture())
+	dq.material = _fx_material(_smoke_texture(), "smoke")   # D-474: soft (the hard disc read as a dark circle)
 	dust.mesh = dq
 	# The sparks ride on the car that was hit (this view's own, or the other
 	# player's), aimed forward along the road at under the car's speed.
@@ -2310,7 +2397,7 @@ func _fx_material(tex: Texture2D, key: String = "") -> StandardMaterial3D:
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.vertex_color_use_as_albedo = true
 		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR if key == "smoke" else BaseMaterial3D.TEXTURE_FILTER_NEAREST
 		if tex != null:
 			m.albedo_texture = tex
 		_fx_mats[key] = m
@@ -2346,7 +2433,10 @@ func _handle_events() -> void:
 						sim.backup[-1].s = sim.s - 30.0 - 15.0 * (n + 1)
 				_center_message(tr("RC_GO"), 1.0)
 				_sfx("rc_go")
-				_dmd.flash(tr("RC_GO"), 1.0, Dmd.GREEN)
+				if sim.pursuit:
+					_start_dispatch()   # D-466: the police radio
+				else:
+					_dmd.flash(tr("RC_GO"), 1.0, Dmd.GREEN)
 			"checkpoint":
 				_bg_flash = 1.2
 				_sfx("rc_checkpoint")
@@ -2447,6 +2537,49 @@ func _handle_events() -> void:
 				_center_message(tr("RC_ESCAPED"), 1.4, COPS_FONT)
 				_dmd.flash(tr("RC_ESCAPED"), 1.2, Dmd.GREEN)
 				_sfx("rc_perfect")
+			"pursuit_on":   # D-460: in range: lights, siren, the chase theme
+				_center_message(tr("RC_ENGAGING"), 1.6, COPS_FONT)   # D-472 (the +30 s is added quietly)
+				_cops_flash = true
+				_start_report()   # D-468: "unit to central"
+			"pursuit_off":
+				_target_tagged = false   # D-475
+				_target_lost = true
+				_center_message(tr("RC_SUSPECT_LOST"), 1.6, COPS_FONT)
+				_cops_flash = true
+				_dmd.flash(tr("RC_SUSPECT_LOST"), 1.4, Dmd.YELLOW)
+			"speeder_spawn":
+				_speeder_sprite = null   # its own paint
+				_target_tagged = false
+				_target_lost = false
+				if sim.busts > 0:
+					_start_dispatch()   # D-466: the radio calls in the next one
+			"speeder_hit":
+				_sfx("rc_bump")
+				_shake = maxf(_shake, 0.4)
+				var sd: Dictionary = sim.speeder if not sim.speeder.is_empty() else sim.wreck
+				if not sd.is_empty():
+					_burst(sim.track.point((float(sd.s) + sim.s) * 0.5, (float(sd.x) + sim.x) * 0.5, 0.45), false, _role, sim.v)
+			"speeder_bump":
+				_sfx("rc_bump")
+			"speeder_busted":
+				_center_message(tr("RC_BUSTED"), 2.5, COPS_FONT)
+				_cops_flash = true
+				_sfx("rc_checkpoint")
+				_bg_flash = 1.2
+				_shake = 0.6
+				_dmd_anim("checkpoint", [tr("RC_BUSTED"), tr("RC_EXTENDED") % int(e[2])])
+			"speeder_fined":   # D-466: parked in front of it, the fine
+				_center_message(tr("RC_FINED") % ScoreTable.format_score(int(e[1])), 2.0, COPS_FONT)
+				_cops_flash = true
+				_dmd_anim("fine", [tr("RC_BUSTED"), tr("RC_FINE"), "+" + ScoreTable.format_score(int(e[1]))])
+				_sfx("rc_perfect")
+				if not sim.wreck.is_empty():
+					_burst(sim.track.point(float(sim.wreck.s), float(sim.wreck.x), 0.45), true, _role, sim.v)
+			"stage":   # D-460: a new stage in a pursuit (no gate, no time)
+				_dmd.flash(tr("RC_STAGE") % int(e[1]), 1.6, Dmd.CYAN)
+				var lap := posmod(int(e[1]) - 2, Track.LOOP_AREAS.size()) + 1   # stages passed, round the loop
+				if lap in _heli_checkpoints() and _heli != null and not _heli.active():
+					_heli.start(-1.0 if sim.x > 0.0 else 1.0)
 			"crash":
 				_shift_armed = true   # the SHIFT hint may show again (D-160)
 				_bg_dark = 0.8
@@ -2493,14 +2626,18 @@ func _hud_layout() -> void:
 	if _hud_top == null:
 		return
 	var land := _landscape()
-	var in_left := _hud_mid.get_parent() == _hud_left
-	if land and not in_left:
-		_hud_col.remove_child(_hud_mid)
-		_hud_left.add_child(_hud_mid)
-	elif not land and in_left:
-		_hud_left.remove_child(_hud_mid)
-		_hud_col.add_child(_hud_mid)
-		_hud_col.move_child(_hud_mid, 0)
+	# Where the clock block goes: landscape, the left column; portrait, its own
+	# row on top (D-389), or in a pursuit (D-461) the top row's middle, between
+	# the (empty) left column and stage/score, so its taller block (the clock,
+	# then SUSPECT and the damage meter) doesn't push stage and score down.
+	var want: Node = _hud_left if land else (_hud_top if _pursuit else _hud_col)
+	if _hud_mid.get_parent() != want:
+		_hud_mid.get_parent().remove_child(_hud_mid)
+		want.add_child(_hud_mid)
+		if want == _hud_col:
+			_hud_col.move_child(_hud_mid, 0)
+		elif want == _hud_top:
+			_hud_top.move_child(_hud_mid, 1)
 	_hud_mid.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_hud_gap.visible = land
 	# Landscape: the left column hugs the left edge, clear of the DMD.
@@ -2509,6 +2646,14 @@ func _hud_layout() -> void:
 	# D-401: TIME centred over the number; the block at the left in landscape,
 	# in the middle in portrait. Landscape keeps the blocks in from the edges.
 	_hud_mid.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN if land else Control.SIZE_SHRINK_CENTER
+	# D-461: the pursuit block under the clock: left-aligned in landscape,
+	# centred under it in portrait.
+	if _pursuit_box != null:
+		for l in _pursuit_box.find_children("*", "Label", true, false):
+			(l as Label).horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if land else HORIZONTAL_ALIGNMENT_CENTER
+		for c in _pursuit_dmg_box.get_children():
+			if c is ColorRect:
+				(c as Control).size_flags_horizontal = Control.SIZE_SHRINK_BEGIN if land else Control.SIZE_SHRINK_CENTER
 	_hud_col.offset_left = 82 if land else 40
 	_hud_col.offset_right = -82 if land else -40
 	if is_instance_valid(_radar_bar):
@@ -2885,6 +3030,7 @@ func _build_body(model: String) -> void:
 	var plate: Array = PLATES.get(model, PLATES[CAR_MODEL])
 	_add_plate(_car_body, plate[0], plate[1])
 	_car.add_child(_car_body)
+	_hero_bar = _add_light_bar(_car_body, true) if model == POLICE_MODEL else {}   # D-460
 	var pipes: Array = EXHAUSTS.get(model, EXHAUSTS[CAR_MODEL])
 	_exhaust_z = (pipes[0] as Vector3).z
 	for pipe in pipes:
@@ -3272,38 +3418,83 @@ func _build_police_car() -> void:
 	var car := _car_instance(0.0, POLICE_MODEL, POLICE_TEXTURE)
 	car.visible = false
 	_root.add_child(car)
+	var rig := _add_light_bar(car)
+	# Night lights like the other cars (D-198).
+	var night: Node3D = Night.add_car_lights(car, "car", _puff_texture(), TAIL_AT["police"])
+	_place_tails(car, night, POLICE_MODEL)
+	rig.node = car
+	rig.night = night
+	rig.swing = 0.0
+	rig.wheel = 0.0
+	_police_rigs.append(rig)
+
+
+## A police car's light bar (D-147) and siren lights (D-198): the flashers over
+## the painted bar, a coloured light each and a glow pool on the road. (D-460:
+## also on the player's car in a pursuit.)
+func _add_light_bar(car: Node3D, own := false) -> Dictionary:
 	var flashers := []
 	var lights := []
 	var pools := []
 	for c in [Color(1.0, 0.1, 0.1), Color(0.15, 0.35, 1.0)]:
 		var q := QuadMesh.new()
-		q.size = Vector2(1.1, 1.1)
+		# D-469: a wide oval glow over its half of the bar, reaching a little
+		# past the roof's edge, two hot spots in it (was a round puff).
+		q.size = Vector2(1.25, 0.42) * (0.75 if own else 1.0)   # D-460: the player's own, right under the camera
 		var m := StandardMaterial3D.new()
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-		m.albedo_texture = _puff_texture()
+		m.albedo_texture = _bar_glow_texture()
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
 		m.albedo_color = c
 		q.material = m
 		var f := MeshInstance3D.new()
 		f.mesh = q
 		# Over the model's painted bar (D-147): seen from behind, red is on the
 		# right and blue on the left (model space is turned 180 degrees).
-		f.position = Vector3(-0.35 if c.r > 0.5 else 0.35, 1.52, 0.15)
+		f.position = Vector3(-0.42 if c.r > 0.5 else 0.42, 1.42, 0.15)
+		f.visible = false
+		if own:
+			# D-462: the player's own bar, right under the camera: its half of
+			# the bar lights up (a glowing block over the painted lamp) with a
+			# small glow drawn over the roof, so it reads as blinking without
+			# a big flare in the way.
+			m.no_depth_test = true
+			m.render_priority = 1
+			f.position.y = 1.41
+			var lamp := MeshInstance3D.new()
+			var bx := BoxMesh.new()
+			bx.size = Vector3(0.4, 0.085, 0.44)   # D-476/D-478: its half's lamp (not the middle box), deeper than the bar so its back face shows
+			var lm := StandardMaterial3D.new()
+			lm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			lm.albedo_color = c.lightened(0.35)
+			bx.material = lm
+			lamp.mesh = bx
+			lamp.position = Vector3(-0.36 if c.r > 0.5 else 0.36, 0.0, 0.0) + Vector3(0.0, 1.365, 0.15)
+			lamp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			lamp.visible = false
+			car.add_child(lamp)
+			f.set_meta("lamp", lamp)
+		if not own:
+			# D-474: a second glow at the bar's back edge, so from behind it isn't
+			# hidden by the roof (it shows from the front through the first).
+			var back := MeshInstance3D.new()
+			back.mesh = q
+			back.position = Vector3(0.0, 0.0, -0.5)
+			back.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			f.add_child(back)
 		car.add_child(f)
 		flashers.append(f)
-	# Night lights like the other cars (D-198).
-	var night: Node3D = Night.add_car_lights(car, "car", _puff_texture(), TAIL_AT["police"])
-	_place_tails(car, night, POLICE_MODEL)
 	# Siren light (D-198): the light bar lights the road and the cars around it,
 	# red and blue in turn, strongest at night: a coloured light each, plus a
 	# soft glow pool on the road (the fake-light look of the lamp pools).
 	for c in [Color(1.0, 0.12, 0.1), Color(0.2, 0.4, 1.0)]:
 		var l := OmniLight3D.new()
 		l.light_color = c
-		l.omni_range = 14.0
+		l.omni_range = 7.0 if own else 14.0
 		l.light_energy = 0.0
 		l.shadow_enabled = false
 		l.position = Vector3(-0.35 if c.r > 0.5 else 0.35, 1.9, 0.15)
@@ -3325,8 +3516,7 @@ func _build_police_car() -> void:
 		pool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		car.add_child(pool)
 		pools.append(pool)
-	_police_rigs.append({"node": car, "flashers": flashers, "night": night, "lights": lights, "pools": pools,
-		"swing": 0.0, "wheel": 0.0})
+	return {"flashers": flashers, "lights": lights, "pools": pools, "own": own}
 
 
 func _animate_police(delta: float, cam_yaw: float) -> void:
@@ -3357,6 +3547,12 @@ func _animate_police(delta: float, cam_yaw: float) -> void:
 			siren_db = db
 			var closing: float = (pd.v - sim.v) * (1.0 if pd.s < sim.s else -1.0)
 			siren_pitch = clampf(SOUND_SPEED / maxf(SOUND_SPEED - closing, 20.0), 0.7, 1.5)
+	if sim.pursuit:   # D-460: our own light bar and siren while the chase is on
+		if not _hero_bar.is_empty():
+			_flash_light_bar(_hero_bar, sim.engaged)
+		if sim.engaged:
+			siren_db = maxf(siren_db, -9.0)
+			siren_pitch = 1.0
 	(_washes[0] as CanvasItem).modulate.a = wash_b
 	(_washes[1] as CanvasItem).modulate.a = wash_r
 	if siren_db > -80.0:
@@ -3403,24 +3599,34 @@ func _animate_police_car(rig: Dictionary, pd: Dictionary, delta: float, cam_yaw:
 			InstParam.set_param(pmi, "spin", 1.0)
 			InstParam.set_param(pmi, "wheel_phase", pstep)
 			InstParam.set_param(pmi, "wheel_blur", clampf((absf(float(pd.v)) - 6.0) / 20.0, 0.0, 1.0) * 0.45)
-	var ph := fmod(_phase_t, 0.5)
-	var lights := Sim.car_lights(pd)   # off once it has given up or is driving off (D-145)
-	var red_on: bool = lights and ph < 0.25 and (ph < 0.08 or ph > 0.15)
-	var blue_on: bool = lights and ph >= 0.25 and (ph < 0.33 or ph > 0.4)
-	(rig.flashers[0] as Node3D).visible = red_on
-	(rig.flashers[1] as Node3D).visible = blue_on
 	# Its own head/tail lights at night (D-198), like every other car.
 	for m in car.find_children("*", "MeshInstance3D", true, false):
 		if (m as MeshInstance3D).material_override is ShaderMaterial:
 			InstParam.set_param(m as MeshInstance3D, "lamps", _car_lamps)
 	(rig.night as Node3D).visible = _lamps > 0.0
-	# Siren light around the car (D-198), red and blue in turn, stronger at night.
-	var glow := lerpf(0.7, 2.6, _night)
+	return _flash_light_bar(rig, Sim.car_lights(pd))   # off once it has given up or is driving off (D-145)
+
+
+## The light bar's red/blue flashing and the siren light around the car (D-198),
+## stronger at night. Returns which are lit (x = red, y = blue).
+func _flash_light_bar(rig: Dictionary, lights: bool) -> Vector2:
+	var ph := fmod(_phase_t, 0.5)
+	var red_on: bool = lights and ph < 0.25 and (ph < 0.08 or ph > 0.15)
+	var blue_on: bool = lights and ph >= 0.25 and (ph < 0.33 or ph > 0.4)
+	# D-460: the player's own lights wash the road around it more softly.
+	var own: bool = rig.get("own", false)
+	(rig.flashers[0] as Node3D).visible = red_on
+	(rig.flashers[1] as Node3D).visible = blue_on
+	if own:   # D-462: its lamps light up too
+		(rig.flashers[0].get_meta("lamp") as Node3D).visible = red_on
+		(rig.flashers[1].get_meta("lamp") as Node3D).visible = blue_on
+	var glow := lerpf(0.7, 2.6, _night) * (0.3 if own else 1.0)   # (D-477: the director likes our own tinting the rear window by day)
 	for i in 2:
 		var on: bool = red_on if i == 0 else blue_on
 		(rig.lights[i] as OmniLight3D).light_energy = glow if on else 0.0
 		var pm := ((rig.pools[i] as MeshInstance3D).mesh as PlaneMesh).material as StandardMaterial3D
-		pm.albedo_color.a = lerpf(0.18, 0.7, _night) if on else 0.0
+		# (D-460: the player's own car lights the road around it more softly.)
+		pm.albedo_color.a = lerpf(0.18, 0.7, _night) if on and not own else 0.0
 	return Vector2(1.0 if red_on else 0.0, 1.0 if blue_on else 0.0)
 
 
@@ -3730,9 +3936,10 @@ func _build_chunk(k: int) -> Node3D:
 	Tunnel.build(node, tr_, s0, s0 + CHUNK)   # D-127
 	# Start line and checkpoint gates.
 	var cp := ceilf(s0 / Sim.CHECKPOINT_EVERY) * Sim.CHECKPOINT_EVERY
-	if s0 <= Sim.START_LINE and s0 + CHUNK > Sim.START_LINE:
+	if s0 <= Sim.START_LINE and s0 + CHUNK > Sim.START_LINE and not (sim != null and sim.pursuit):   # D-466: none in a pursuit
 		_build_gate(node, Sim.START_LINE, tr("RC_START"))
-	if cp >= Sim.CHECKPOINT_EVERY and cp < s0 + CHUNK and cp <= Sim.FINISH_STAGE * Sim.CHECKPOINT_EVERY:
+	if cp >= Sim.CHECKPOINT_EVERY and cp < s0 + CHUNK and cp <= Sim.FINISH_STAGE * Sim.CHECKPOINT_EVERY \
+			and not (sim != null and sim.pursuit):   # D-460: no checkpoints in a pursuit
 		# The last one is the finish line (D-221).
 		var fin := is_equal_approx(cp, Sim.FINISH_STAGE * Sim.CHECKPOINT_EVERY)
 		_build_gate(node, cp, tr("RC_FINISH") if fin else tr("RC_CHECKPOINT"), fin)
@@ -3948,6 +4155,8 @@ func _animate(delta: float) -> void:
 		travel *= clampf(sim.v / 15.0, 0.0, 1.0)
 	_travel = move_toward(_travel, travel, delta * 1.8)
 	var yaw := deg_to_rad(sim.drift_angle) - _travel + sim.sway   # D-239: side-impact sway
+	if sim.arrest_swing > 0.0:   # D-466: turned across the lane in front of the busted car, in stepped frames
+		yaw += sim.arrest_swing * PI * 0.5 * sim.arrest_side   # (D-473: smooth, following its motion)
 	var crash_p := _anim_steps(sim.crash_progress(), sim.crash_anim)
 	if sim.spin_t > 0.0 and not sim.flipping:
 		# Spin-out: two full turns stepped like sprite frames, ending nose
@@ -4145,6 +4354,7 @@ func _animate(delta: float) -> void:
 		for i in range(used[kind], _traffic_pool[kind].size()):
 			(_traffic_pool[kind][i] as Node3D).visible = false
 	_animate_rival(delta, cam_yaw)
+	_animate_speeder(delta, cam_yaw)   # D-460
 	_animate_police(delta, cam_yaw)
 	_update_radar(delta)
 	# Nitro tanks bob on stepped frames (D-103, D-115) and rock from side to
@@ -4174,7 +4384,11 @@ func _animate(delta: float) -> void:
 		_cam_x = sim.x
 		_cam_ready = true
 	_cam_x = lerpf(_cam_x, sim.x, 1.0 - exp(-delta * 6.0))
-	var target := tr_.point(sim.s - CAM_BACK, _cam_x * 0.85, CAM_HEIGHT)
+	# D-472: during an arrest it pulls back and up, so the busted car (stopped
+	# behind the police car) stays on screen.
+	_arrest_cam = move_toward(_arrest_cam, 1.0 if (sim.pursuit and not sim.arrest.is_empty()) else 0.0, delta * 0.8)
+	var ak := _arrest_cam * _arrest_cam * (3.0 - 2.0 * _arrest_cam)
+	var target := tr_.point(sim.s - CAM_BACK - ARREST_CAM_BACK * ak, _cam_x * 0.85, CAM_HEIGHT + ARREST_CAM_UP * ak)
 	var look := tr_.point(sim.s + CAM_LOOK, _cam_x * 0.9, 0.5)
 	_cam_pos = target
 	_shake = maxf(0.0, _shake - delta)
@@ -4330,6 +4544,7 @@ func _build_hud() -> void:
 	mid.add_child(_time_caption)
 	_time_label = UI.styled_label("45", TITLE_FONT, 5)   # D-389
 	mid.add_child(_time_label)
+	_build_pursuit_hud(mid)   # D-461: right under the clock
 	_hud_col.add_child(mid)
 	_hud_col.move_child(mid, 0)
 	_hud_mid = mid
@@ -4544,6 +4759,7 @@ func _update_hud(delta: float) -> void:
 		_sfx("rc_tick")
 	_score_label.text = ScoreTable.format_score(sim.score)
 	_stage_label.text = tr("RC_FINISH") if sim.finished else tr("RC_STAGE") % (sim.checkpoints + 1)
+	_update_pursuit_hud()
 	_speed_label.text = str(sim.speed_mph())
 	UI.set_color(_speed_label, UI.CYAN if sim.boosting else UI.WHITE)
 	_speedo.set_value(sim.v * Sim.MPH / SPEEDO_MAX)
@@ -4605,6 +4821,9 @@ func _update_hud(delta: float) -> void:
 		_center_t -= delta
 		if _center_t <= 0.0 and is_instance_valid(_center):
 			_center.queue_free()
+	if _dispatch_t >= 0.0:   # D-468: nothing over the police radio
+		_dmd.stop_anim()
+		_dmd.clear_flash()
 	_dmd_t -= delta
 	if _dmd_t <= 0.0 and sim.state != Sim.State.COUNTDOWN:
 		_dmd_t = 0.12
@@ -4739,6 +4958,9 @@ func _update_rev_hint(countdown: bool) -> void:
 func _draw_dmd_dash(p) -> void:
 	if sim == null:
 		return
+	if sim.pursuit:
+		_draw_dmd_pursuit(p)   # D-460
+		return
 	if sim.police_lights():
 		_draw_dmd_chase(p)   # D-162
 		return
@@ -4848,7 +5070,7 @@ func _rain_lamps() -> float:
 ## --rc-tod=<progress> / --rc-sunset / --rc-night pick a time for screenshots.
 func _update_night(delta: float) -> void:
 	var p := _tod_progress()
-	_tod_p = p if _tod_p < 0.0 else move_toward(_tod_p, p, delta * 0.5)   # smooths jumps (new race, debug skips)
+	_tod_p = p if _tod_p < 0.0 or p < _tod_p - 5.0 else move_toward(_tod_p, p, delta * 0.5)   # smooths jumps (new race, debug skips); D-460: round the loop at once
 	var hour := TimeOfDay.hour_at(_tod_p)
 	var el := TimeOfDay.sun_elevation(hour)
 	_night = TimeOfDay.night_level(el)
@@ -4952,6 +5174,11 @@ func _tod_progress() -> float:
 	if _phase == "attract" or sim == null:
 		return 0.5
 	var into := 1.0 - clampf((sim.next_checkpoint - sim.s) / Sim.CHECKPOINT_EVERY, 0.0, 1.0)
+	if sim.pursuit:
+		# D-460: round the loop. Stages 1-10 as a race; the 11th (the forest
+		# back to the beach) runs the morning on to stage 1's early afternoon.
+		var cyc := fmod(float(sim.checkpoints) + into, float(Track.LOOP_AREAS.size()))
+		return cyc if cyc <= 10.0 else 10.0 + (cyc - 10.0) * 5.0
 	return float(sim.checkpoints) + into
 
 
@@ -5034,6 +5261,8 @@ func _debug_skip_to_night() -> void:
 
 ## Plays one of the DMD event animations (D-115) with its translated texts.
 func _dmd_anim(name: String, args: Array) -> void:
+	if _dispatch_t >= 0.0:
+		return   # D-468: the police radio has the DMD
 	_dmd.play(Callable(_anims, name).bindv(args), DmdAnims.DURATIONS[name])
 
 
@@ -5368,3 +5597,397 @@ func _update_audio() -> void:
 			var quiet: bool = (pl as AudioStreamPlayer).volume_db < -58.0
 			if (pl as AudioStreamPlayer).stream_paused != quiet:
 				(pl as AudioStreamPlayer).stream_paused = quiet
+
+
+# --- pursuit (D-460) ------------------------------------------------------------------------
+## The speeder's car and the busted one (the same model: the chosen target),
+## each with its lights and a smoke trail that thickens with its damage.
+func _build_speeder_nodes() -> void:
+	for n in _speeder_cars + _wreck_cars:
+		if is_instance_valid(n):
+			n.queue_free()
+	_speeder_cars.clear()
+	_wreck_cars.clear()
+	var made := []
+	for k in 2 * CAR_MODELS.size():   # D-468: every model, as the speeder and as the wreck
+		var m: String = CAR_MODELS[k % CAR_MODELS.size()]
+		var car := _car_instance(0.0, m, MODEL_TEXTURES[m])
+		_add_headlights(car, "car")
+		car.set_meta("night", Night.add_car_lights(car, "car", _puff_texture(), TAIL_AT[MODEL_LIGHTS[m]]))
+		_place_tails(car, car.get_meta("night"), m)
+		var smoke := CPUParticles3D.new()   # (GPU particles don't move in our TABLE viewports)
+		# D-464: puffs of smoke off the bonnet that drift up and fall back
+		# along the road behind it: thrown forward at a little under the
+		# car's speed (set each frame), so they trail a short way behind it
+		# instead of sitting on the car (the black blob) or streaming at the
+		# camera. Light and thin at first, thicker and darker with damage.
+		smoke.amount = 48
+		smoke.lifetime = 1.0
+		smoke.local_coords = false
+		smoke.emitting = false
+		smoke.direction = Vector3(0.0, 0.08, 1.0)   # model space: +Z is the front
+		smoke.spread = 3.0
+		smoke.gravity = Vector3(0.0, 1.8, 0.0)
+		smoke.scale_amount_min = 0.7
+		smoke.scale_amount_max = 1.1
+		var grow := Curve.new()
+		grow.max_value = 3.0
+		grow.add_point(Vector2(0.0, 0.5))
+		grow.add_point(Vector2(1.0, 2.6))
+		smoke.scale_amount_curve = grow
+		var q := QuadMesh.new()
+		q.size = Vector2(1.0, 1.0)
+		var sm := StandardMaterial3D.new()
+		sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		sm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		sm.albedo_texture = _smoke_texture()   # D-474: soft (the hard puff disc read as a black circle)
+		sm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+		sm.albedo_color = Color(1.0, 1.0, 1.0, 1.0)   # (tinted per car by the smoke's colour)
+		sm.vertex_color_use_as_albedo = true
+		q.material = sm
+		smoke.mesh = q
+		var ramp := Gradient.new()
+		ramp.set_color(0, Color(1, 1, 1, 0.0))
+		ramp.add_point(0.12, Color(1, 1, 1, 1.0))
+		ramp.set_color(ramp.get_point_count() - 1, Color(1, 1, 1, 0.0))
+		smoke.color_ramp = ramp
+		smoke.position = Vector3(0.0, 1.1, 0.6)   # over the bonnet's back edge
+		car.add_child(smoke)
+		car.set_meta("smoke", smoke)
+		car.visible = false
+		_root.add_child(car)
+		made.append(car)
+	_speeder_cars = made.slice(0, CAR_MODELS.size())
+	_wreck_cars = made.slice(CAR_MODELS.size())
+	_speeder_node = _speeder_cars[_target_car]
+	_wreck_node = _wreck_cars[_target_car]
+	_speeder_sprite = null
+	if is_instance_valid(_target_tag):
+		_target_tag.queue_free()
+	_target_tag = Node3D.new()   # D-462; D-464: a smooth arrow picture
+	var arrow := Sprite3D.new()
+	arrow.texture = load(TARGET_ARROW)
+	arrow.pixel_size = 0.0004
+	arrow.fixed_size = true
+	arrow.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	arrow.shaded = false
+	arrow.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	arrow.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	arrow.centered = true
+	arrow.offset = Vector2(0, arrow.texture.get_height() * 0.5)   # tip at the node's position
+	arrow.render_priority = 1
+	_target_tag.add_child(arrow)
+	_target_tag.set_meta("arrow", arrow)
+	_target_tag.visible = false
+	_root.add_child(_target_tag)
+	_target_tag_t = 0.0
+
+
+## Places the speeder and the wreck where the pursuit has them.
+func _animate_speeder(delta: float, cam_yaw: float) -> void:
+	if not is_instance_valid(_speeder_node):
+		return
+	# D-462: the arrow over it for a few seconds once we've caught up.
+	# D-464: the first time we're within TARGET_TAG_NEAR of each speeder.
+	# D-472: as soon as it's in sight; D-475: again when we catch up with it
+	# after it got away (SUSPECT LOST), as the chase comes back on.
+	var tag_from := VIEW_AHEAD if not _target_lost else Sim.ENGAGE_RANGE
+	if sim.pursuit and not _target_tagged and sim.state == Sim.State.RACE and sim.speeder_gap() < tag_from:
+		_target_tagged = true
+		_target_tag_t = TARGET_TAG_TIME
+	_target_tag_t = maxf(0.0, _target_tag_t - delta)
+	var tag_on: bool = _target_tag_t > 0.0 and sim.pursuit and not sim.speeder.is_empty()
+	_target_tag.visible = tag_on
+	if tag_on:
+		# D-464: it drops onto the car's roof and bounces three times, each
+		# lower, then fades away.
+		var t := TARGET_TAG_TIME - _target_tag_t
+		var hop := 0.0
+		if t < 1.8:
+			var k := int(t / 0.6)
+			var f := fmod(t, 0.6) / 0.6
+			hop = 4.0 * f * (1.0 - f) * [1.4, 0.8, 0.4][k]
+		(_target_tag.get_meta("arrow") as Sprite3D).modulate.a = clampf(_target_tag_t / 0.4, 0.0, 1.0)
+		_target_tag.position = sim.track.point(float(sim.speeder.s), float(sim.speeder.x), 1.6 + hop)
+	_speeder_wheel = fmod(_speeder_wheel + minf(float(sim.speeder.get("v", 0.0)) / 0.32, WHEEL_MAX) * delta, TAU * 100.0)
+	# D-468: each speeder's own model; the others hidden.
+	_speeder_node = _speeder_cars[int(sim.speeder.get("car", _target_car))]
+	_wreck_node = _wreck_cars[int(sim.wreck.get("car", _target_car))]
+	for n in _speeder_cars + _wreck_cars:
+		if n != _speeder_node and n != _wreck_node:
+			n.visible = false
+			(n.get_meta("smoke") as CPUParticles3D).emitting = false
+	for pair in [[_speeder_node, sim.speeder if sim.pursuit else {}], [_wreck_node, sim.wreck if sim.pursuit else {}]]:
+		var node: Node3D = pair[0]
+		var d: Dictionary = pair[1]
+		var smoke: CPUParticles3D = node.get_meta("smoke")
+		if d.is_empty() or absf(float(d.s) - sim.s) > VIEW_AHEAD:
+			node.visible = false
+			smoke.emitting = false
+			continue
+		node.visible = true
+		var tr_ := sim.track
+		node.transform = tr_.frame(float(d.s), float(d.x))
+		var h := tr_.heading(float(d.s))
+		node.basis = node.basis * Basis(Vector3.UP, _sprite_yaw(h + float(d.get("sway", 0.0)), cam_yaw) - h) * MODEL_TURN
+		_step_later(node)
+		var hue := _speeder_hue(d)
+		var dv: float = d.v
+		for m in node.find_children("*", "MeshInstance3D", true, false):
+			var gi := m as MeshInstance3D
+			if gi.material_override != null:
+				InstParam.set_param(gi, "hue", hue)
+				InstParam.set_param(gi, "spin", 1.0)
+				InstParam.set_param(gi, "wheel_phase", _speeder_wheel if node == _speeder_node else 0.0)
+				InstParam.set_param(gi, "wheel_blur", clampf((dv - 6.0) / 20.0, 0.0, 1.0))
+				InstParam.set_param(gi, "lamps", _car_lamps)
+				InstParam.set_param(gi, "overhead", _overhead(float(d.s)))
+		(node.get_meta("night") as Node3D).visible = _lamps > 0.0
+		# D-464: smoke from the first real damage, light grey and thin,
+		# thickening and darkening as it builds; a wreck pours it out.
+		var dmg: float = 1.0 if d.get("state", "") == "wrecked" else float(d.get("dmg", 0.0))
+		smoke.emitting = dmg >= 0.15
+		var k := clampf((dmg - 0.15) / 0.85, 0.0, 1.0)
+		var grey := lerpf(0.75, 0.3, k)
+		smoke.color = Color(grey, grey, grey * 1.02, lerpf(0.18, 0.7, k))
+		smoke.initial_velocity_min = dv * 0.86
+		smoke.initial_velocity_max = dv * 0.9
+
+
+## HUD (D-460): on the left, SUSPECT and how far ahead it is; while the chase
+## is on, its damage meter under it.
+func _build_pursuit_hud(parent: Control) -> void:
+	_pursuit_box = UI.vstack(2)
+	_pursuit_box.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_pursuit_box.add_child(UI.styled_label(tr("RC_SUSPECT"), TITLE_FONT, 1))
+	_pursuit_dist = UI.styled_label("", TITLE_FONT, 2)
+	_pursuit_box.add_child(_pursuit_dist)
+	_pursuit_dmg_box = UI.vstack(4)
+	_pursuit_dmg_box.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_pursuit_dmg_box.add_child(UI.styled_label(tr("RC_DAMAGE"), TITLE_FONT, 1))
+	var bar := ColorRect.new()
+	bar.color = Color(0.08, 0.06, 0.12, 0.85)
+	bar.custom_minimum_size = Vector2(260, 24)
+	bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_pursuit_dmg = ColorRect.new()
+	_pursuit_dmg.color = UI.RED
+	_pursuit_dmg.position = Vector2(3, 3)
+	_pursuit_dmg.size = Vector2(0, 18)
+	bar.add_child(_pursuit_dmg)
+	_pursuit_dmg_box.add_child(bar)
+	_pursuit_box.add_child(_pursuit_dmg_box)
+	_pursuit_box.visible = false
+	parent.add_child(_pursuit_box)
+
+
+func _update_pursuit_hud() -> void:
+	if _pursuit_box == null:
+		return
+	_pursuit_box.visible = sim.pursuit
+	if not sim.pursuit:
+		return
+	_pursuit_dist.text = _pursuit_distance_text(sim.speeder_gap())
+	var on := sim.engaged and not sim.speeder.is_empty()
+	_pursuit_dmg_box.modulate.a = 1.0 if on else 0.0   # (D-096: alpha, so nothing jumps)
+	if on:
+		var dmg: float = sim.speeder.dmg
+		_pursuit_dmg.size.x = roundf(254.0 * dmg)
+		_pursuit_dmg.color = UI.RED if dmg < 0.75 or fmod(_phase_t, 0.3) < 0.15 else UI.YELLOW
+
+
+## The gap in feet up close, in miles further off ("---" between speeders).
+func _pursuit_distance_text(gap: float) -> String:
+	if is_inf(gap):
+		return tr("RC_DIST_NONE")
+	var ft := maxf(0.0, gap) * 3.281
+	if ft < 1000.0:
+		return tr("RC_DMD_FT") % roundi(ft)
+	return tr("RC_DIST_MI") % (gap / 1609.34)
+
+
+## DMD in a pursuit (D-460): a side view, the police car on the left (lights
+## flashing in the chase) and the speeder ahead at a gap that follows the real
+## one (up to 250 m); its damage along the bottom, the distance top left and
+## our speed top right.
+func _draw_dmd_pursuit(p) -> void:
+	var t := _phase_t
+	if _dispatch_t >= 0.0 and _draw_dispatch(p):
+		return
+	p.line(0, 29, 127, 29, Color(0.3, 0.3, 0.35))
+	var scroll := fmod(sim.s * 1.5, 16.0)
+	for i in 9:
+		var dx := 128.0 - fmod(i * 16.0 + scroll, 144.0)
+		p.line(dx, 31, dx + 6, 31, Color(0.5, 0.5, 0.55))
+	_anims._police(p, 6, 24, t if sim.engaged else -1.0)
+	var gap := sim.speeder_gap()
+	if not is_inf(gap):
+		if _speeder_sprite == null:
+			_speeder_sprite = _painted(_dmd_sprite(CAR_MODELS[int(sim.speeder.get("car", _target_car))]), _speeder_hue(sim.speeder))
+		var sx := 26.0 + clampf(gap / 250.0, 0.0, 1.0) * 84.0
+		if _speeder_sprite != null:
+			var spr := _speeder_sprite
+			var y0 := 29 - spr.get_height()
+			for r in spr.get_height():
+				for c in spr.get_width():
+					var px := spr.get_pixel(c, r)
+					if px.a >= 0.5:
+						p.dot(sx + c - spr.get_width() * 0.5 + 6.5, y0 + r, Color(px.r, px.g, px.b))
+		else:
+			_anims._car(p, sx, 24, CAR_COLS[_target_car])
+		if sim.engaged:
+			var dmg: float = sim.speeder.dmg
+			p.block(40, 13, 48, 3, Color(0.16, 0.18, 0.22))
+			p.block(40, 13, roundi(48.0 * dmg), 3, Dmd.RED if dmg < 0.75 or fmod(t, 0.3) < 0.15 else Dmd.YELLOW)
+	var dist := _pursuit_distance_text(gap)
+	p.text(dist, 2, 2, 1, Dmd.RED if sim.engaged and fmod(t, 0.24) < 0.12 else Dmd.YELLOW)
+	var spd := tr("RC_DMD_MPH") % sim.speed_mph()
+	p.text(spd, 126 - p.text_width(spd), 2, 1, Dmd.WHITE)
+	var clock := str(ceili(sim.time_left))
+	p.text(clock, 64 - p.text_width(clock) * 0.5, 2, 1, Dmd.RED if sim.time_left < 10.0 and fmod(t, 0.5) < 0.25 else Dmd.WHITE)
+
+
+## D-466: the police radio calls in the speeder: what it is, its colour and
+## how fast it was going, scrolling across the DMD beside a radio.
+func _start_dispatch() -> void:
+	var car_i := int(sim.speeder.get("car", _target_car))
+	var kind: String = ["RC_KIND_SALOON", "RC_KIND_SPORTS", "RC_KIND_SUPER"][car_i]
+	var mph := roundi(float(sim.speeder.get("top", Sim.CARS[_target_car].top)) * Sim.MPH / 10.0) * 10
+	var colour := tr(_colour_name(_speeder_hue(sim.speeder), car_i))
+	# D-471: "an" before a vowel sound (AN ORANGE), "a" otherwise.
+	var art := "RC_ARTICLE_AN" if colour.substr(0, 1) in ["A", "E", "I", "O", "U"] else "RC_ARTICLE_A"
+	_dispatch_msg = tr("RC_DISPATCH") % [tr(art) % colour, tr(kind), mph]
+	_dispatch_start()
+
+
+## D-468: the cop reporting in as the chase comes on.
+func _start_report() -> void:
+	_dispatch_msg = tr("RC_REPORT")
+	_dispatch_start()
+
+
+## A radio message (D-466, D-468): the DMD's priority: other DMD animations
+## and flashes are cut and held off until it has scrolled through.
+func _dispatch_start() -> void:
+	_dispatch_t = _phase_t
+	_dmd_t = 0.0
+	_dmd.stop_anim()
+	_dmd.clear_flash()
+	_sfx("rc_dispatch")   # D-467: "calling all units"
+
+
+## The paint's name, from the painted DMD picture's saturated dots.
+func _colour_name(hue_v: float, car_i: int) -> String:
+	var img := _painted(_dmd_sprite(CAR_MODELS[car_i]), hue_v)
+	if img == null:
+		return "RC_COL_RED"
+	var hx := 0.0
+	var hy := 0.0
+	var lum := 0.0
+	var n := 0
+	var m := 0
+	for r in img.get_height():
+		for c in img.get_width():
+			var px := img.get_pixel(c, r)
+			if px.a < 0.5:
+				continue
+			m += 1
+			lum += px.get_luminance()
+			if px.s > 0.45 and px.v > 0.25:
+				hx += cos(px.h * TAU)
+				hy += sin(px.h * TAU)
+				n += 1
+	if n < 12:
+		var l := lum / maxf(m, 1)
+		return "RC_COL_BLACK" if l < 0.25 else ("RC_COL_GREY" if l < 0.6 else "RC_COL_WHITE")
+	var h := fposmod(atan2(hy, hx) / TAU, 1.0) * 360.0
+	if h < 15.0 or h >= 340.0:
+		return "RC_COL_RED"
+	if h < 40.0:
+		return "RC_COL_ORANGE"
+	if h < 70.0:
+		return "RC_COL_YELLOW"
+	if h < 165.0:
+		return "RC_COL_GREEN"
+	if h < 250.0:
+		return "RC_COL_BLUE"
+	if h < 300.0:
+		return "RC_COL_PURPLE"
+	return "RC_COL_PINK"
+
+
+## The radio on the DMD's left (a handset with a lit band and a blinking
+## light), DISPATCH over the message scrolling right to left. False once it
+## has scrolled through.
+func _draw_dispatch(p) -> bool:
+	var t := _phase_t - _dispatch_t
+	var w: float = p.text_width(_dispatch_msg)
+	var x := 128.0 - t * DISPATCH_SPEED
+	if x + w < 26.0:
+		_dispatch_t = -1.0
+		return false
+	p.text(_dispatch_msg, x, 17, 1, Dmd.YELLOW)
+	# The radio, drawn over the text's left end.
+	p.block(0, 0, 25, 32, Color.BLACK)
+	p.block(9, 1, 1, 6, Dmd.DIM)              # antenna
+	p.block(3, 7, 15, 23, Color(0.2, 0.22, 0.26))
+	p.block(4, 8, 13, 5, Color(0.08, 0.3, 0.12))   # display
+	p.block(5, 10, int(fmod(t * 8.0, 11.0)) + 1, 1, Dmd.GREEN)
+	for gy in 4:
+		p.block(5, 16 + gy * 3, 11, 1, Dmd.DIM)   # speaker grille
+	p.disc(20, 9, 1.4, Dmd.RED if fmod(t, 0.5) < 0.25 else Color(0.25, 0.05, 0.05))
+	p.text(tr("RC_DISPATCH_TITLE"), 30, 3, 1, Dmd.RED if fmod(t, 0.6) < 0.4 else Dmd.WHITE)
+	return true
+
+
+## D-468: a speeder's paint: the one chosen on the target select for the
+## first, a random one after.
+func _speeder_hue(d: Dictionary) -> float:
+	var paint := int(d.get("paint", -1))
+	var car_i := int(d.get("car", _target_car))
+	if paint < 0:
+		return _car_hue(_target_car)
+	return _turn_hue(float(Sim.CARS[car_i].hue), float(PAINTS[paint]))
+
+
+## D-469: the light bar's glow: a wide soft oval with two white-hot cores
+## (the lamps), like a real bar's halves lit up. Tinted per colour.
+static var _bar_glow: Texture2D = null
+static func _bar_glow_texture() -> Texture2D:
+	if _bar_glow != null:
+		return _bar_glow
+	var w := 128
+	var h := 44
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	for y in h:
+		for x in w:
+			var dx := (x + 0.5 - w * 0.5) / (w * 0.5)
+			var dy := (y + 0.5 - h * 0.5) / (h * 0.5)
+			var r := sqrt(dx * dx + dy * dy)
+			var a := clampf(1.0 - r, 0.0, 1.0)
+			a = a * a * 0.85
+			var core := 0.0
+			for cx in [-0.32, 0.32]:
+				var d := Vector2((dx - cx) * 2.6, dy * 1.6).length()
+				core = maxf(core, clampf(1.0 - d, 0.0, 1.0))
+			var white := core * core
+			var v := clampf(a + white, 0.0, 1.0)
+			img.set_pixel(x, y, Color(lerpf(1.0, 1.0, white), 1.0, 1.0, v).lerp(Color(1, 1, 1, v), white))
+	_bar_glow = ImageTexture.create_from_image(img)
+	return _bar_glow
+
+
+## D-474: a soft smoke puff: white, alpha falling off smoothly from the middle.
+static var _smoke_tex: Texture2D = null
+static func _smoke_texture() -> Texture2D:
+	if _smoke_tex != null:
+		return _smoke_tex
+	var n := 48
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	for y in n:
+		for x in n:
+			var d := Vector2(x + 0.5 - n * 0.5, y + 0.5 - n * 0.5).length() / (n * 0.5)
+			var a := clampf(1.0 - d, 0.0, 1.0)
+			img.set_pixel(x, y, Color(1, 1, 1, a * a * (3.0 - 2.0 * a) * 0.8))
+	_smoke_tex = ImageTexture.create_from_image(img)
+	return _smoke_tex

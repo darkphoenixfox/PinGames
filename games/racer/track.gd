@@ -41,6 +41,11 @@ const CROWD_AFTER := 160.0    # D-234: people line the run-out too (was 40)
 ## finish (stage 11 on) the last one goes on. The look cross-fades into the
 ## next area over the last AREA_BLEND m of a stage.
 const STAGE_AREAS := ["beach", "beach", "forest", "forest", "desert", "city", "city", "fields", "snow", "snow"]
+## Pursuit (D-460, director): the road never ends. After the ten stages it
+## goes back through the forest to the beach and round again (stage 11 is
+## the forest, 12 the beach of stage 1, ...). No finish town, no speed cameras.
+const LOOP_AREAS := ["beach", "beach", "forest", "forest", "desert", "city", "city", "fields", "snow", "snow", "forest"]
+var loop := false
 ## The guaranteed tunnel (D-132) is laid in the second half of this stage.
 const TUNNEL_STAGE := 3
 const AREA_BLEND := 200.0
@@ -312,7 +317,7 @@ func _place_city(s: float) -> void:
 
 ## The finish line's distance (D-221), 0 if checkpoints aren't set.
 func finish_s() -> float:
-	return avoid_every * FINISH_STAGE
+	return 0.0 if loop else avoid_every * FINISH_STAGE
 
 
 ## In the finish town (D-229)?
@@ -417,7 +422,8 @@ func _place_dressing(s1: float) -> void:
 		_next_trap_s = avoid_every * TRAPS_FROM_STAGE + 300.0
 	while _next_trap_s > 0.0 and _next_trap_s < s1:
 		if absf(curvature(_next_trap_s)) < 1.0 / 400.0 and not in_tunnel(_next_trap_s) and not in_town(_next_trap_s):
-			_add_obj(_next_trap_s, ROAD_HALF + RUMBLE + 1.6, "speedtrap")
+			if not loop:   # (D-460: the same draws either way, so the road is unchanged)
+				_add_obj(_next_trap_s, ROAD_HALF + RUMBLE + 1.6, "speedtrap")
 			_next_trap_s += _rng.randf_range(TRAP_GAP.x, TRAP_GAP.y)
 		else:
 			_next_trap_s += 80.0
@@ -555,6 +561,13 @@ static func stage_area(k: int) -> String:
 	return STAGE_AREAS[clampi(k, 1, STAGE_AREAS.size()) - 1]
 
 
+## The area of stage k on this road: in a pursuit's loop (D-460), round again.
+func area_of_stage(k: int) -> String:
+	if loop:
+		return LOOP_AREAS[(maxi(k, 1) - 1) % LOOP_AREAS.size()]
+	return stage_area(k)
+
+
 ## The stage (1-based) at distance s.
 func stage_at(s: float) -> int:
 	return 1 if avoid_every <= 0.0 else int(floor(maxf(s, 0.0) / avoid_every)) + 1
@@ -578,8 +591,8 @@ func areas(s: float) -> Dictionary:
 	if avoid_every <= 0.0:
 		return {"fields": 1.0}
 	var k := stage_at(s)
-	var cur := stage_area(k)
-	var nxt := stage_area(k + 1)
+	var cur := area_of_stage(k)
+	var nxt := area_of_stage(k + 1)
 	if nxt == cur:
 		return {cur: 1.0}
 	var t := clampf((s - (k * avoid_every - AREA_BLEND)) / AREA_BLEND, 0.0, 1.0)

@@ -1598,6 +1598,129 @@ func test_racer_hd_assets() -> void:
 	var waiter: Dictionary = sw.traffic[0] if not sw.traffic.is_empty() else {}
 	check(not waiter.is_empty() and float(waiter.v) < 1.0 and sw.s - float(waiter.s) > SimA.CAR_LEN,
 		"traffic behind a crash stops and waits")
+	# D-460: PURSUIT. The road loops: after the ten stages, the forest, then
+	# the beach of stage 1 again; no finish town.
+	var lt = TrackA.new()
+	lt.loop = true
+	check(lt.area_of_stage(10) == "snow" and lt.area_of_stage(11) == "forest" and lt.area_of_stage(12) == "beach"
+		and lt.area_of_stage(22) == "forest" and lt.area_of_stage(23) == "beach" and lt.finish_s() == 0.0,
+		"pursuit: the stages loop (snow, forest, back to the beach), no finish")
+	var pu = SimA.new()
+	pu.setup(4)
+	pu.setup_pursuit(1)
+	pu.state = SimA.State.RACE
+	check(pu.pursuit and is_equal_approx(pu.time_left, SimA.PURSUIT_TIME) and not pu.speeder.is_empty()
+		and float(pu.speeder.s) - pu.s > 500.0 and is_equal_approx(pu.top_speed(), float(SimA.PURSUIT_CAR.top)),
+		"pursuit: the police car, 90 s, the speeder well up the road")
+	# Close in: the chase comes on, and the speeder stays close ahead (on
+	# screen) while we keep after it.
+	pu.s = float(pu.speeder.s) - 140.0
+	pu.x = float(pu.speeder.x)
+	pu.v = 75.0
+	pu.gear = SimA.Gear.HIGH
+	pu.autopilot = true
+	var max_gap := 0.0
+	var on_t := -1.0
+	for i in 1500:
+		pu.traffic.clear()
+		pu.pickups.clear()
+		pu.step(1.0 / 60.0, false, false)
+		if pu.engaged and on_t < 0.0:
+			on_t = i / 60.0
+		if on_t >= 0.0 and not pu.speeder.is_empty():
+			max_gap = maxf(max_gap, pu.speeder_gap())
+	check(pu.time_left > SimA.PURSUIT_TIME + SimA.REACH_TIME - 30.0, "pursuit: reaching the speeder extends the clock (D-465)")
+	check(on_t >= 0.0 and pu.engaged and max_gap < SimA.STAY_GAP + 50.0 and pu.spin_t <= 0.0,
+		"pursuit: within range the chase is on and the speeder stays in sight ahead (gap up to %.0f m)" % max_gap)
+	# D-463: flat out we gain on it slowly; with nitro, much faster.
+	var gains := []
+	for boost in [false, true]:
+		var gq = SimA.new()
+		gq.setup(4)
+		gq.setup_pursuit(1)
+		gq.state = SimA.State.RACE
+		# On a straight stretch (the test's autopilot is no drifter).
+		gq.track.ensure(30000.0)
+		var st := 1000.0
+		while st < 28000.0:
+			var straight := true
+			for k in 26:
+				if absf(gq.track.curvature(st + k * 20.0)) > 0.0025:
+					straight = false
+					break
+			if straight:
+				break
+			st += 50.0
+		gq.speeder.s = st + 85.0
+		gq.s = st
+		gq.x = float(gq.speeder.x)
+		gq.v = 80.0
+		gq.gear = SimA.Gear.HIGH
+		gq.autopilot = true
+		for i in 60:   # into the chase
+			gq.traffic.clear()
+			gq.pickups.clear()
+			gq.step(1.0 / 60.0, false, false)
+		var g0: float = gq.speeder_gap()
+		if boost:
+			gq.boosting = true
+			gq.boost_t = SimA.NITRO_TIME
+		for i in 120:
+			gq.traffic.clear()
+			gq.pickups.clear()
+			gq.step(1.0 / 60.0, false, false)
+		gains.append(g0 - gq.speeder_gap())
+	check(float(gains[0]) > 5.0 and float(gains[1]) > float(gains[0]) * 1.8,
+		"pursuit: flat out the police car gains on the speeder (%.0f m in 2 s), with nitro much faster (%.0f m)" % [gains[0], gains[1]])
+	# Nitro can't carry the police car far past it.
+	pu.s = float(pu.speeder.s) + 15.0
+	pu.v = 98.0
+	pu.boosting = true
+	pu.boost_t = 5.0
+	for i in 120:
+		pu.traffic.clear()
+		pu.step(1.0 / 60.0, false, false)
+	check(pu.s - float(pu.speeder.s) < 40.0, "pursuit: nitro doesn't carry the police car far past the speeder")
+	# Ramming it wrecks it: BUSTED, more time, the next one up the road.
+	pu.autopilot = false
+	var t_before: float = pu.time_left
+	var rams := 0
+	for i in 2400:
+		if pu.speeder.is_empty():
+			break
+		pu.traffic.clear()
+		pu.x = float(pu.speeder.x)
+		pu.s = minf(pu.s, float(pu.speeder.s) - SimA.CAR_LEN * 0.9)
+		pu.v = minf(float(pu.speeder.v), 80.0) + 8.0
+		pu.step(1.0 / 60.0, false, false)
+		for e in pu.events:
+			if e[0] == "speeder_hit":
+				rams += 1
+	var busted_ok: bool = pu.speeder.is_empty() and pu.busts == 1 and not pu.wreck.is_empty() \
+		and pu.time_left > t_before + SimA.PURSUIT_BONUS_TIME - 30.0 and rams >= 3
+	# D-466: the arrest: we park across in front of it, the fine, the clock
+	# stopped meanwhile; then we drive on and the next one is called in.
+	var t_arrest: float = pu.time_left
+	var fined := false
+	var parked_ahead := false
+	var clock_held := true
+	for i in 1200:
+		pu.traffic.clear()
+		pu.step(1.0 / 60.0, false, false)
+		if not pu.arrest.is_empty():
+			clock_held = clock_held and is_equal_approx(pu.time_left, t_arrest)
+		for e in pu.events:
+			if e[0] == "speeder_fined":
+				fined = true
+				parked_ahead = not pu.wreck.is_empty() and pu.s > float(pu.wreck.s) + SimA.CAR_LEN and pu.v < 2.0 					and pu.arrest_swing > 0.3
+		if not pu.speeder.is_empty():
+			break
+	check(busted_ok and fined and parked_ahead and clock_held and pu.arrest.is_empty() and not pu.speeder.is_empty()
+		and float(pu.speeder.s) - pu.s > 600.0 and float(pu.speeder.dmg) == 0.0,
+		"pursuit: rams wreck the speeder (%d rams); we park across in front, fine it, drive on; the next one up the road" % rams)
+	check(not pu.speeder.is_empty() and float(pu.speeder.top) > float(SimA.CARS[1].top)
+		and float(pu.speeder.per_ram) < float(SimA.TARGETS[1].dmg) and int(pu.speeder.paint) >= 0,
+		"pursuit: each next speeder is faster and tougher, in a random paint (D-468)")
 	# D-452: a fast car catching a slow one in its lane follows it, never
 	# through it; one behind a stopped car stops short of it.
 	# D-453: with the other lane clear, it changes lanes and passes instead.
@@ -2484,6 +2607,7 @@ func test_racer_sim() -> void:
 		and absf(float(hit_car.hit_yaw)) > 0.3 and absf(float(hit_car.shove)) > 0.3
 	for i in 600:
 		tr._move_traffic(hit_car, dt, tr._players_view())
+	check(float(hit_car.x) > 1.875 + 0.3, "a car we crash into slides out towards its own road edge, not the middle (D-470)")
 	check(knocked and absf(float(hit_car.v)) < 0.1 and bool(hit_car.blink) and absf(float(hit_car.shove)) > 0.3,
 		"the car we crash into is shoved, spun and stopped with its hazards on, and stays stopped")
 	# D-457: in a tunnel, a car knocked towards the wall stops against it.

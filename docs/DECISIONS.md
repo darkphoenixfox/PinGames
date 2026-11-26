@@ -4387,3 +4387,159 @@ un.ps1 --layout=single` (or add `--stereo=sr`).
 - **Dev flag:** `--tb-fire-at=<s>` fires a column-clearing bolt at that time, to watch bricks break.
 - **Checked:** screenshot of a column shattering; test: the ship reaches the outer column centres at both walls.
 - **Status:** Accepted, pending the director's look
+### D-460 — Turbo Run: PURSUIT mode
+- **Date:** 2026-11-26
+- **Decision (director):** a new 1-player mode, chosen from the 1P / 2P menu: drive the police car after a speeding car; the difficulty is which of the three cars you chase. No checkpoints, a clock; drive fast, pick up nitro and dodge traffic to close in. In close range: lights, chase music, bump it until it breaks (damage meter); it's rubber-banded, always on screen unless the player crashes; nitro doesn't carry the police car far past it. Stop it before time runs out. The stages loop (after snow, forest, then the beach of stage 1).
+- **Director's answers:** after a bust, the next speeder comes with more time (the run lasts until time is up); 90 s at the start, +60 s per bust; menus are graphics, target, radio (no start stage).
+- **Menu:** the players menu now always shows (PRESS START goes there even when 2 players isn't possible): 1 PLAYER, 2 PLAYERS (only where possible, D-284), PURSUIT. The flippers move through it, wrapping.
+- **Target select:** the car select as CHOOSE YOUR TARGET; the card's clock row becomes RAMS (how many average rams stop it). The paint chosen there is the speeders'.
+- **Sim (`Sim.pursuit`, `setup_pursuit`):**
+  - The police car: top 86 m/s, grip 1.1. No speed cameras, no police chasing; stage crossings just count (`stage` event).
+  - The speeder (`Sim.speeder`): 600 m ahead at the start, cruising at 0.8 × its car's top. Within 160 m (`ENGAGE_RANGE`) the chase is on (`engaged`); past 450 m off again.
+  - Rubber band while engaged: it holds a gap that drifts between the target's min and max (easy 3–22 m, normal 6–28, hard 9–34; 7 s period), at the player's speed ± a correction (up to +10/+14/+18 m/s faster, 12 slower), capped at 1.2 × its top. While the player is crashed, and 4 s after, it flees at 1.08 × top.
+  - Nitro: more than 10 m past it, the police car is eased down to its speed.
+  - Traffic: it picks the lane with the most room ahead (oncoming cars by how soon they'd meet), one lane at a time, sticking to its own unless another is clearly better; brakes behind what's in its way; hitting a car knocks it (D-455) and slows itself. Engaged, it sometimes swerves away from a police car right behind it (more often the harder the target). Held inside tunnel and town walls.
+  - Ramming: contact pushes it on (from behind) or apart (side), never through. Each ram adds the target's damage (easy 0.34, normal 0.25, hard 0.17) plus 0.006 per m/s of closing speed, 0.6 s apart. At 1.0: wrecked, `busts` + 1, +60 s, 50,000 points (+10,000 per earlier bust); it skids to the roadside and stays until left behind; the next speeder appears 900 m ahead 2.5 s later.
+  - Traffic yields to the player's lights while engaged (D-163's pull-over).
+- **Track:** `Track.loop`: stage areas cycle `LOOP_AREAS` (the ten stages plus a forest); no finish town; speed cameras aren't placed (same random draws, so the road is otherwise unchanged).
+- **View:**
+  - The player's car is the police model with its light bar (`_add_light_bar`, shared with the police cars): flashing and siren while engaged. Its own flare sprites stay hidden and its siren light is softer and shorter (they'd sit right under the camera).
+  - The speeder and the wreck: the target's model in the chosen paint, with a smoke plume from half damage (riding with the car), thick once wrecked.
+  - HUD: SUSPECT and the gap (feet under 1,000 ft, else miles; --- between speeders) and, while engaged, the damage meter (top left). Finale: SUSPECTS BUSTED: n.
+  - DMD: the police car (lights while engaged) and the speeder side on at the real gap (up to 250 m), the damage bar, the gap, the clock and the speed.
+  - Music: the chase theme (D-363) while engaged.
+  - Time of day loops: stages 1–10 as a race, the 11th (forest) runs the morning on to stage 1's afternoon.
+  - The helicopter (D-436) comes at the same stages, round the loop.
+- **Dev flags:** `--rc-pursuit` (with `--rc-skip-intro`), `--rc-target=N`, `--rc-speeder-near` (60 m ahead), `--rc-speeder-dmg=0..1`.
+- **Not done:** pursuit scores go in the same high-score table as races.
+- **Checked:** tests (the loop; the start; the rubber band keeps it within 60 m once caught up; nitro doesn't carry the police car past; rams wreck it, +time, the next one up the road). Screenshots: the players menu, the target select, the chase by day and night (HD and 16-BIT), a damaged speeder smoking, the portrait layout.
+- **Status:** Accepted, pending the director's play-test
+### D-461 — Turbo Run pursuit: the clock right over the suspect distance
+- **Date:** 2026-11-26
+- **Decision (director):** the timer on top of the suspect distance, closer together (too much empty space).
+- **How:** the pursuit block (SUSPECT, the distance, the damage meter) now sits in the clock's own column, right under the number (D-460 had it in the left column, under the clock in landscape but after it). Landscape: TIME, then SUSPECT, left-aligned. Portrait: centred under the clock, and in a pursuit the clock block moves into the top row between the empty left column and STAGE/SCORE, so stage and score stay at the top instead of being pushed down. Races keep D-389's portrait layout.
+- **Checked:** screenshots in both layouts.
+- **Status:** Accepted
+### D-462 — Turbo Run pursuit: the player's lights blink; an arrow marks the target
+- **Date:** 2026-11-26
+- **Decision (director):** in the chase the player's police lights are on and visibly blinking; a red arrow shows over the target car for a few seconds when the player reaches it.
+- **Lights:** the player's own light bar (D-460 had hidden its flares) now lights its red and blue halves in turn: a lit block over each painted lamp, and a small glow (half the police cars' flare size) drawn over the roof (no depth test, so the roof never cuts it). The siren lights stay soft (D-460).
+- **Arrow:** when the chase comes on (`pursuit_on`), the 2-player tag's red triangle (D-290, now `_tag_triangle`, shared), 1.4× its size and without the label, bobs over the speeder for `TARGET_TAG_TIME` (3 s).
+- **Checked:** screenshots: the arrow over the speeder as the chase starts, the roof light blinking.
+- **Status:** Accepted
+
+### D-463 — Turbo Run pursuit: you gain on the speeder flat out, faster with nitro
+- **Date:** 2026-11-26
+- **Bug (director):** chasing the normal car, it was impossible to gain on it; it stayed at about the same distance. Flat out should gain slowly, nitro faster.
+- **Cause:** D-460's rubber band held the speeder at a wanted gap from the player whatever the player did.
+- **Fix (supersedes D-460's rubber band):** in the chase the speeder drives at a set speed under the police car's top: 10 / 7 / 5 m/s under (easy / normal / hard; `TARGETS.gain`). Flat out the police car gains slowly; nitro (+20 m/s) roughly doubles that. It only waits for the player: more than `STAY_GAP` (90 m) ahead, it slows to 0.4 m/s per m past that under the player's speed (never under half its chase speed), so it stays in sight. Bends slow it like the player: no faster than a car with its grip takes them before the auto-brake (it was taking tight bends flat out). A ram from behind now leaves the police car at 0.95 of the speeder's speed (was 0.88), so a hit doesn't lose the chase. Crashing still lets it get away (it flees, D-460), and nitro still can't carry the police car far past it.
+- **Test:** on a straight, flat out from 85 m behind: about 25 m gained in 4 s; with nitro, about 52 m.
+- **Status:** Accepted, pending the director's play-test
+### D-464 — Turbo Run pursuit: a longer approach, three times the rams, a smooth bouncing arrow, gradual smoke
+- **Date:** 2026-11-26
+- **Decision (director):** the arrow was too big and pixelated: make a nice one, or a PNG to replace, that bounces on the car a few times and disappears. Reaching the speeder was too quick. It took too few hits: at least 3x. A black blob appeared on the speeder after a few hits: just smoke, coming out progressively with damage.
+- **Arrow:** `assets/textures/racer/target_arrow.png` (128 px; `scripts/tools/gen_target_arrow.py`): a smooth red arrow with a dark outline and highlight, drawn with filtering, constant size on screen. Replace the PNG to restyle it (tip at the bottom centre). It shows the first time the police car gets within 45 m of each speeder (D-462 showed it as the chase came on, ~150 m out): it drops onto the roof and bounces three times, each lower (0.6 s each), then fades over 0.4 s (2.2 s in all).
+- **Approach:** the speeder starts 1,000 m ahead (was 600), the next ones 1,200 m (was 900), and cruises at 0.85 of its top (was 0.8). Without nitro the normal car takes about a minute to reach.
+- **Rams:** a third of D-460's damage per ram (easy 0.113, normal 0.083, hard 0.057, + 0.002 per m/s of closing speed): about 9 / 12 / 18 rams. The target card shows the count, pips at a quarter of it.
+- **Smoke (replaces D-460's plume):** puffs thrown forward at 0.86–0.9 of the car's speed, so they trail a short way behind it instead of sitting on it (the black blob was the plume bunched on the bonnet). From 15 % damage, light grey and thin, darker and thicker as it builds; a wreck pours it out.
+- **Note:** the 90 s clock (+60 per bust) is unchanged; with the longer approach and more rams it may need raising after play-testing.
+- **Checked:** tests; screenshots of the arrow over the speeder and of the smoke trail.
+- **Status:** Accepted, pending the director's play-test
+### D-465 — Turbo Run pursuit: an easier approach; reaching the speeder extends the clock
+- **Date:** 2026-11-26
+- **Decision (director):** after D-464 the escaping car was too hard to reach; also give a time extension (a checkpoint) when reaching pursuit distance.
+- **Approach (between D-460 and D-464):** the speeder starts 800 m ahead (D-464 1,000), the next ones 1,000 m (1,200), cruising at 0.78 of its top (0.85). The normal car closes at about 22 m/s flat out: under 40 s without nitro.
+- **Extension:** the first time the chase comes on for each speeder (within 160 m), +30 s (`REACH_TIME`), shown like a checkpoint (the checkpoint sound, the background flash and the DMD's TIME +30). Losing it and catching up again gives nothing more.
+- **Test:** reaching the speeder extends the clock.
+- **Status:** Accepted, pending the director's play-test
+### D-466 — Turbo Run pursuit: the arrest, no START banner, the police radio on the DMD
+- **Date:** 2026-11-26
+- **Decision (director):** after busting a car, stop in front of it (like the police in a race) and issue a fine, then turn back into the road and restart the clock. Remove the START banner. On the DMD, a police radio with a scrolling call ("Calling all units. A <colour> sports car reported going 150 mph. Engage the suspect and stop it."), and one for each next car after a bust.
+- **Arrest (`Sim.arrest`):** once wrecked, the speeder stops in its lane (D-460 slid it to the roadside). The police car drives itself: round it on the side with more road, then across the lane `ARREST_AHEAD` (7 m) in front, turning across it in stepped frames (`arrest_swing`, like D-161). Parked `ARREST_HOLD` (1.5 s): the fine, the bust's points (FINED +points, the DMD's fine animation). `ARREST_FINE_HOLD` (1.2 s) later it turns back into the road (1 s) and the player drives on, in L. The clock stops through it; traffic can't hit it meanwhile. The next speeder is called `NEXT_WAIT` after it ends. The +60 s still comes at the bust.
+- **START:** no start banner in a pursuit.
+- **Police radio:** at GO and when each next speeder is called in, the DMD shows a handset (blinking light, a level bar on its display) beside DISPATCH, with the call scrolling right to left: "CALLING ALL UNITS... A <COLOUR> <SALOON|SPORTS CAR|SUPERCAR> CLOCKED AT <its top, to the nearest 10> MPH. ENGAGE THE SUSPECT AND STOP IT!" The colour's name comes from the painted DMD picture (the average hue of its saturated dots; black, grey or white if it has none). Replaces STOP THAT CAR! and NEW SUSPECT.
+- **Dev flag:** `--rc-bust-at=<s>` wrecks the speeder at that time.
+- **Test:** the bust: parked across in front of it at the fine, the clock held, then on; the next speeder up the road.
+- **Checked:** screenshots of the DMD radio and of the arrest.
+- **Status:** Accepted, pending the director's play-test
+### D-467 — Turbo Run pursuit: the director's radio call with the DMD dispatch
+- **Date:** 2026-11-26
+- **Decision (director):** play calling_all_units.mp3 (and static.mp3, radio static) when the DMD radio shows.
+- **How:** `assets/audio/sfx/racer/calling_all_units.ogg` (1.3 s, from the director's MP3, OGG q5) plays as `rc_dispatch` each time the dispatch starts (at GO and for each next speeder).
+- **Pending:** static.mp3 wasn't in the asset folder; it will play under the call once added.
+- **Status:** Accepted
+### D-468 — Turbo Run pursuit: radio priority and the engage report; varied, tougher speeders; the police car at HARD speed
+- **Date:** 2026-11-26
+- **Decision (director):** the first radio message as soon as the car starts moving; another when engaging (the police car reporting to central); radio messages take priority on the DMD (no drift, nitro or other animations over them until they're gone); the cars after the first a random model and colour, their specs rising for difficulty; the police car as fast as the HARD 1P car.
+- **Radio:** the first call starts at GO (D-466). Engaging now plays a report (`RC_REPORT`: "UNIT 7 TO CENTRAL... SUSPECT IN SIGHT. IN PURSUIT NOW!") with the radio sound; the +30 s (D-465) shows as a centre message instead of the DMD's checkpoint animation. While a radio message runs, every DMD animation and flash is cut and held off (`_dmd_anim` returns; each frame `stop_anim` and the new `Dmd.clear_flash`).
+- **Speeders:** the first is the chosen target in the chosen paint. Each next one is a random model (saloon, sports car, supercar) in a random paint, with specs from the chosen difficulty plus its level (speeders already busted): +2 m/s top speed per level (up to +10), grip +4 % (up to +20 %), 0.7 m/s less under the police car in the chase (`gain`, down to 2), 8 % less damage per ram (compounding), swerving more often and faster. The radio call names its model, colour and top speed. The view keeps a car per model for the speeder and the wreck.
+- **Police car:** top 88 m/s (the HARD car's; was 86).
+- **Tests:** the gain test now over 2 s (the faster police car closes the old 4 s window), canisters cleared in its lead-in; each next speeder is faster, tougher and in a random paint.
+- **Checked:** screenshots: the next speeder (a random car and paint) and its radio call.
+- **Status:** Accepted, pending the director's play-test
+### D-469 — Turbo Run: police light bars glow as ovals
+- **Date:** 2026-11-26
+- **Decision (director):** the police lights shouldn't be circles; ovals stretching a little outside the top, like a real light bar (reference photo).
+- **How:** every police light bar (the race police and the player's in a pursuit) flashes a wide oval glow per half (1.25 x 0.42 m; the player's 0.75 of that) with two white-hot cores, drawn in code (`_bar_glow_texture`), centred further out on the bar (0.42 m) and on it (y 1.42) so the glow reaches a little past the bar's ends. Replaces D-147's round puff. The player's lit lamp blocks (D-462) sit on the bar (y 1.37; they floated above it).
+- **Checked:** night screenshots, cropped on the bar, lit.
+- **Status:** Accepted
+### D-470 — Turbo Run: knocked traffic slides to its own road edge
+- **Date:** 2026-11-26
+- **Bug (director):** after a crash, the traffic car slid towards the centre of the road.
+- **Cause:** D-455 slid it directly away from the car that hit it (or a random way on a square hit), so a hit from its outer side, or a coin toss, sent it inwards.
+- **Fix:** a knocked car always slides out towards the edge of its own side of the road (the sign of its x), and its spin follows; the tunnel and town walls still hold it (D-457, D-458). Only a car right on the centre line goes by the hit.
+- **Test:** the rear-ended car in lane 2 ends up further out.
+- **Status:** Accepted
+### D-471 — Turbo Run pursuit: AN ORANGE in the radio call
+- **Date:** 2026-11-26
+- **Bug (director):** the radio said "A ORANGE".
+- **Fix:** the article is its own string: `RC_ARTICLE_AN` ("AN %s") before a colour starting with a vowel, `RC_ARTICLE_A` otherwise; `RC_DISPATCH` takes the result.
+- **Status:** Accepted
+### D-472 — Turbo Run pursuit: the arrow on sight, ENGAGING!, the arrest camera
+- **Date:** 2026-11-26
+- **Decision (director):** the red arrow over the target as soon as it appears in the distance; no bonus-time notice when engaging, just ENGAGING!; when busting, the stopped car ended up off the bottom of the screen.
+- **Arrow:** shown (bounce and fade, D-464) the first time each speeder comes within the view distance (`VIEW_AHEAD`, 900 m) during the race, not at 45 m.
+- **Engaging:** the centre message is ENGAGING! (police font); the +30 s (D-465) is still added but no longer announced (no time notice, checkpoint sound or flash). The radio report (D-468) still plays.
+- **Arrest camera:** the police car parks in front of the busted car, so the busted car was behind it, under the chase camera. While arresting, the camera eases 14 m further back and 5 m higher (and back after), so both cars stay on screen.
+- **Checked:** tests; a screenshot of the arrest view.
+- **Status:** Accepted, pending the director's play-test
+### D-473 — Turbo Run pursuit: a believable arrest; a gentler second speeder
+- **Date:** 2026-11-26
+- **Bug (director):** stopping and starting again, the police car turned 90 degrees while sliding forward as if on ice; and the jump in difficulty from the first speeder to the second was huge.
+- **Arrest motion (replaces D-466's swing):** the car's heading follows its motion: the angle of its sideways speed against its forward speed (`arrest_swing`, smooth, no stepped frames), held while it stands. It overtakes on a fixed side (`arrest.pass`) and pulls in straight in front while both cars brake hard together; as it comes down through its last 10 m/s it steers 2.4 m across the busted car's lane, so it stops angled across it (about 70 degrees). It only moves across while rolling. Leaving, it pulls away along its nose into the next lane that way, straightening as it gains speed, and hands back once it's in the lane at 8 m/s.
+- **Second speeder:** called in 650 m ahead (was 1,000; the player starts from a stop after the arrest), and the per-level steps halved: +1 m/s top (up to +8), +2 % grip (up to 15 %), 0.35 m/s less to gain (down to 2.5), 4 % less damage per ram, smaller swerve and lateral increases. (The random model is only the look; the specs come from the chosen difficulty.)
+- **Test:** the arrest ends parked in front of it, turned across, the clock held.
+- **Status:** Accepted, pending the director's play-test
+### D-474 — Turbo Run: light bar from behind, no dark circles, police tail lamps in rain, a metal crash sound
+- **Date:** 2026-11-26
+- **Decision (director):** the police lights render in front of the bar and are mostly hidden by the car (show them front and back); a black circle still appears on the target when hit; the police cars' rear lights look wrong in the rain (not the shape of the red lamps); the collision sound is a bouncy bump, not metal clashing.
+- **Light bar:** each flashing glow (D-469) has a twin 0.5 m further back on the bar, so seen from behind the roof doesn't hide it.
+- **Circles:** the speeder's smoke and the collision dust used the pixel-art puff, a hard-edged disc that read as a dark circle; both now use a soft, feathered puff (`_smoke_texture`, filtered).
+- **Police tail lamps:** the police model had no lamp area (`LAMP_BOXES`), so the car shader's default box lit its bodywork whenever lamps were on (rain, D-454, and night). It now has its own: a wide rear box, red lenses only, so the lamps' own shape lights.
+- **Sound:** `rc_bump` (every car-to-car and soft knock) is now metal on metal: a hard noise crunch, a short dull knock and three inharmonic panel rings dying quickly (was a sine thud with a soft clank).
+- **Checked:** screenshots: rain pursuit (the police car's rear lamps), a night race chase (the light bar, the dust). The sound isn't checked by ear.
+- **Status:** Accepted, pending the director's look and listen
+### D-475 — Turbo Run pursuit: the arrow again after it got away
+- **Date:** 2026-11-26
+- **Decision (director):** when the target runs away out of sight, the red arrow appears again on catching up.
+- **How:** when the chase is lost (`pursuit_off`, past 450 m, SUSPECT LOST), the arrow is re-armed; it then shows (bounce and fade, D-464) as the chase comes back on (within 160 m). A new speeder still gets it as soon as it's in sight (D-472).
+- **Status:** Accepted
+### D-476 — Turbo Run: graphics first, then the mode; the player's light bar from behind
+- **Date:** 2026-11-26
+- **Decision (director):** choose 8-BIT / 16-BIT / HD first, then the game mode; the player's flashing lights still looked off from behind.
+- **Menus:** PRESS START, then the graphics, then 1 PLAYER / 2 PLAYERS / PURSUIT, then the start stage (races) or the target (pursuit). EXIT steps back the same way (mode to graphics to title; stage or target to the mode).
+- **Light bar (the player's):** each half's lit block now matches the bar (0.62 x 0.09 m, at its height) and reaches past its back face, so from behind the bar's own half lights up (D-462's block sat inside the bar; a first try floated on top). Its siren light (D-460) only works at night; by day it only tinted the player's own rear window.
+- **Checked:** a cropped screenshot of the lit bar from behind; the menu order.
+- **Status:** Accepted
+### D-477 — Turbo Run pursuit: the player's siren light by day again
+- **Date:** 2026-11-26
+- **Decision (director):** keep the red/blue tint the player's own siren light gave the rear window in daylight.
+- **How:** reverts D-476's night-only siren light for the player's car: it lights as in D-460 (soft, short range), day and night. The rest of D-476 stands.
+- **Status:** Accepted
+### D-478 — Turbo Run: the police car's lit areas, from the director's marks
+- **Date:** 2026-11-26
+- **Decision (director):** marked on a screenshot: the two lamp halves of the light bar (either side of the middle box) light in a pursuit; the thin strip right across the back is the rear light (tunnels, night, rain).
+- **Light bar:** the player's lit block per half is now the lamp's size (0.4 x 0.085 m, 0.36 m out from the middle), not the whole half (D-476), so the middle box stays dark.
+- **Rear light:** the police model's lamp area (D-474) is now that strip: |x| up to 0.98 m, 0.79 to 0.86 m high, all texels (it isn't red in the texture). The car shader takes a per-model feather for the tail box (`tail_soft`, default 0.06 m as before); the police strip uses 0.012 m, as the default bled over the panel below.
+- **Checked:** cropped rain screenshots from behind.
+- **Status:** Accepted

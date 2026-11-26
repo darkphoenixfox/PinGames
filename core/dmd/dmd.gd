@@ -192,6 +192,12 @@ func play(anim: Callable, duration: float) -> void:
 	_anim_len = duration
 
 
+## Removes a flash callout now (D-468).
+func clear_flash() -> void:
+	_overlay = []
+	_overlay_left = 0.0
+
+
 ## Ends the current animation now (D-238).
 func stop_anim() -> void:
 	_anim = Callable()
