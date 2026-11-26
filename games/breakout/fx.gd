@@ -900,3 +900,88 @@ class Planet:
 		if _impact_age < 10.0:
 			_impact_age += delta
 			_mat.set_shader_parameter("impact_age", _impact_age)
+
+
+## Brick shatter (D-459): the broken brick itself bursts into pieces, each a
+## small block cut from the brick and drawn with the brick's own material, so
+## every piece shows its part of the brick's circuit art. Like the old shards
+## (D-423, D-425) they fly almost straight at the viewer, tumbling, growing as
+## they come (the view is orthographic), then shrink away. Frees itself.
+class BrickShatter:
+	extends Node3D
+
+	const InstParamS = preload("res://core/util/inst_param.gd")
+	const COLS := 5
+	const ROWS := 2
+	const SPEED := Vector2(30.0, 45.0)   # units/s out (D-423's shards)
+	const DAMP := Vector2(8.0, 12.0)    # units/s^2 slowing
+	const SPREAD_DEG := 4.0             # cone around the viewer direction
+	const SPLIT := 2.5                  # units/s the pieces part from the middle
+	const SPIN := 12.0                  # rad/s at most
+
+	var life := 1.0
+	var _t := 0.0
+	var _pieces: Array = []   # [node, velocity, damping, axis, spin]
+
+	## `brick` is the brick's node (its material and per-brick values are
+	## copied); `size` its box size; `toward` the direction to the viewer.
+	func _init(brick: MeshInstance3D, size: Vector3, toward: Vector3, p_life: float) -> void:
+		life = p_life
+		position = brick.position
+		var mat := brick.material_override as ShaderMaterial
+		var crop_size: Vector2 = mat.get_shader_parameter("crop_size") if mat != null else Vector2.ZERO
+		var piece := Vector3(size.x / COLS, size.y * 0.7, size.z / ROWS)
+		var box := BoxMesh.new()
+		box.size = piece * 0.92
+		var crop: Vector2 = _inst_value(brick, &"crop_offset", Vector2.ZERO)
+		var mode: float = _inst_value(brick, &"mode", 0.0)
+		var phase: float = _inst_value(brick, &"phase", 0.0)
+		for c in COLS:
+			for r in ROWS:
+				var at := Vector3((c + 0.5) * piece.x - size.x * 0.5, 0.0, (r + 0.5) * piece.z - size.z * 0.5)
+				var m := MeshInstance3D.new()
+				m.mesh = box
+				m.material_override = mat
+				m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				m.position = at
+				add_child(m)
+				# Its part of the brick's art: shift the crop by its place.
+				InstParamS.set_param(m, "crop_offset", crop + Vector2(at.x / size.x, at.z / size.z) * crop_size)
+				InstParamS.set_param(m, "mode", mode)
+				InstParamS.set_param(m, "phase", phase)
+				var dir := toward.rotated(Vector3(randf() - 0.5, 0.0, randf() - 0.5).normalized(),
+					deg_to_rad(randf() * SPREAD_DEG))
+				var out := Vector3(at.x, 0.0, at.z).normalized() * SPLIT * randf_range(0.6, 1.2)
+				var axis := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5).normalized()
+				_pieces.append([m, dir * randf_range(SPEED.x, SPEED.y) + out, randf_range(DAMP.x, DAMP.y),
+					axis, randf_range(-SPIN, SPIN)])
+
+	## A per-brick shader value (D-175: an instance uniform, or on the web the
+	## brick's own material copy).
+	static func _inst_value(gi: GeometryInstance3D, pname: StringName, fallback: Variant) -> Variant:
+		var v: Variant = null
+		if InstParamS.per_material():
+			var m := gi.material_override as ShaderMaterial
+			if m != null:
+				v = m.get_shader_parameter(pname)
+		else:
+			v = gi.get_instance_shader_parameter(pname)
+		return fallback if v == null else v
+
+	func _process(delta: float) -> void:
+		_t += delta
+		if _t >= life:
+			queue_free()
+			return
+		var k := _t / life
+		# Grow as they come (1 -> 2.6 by 3/4 of the way), then shrink away.
+		var s := lerpf(1.0, 2.6, k / 0.75) if k < 0.75 else lerpf(2.6, 0.0, (k - 0.75) / 0.25)
+		for p in _pieces:
+			var m: MeshInstance3D = p[0]
+			var vel: Vector3 = p[1]
+			var sp := vel.length()
+			if sp > 0.0:
+				vel = vel * maxf(0.0, sp - float(p[2]) * delta) / sp
+				p[1] = vel
+			m.position += vel * delta
+			m.basis = Basis(p[3], float(p[4]) * _t).scaled(Vector3.ONE * s)

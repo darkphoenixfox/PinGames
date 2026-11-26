@@ -1568,6 +1568,19 @@ func _move_traffic(t: Dictionary, dt: float, pv: Array) -> void:
 		break
 	t.dodge = move_toward(float(t.get("dodge", 0.0)), dodge_to, DODGE_RATE * dt)
 	t.x = lane_x + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6) * (0.0 if yielding else 1.0) 			+ t.shove + t.pull + float(t.dodge) + _lane_change_offset(t, dt)
+	# D-457: tunnel walls and the town's sidewalk barrier hold traffic too (a
+	# car knocked or shoved aside stops against them, it doesn't go through).
+	var wall := Track.TUNNEL_HALF if track.in_tunnel(float(t.s)) else track.side_wall(float(t.s))
+	if wall > 0.0:
+		# D-458: a car turned (spun by a crash, swaying) reaches further
+		# sideways: its corners, half its width and length turned by the yaw.
+		var turned := absf(float(t.get("hit_yaw", 0.0)) + float(t.get("sway", 0.0)))
+		var reach := tw * 0.5 * cos(minf(turned, PI * 0.5)) + tlen * 0.5 * sin(minf(turned, PI * 0.5))
+		var lim: float = wall - reach - 0.15
+		if absf(float(t.x)) > lim:
+			var over: float = absf(float(t.x)) - lim
+			t.x = signf(float(t.x)) * lim
+			t.shove = float(t.shove) - signf(float(t.x)) * over   # so it stays put there
 	_follow_traffic(t, dt, pv)
 
 

@@ -168,6 +168,19 @@ func test_breakout_powerups(Sim) -> void:
 	up.step(dt, false, false, false, 0)
 	up.step(dt, false, false, false, 0)
 	check(up.ball_vel.y < 0.0, "ball rising from below passes through the ship")
+	# D-459: the ship slides into the side walls far enough that its centre
+	# (where the blasters fire from) is over the outermost brick columns.
+	var reach = Sim.new()
+	reach.setup(3)
+	reach.step(dt, false, false, true, 0)
+	for i in 300:
+		reach.step(dt, false, true, false, 0)
+	var right_x: float = reach.paddle_x
+	for i in 600:
+		reach.step(dt, true, false, false, 0)
+	var col_c: float = reach.field.size.x * 0.5 - reach.field.size.x / reach.cols * 0.5
+	check(right_x >= col_c - 0.001 and reach.paddle_x <= -col_c + 0.001 and right_x <= reach.field.size.x * 0.5,
+		"the ship reaches the outermost brick columns at both walls (D-459)")
 	# Capsule falls onto the ship and is collected.
 	var c = mk.call()
 	c.spawn_powerup("T", Vector2(c.paddle_x, Sim.PADDLE_Y - 2.0))
@@ -2473,6 +2486,30 @@ func test_racer_sim() -> void:
 		tr._move_traffic(hit_car, dt, tr._players_view())
 	check(knocked and absf(float(hit_car.v)) < 0.1 and bool(hit_car.blink) and absf(float(hit_car.shove)) > 0.3,
 		"the car we crash into is shoved, spun and stopped with its hazards on, and stays stopped")
+	# D-457: in a tunnel, a car knocked towards the wall stops against it.
+	var tw_sim = Sim.new()
+	tw_sim.setup(7)
+	tw_sim.track.ensure(12.0 * Sim.CHECKPOINT_EVERY)
+	var tun_s := -1.0
+	var ss := 0.0
+	while ss < 12.0 * Sim.CHECKPOINT_EVERY and tun_s < 0.0:
+		if tw_sim.track.in_tunnel(ss) and tw_sim.track.in_tunnel(ss + 120.0):
+			tun_s = ss + 40.0
+		ss += 20.0
+	var held := true
+	if tun_s > 0.0:
+		tw_sim.s = tun_s - 3.0
+		tw_sim.x = 4.6
+		var wc := {"id": 5, "s": tun_s, "x": 5.625, "lane": 3, "v": 30.0, "v0": 30.0, "hue": 0.0, "weave": 0.0,
+			"last_ds": 3.0, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W}
+		tw_sim.traffic = [wc]
+		tw_sim._knock_traffic(wc, 1.0, 40.0, false)
+		for i in 240:
+			tw_sim._move_traffic(wc, dt, tw_sim._players_view())
+			var yw: float = absf(float(wc.get("hit_yaw", 0.0)) + float(wc.get("sway", 0.0)))
+			var reach: float = Sim.CAR_W * 0.5 * cos(yw) + Sim.CAR_LEN * 0.5 * sin(yw)
+			held = held and absf(float(wc.x)) + reach <= tw_sim.track.TUNNEL_HALF + 0.001
+	check(tun_s > 0.0 and held, "a car knocked aside (and spun) in a tunnel stops against the wall, no corner through it")
 	# Side-swipe (D-152): touching a car alongside bumps both apart, no crash.
 	var sw = Sim.new()
 	sw.setup(7)

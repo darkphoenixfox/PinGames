@@ -4365,3 +4365,25 @@ un.ps1 --layout=single` (or add `--stereo=sr`).
 - **Weather (amends D-219):** the beach and the desert have no weather kinds (the desert's haze goes too). A spell whose middle falls there is clear, and a spell from a neighbouring area fades out as the road enters them. The random draws are unchanged, so later spells keep their kinds.
 - **Tests:** the crashed-into car stays stopped; sampled every 50 m over ten stages, the beach and desert never have weather.
 - **Status:** Accepted
+### D-457 — Turbo Run: traffic is held inside tunnel walls and the town barrier
+- **Date:** 2026-11-26
+- **Bug (director):** a car crashed into inside a tunnel slid through the wall.
+- **Cause:** D-455's slide (1.8 m) and side-swipe shoves moved traffic sideways with no wall check; only the player and the police were held by walls.
+- **Fix:** after a traffic car moves, it's held inside the tunnel walls (`TUNNEL_HALF`), or in town inside the sidewalk barrier (`side_wall`), less half its width and 0.1 m. What went past the wall is taken off its shove, so a knocked car stays against the wall.
+- **Test:** a car knocked towards a tunnel wall never goes past it.
+- **Status:** Accepted
+### D-458 — Turbo Run: a spun car's corners stay inside the walls
+- **Date:** 2026-11-26
+- **Bug (director):** cars crashed into still clipped into the tunnel wall a bit (after D-457).
+- **Cause:** D-457 held the car's centre half its width from the wall, but a car spun by a crash (D-455) or swaying reaches further sideways: its front or rear corner.
+- **Fix:** the sideways reach counts the turn: half the width times cos(yaw) plus half the length times sin(yaw) (yaw = crash spin plus sway, up to 90°), plus 0.15 m. A car that turns more while against the wall is eased away from it.
+- **Test:** D-457's tunnel test now checks the turned car's full reach, not just its centre.
+- **Status:** Accepted
+### D-459 — Tilt Breaker: bricks shatter into textured pieces; the ship reaches the outer columns
+- **Date:** 2026-11-26
+- **Decision (director):** broken bricks explode into pieces carrying the brick's texture, not flat-coloured shards; the ship may move into the side walls far enough for its centre blasters to hit every column.
+- **Shatter:** a broken brick (the `brick` event) bursts into 5 × 2 blocks cut from it (`Fx.BrickShatter`). Each block uses the brick's own material, with its crop shifted to its part of the brick's circuit art, and the brick's mode (armoured, metal, charged) and pulse phase. The motion is D-423/D-425's: almost straight at the viewer (4° cone, parting 2.5 units/s from the middle), 30–45 units/s slowing, tumbling, growing to 2.6× and then shrinking away over `DEBRIS_LIFE`. The fireball stays. Other explosions (armour hits, enemies, the boss) keep their coloured shards.
+- **Ship reach:** the ship's limit is now the farther of the old one (its catch width inside the walls) and the outermost column's centre (half a column width from the wall). The ship slides partly into the walls; the ball still bounces off the walls as before.
+- **Dev flag:** `--tb-fire-at=<s>` fires a column-clearing bolt at that time, to watch bricks break.
+- **Checked:** screenshot of a column shattering; test: the ship reaches the outer column centres at both walls.
+- **Status:** Accepted, pending the director's look

@@ -442,6 +442,9 @@ func _process(delta: float) -> void:
 		set_meta("dev_pu_clear", true)
 		_on_debug_action(&"powerup")
 		_on_debug_action(&"clear_level")
+	if Config.cli.has("tb-fire-at") and _phase == "play" and _phase_t >= float(str(Config.cli["tb-fire-at"])) 			and not has_meta("dev_fire"):   # dev: a column-clearing bolt at N s, to see bricks break (D-459)
+		set_meta("dev_fire", true)
+		sim.debug_fire_line()
 	if Config.cli.has("tb-outro-at") and _phase == "play" and _phase_t >= float(str(Config.cli["tb-outro-at"])) 			and not has_meta("dev_outro"):   # dev: play the level-clear outro at N s (D-425)
 		set_meta("dev_outro", true)
 		_begin_outro()
@@ -560,7 +563,10 @@ func _handle_events() -> void:
 			"brick":
 				var n := _brick_nodes[e[1]]
 				n.visible = false
-				_explode_brick(n.position, _brick_glow(sim.bricks[e[1]]), 1.5 if nuked else 1.0)
+				# D-459: the brick bursts into textured pieces of itself
+				# (with the fireball), not flat-coloured shards.
+				_explode_brick(n.position, _brick_glow(sim.bricks[e[1]]), 1.5 if nuked else 1.0, false)
+				_shatter_brick(n)
 				_lights.pulse(BackglassLights.IMPACTS, 0.35, 14.0)
 				if not nuked:
 					_sfx("tb_brick")
@@ -1921,7 +1927,7 @@ func warmup_nodes() -> Array[Node]:
 	return out
 
 
-func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void:
+func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0, debris: bool = true) -> void:
 	var blast := MeshInstance3D.new()
 	var quad := QuadMesh.new()
 	quad.size = Vector2(1.3, 1.3) * size_scale
@@ -1937,6 +1943,8 @@ func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void
 	var tw := blast.create_tween()
 	tw.tween_method(func(a: float): InstParam.set_param(blast, "age", a), 0.0, 1.0, 0.55)
 	tw.tween_callback(blast.queue_free)
+	if not debris:
+		return
 
 	# Debris (D-087): tumbling brick-coloured shards. D-423: they fly out
 	# towards the viewer (the camera's back direction), growing as they come
@@ -1976,6 +1984,15 @@ func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void
 	_root.add_child(p)
 	p.emitting = true
 	get_tree().create_timer(DEBRIS_LIFE + 0.1).timeout.connect(p.queue_free)
+
+
+## D-459: a broken brick bursts into pieces of itself, its own art on each.
+func _shatter_brick(n: MeshInstance3D) -> void:
+	var box := n.mesh as BoxMesh
+	if box == null:
+		return
+	var sh := Fx.BrickShatter.new(n, box.size, _to_viewer(), DEBRIS_LIFE)
+	_root.add_child(sh)
 
 
 const CHARGE_FROM := 5.0   # D-423: the charge gathers from this far towards the viewer; D-424: close to the ship (was 30)

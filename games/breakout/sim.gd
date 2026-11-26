@@ -939,7 +939,9 @@ func _move_paddle(dt: float, left: bool, right: bool, dash: int) -> void:
 			var rate := PADDLE_REVERSE if signf(target) != signf(paddle_vx) and paddle_vx != 0.0 else PADDLE_ACCEL
 			paddle_vx = move_toward(paddle_vx, target, rate * boost * dt)
 	paddle_x += paddle_vx * dt
-	var limit := field.size.x * 0.5 - catch_half_w()
+	# D-459: the ship may slide into the side walls far enough that its
+	# centre (where the blasters fire from) lines up with the outer columns.
+	var limit := maxf(field.size.x * 0.5 - catch_half_w(), field.size.x * 0.5 - field.size.x / cols * 0.5)
 	if absf(paddle_x) > limit:
 		paddle_x = clampf(paddle_x, -limit, limit)
 		paddle_vx = 0.0
