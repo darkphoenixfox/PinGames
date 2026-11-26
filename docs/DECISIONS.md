@@ -4025,3 +4025,298 @@
 - **Decision (director):** the nitro pick-up's collision is too small; collect them from a bit further away on the sides.
 - **Change:** the side reach (`Sim.PICKUP_DX`, car centre to tank centre) is 2.4 m, up from D-408's 1.87 m (+28 %). A lane is 3.75 m wide, so a car still has to move towards the tank's lane rather than collect it from the middle of the next lane. The reach along the road (0.66 of a car length) is unchanged.
 - **Status:** Accepted
+
+### D-417 — Windows renders with DirectX 12 (Vulkan as fallback)
+- **Date:** 2026-11-25
+- **Decision (director):** move the Windows build to DirectX 12, in preparation for stereo 3D on the Leia SR display, whose SDK weaves only through DirectX 9–12 or OpenGL.
+- **Change:** `project.godot` sets `rendering/rendering_device/driver.windows="d3d12"` with `fallback_to_vulkan=true`, so a PC without DirectX 12 starts on Vulkan. Forward+ is unchanged. Web and Android keep their own renderers.
+- **Checked:** Turbo Run (HD, clear weather) and Tilt Breaker look the same as on Vulkan, including the three-window layout; with vsync off Turbo Run ran at ~700 fps on DirectX 12 against ~620 on Vulkan (short runs, RTX 5080). The exported release build starts on D3D12 12_0. Not measured: first-launch shader cache stutter.
+- **Status:** Accepted, pending the director's playtest
+
+### D-418 — Stereo 3D for Leia SR displays: Turbo Run and Tilt Breaker (branch `stereo-3d`)
+- **Date:** 2026-11-25
+- **Decision (director):** make the two 3D games stereoscopic with the LeiaSR SDK. Turbo Run: the 3D play area in depth, the UI and DMD floating in front. Tilt Breaker: the ship, bricks and plasma floating in front of the 3D background further away; the stars at different distances.
+- **Native bridge:** a GDExtension, `LeiaSR` (`native/leiasr/`, C++ on godot-cpp's 4.5 branch at a pinned commit, built by `scripts/build_leiasr.ps1` with the VS 2022 Build Tools; the DLL is committed in `native/bin/` through LFS). It connects to the SR service, finds the SR display, reads the tracked eye positions, and runs the SDK's DirectX 12 weaver on Godot's own D3D12 device and command queue (D-417). The SR runtime DLLs are delay-loaded, so the extension loads on any Windows PC; nothing happens without the SR software and an active SR display. Leia's runtime is not redistributed: stereo only works on PCs with it installed.
+- **Stereo layer** (`core/stereo.gd`, autoload `Stereo`), single-screen layout only: each eye is a stack of layers, back to front, each shifted sideways for its depth. A game registers its layers (its 3D from a left and a right camera; backgrounds); the whole single-screen page (HUD, DMD, side panels) is drawn once into a transparent overlay without the game's 3D, and floats 14 px (at a 1920-wide window) in front. The pair is laid out side by side at the window's size per eye and woven into the window (fullscreen on the SR display) each frame; the weave runs on the render thread and uses the previous frame's pair (one frame of latency).
+- **Modes:** `--stereo=sr` (the default when an SR display is found; `auto` waits at most 0.5 s), `sbs` and `anaglyph` (dev previews in the window, for screenshots), `off`.
+- **Turbo Run:** a second pixel viewport shares the world; two perspective cameras either side of the chase camera, parallel with shifted frusta, converge 1.5 m past the car (the car at the screen's depth, a touch in front); the horizon's parallax is 1.2 % of the image width. Both eyes go through the pixel pass. Scanlines are off in stereo (they read the screen behind, which the overlay lacks). Not in two-player mode.
+- **Tilt Breaker:** in stereo the TABLE draws only its 2D; two transparent eye viewports share its world through an orthographic pair turned 0.45° about the playfield's centre, so the ship, bricks and plasma sit at the screen's depth and the planet and space backdrop lie behind. The starfield's three bands are drawn separately behind them (far −30, mid −25, near −21 px); the far band brings the dark of space.
+- **Checked (side-by-side screenshots, parallax measured between the eyes):** Turbo Run: HUD in front, car at the screen, horizon behind. Tilt Breaker: DMD and panels in front, ship and bricks at the screen, planet behind, stars furthest. Normal runs unchanged. **Not yet checked:** weaving on the SR display. The Odyssey 3D (G90XF) was connected but not active on the desktop, so the SR service reported no display.
+- **Open:** head-tracked cameras (the eye positions are read but not yet used to move the cameras), and depth tuning on the display.
+- **Status:** In progress
+
+### D-419 — Stereo 3D: weaving runs on the Odyssey 3D
+- **Date:** 2026-11-25
+- **Report (director):** `--stereo=sbs` only shows the side-by-side preview in a window; the Samsung needs woven 3D through the LeiaSR service, fullscreen.
+- **Finding:** `sbs` and `anaglyph` are dev previews only (D-418). The woven output is `sr`, the default once an SR display is active. Earlier the Odyssey 3D was connected but not on the desktop, so `sr` could not start. With the display active (desktop 1920×1080 at 0,0, physical 59.7 × 33.6 cm), `--layout=single` found it, went fullscreen on it at 3840×2160, created the DirectX 12 weaver, and the captured frame shows the woven interlace. To run: `scripts
+un.ps1 --layout=single` (or add `--stereo=sr`).
+- **Status:** Accepted; 3D look and depth to be judged by the director on the display
+
+### D-420 — Stereo: less ghosting on Turbo Run's road; Tilt Breaker's stars drift steadily
+- **Date:** 2026-11-25
+- **Report (director):** ghosting on the road markings. In Tilt Breaker, make the background stars move more noticeably, always in one direction.
+- **Ghosting:** the near road (bottom of the view, 4–5 m) stood well in front of the screen with D-418's convergence at 9.5 m, so its bright markings had the largest parallax in the scene. The screen's depth is now 5 m ahead (the near road; the car just behind the screen) and the horizon's parallax is 1.0 % of the width (was 1.2 %). The weaver is told the pair is sRGB-encoded (`setShaderSRGBConversion(true, true)`), so its crosstalk cancelling works in linear light, and its latency is 3 frames (the weave reads the previous frame's pair, plus Godot's frame queue) for eye prediction (`LeiaSR.configure`).
+- **Stars (mono and stereo):** the starfield drifts 4× faster (`STAR_DRIFT` 0.016 rad/s, was 0.004). The ship's movement still speeds it up or slows it, but never below a quarter of the drift, so it never reverses.
+- **Status:** Accepted, pending the director's look on the display
+
+### D-421 — Stereo: head tracking
+- **Date:** 2026-11-25
+- **Decision (director):** add head tracking.
+- **How:** each frame the eye cameras follow the SR tracker's predicted eyes (mm from the display's centre), relative to the display's default viewing position, clamped to 250 mm.
+  - **Turbo Run (perspective):** the window shows a virtual screen at the convergence distance, as wide as the camera's view there. The eyes move with the head at half its movement (`HEAD_GAIN` 0.5, scaled from the display's 59.7 cm width), stay level and `far_frac` apart (not the real eye spacing, which would make the horizon's parallax ~10 % of the width), and each frustum stays pinned to the virtual screen, so the scene is seen as through a window.
+  - **Tilt Breaker (orthographic):** no perspective to shift, so the pair turns about the playfield's centre: 1.2° per 100 mm of head movement sideways and up/down.
+- **Checked:** `--stereo-debug` prints the tracked eyes once a second; on the Odyssey 3D they arrive in mm and follow the viewer. Without a tracked face the eyes report the default position, and the cameras stay where they were.
+- **Status:** Accepted, pending the director's look on the display
+
+### D-422 — Stereo: head tracking removed
+- **Date:** 2026-11-25
+- **Decision (director):** the head tracking seems to do nothing; remove it. Supersedes D-421.
+- **Change:** the eye cameras are a fixed pair again (D-418's layout, with D-420's depths): Turbo Run's parallel pair converging 5 m ahead, Tilt Breaker's orthographic pair turned 0.45° about the playfield. `--stereo-debug` is gone. The weaver still tracks the eyes for its own weaving, and `LeiaSR.eyes()` stays in the extension, unused.
+- **Status:** Accepted
+
+### D-423 — Tilt Breaker: brick debris flies at the viewer; the blaster charge comes from the viewer
+- **Date:** 2026-11-25
+- **Decision (director):** the particles from broken bricks fly towards the viewer, and the blaster's power-charge particles come from the viewer's position towards the ball.
+- **Camera:** the orthographic camera is 60 units back (was 20, `CAMERA_DIST`). An orthographic view looks the same from any distance, so the 2D picture is unchanged, but there is now room for things to fly out of the screen in stereo (the far plane moves back with it).
+- **Debris (D-087):** fired towards the camera (its back direction, 20° off vertical) in a 10° cone at 30–45 units/s with drag and no gravity, for 1.0 s (was 0.8): 25–40 units out. The shards grow to 2.6× before fading (an orthographic view doesn't enlarge near things, so the growth sells the approach in 2D). In stereo they come about 10 px in front of the screen, about as far as the HUD.
+- **Charge (D-053):** the particles start on a ring 30 units towards the viewer (`Fx.aim_charge_from`, set each time a charge starts, from the ship's current orientation) and are pulled down the line of sight into the charge point. In 2D they still close in on the nose; in stereo they fly in out of the screen.
+- **Stereo auto mode:** dev runs (`--dev-offscreen`, scripts/dev_run.sh) no longer switch to the SR display by themselves, because one took the director's screen fullscreen during this check. They still can with `--stereo=sr`.
+- **Checked:** side-by-side and 2D screenshots with `--tb-autofire`; parallax measured: debris in front, bricks and ship at the screen, planet behind.
+- **Status:** Accepted, pending the director's look on the display
+
+### D-424 — Tilt Breaker stereo: the charge starts near the ship; glows no longer cut off
+- **Date:** 2026-11-25
+- **Decision (director):** the charge particles should come from the viewer's side but not from that far: start them close to the ship. Supersedes D-423's 30 units.
+- **Change:** `CHARGE_FROM` is 5 units towards the viewer.
+- **Bug (director):** the charging blaster was cut off at the top in stereo.
+- **Cause:** D-418's eye viewports were transparent, layered over separate star layers. Additive glows (the blaster's halo, plasma, Environment glow) add colour but no opacity, so over empty space they vanished when layered, leaving a hard-edged box where the halo met the ship.
+- **Fix:** each eye viewport is opaque and draws the stars as its own background (Environment BG_CANVAS, a canvas layer -1 in that viewport). The three bands are shifted per eye for their depths (far −30, mid −25, near −21 px), drawn a margin wider than the view so no edge shows. Depths are unchanged: stars furthest, planet behind, playfield at the screen.
+- **Checked:** side-by-side screenshot with `--tb-autofire`: the halo matches 2D.
+- **Status:** Accepted
+
+### D-425 — Tilt Breaker: debris goes straight at the viewer; the level-clear ship flies to the middle and out
+- **Date:** 2026-11-25
+- **Decision (director):** the brick particles should spread less over the level and just move towards the camera. On level clear, the ship should fly to the middle of the screen and towards the viewer, not up and off the screen.
+- **Debris:** the cone is 3° (was 10°, D-423), so the shards stay over their brick and come straight out, growing.
+- **Outro (D-068):** the ship goes from where it settled to a point 30 units along the line of sight in front of the middle of the view (`CAMERA_TARGET`), easing in as before, growing to 3.2× (was: 13 units up the screen and 7 towards the camera). In two-player each ship heads for the middle of its half. In stereo it comes out to about the HUD's depth.
+- **Dev flag:** `--tb-outro-at=N` plays the level-clear outro N s into play (`--tb-win-at` doesn't reach it in a dev run).
+- **Checked:** side-by-side screenshots through the outro; the ship's parallax grows towards the viewer.
+- **Status:** Accepted
+
+### D-426 — Turbo Run: hunting the drift tick; sound test and recording dev options
+- **Date:** 2026-11-26
+- **Report (director):** a ticking sound while drifting, which seems to come every time the car changes angle.
+- **Measured (lead developer):** the game's own mix, recorded during a 60 s race in 16-BIT with drifts, has nothing tied to the car's angle steps. Around 168 steps the level in every band, from 0 Hz to 22 kHz, is the same as around random moments. No sound effect plays at a step, and frames at steps take the usual 6 ms (slowest frame of the run: 18 ms), so a stall at the step is ruled out too. Not yet checked: the sound on the director's own audio output, which a dev run doesn't use.
+- **Dev options added:**
+  - `--rc-sound-test`: no skid squeal and no music (the Music bus is muted for the run), so the director can hear whether the tick is still there with only the engine, wind, traffic and effects.
+  - `--rc-rec-audio=<dir>` (`--rc-rec-secs=N`, default 40): records the master bus from the start of the race and writes `race.wav` and `race_log.txt` (each frame's drift, rpm, engine pitch, skid level, gear and speed; every sound effect; every change of the car's view), then quits.
+  - `--rc-drift-bot`: steers into every bend fast enough to drift and holds the drift; the autopilot drives the rest.
+- **Status:** In progress, waiting for the director's test
+
+### D-427 — Turbo Run sound test: only the hero car's one-shots
+- **Date:** 2026-11-26
+- **Report (director):** the tick is still there with no skid squeal and no music (D-426). Next test: remove the engine sound and every sound not from the hero car.
+- **Change:** `--rc-sound-test` now also silences the engine (both layers), wind, passing traffic, police siren, horns, rain, radar detector, and every race sound effect except the hero car's own: gear clunk, backfire, downshift chirp, bumps, crash, nitro, perfect shift/start (`TEST_SFX`). Menu sounds and the low-time clock tick stay.
+- **Checked (recording, 45 s in 16-BIT with drifts):** the race is silent apart from the countdown, the nitro pick-up, one crash and the low-time ticks from 38 s; the 15 s of drifting in it are silent.
+- **Status:** In progress, waiting for the director's test
+
+### D-428 — Turbo Run sound test: groups can be brought back one at a time
+- **Date:** 2026-11-26
+- **Report (director):** with D-427's sound test the noise is gone. Something muted in D-427 makes it. (The skid squeal and the music were already off in D-426, when the noise was still there.)
+- **Change:** `--rc-sound-keep=<groups>` (comma-separated) brings groups back into `--rc-sound-test`: `engine` (body and whine), `wind`, `traffic` (passing cars, horns, siren), `rain`, `radar`, `sfx` (every race sound effect), and also `skid` and `music`. The recording's frame log (`--rc-rec-audio`, D-426) now also holds throttle, auto-brake, the engine's two levels, the traffic ducking and the wind level. `--rc-drift-wiggle` (dev) makes the drift bot counter-steer in short taps.
+- **Measured (lead developer):** with the drift bot, holding the drift or tapping, the engine's pitch and levels, the ducking and the wind move smoothly through every drift (no step over 0.5 dB or 0.5 pitch in 939 drift frames), and the auto-brake never switches. The bot doesn't reproduce the noise; the director's test decides.
+- **Status:** In progress, waiting for the director's test
+
+### D-429 — Turbo Run: no sound when drift points are banked
+- **Date:** 2026-11-26
+- **Found (director's test):** `--rc-sound-test --rc-sound-keep=sfx` (D-428) brings the noise back, and it had gone with every race sound effect muted (D-427). In that group only one sound plays during drifting: `rc_drift_bank` (D-121, D-375), the brass stab over a tyre swoosh played when a drift ends with points.
+- **Why it repeated:** a drift ends 0.25 s after the player stops steering into the bend (`DRIFT_EXIT_HOLD`) and starts again 0.12 s after steering back in. Adjusting the car's angle through a bend breaks and restarts the drift, and each break banked its points with the sound. The drift bot held every drift through its bend, so the recordings (D-426) had it only once per bend. This also explains the earlier reports: D-376's "periodic clicking" and D-407 and D-409's noise "close to the upshift sound, repeated". D-376, D-407 and D-409 looked in the wrong place (the skid loop, then the rev limiter).
+- **Decision (lead developer, from the director's first report: "just the skidding and the engine"):** the sound is removed. Banked points still show under the score and as the DMD's drift animation.
+- **Kept:** the dev options from D-426 to D-428 (`--rc-sound-test`, `--rc-sound-keep`, `--rc-rec-audio`, `--rc-drift-bot`, `--rc-drift-wiggle`).
+- **Status:** Accepted, pending the director's test
+
+### D-430 — Turbo Run: one drift score through a whole bend
+- **Date:** 2026-11-26
+- **Decision (director):** the drift score should keep growing until the car stops turning, even through changes of angle.
+- **Change:** a drift that breaks (0.25 s without steering into the bend, `DRIFT_EXIT_HOLD`) no longer banks its points at once. They wait for `DRIFT_RESUME` = 1.0 s (`Sim.drift_resume_t`). If the car drifts again within that time, the same drift goes on and its points keep growing; otherwise they are banked as one drift. A crash, a slow-down below the drift speed or the race ending banks them at once, as before. Points don't grow during the break. The DRIFT counter under the score stays on through the breaks and fades once the points are banked; the DMD's drift animation plays once per bank.
+- **Tests:** a released drift keeps its points for a second and then banks once; three drifts with short breaks bank once, as one drift.
+- **Status:** Accepted
+
+### D-431 — Turbo Run: the director's new nitro tank sprite
+- **Date:** 2026-11-26
+- **Decision (director):** a new `sprites/racer/hd/nitro.png`: a pixel-art style blue tank with a valve and gauge.
+- **Change:** the director's 2048 × 2048 file had the tank in the middle of empty canvas (and faint stray pixels across it), so in the game it would have shown at 70 % of its height and floated 0.4 m up. It is cropped to the tank, stray pixels below 16 alpha cleared, and Lanczos-scaled to 338 × 1024, like the other HD sprites. The untouched original is kept as `assets/source/racer/nitro_director.png`. It still stands 2.6 m tall in the world, a little wider than before because of the gauge.
+- **Open (director's call):** the label reads "NOS" in a red box, the logo of a real brand (Nitrous Oxide Systems). The project uses original content only and may be sold.
+- **Dev flag:** `--rc-nitro-show` keeps a tank 22 m ahead of the car, for screenshots.
+- **Checked:** HD, 16-BIT and 8-BIT; windowed and single layouts.
+- **Status:** Accepted
+
+### D-432 — Turbo Run: the saloon is the easy car; the hot hatch stays in traffic
+- **Date:** 2026-11-26
+- **Decision (director):** the new `saloon.glb` replaces the easy car for the player; the old easy car (the hot hatch) stays a traffic car. The saloon gets colours, joins the traffic, and its exhaust is checked for the nitro flames.
+- **Model:** run through `prepare_racer_car.py`: full 33k-tri mesh, 4.5 m long (1.93 m wide with mirrors, 1.34 m tall), nose +Z, 256 px albedo for 8-BIT/16-BIT; HD uses the original 4096 px texture (`saloon_saloon_albedo.jpg`, imported like the others: VRAM-compressed, mipmapped, 2048 px limit). Blender's JPEG wouldn't load in Godot, so it is re-encoded as a plain baseline JPEG.
+- **Per-model settings** (from `measure_racer_car.gd`, orthographic renders and rays at the mesh):
+  - **Exhaust:** one big pipe at x −0.41, 0.26 m up, tip at z −2.07: the nitro and backfire flames come out of it (checked with the new `--rc-boost`). The ring at the other corner is a tow hook, not a pipe.
+  - **Plate:** 0.36 × 0.18 m at 0.41 m up, just behind its recess (surface at −2.186).
+  - **Lamps:** two round tail lamps a side (red outer, amber inner): tail box |x| 0.33–0.76, y 0.68–0.95, red lenses only; head lamps |x| 0.5–0.76, y 0.54–0.77. Night tail glow on the outer lamps (0.64, 0.82); indicators on the inner amber lamp and the front side marker.
+  - **Wheels:** axles at z +1.278 and −1.219, 0.33 m up, rim 0.235 m, the 5-spoke rim picture.
+  - **DMD picture:** `dmd_car_saloon.png` (22×7) from a side render, as for the hot hatch (D-313).
+- **Colours:** the easy car's hue is 0.0, the saloon's own blue (was 0.13 on the hot hatch). Its paint is a strong blue, so the paint choices (D-236/D-312) and the traffic's random hues recolour it like the other models.
+- **Traffic:** a fifth of the cars are saloons (`id % 5 == 2`, from the red car's two fifths), pool of 6. The mix is now red car, saloon and hot hatch a fifth each, the hatchback two.
+- **Dev flags:** `--rc-boost` keeps the nitro on; `--rc-traffic-show` puts one car of each traffic model just ahead, each in another paint.
+- **Note for the director:** the body closely resembles a real car (the Nissan Skyline GT-R R34, especially the round twin tail lamps). D-140 kept the police car off real-car designs; whether this needs changing is the director's call.
+- **Checked:** HD and 16-BIT screenshots with nitro on; the traffic row in five paints.
+- **Status:** Accepted
+
+### D-433 — Turbo Run: traffic grows in steps in 8-BIT and 16-BIT
+- **Date:** 2026-11-26
+- **Decision (director):** in 8-BIT and 16-BIT, traffic coming down the road should not scale smoothly as it comes closer, but in simulated steps, like the rotation (D-092, D-208).
+- **How:** `_sprite_scale` scales each traffic vehicle (cars and trucks) about its own origin so its size on screen snaps to a ladder of sizes, as if picked from a set of pre-drawn sprites: it holds one size, then jumps to the next as it nears. Rungs are 0.14 apart in log size (~15 %) in 8-BIT and half that (~7 %) in 16-BIT, like the rotation's frame counts. Nearer than 8 m (passing beside the camera) it stays smooth, so close passes don't flicker. The car stays exactly on its spot on the road; only its size snaps. HD is unchanged.
+- **Status:** Accepted, pending the director's look
+
+### D-434 — Turbo Run: scenery, gates and pick-ups grow in steps too
+- **Date:** 2026-11-26
+- **Decision (director):** the stepped sizes of D-433 also for the other sprites: trees, checkpoints, nitro pick-ups and the rest.
+- **How:** done in the shaders, since the roadside sprites are drawn in batches (MultiMesh): `sprite.gdshader` (every roadside sprite kind: trees, palms, signs, houses, crowds, the gantry, speed cameras, nitro tanks) and `banner.gdshader` (the start, checkpoint and finish gates) scale each sprite about its base by the same ladder as the traffic: `size_step` (0.14 in 8-BIT, 0.07 in 16-BIT, 0 in HD, from `_size_step()`), smooth nearer than 8 m. `Sprites.set_size_step` sets it on every sprite material (and new ones), with the graphics mode. Blob shadows under the sprites keep their smooth size.
+- **Status:** Accepted, pending the director's look
+
+### D-435 — Turbo Run: the second saloon replaces the first
+- **Date:** 2026-11-26
+- **Decision (director):** `saloon2.glb` replaces `saloon.glb` (D-432); it does not look like a real car (D-432's note).
+- **Model:** prepared in place of the first (same file names, so the code is unchanged apart from its measurements): full 32k-tri mesh, 4.5 m (1.94 × 1.33 m). Its texture is in many small pieces and turned to mush at 256 px, so it gets a 1024 px albedo for 8-BIT/16-BIT, like the supercar (D-210). HD uses its original 4096 px texture. The first saloon's original is removed from `source/racer/`; `saloon2.glb` is kept there.
+- **Measurements:** one big exhaust at x −0.41, 0.275 m up, tip at z −2.06 (the nitro flame comes out of it); plate 0.36 × 0.18 at 0.42 m, just behind its recess (surface −2.19); a full-width rear light bar, tail box |x| 0–0.76, y 0.70–0.87 (red lenses only), night glow at its outer ends (0.6, 0.79); round headlamps as before; indicators at the bar's ends and the front side markers; axles at z +1.294 and −1.195, 0.33 m up, rim 0.24 m. New DMD picture.
+- **Checked:** HD and 16-BIT with nitro on; recoloured in the traffic row.
+- **Status:** Accepted
+
+### D-436 — Turbo Run: a news helicopter at the second checkpoint
+- **Date:** 2026-11-26
+- **Decision (director):** `heli.glb` (no blades) flies in at the second checkpoint, hovers ahead of the player's car for 4–5 s, then flies away, turning a bit sideways for effect. The blades are round transparent textures of blurry turning blades. A chopper sound plays while it is on screen.
+- **Model:** `prepare_racer_car.py` at 11 m nose to tail (29k tris, 2.8 m wide, 3.85 m tall), nose +Z, 1024 px albedo for 8-BIT/16-BIT and the original 4096 px texture for HD. Drawn with the cars' shader (`_car_instance`), so it takes the toon look and HD switch.
+- **Rotors:** `rotor_blur.png` (256 px, `gen_rotor_blur.py`): two dark blades whose motion blur trails behind them, a faint disc, a dark hub. The main rotor is a 10 m disc on the mast (model 0, 3.66, 1.86), spun 2.6 turns/s; the tail rotor a 1.7 m upright disc at (0.45, 2.38, −4.65), 4.5 turns/s.
+- **Flight** (`games/racer/heli.gd`): 
+  - **In (3 s):** from 150 m ahead, 30 m to the side (the side the car isn't on) and 34 m up, easing to a stop 28 m ahead of the car, 7 m up; it swings round from 70° to face the car, nose down then a flare, banking.
+  - **Hover (4.5 s):** keeps 28 m ahead at the car's speed, over the road between the centre and the car's line, facing the car (filming it); it swings ±25° sideways, drifts ±2 m, bobs, and banks with the swing.
+  - **Out (3.5 s):** turns away to 150°, noses down 16°, banks, and accelerates off ahead, 40 m to the side and 26 m up.
+  - In 8-BIT/16-BIT it turns and grows in steps like the traffic (D-092, D-433). Not in two-player.
+- **Sound:** a procedural loop (`_loop_wav("chopper")`): 13 blade thumps a second (a 55/110 Hz boom with a burst of air) over a thin turbine whine. It plays only while the helicopter is out, fading in as it arrives and out as it leaves.
+- **Dev flag:** `--rc-heli` brings it in at once.
+- **Checked:** HD and 16-BIT screenshots of the arrival and the hover.
+- **Note for the director:** its livery reads "NEWS 4", "NEWS COPTER 4", "LIVE EYE". "News 4" is a common station name, used by real stations.
+- **Status:** Accepted, pending the director's look and listen
+
+### D-437 — Turbo Run: the helicopter at the first and the first city checkpoint, leaving over the camera; two more mesas
+- **Date:** 2026-11-26
+- **Decision (director):** the helicopter comes at the first checkpoint and the first city checkpoint instead of the second; when leaving it flies towards the player and camera. `mesa2.png` and `mesa3.png` add variety in the desert.
+- **When:** `_heli_checkpoints()`: checkpoint 1, and the checkpoint at the end of the first city stage (`Track.STAGE_AREAS`, stage 6: checkpoint 6). Supersedes D-436's second checkpoint.
+- **Exit (2.6 s, was 3.5):** it turns back to nearly face the car (±12°), noses down 18° and flies at the camera, gathering speed: 75 m back along the road, climbing 9 m, lining up just off the car's line, so it grows and passes over the top of the view, ending well behind. The chopper is loudest as it passes over, then fades.
+- **Mesas:** `prepare_mesas.py` trims the paintings and scales them to 1024 px wide (`sprites/racer/hd/mesa_2.png`, `mesa_3.png`); originals kept in `source/racer/`. Sprite kinds `mesa_2` and `mesa_3`, 45 m tall like the first; each desert mesa is one of the three, picked from its position (a third each), with the same random size and sinking into the dunes.
+- **Checked:** HD screenshots through the exit; 16-BIT desert screenshots with the new mesas.
+- **Status:** Accepted
+
+### D-438 — Turbo Run: "Abrupt Cutoff" on radio station 5
+- **Date:** 2026-11-26
+- **Decision (director):** replace station 5's Turbo Pixel (D-402) with `Abrupt Cutoff.m4a`.
+- **Asset:** converted M4A → MP3 V0 (beside the original in the asset folder) → OGG Vorbis q5 (`assets/audio/music/racer/abrupt_cutoff.ogg`, 3:05). The first two M4As had broken timestamps (a direct MP3 came out 4:59, then 8:02); the director's third file converts cleanly and is the one used.
+- **Start:** a softer intro (about −25 dB) runs to ~16 s, then the song is at full strength (−17 dB), so the station starts it 15.5 s in (`MUSIC_SKIP`), like the other build-ups. Its title on the radio: ABRUPT CUTOFF. `turbo_pixel.ogg` stays in the repo, unused.
+- **Status:** Accepted
+
+### D-439 — Unused music removed from the repo
+- **Date:** 2026-11-26
+- **Decision (director):** remove the music tracks the game no longer uses, and clean up the credits.
+- **Removed** (no code referenced them): Tilt Breaker's `n_dimensions.ogg` (Matthew Pablo; unused since D-318) and its original `source/breakout/n-dimensions_retro.mp3`; the five Bogart VGM songs `bogart_chillwave_nightdrive`, `bogart_dreamstate`, `bogart_maximum_overdrive`, `bogart_nightlife`, `bogart_one_more_round` (unused since D-403); the director's `coastal_drive.ogg` (since D-373) and `turbo_pixel.ogg` (since D-438). Each with its `.import`.
+- **Credits:** their rows are gone from `assets/CREDITS.md`, and the notes about kept-but-unused files are trimmed. No Matthew Pablo or Bogart VGM credit is needed any more. The GDD's music table now lists the music actually used.
+- **Status:** Accepted
+
+### D-440 — Turbo Run: the helicopter hovers closer
+- **Date:** 2026-11-26
+- **Decision (director):** make the helicopter hover closer to the camera.
+- **Change:** it hovers 16 m ahead of the car (was 28, D-437) and 5.5 m up (was 7), so about 24 m from the camera. The fly-in ends there and the exit starts from there; the exit still ends well behind the camera.
+- **Status:** Accepted
+
+### D-441 — Turbo Run: a better helicopter sound
+- **Date:** 2026-11-26
+- **Report (director):** the helicopter sound is quite bad.
+- **Cause:** D-436's loop was a sine thump with white, hashed noise and a loud whine: thin, buzzy and harsh.
+- **New sound** (`Heli.chopper_sound()`, a seamless 2 s loop made once, 52 ms): blade slaps 11 a second (two blades at 5.5 turns/s), each a sharp crack of band-passed noise (250–1700 Hz, 2.5 ms attack, 45 ms decay) over a low thump that drops in pitch, each pass a little different; the rotor wash, low-passed noise that swells with every pass; the tail rotor's 55 Hz buzz of band-passed noise; a faint turbine whine. The mix is low-passed twice at 2.4 kHz (energy above 3.5 kHz ~17 dB below the body) and gently soft-clipped; the noise's run-on is blended into the loop's start.
+- **In play:** louder near the camera (×22 m/distance, 0.35–1.5), with a gentle Doppler: the pitch rises as it closes in (up to +12 %) and drops as it goes away. Overall level −6 dB.
+- **Status:** Accepted, pending the director's listen
+
+### D-442 — Turbo Run: the night helicopter's searchlight and position lights
+- **Date:** 2026-11-26
+- **Decision (director):** the second helicopter (the city checkpoint, at night) has a searchlight and position lights.
+- **Lights** (`Heli.night_lights`, model space from renders; nose +Z, left +X): red on the left stabiliser tip, green on the right (±1.39, 2.24, −3.0), white on the tail (0, 2.2, −5.45), a red beacon on the roof (0, 3.2, 1.1) that flashes for 0.12 s once a second. Small glowing HDR lamps, picked up by the environment's glow.
+- **Searchlight:** a lamp under the nose, below the camera pod (0, 0.42, 3.9), with a `SpotLight3D` (9° half-angle, no shadow) that follows the player's car, lighting it and a pool on the road, and a visible beam: an additive cone that reaches just past the car, brightest down its middle.
+- **When:** whenever the helicopter is out and it is dark: off by day, fading in from the night level 0.3 to 0.7, so the city one at night has them and the first one (stage 1, day) doesn't.
+- **Checked:** HD and 16-BIT screenshots with `--rc-heli --rc-night`.
+- **Status:** Accepted
+
+### D-443 — Turbo Run: the police gives up sooner once you're out of range
+- **Date:** 2026-11-26
+- **Decision (director):** police chases last too long; once mostly out of range the police should slow down and give up.
+- **Cause:** the escape count (D-200) only ran once the police had first caught up with the player (D-203). A car still catching up never gave up, however far behind, until it closed in or 25 s passed (`CATCH_UP_MAX`); after that the player needed 4 s in a row more than 120 m ahead.
+- **Change** (`Sim`):
+  - The count also runs while it is still catching up, after `ESCAPE_GRACE` 6 s from when it appears (it appears 140 m behind, already past the gap).
+  - `ESCAPE_TIME` is 2.5 s (was 4). `ESCAPE_GAP` stays 120 m, most of the DMD chase indicator's 150 m.
+  - While the count runs, its top speed eases down to 80 % (`ESCAPE_SLOW`), so it visibly drops back; then it gives up as before (lights off, falls behind, escape bonus).
+  - Getting closer again still starts the count over.
+- **Test:** a police car still catching up, with the player flat out ahead and out of range, gives up between 6 and 9.5 s.
+- **Status:** Accepted, pending the director's playtest
+
+### D-444 — Turbo Run: desert mesas floating in the air
+- **Date:** 2026-11-26
+- **Bug (director, two screenshots):** mesas floated above the desert, some over a strip of purple haze.
+- **Cause 1:** mesas stand 70–130 m from the road. On the inside of a bend the drawn ground strip is cut short (at 0.75 / curvature, D-094) so it doesn't fold back over the road, and beyond that edge its skirt falls away into the haze (D-197). A mesa placed there stood on the ground model's height with no drawn ground under it.
+- **Fix 1:** `Track._ground_reaches` checks the bend at the mesa and 40 m either side (half the widest mesa at its largest scale); a mesa that would overhang cut ground moves to the outside of the bend, or is left out if both sides are short. Probe: 8–20 desert mesas on three seeds, none over cut ground.
+- **Cause 2:** D-437 trimmed the new mesa paintings at any alpha, keeping a faint halo (below half opacity, which the sprite shader cuts) of ~135 px under the rock, so their rock stood ~7 m above the sprite's base.
+- **Fix 2:** `prepare_mesas.py` trims at the visible outline (alpha above half). The trimmed pictures are wider for their height, so `mesa_2` and `mesa_3` are 30.5 m tall (was 45), which keeps them the same size as before (57–60 m wide).
+- **Checked:** HD desert screenshots: the mesas stand on the sand.
+- **Status:** Accepted
+
+### D-445 — Turbo Run: mesas stand in the sand on slopes; white halos cleaned from the sprites
+- **Date:** 2026-11-26
+- **Bug (director, screenshot):** a mesa still floated: a gap under its road-side edge. The director also asked for the sprites to be checked for white halos.
+- **Cause:** a mesa is a flat picture ~60 m wide, standing on the ground at its centre; the desert ground rises away from the road (and rolls with the dunes), so the road-side half hung over lower ground.
+- **Fix:** each mesa is sunk by the drop from its centre to its road-side edge (and along the road, half its width either side), plus the dunes' 1.6 m, on top of D-216's 2 m. Its painted apron slopes into the sand.
+- **Halos:** a measure of pale pixels on each sprite's outer 2 px that are much paler than the art 2–8 px further in (sprites already cleaned in D-392/D-396 score ~0 %), checked against close-ups on a dark background. Real halos (dotted white outlines left by the white backgrounds) on the original `mesa`, `bush_1`, `bush_2`, `cactus_1`, `cactus_2`, `palm_1`, `palm_2`, `crowd_1`–`3` and `lifeguard`: cleaned with `defringe_sprites.py` (D-392), which recolours only pale, colourless rim pixels from the art next to them; the shapes and white paint (the lifeguard hut, the crowd's clothes) are unchanged. The director's `mesa_2`/`mesa_3` are clean. High scores on the houses, chalets, town house, gantry, signs, snow rock, snow spruce and desert bush are their own white or grey paint, snow, or pale twigs, so they are left as they are.
+- **Checked:** HD desert screenshots; before/after close-ups.
+- **Status:** Accepted
+
+### D-446 — Turbo Run 8-BIT: jumpier car animations
+- **Date:** 2026-11-26
+- **Decision (director):** make the car animations even more jumpy in 8-BIT; the rotation is already fine.
+- **Change:** the cars' own animations get their own step multiplier, `_car_mult`: 0.55 in 8-BIT (was 1.0, shared with the rotation), 2.0 in 16-BIT (unchanged), 0 in HD. In 8-BIT:
+  - spins, roll-overs, the turn back after a roll, the time-over slide and the landing bounces run at ~5.5 frames a second (was 10);
+  - the wheels turn in coarser steps;
+  - approaching cars, the police and the helicopter grow in ~29 % steps (was ~15 %, D-433).
+- **Unchanged:** the 32-view rotation (`_anim_mult`), the scenery's and gates' size steps (D-434), the gates' wave, the pick-ups' bob, and everything in 16-BIT and HD.
+- **Status:** Accepted, pending the director's look
+
+### D-447 — Turbo Run 8-BIT: nearly 16-BIT's resolution
+- **Date:** 2026-11-26
+- **Decision (director):** keep 8-BIT's palette and jumpiness (D-446), but bring its resolution closer to 16-BIT's for definition.
+- **Change:** 8-BIT renders the world, and its HUD layer, at 420 px on the short side (`NES_SHORT`; was 270, D-207; 16-BIT is 480). The scanline count follows. Its palette snap and dither, its rotation steps and D-446's jumpier car animations are unchanged, so it still reads differently from 16-BIT, a little chunkier.
+- **Checked:** 8-BIT and 16-BIT screenshots side by side.
+- **Status:** Accepted
+
+### D-448 — Turbo Run: stepped sizes hold still between steps
+- **Date:** 2026-11-26
+- **Bug (director):** with the stepped sizes (D-433, D-434, D-446), an object jumped bigger, then shrank a little smoothly, then jumped again, and so on.
+- **Cause:** the step correction held the size steady against the object's depth only. The chase camera's view widens with speed (and more with nitro, D-098), which shrinks everything on screen smoothly; normally the approach hides it, but with the approach turned into steps the widening showed on its own between them.
+- **Fix:** the size on screen is taken as 1 / (depth × tan(half the view angle)): `_sprite_scale` uses the camera's angle, and the sprite and banner shaders use the projection's scale (`PROJECTION_MATRIX[0][0]`). Between steps each object now holds its size on screen; it changes only at a step.
+- **Status:** Accepted, pending the director's look
+
+### D-449 — Turbo Run: steps with this frame's camera; lamps, rocks and the police step too
+- **Date:** 2026-11-26
+- **Report (director):** after D-448 the shrinking between steps still happened a little; street lamps didn't grow in steps.
+- **Cause:** traffic and the helicopter took their step from the camera before it moved for the frame: the last frame's camera, about a metre behind at speed, so their size still drifted between steps. Lamps and rocks are 3D props with the standard toon material, which the sprite shaders' steps (D-434) never reached; the police cars were never stepped.
+- **Fix:** one pass after the camera update (`_apply_steps`): traffic, the police and the helicopter on the cars' ladder (D-446); lamps, their night glows and rocks (`Scenery` kinds, MultiMesh instances re-set from their placed transforms) on the scenery's ladder (D-434), skipped while hidden. `_step_scale(pos, step)` is the shared rule (D-448: depth and zoom).
+- **Checked:** 8-BIT city at night: the lamp glows stay on the lamp heads.
+- **Status:** Accepted, pending the director's look
+
+### D-450 — Turbo Run 8-BIT: 350 px, 30 frames a second
+- **Date:** 2026-11-26
+- **Decision (director):** 8-BIT at 350 pixels; the game runs at 30 fps in 8-BIT.
+- **Resolution:** 350 px on the short side, world and HUD layer (`NES_SHORT`; D-447 had 420; 16-BIT is 480).
+- **Frame rate:** choosing 8-BIT (`_apply_gfx`) sets `Engine.max_fps` to 30 (`NES_FPS`); 16-BIT and HD set it back to uncapped (vsync paces them). Leaving Turbo Run clears the cap, so the shell and Tilt Breaker are unaffected. The simulation is time-based, so speeds and timings are unchanged; only the picture updates half as often.
+- **Checked:** `--print-fps`: 8-BIT holds 30, 16-BIT uncapped (500+ with vsync off); 8-BIT screenshot.
+- **Status:** Accepted

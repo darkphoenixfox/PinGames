@@ -34,6 +34,8 @@ const KINDS := {
 	"cactus_2": ["cactus_2", 2.2, true, false, 70],
 	"desert_bush": ["desert_bush", 1.6, true, false, 60],
 	"mesa": ["mesa", 45.0, true, false, 300],
+	"mesa_2": ["mesa_2", 30.5, true, false, 204],   # D-437: the director's broad butte; D-444: trimmed to the rock, so 30.5 m keeps its size
+	"mesa_3": ["mesa_3", 30.5, true, false, 204],   # D-437: the director's butte with a spire; D-444: as mesa_2
 	"pine_1": ["pine_1", 17.0, true, false, 300],
 	"pine_2": ["pine_2", 13.0, true, false, 260],
 	"tree_forest": ["tree_forest", 14.0, true, false, 280],   # D-396: the director's broadleaf tree
@@ -74,6 +76,14 @@ static func set_hd(on: bool) -> void:
 		_mat(kind).set_shader_parameter("retro", not hd)
 
 
+## D-434: stepped sizes (log rung size; 0 = smooth), as for the traffic.
+static var _size_step := 0.0
+static func set_size_step(step: float) -> void:
+	_size_step = step
+	for kind in _meshes:
+		_mat(kind).set_shader_parameter("size_step", step)
+
+
 static func _mat(kind: String) -> ShaderMaterial:
 	return (_meshes[kind] as QuadMesh).material
 
@@ -101,6 +111,7 @@ static func mesh(kind: String) -> Mesh:
 	m.shader = SHADER
 	m.set_shader_parameter("tex", tex)
 	m.set_shader_parameter("retro", not hd)
+	m.set_shader_parameter("size_step", _size_step)
 	var rt := float(spec[4])
 	m.set_shader_parameter("retro_size", Vector2(maxf(1.0, roundf(rt * aspect)), rt))
 	m.set_shader_parameter("billboard", spec[2])

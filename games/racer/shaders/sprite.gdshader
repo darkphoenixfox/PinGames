@@ -17,8 +17,29 @@ uniform bool flip = false;                     // mirrored (left-turn curve sign
 uniform bool billboard = true;
 uniform float roll = 0.0;                      // radians, about the view axis (D-408: the nitro tank rocks)
 uniform float roll_pivot = 0.0;                // height of the point it turns about
+// D-434: stepped sizes in 8-BIT/16-BIT, as for the traffic (D-433): the
+// sprite's size on screen snaps to a ladder of sizes (rungs `size_step` apart
+// in log size; 0 = smooth, HD), scaled about its base. Nearer than
+// `step_from` m it stays smooth.
+uniform float size_step = 0.0;
+uniform float step_from = 8.0;
+
+// D-434: the factor that snaps the size on screen to the ladder of sizes.
+float step_scale(mat4 modelview, mat4 projection) {
+	if (size_step <= 0.0) {
+		return 1.0;
+	}
+	float d = -(modelview * vec4(0.0, 0.0, 0.0, 1.0)).z;   // depth of the sprite's base
+	if (d < step_from) {
+		return 1.0;
+	}
+	// D-448: with the camera's zoom (it widens with speed), not the depth alone.
+	float size = log(projection[0][0]) - log(d);
+	return exp(round(size / size_step) * size_step - size);
+}
 
 void vertex() {
+	VERTEX *= step_scale(MODELVIEW_MATRIX, PROJECTION_MATRIX);   // D-434
 	if (roll != 0.0) {
 		vec2 p = VERTEX.xy - vec2(0.0, roll_pivot);
 		VERTEX.xy = vec2(p.x * cos(roll) - p.y * sin(roll), p.x * sin(roll) + p.y * cos(roll)) + vec2(0.0, roll_pivot);

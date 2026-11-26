@@ -29,7 +29,7 @@ const NITRO_SPEED := 100.0     # m/s while nitro burns (normal car; see CARS)
 const CARS := [
 	# time: the starting clock (s); bonus: added to every checkpoint's time and
 	# to its floor (D-183), so the easy car gets more time, the hard car less.
-	{"name": "RC_CAR_EASY", "hue": 0.13, "top": 72.0, "grip": 1.25, "time": 55.0, "bonus": 10.0},     # the red hot hatch (D-206; was blue, D-202)
+	{"name": "RC_CAR_EASY", "hue": 0.0, "top": 72.0, "grip": 1.25, "time": 55.0, "bonus": 10.0},     # D-432: the saloon in its own blue (was the hot hatch at 0.13)
 	{"name": "RC_CAR_NORMAL", "hue": 0.06, "top": 80.0, "grip": 1.0, "time": START_TIME, "bonus": 0.0},   # green (D-210; the red car's paint rotated)
 	{"name": "RC_CAR_HARD", "hue": 10.89, "top": 88.0, "grip": 0.8, "time": 40.0, "bonus": -4.0},     # the supercar's own yellow (D-210)
 ]
@@ -60,6 +60,7 @@ const DRIFT_GRIP := 0.45         # fraction of the centrifugal push felt while d
 const DRIFT_STEER := 1.25
 const DRIFT_DRAG := 2.5
 const DRIFT_ANGLE := 32.0        # degrees (visual + score feel)
+const DRIFT_RESUME := 1.0        # s a broken drift's points wait for it to start again (D-430)
 ## Nitro pick-ups on the road (D-103)
 const NITRO_TIME := 5.0          # s of boost per canister
 const PICKUP_GAP_MIN := 700.0    # m between canisters
@@ -169,9 +170,13 @@ const HIT_BOUNCE := 9.0         # m/s sideways shove
 const POLICE_BUMP_SLOW := 0.55  # speed the police keeps after hitting traffic
 ## Losing the police (D-200): stay more than ESCAPE_GAP ahead of it for
 ## ESCAPE_TIME in a row. Getting closer starts the count again, however long
-## the chase has gone on.
-const ESCAPE_GAP := 120.0        # m ahead of it
-const ESCAPE_TIME := 4.0         # s in a row
+## the chase has gone on. D-443: the count also runs while it is still
+## catching up (after ESCAPE_GRACE s, so it doesn't quit where it appears),
+## and while it runs the police slows, dropping back before it gives up.
+const ESCAPE_GAP := 120.0        # m ahead of it (most of the DMD indicator's 150 m)
+const ESCAPE_TIME := 2.5         # s in a row (D-443: was 4)
+const ESCAPE_GRACE := 6.0        # s after it appears before it can give up (D-443)
+const ESCAPE_SLOW := 0.8         # x its top speed by the end of the count (D-443)
 const BUST_SPEED := 22.0        # m/s: slower than this with police close = busted
 const BUST_NEAR := 12.0         # m: "close" - right on you (D-157; was 40)
 const BUST_TIME := 3.5          # s held at the roadside
@@ -242,6 +247,7 @@ var drift_angle := 0.0         # degrees, signed like drift_dir
 var drift_points := 0.0
 var _drift_entry := 0.0
 var _drift_exit := 0.0
+var drift_resume_t := 0.0     # D-430: >0 while a broken drift can still pick up its points
 var boost_t := 0.0             # s of nitro boost left
 var boosting := false          # boost_t > 0 this step
 var pickups: Array = []        # nitro canisters on the road: {id, s, x}
@@ -297,7 +303,7 @@ var done := false
 ## for whichever car is live. Shared: the track, traffic and the random stream.
 const PLAYER_FIELDS := ["state", "countdown", "manual", "shift_request", "autopilot", "s", "x", "v",
 	"lat_v", "steer", "throttle", "steer_axis", "gas_axis", "braking", "auto_braking", "offroad",
-	"drifting", "drift_dir", "drift_angle", "drift_points", "_drift_entry", "_drift_exit", "boost_t",
+	"drifting", "drift_dir", "drift_angle", "drift_points", "_drift_entry", "_drift_exit", "drift_resume_t", "boost_t",
 	"boosting", "pickups", "_next_pickup_s", "_next_id_pickups", "car", "gear", "_launch_t",
 	"_rev_lock_l", "_rev_lock_r", "freeze_time", "perfect_t", "rpm", "shift_hold", "_shift_lock",
 	"police", "backup", "busted_t", "radar", "_trap_passed", "in_tunnel", "_scrape_t", "grace_t", "finished",
@@ -818,7 +824,9 @@ func _update_car(dt: float) -> void:
 			if ds > -CAUGHT_GAP or police.t > CATCH_UP_MAX:
 				police.caught = true
 			var catching := not bool(police.get("caught", false))
-			_police_follow(dt, want_ds, CHASE_CLOSE, 40.0, 15.0, POLICE_CATCH_TOP if catching else POLICE_TOP)
+			# D-443: dropping back while the escape count runs.
+			var tiring := lerpf(1.0, ESCAPE_SLOW, clampf(float(police.get("lose_t", 0.0)) / ESCAPE_TIME, 0.0, 1.0))
+			_police_follow(dt, want_ds, CHASE_CLOSE, 40.0, 15.0, (POLICE_CATCH_TOP if catching else POLICE_TOP) * tiring)
 			police.x = move_toward(police.x, want_x, (9.0 if police.ram_t > RAM_WINDUP else 5.0) * dt)
 			police.hit_cd = maxf(0.0, float(police.get("hit_cd", 0.0)) - dt)
 			# The rams only count close together (D-198): a pause, or getting
@@ -840,8 +848,9 @@ func _update_car(dt: float) -> void:
 			if close and (spin_t > 0.0 or v < BUST_SPEED):
 				_bust()
 			else:
-				# Losing it (D-200): only once it has caught up (D-203).
-				police.lose_t = float(police.get("lose_t", 0.0)) + dt if ds < -ESCAPE_GAP and not catching else 0.0
+				# Losing it (D-200). D-443: also while still catching up (was only
+				# once it had caught up, D-203), after ESCAPE_GRACE s.
+				police.lose_t = float(police.get("lose_t", 0.0)) + dt if ds < -ESCAPE_GAP and (not catching or police.t >= ESCAPE_GRACE) else 0.0
 			if police.state == "chase" and float(police.get("lose_t", 0.0)) >= ESCAPE_TIME:
 				police.state = "giveup"   # D-145: falls back, lights off
 				if not _others_chasing():   # D-364: escaped once every car is lost
@@ -1202,6 +1211,12 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 func _update_drift(dt: float, want: float, c: float, brake: bool) -> void:
 	var into := want != 0.0 and want * c < 0.0     # steering towards the inside
 	if not drifting:
+		# D-430: a drift that broke keeps its points for DRIFT_RESUME s; they're
+		# banked once that runs out without a new drift.
+		if drift_resume_t > 0.0:
+			drift_resume_t -= dt
+			if drift_resume_t <= 0.0:
+				_end_drift()
 		var can := v > DRIFT_MIN_SPEED and spin_t <= 0.0 and state == State.RACE
 		if can and into and absf(c) > DRIFT_MIN_CURV:
 			_drift_entry += dt
@@ -1211,7 +1226,9 @@ func _update_drift(dt: float, want: float, c: float, brake: bool) -> void:
 		if can and (_drift_entry >= DRIFT_ENTRY_HOLD or flick):
 			drifting = true
 			drift_dir = -want                      # left steer = nose left = +1
-			drift_points = 0.0
+			if drift_resume_t <= 0.0:
+				drift_points = 0.0                 # a new drift (else the broken one goes on)
+			drift_resume_t = 0.0
 			_drift_exit = 0.0
 			events.append(["drift_start", drift_dir])
 	else:
@@ -1220,8 +1237,12 @@ func _update_drift(dt: float, want: float, c: float, brake: bool) -> void:
 			_drift_exit = 0.0
 		else:
 			_drift_exit += dt * (2.0 if want == drift_dir else 1.0)
-		if _drift_exit >= DRIFT_EXIT_HOLD or v < DRIFT_MIN_SPEED * 0.6 or spin_t > 0.0 or state != State.RACE:
+		if v < DRIFT_MIN_SPEED * 0.6 or spin_t > 0.0 or state != State.RACE:
 			_end_drift()
+		elif _drift_exit >= DRIFT_EXIT_HOLD:
+			# Let go: the car grips again, but the points wait (D-430).
+			drifting = false
+			drift_resume_t = DRIFT_RESUME
 		else:
 			drift_points += v * dt * 25.0
 	var target := drift_dir * DRIFT_ANGLE if drifting else 0.0
@@ -1255,10 +1276,12 @@ func _tunnel_walls(dt: float, was_in: bool) -> void:
 				events.append(["scrape", side])
 
 
+## Banks the drift's points (also a broken drift still waiting, D-430).
 func _end_drift() -> void:
-	if not drifting:
+	if not drifting and drift_resume_t <= 0.0 and drift_points <= 0.0:
 		return
 	drifting = false
+	drift_resume_t = 0.0
 	var pts := int(drift_points / 10.0) * 10
 	_add_score(pts)
 	events.append(["drift_end", pts])

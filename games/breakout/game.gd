@@ -55,6 +55,8 @@ const FINALE_SKIP_AT := 2.6
 const FINALE_END_AT := 6.0
 ## Camera lean towards the player (0 = straight down) (D-040).
 const CAMERA_TILT_DEG := 20.0
+const CAMERA_DIST := 60.0   # D-423 (was 20)
+const CAMERA_TARGET := Vector3(0, 0, 0.6)   # the point at the middle of the view
 ## Blast charge levels (D-054): particle/sphere/bolt colour and sphere size.
 const LEVEL_COLORS := [Color(0.35, 0.65, 1.0), Color(1.0, 0.85, 0.25), Color(1.0, 0.3, 0.2)]
 ## Power-up colours (D-072); also the DMD power bar colour while active.
@@ -86,7 +88,8 @@ const PLANET_DEPTH_BEHIND := 30.0
 ## quickly the spin follows the ship, and an idle drift.
 const STAR_SPIN_PER_SPEED := 0.006
 const STAR_SPIN_RESPONSE := 3.0
-const STAR_DRIFT := 0.004
+const STAR_DRIFT := 0.016   # D-420: 4x faster (was 0.004), always the same way
+const STAR_DRIFT_MIN := 0.25   # the ship slows the drift to a quarter at most, never reverses it
 
 ## 16-bit style sound effects (D-050), synthesized by core/util/synth.gd.
 const ECHO := [0.085, 0.3, 0.55]
@@ -439,6 +442,10 @@ func _process(delta: float) -> void:
 		set_meta("dev_pu_clear", true)
 		_on_debug_action(&"powerup")
 		_on_debug_action(&"clear_level")
+	if Config.cli.has("tb-outro-at") and _phase == "play" and _phase_t >= float(str(Config.cli["tb-outro-at"])) 			and not has_meta("dev_outro"):   # dev: play the level-clear outro at N s (D-425)
+		set_meta("dev_outro", true)
+		_begin_outro()
+		return
 	if Config.cli.has("tb-win-at") and _phase == "play" and _phase_t >= float(str(Config.cli["tb-win-at"])) 			and not has_meta("dev_win"):   # dev: clear the bricks and kill the boss at N s (D-361)
 		set_meta("dev_win", true)
 		sim.events.clear()
@@ -1151,6 +1158,7 @@ func _finale(delta: float) -> void:
 
 # --- per-frame visuals ----------------------------------------------------------------
 func _animate(delta: float) -> void:
+	_stereo_frame()
 	# D-267: tell the single-screen layout how wide the play area is (its field
 	# plus the edge shields and a margin), so the side panels stay clear of it.
 	# The camera is orthographic, 16 units high: half width / TABLE width.
@@ -1198,7 +1206,7 @@ func _animate(delta: float) -> void:
 	# Starfield swings with the ship's movement (D-049)
 	var target_spin := -sim.paddle_vx * STAR_SPIN_PER_SPEED
 	_star_spin = lerpf(_star_spin, target_spin, 1.0 - exp(-STAR_SPIN_RESPONSE * delta))
-	_star_angle += (_star_spin + STAR_DRIFT) * delta
+	_star_angle += maxf(_star_spin + STAR_DRIFT, STAR_DRIFT * STAR_DRIFT_MIN) * delta
 	_star_mat.set_shader_parameter("angle", _star_angle)
 	# Plasma: only exists once fired (hidden while waiting), flies with a trail.
 	var flying := sim.state == Sim.State.PLAY
@@ -1269,6 +1277,7 @@ func _animate_ship(delta: float) -> void:
 	charging = charging and reached < mini(sim.affordable_level(), Sim.BLAST_MAX_LEVEL)
 	if _charge_particles.emitting != charging:
 		if charging:
+			Fx.aim_charge_from(_charge_particles, _ship.global_basis.inverse() * _to_viewer(), CHARGE_FROM)
 			_charge_particles.restart()  # no leftovers from a previous charge
 			_charge_particles.visible = true
 		else:
@@ -1523,6 +1532,82 @@ func _view_use(i: int) -> void:
 	_vship = i
 
 
+# --- stereo 3D (D-418) ------------------------------------------------------------------
+## Stereo: the ship, plasma and swarm sit at the screen's depth; the planet and
+## the space backdrop lie behind (an orthographic pair turned about the
+## playfield), and behind them the three star bands, each at its own depth.
+## The TABLE keeps its 2D (HUD); the eyes draw the world over their own stars.
+const STEREO_ANGLE := 0.45                      # degrees between the eyes
+const STEREO_STAR_DEPTHS := [-30.0, -25.0, -21.0]   # far, mid, near band
+var _star_layer: CanvasLayer
+var _eye_vps: Array[SubViewport] = []
+var _eye_cams: Array[Camera3D] = []
+var _stereo_star_mats: Array[ShaderMaterial] = []
+var _eye_stars: Array = []   # per eye: its three band ColorRects (D-424)
+
+
+func _build_stereo() -> void:
+	if not Stereo.active():
+		return
+	_star_layer.visible = false
+	var world := Screens.table.find_world_3d()
+	for i in 2:
+		# D-424: each eye is opaque, with the stars as its own background
+		# (Environment BG_CANVAS draws canvas layer -1 of this viewport), so the
+		# additive glows blend over space as in 2D. A transparent eye lost them
+		# over empty space (the blaster's halo was cut off).
+		var vp := SubViewport.new()
+		vp.world_3d = world
+		vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		add_to_table(vp)
+		var stars := CanvasLayer.new()
+		stars.layer = -1
+		vp.add_child(stars)
+		var bands: Array[ColorRect] = []
+		for b in 3:
+			var m := ShaderMaterial.new()
+			m.shader = STARFIELD_SHADER
+			m.set_shader_parameter("band", b)
+			m.set_shader_parameter("opaque", b == 0)   # the far band brings the dark of space
+			_stereo_star_mats.append(m)
+			var r := ColorRect.new()
+			r.material = m
+			stars.add_child(r)
+			bands.append(r)
+		_eye_stars.append(bands)
+		var c := Camera3D.new()
+		vp.add_child(c)
+		c.current = true
+		_eye_vps.append(vp)
+		_eye_cams.append(c)
+	Stereo.add_layer([_eye_vps[0].get_texture(), _eye_vps[1].get_texture()], 0.0)
+	Screens.table.disable_3d = true   # Stereo.clear_layers() turns it back on
+
+
+func _stereo_frame() -> void:
+	if _eye_vps.is_empty():
+		return
+	for vp in _eye_vps:
+		if vp.size != Screens.table.size:
+			vp.size = Screens.table.size
+	for m in _stereo_star_mats:   # the bands turn with the mono starfield
+		m.set_shader_parameter("angle", _star_angle)
+		m.set_shader_parameter("base_size", Vector2(Screens.table_base()))
+	# Each band shifted for its depth, in this viewport's pixels; drawn a
+	# margin wider than the view so the shift never shows an edge.
+	var vp_size := Vector2(Screens.table.size)
+	var shown := Screens.table_rect_in_window().size.x
+	var px := Stereo.depth_scale() * (vp_size.x / shown if shown > 0.0 else 1.0)
+	var margin := 40.0 * px
+	for i in 2:
+		var side := 0.5 if i == 0 else -0.5
+		for b in 3:
+			var r: ColorRect = _eye_stars[i][b]
+			r.position = Vector2(side * float(STEREO_STAR_DEPTHS[b]) * px - margin, -margin)
+			r.size = vp_size + Vector2(margin, margin) * 2.0
+	Stereo.ortho_pair(_cam, _eye_cams[0], _eye_cams[1], CAMERA_TARGET, STEREO_ANGLE)
+
+
 # --- construction ----------------------------------------------------------------------
 func _build_world() -> void:
 	_root = Node3D.new()
@@ -1556,10 +1641,12 @@ func _build_world() -> void:
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
 	cam.size = 16.0
 	var t := deg_to_rad(CAMERA_TILT_DEG)
-	var target := Vector3(0, 0, 0.6)
-	cam.position = target + Vector3(0, cos(t), sin(t)) * 20.0
+	var target := CAMERA_TARGET
+	# D-423: 60 units back (was 20): an orthographic view looks the same from
+	# any distance, and the room lets debris and charge fly out in stereo.
+	cam.position = target + Vector3(0, cos(t), sin(t)) * CAMERA_DIST
 	cam.near = 1.0
-	cam.far = 260.0
+	cam.far = 260.0 + CAMERA_DIST - 20.0
 	# No camera DOF: it also blurred the starfield background. The planet's
 	# out-of-focus look is done in its own shader instead (D-049).
 	_root.add_child(cam)
@@ -1578,6 +1665,7 @@ func _build_world() -> void:
 	# where the plasma rebounds.
 	_build_edge_shields()
 	_build_starfield()
+	_build_stereo()
 
 	var fallback_mat := StandardMaterial3D.new()
 	fallback_mat.albedo_color = Color(0.6, 0.7, 0.8)
@@ -1597,6 +1685,7 @@ func _build_starfield() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = -1  # <= background_canvas_max_layer: drawn as the 3D background
 	add_to_table(layer)
+	_star_layer = layer
 	var rect := ColorRect.new()
 	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_star_mat = ShaderMaterial.new()
@@ -1849,19 +1938,21 @@ func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void
 	tw.tween_method(func(a: float): InstParam.set_param(blast, "age", a), 0.0, 1.0, 0.55)
 	tw.tween_callback(blast.queue_free)
 
-	# Debris (D-087): tumbling brick-coloured shards that shrink away.
+	# Debris (D-087): tumbling brick-coloured shards. D-423: they fly out
+	# towards the viewer (the camera's back direction), growing as they come
+	# (the orthographic view doesn't enlarge near things), then fade away.
 	var p := CPUParticles3D.new()
 	p.one_shot = true
 	p.amount = int(16 * size_scale)
-	p.lifetime = 0.8
+	p.lifetime = DEBRIS_LIFE
 	p.explosiveness = 1.0
-	p.direction = Vector3(0, 1, 0)
-	p.spread = 80.0
-	p.initial_velocity_min = 2.0
-	p.initial_velocity_max = 4.8
-	p.gravity = Vector3(0, -6, 0)
-	p.damping_min = 1.5
-	p.damping_max = 2.5
+	p.direction = _to_viewer()
+	p.spread = 3.0   # D-425: almost straight at the camera (was 10)
+	p.initial_velocity_min = 30.0
+	p.initial_velocity_max = 45.0   # 25-40 units out in its life; the camera is CAMERA_DIST away
+	p.gravity = Vector3.ZERO
+	p.damping_min = 8.0
+	p.damping_max = 12.0
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 	p.emission_box_extents = Vector3(0.3, 0.05, 0.12) * size_scale
 	p.particle_flag_rotate_y = true
@@ -1871,11 +1962,12 @@ func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void
 	p.angular_velocity_max = 720.0
 	p.scale_amount_min = 0.5
 	p.scale_amount_max = 1.5
-	var shrink := Curve.new()
-	shrink.add_point(Vector2(0.0, 1.0))
-	shrink.add_point(Vector2(0.6, 0.85))
-	shrink.add_point(Vector2(1.0, 0.0))
-	p.scale_amount_curve = shrink
+	var grow := Curve.new()
+	grow.max_value = 3.0
+	grow.add_point(Vector2(0.0, 1.0))
+	grow.add_point(Vector2(0.75, 2.6))
+	grow.add_point(Vector2(1.0, 0.0))
+	p.scale_amount_curve = grow
 	var shard := BoxMesh.new()
 	shard.size = Vector3(0.13, 0.05, 0.09)
 	p.mesh = shard
@@ -1883,10 +1975,18 @@ func _explode_brick(pos: Vector3, color: Color, size_scale: float = 1.0) -> void
 	p.position = pos
 	_root.add_child(p)
 	p.emitting = true
-	get_tree().create_timer(0.9).timeout.connect(p.queue_free)
+	get_tree().create_timer(DEBRIS_LIFE + 0.1).timeout.connect(p.queue_free)
 
 
+const CHARGE_FROM := 5.0   # D-423: the charge gathers from this far towards the viewer; D-424: close to the ship (was 30)
+const DEBRIS_LIFE := 1.0   # D-423: a little longer (was 0.8), to reach the viewer
 var _debris_mats := {}
+
+
+## The direction from the playfield towards the viewer: the camera's back.
+func _to_viewer() -> Vector3:
+	var t := deg_to_rad(CAMERA_TILT_DEG)
+	return Vector3(0.0, cos(t), sin(t))
 
 
 ## Debris material per brick colour (D-087): the brick's hue, lit, with a glow.
@@ -2449,14 +2549,16 @@ const OUTRO_LIFT_TIME := 1.4
 const OUTRO_FADE_AT := 1.9     # fade to black
 const OUTRO_FADE_TIME := 0.6
 const OUTRO_NEXT_AT := 2.7     # next level loads (behind the black)
+const OUTRO_TOWARDS_VIEWER := 30.0   # D-425: how far out along the line of sight it flies
 var _outro_black: ColorRect
 var _outro_lifted := false
 var _outro_x0s: Array = []   # D-286: each ship's x at the level's end
 
 
 ## Level complete: remaining enemies already exploded (sim); the ship flies off
-## towards the top and towards the screen, fade to black, then the next level
-## plays the same intro (bricks drop in, ship blasts in).
+## towards the middle of the screen and out towards the viewer (D-425: was up
+## and off the top), fade to black, then the next level plays the same intro
+## (bricks drop in, ship blasts in).
 func _begin_outro() -> void:
 	_phase = "outro"
 	_phase_t = 0.0
@@ -2477,8 +2579,9 @@ func _begin_outro() -> void:
 
 func _outro() -> void:
 	var t := _phase_t
-	# Ship flies away: up the screen (-z) and up towards the camera (+y). The
-	# camera is orthographic, so growing scale sells "towards the screen".
+	# Ship flies away: to the middle of the screen and out along the line of
+	# sight towards the viewer (D-425). The camera is orthographic, so growing
+	# scale sells "towards the screen"; in stereo it also comes out of it.
 	var k := clampf((t - OUTRO_LIFT_AT) / OUTRO_LIFT_TIME, 0.0, 1.0)
 	if k > 0.0 and not _outro_lifted:
 		_outro_lifted = true
@@ -2493,7 +2596,9 @@ func _outro() -> void:
 		var to_x: float = sim._start_x(ship) if _two else sim.field.get_center().x
 		var x := lerpf(_outro_x0s[ship], to_x, settle)
 		_paddle.visible = true
-		_paddle.position = Vector3(x, 7.0 * e, sim.paddle_y - 13.0 * e)
+		var from := Vector3(x, 0.0, sim.paddle_y)
+		var to := Vector3(to_x, 0.0, CAMERA_TARGET.z) + _to_viewer() * OUTRO_TOWARDS_VIEWER
+		_paddle.position = from.lerp(to, e)
 		_paddle.scale = Vector3.ONE * (1.0 + 2.2 * e)
 		_paddle.rotation = Vector3(-0.5 * k, 0.0, 0.0)
 		_set_belly_thrust(1.5 if k > 0.0 and k < 1.0 else 0.0)

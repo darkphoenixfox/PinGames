@@ -7,6 +7,11 @@ var texture: Texture2D:
 	set(v):
 		texture = v
 		queue_redraw()
+## D-418: false leaves the area around the texture clear (the stereo overlay).
+var opaque := true:
+	set(v):
+		opaque = v
+		queue_redraw()
 var rotation_deg: int = 0:
 	set(v):
 		rotation_deg = posmod(v, 360)
@@ -18,7 +23,8 @@ func _ready() -> void:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color.BLACK)
+	if opaque:
+		draw_rect(Rect2(Vector2.ZERO, size), Color.BLACK)
 	if texture == null:
 		return
 	var ts := texture.get_size()

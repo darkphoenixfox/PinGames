@@ -414,6 +414,28 @@ static func make_missile(band: Color) -> Node3D:
 	return root
 
 
+## D-423: the charge gathers from the viewer: particles start on a ring
+## `distance` along `toward` (local, the direction to the camera) and are pulled
+## down the line of sight into the emitter. Seen from the camera they still
+## close in on the centre; in stereo they fly in out of the screen.
+static func aim_charge_from(p: CPUParticles3D, toward: Vector3, distance: float) -> void:
+	var axis := toward.normalized()
+	var side := axis.cross(Vector3.FORWARD if absf(axis.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT).normalized()
+	var up := axis.cross(side)
+	var r := p.emission_ring_radius
+	var pts := PackedVector3Array()
+	for i in 48:
+		var a := TAU * float(i) / 48.0
+		var rr := r * (0.7 + 0.3 * float(i % 3) / 2.0)
+		pts.append(axis * distance + (side * cos(a) + up * sin(a)) * rr)
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINTS
+	p.emission_points = pts
+	# Reach the centre at about the end of the lifetime: d = 0.5 * a * t^2.
+	var pull := 2.0 * distance * 0.95 / (p.lifetime * p.lifetime)
+	p.radial_accel_min = -pull * 1.05
+	p.radial_accel_max = -pull * 0.95
+
+
 ## Charge-up particles (D-053): glowing square pixels that spawn on a ring around
 ## the emitter and are pulled into its centre, shrinking as they arrive.
 ## Toggle `emitting` while charging.

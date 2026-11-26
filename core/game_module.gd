@@ -51,6 +51,7 @@ func _own(parent: Node, node: Node) -> Node:
 
 
 func _exit_tree() -> void:
+	Stereo.clear_layers()   # D-418: this game's stereo layers go with it
 	for n in _owned:
 		if is_instance_valid(n):
 			n.queue_free()

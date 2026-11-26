@@ -1195,6 +1195,8 @@ func _gd_files(dir: String) -> Array[String]:
 		var sub := dir.path_join(d)
 		if sub == "res://android" or sub == "res://addons" or sub == "res://exports":
 			continue   # Android build template and third-party plugins (D-170)
+		if FileAccess.file_exists(sub.path_join(".gdignore")):
+			continue   # folders Godot ignores, e.g. native/third_party (D-418)
 		out.append_array(_gd_files(sub))
 	for f in DirAccess.get_files_at(dir):
 		if f.ends_with(".gd"):
@@ -1487,7 +1489,7 @@ func test_racer_hd_assets() -> void:
 	for lo in Game.HD_TEXTURES:
 		if not ResourceLoader.exists(Game.HD_TEXTURES[lo]):
 			miss_tex.append(Game.HD_TEXTURES[lo])
-	check(miss_tex.is_empty() and Game.HD_TEXTURES.size() == 7, "HD car textures exist for all seven models")
+	check(miss_tex.is_empty() and Game.HD_TEXTURES.size() == 9, "HD textures exist for all nine models")   # D-432: + the saloon; D-436: + the helicopter
 	# D-213: the oncoming horn is synthesised quickly, audible and not clipped flat.
 	var hg = Game.new()
 	var h_t0 := Time.get_ticks_msec()
@@ -2070,6 +2072,24 @@ func test_racer_sim() -> void:
 			esc = esc or e[0] == "police_escape"
 	check(esc and esc_steps >= int(60 * Sim.ESCAPE_TIME) - 1 and run.police.state == "giveup" and not run.police_lights(),
 		"staying %d m ahead for %d s loses the police, lights off" % [int(Sim.ESCAPE_GAP), int(Sim.ESCAPE_TIME)])
+	# D-443: a police car still catching up gives up too, once it has had
+	# ESCAPE_GRACE s, if the player stays out of range.
+	var far = Sim.new()
+	far.setup(7)
+	far.state = Sim.State.RACE
+	far.freeze_time = true
+	far.police = {"s": far.s - Sim.ESCAPE_GAP - 60.0, "x": 0.0, "v": 0.0, "state": "chase", "t": 0.0}
+	var far_steps := 0
+	var far_esc := false
+	while not far_esc and far_steps < 60 * 20:
+		far.traffic.clear()
+		far.v = far.top_speed()
+		far.step(dt, false, false)
+		far_steps += 1
+		for e in far.events:
+			far_esc = far_esc or e[0] == "police_escape"
+	check(far_esc and far_steps >= int(60 * Sim.ESCAPE_GRACE) and far_steps <= int(60 * (Sim.ESCAPE_GRACE + Sim.ESCAPE_TIME + 1.0)),
+		"out of range while it's still catching up: the police gives up after %.1f s (%.1f s)" % [Sim.ESCAPE_GRACE + Sim.ESCAPE_TIME, far_steps / 60.0])
 	for i in 60 * 6:
 		run.traffic.clear()
 		run.step(dt, false, false)
@@ -2289,9 +2309,48 @@ func test_racer_sim() -> void:
 		drifted = drifted or d.drifting
 	check(s_curve > 0.0 and drifted and d.v > 60.0, "steering into a sharp curve at speed drifts and keeps speed")
 	d.traffic.clear()
+	var d_banked := 0
 	for i in 30:
 		d.step(dt, false, false)
-	check(not d.drifting and d.score > 0, "releasing the steering ends the drift and banks points")
+		for e in d.events:
+			d_banked += int(e[0] == "drift_end")
+	check(not d.drifting and d_banked == 0 and d.drift_points > 0.0, "releasing the steering ends the drift; its points wait (D-430)")
+	for i in 60:
+		d.step(dt, false, false)
+		for e in d.events:
+			d_banked += int(e[0] == "drift_end")
+	check(not d.drifting and d_banked == 1 and d.score > 0 and d.drift_points == 0.0, "a second later with no new drift, the points are banked")
+	# D-430: steering back in within DRIFT_RESUME carries on the same drift.
+	var dc = Sim.new()
+	dc.setup(7)
+	dc.state = Sim.State.RACE
+	dc.track.ensure(8000.0)
+	dc.s = s_curve
+	dc.gear = Sim.Gear.HIGH
+	dc.v = 70.0
+	var banks := 0
+	var starts := 0
+	for k in 3:
+		for i in 30:
+			dc.traffic.clear()
+			dc.step(dt, cv > 0.0, cv < 0.0)
+			for e in dc.events:
+				starts += int(e[0] == "drift_start")
+				banks += int(e[0] == "drift_end")
+		var pts_before: float = dc.drift_points
+		for i in 24:
+			dc.traffic.clear()
+			dc.step(dt, false, false)
+			for e in dc.events:
+				banks += int(e[0] == "drift_end")
+		check(k > 0 or (dc.drift_points >= pts_before and pts_before > 0.0 and not dc.drifting and dc.drift_resume_t > 0.0), "a broken drift keeps its points while it can resume")
+	check(starts >= 2 and banks == 0 and dc.drift_points > 0.0, "re-steering within a second carries on the same drift, no points banked yet")
+	for i in 120:
+		dc.traffic.clear()
+		dc.step(dt, false, false)
+		for e in dc.events:
+			banks += int(e[0] == "drift_end")
+	check(banks == 1 and dc.drift_points == 0.0, "the whole chain banks once, as one drift")
 	# Same curve without drifting: auto-brake slows the car instead.
 	var ab = Sim.new()
 	ab.setup(7)

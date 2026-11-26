@@ -395,6 +395,8 @@ func _web_dmd() -> Control:
 ## TABLE filling the rest. Touch controls (when wanted and no gamepad is
 ## connected) are translucent buttons over the game.
 var _single_page: Control
+var _stereo_page := false   # D-418: the page is the stereo overlay (no black backdrop)
+var _single_bg: ColorRect
 var _single_portrait := -1
 var _single_touch_on := false
 var _single_table: Control
@@ -580,6 +582,7 @@ func _setup_single() -> void:
 	_outputs.append(_single_page)
 	_single_portrait = -1
 	_single_layout()
+	Stereo.attach(_single_page)   # D-418: no-op unless stereo is on
 	if not root.size_changed.is_connected(_single_layout):
 		root.size_changed.connect(_single_layout)
 	if not Input.joy_connection_changed.is_connected(_on_joy_changed):
@@ -609,12 +612,14 @@ func _single_layout() -> void:
 	_touch = null
 	_single_bar = null
 	var bg := ColorRect.new()
-	bg.color = Color.BLACK
+	bg.color = Color.TRANSPARENT if _stereo_page else Color.BLACK
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_single_page.add_child(bg)
+	_single_bg = bg
 	var t := ScreenView.new()
 	t.name = "Table"
+	t.opaque = not _stereo_page
 	t.texture = table.get_texture()
 	_single_page.add_child(t)
 	_single_table = t
@@ -664,6 +669,29 @@ func _single_layout() -> void:
 		_single_page.add_child(_touch.exit_button)     # D-281: EXIT, top left
 		_single_page.add_child(_touch.launch_button)   # D-282: LAUNCH, right edge
 	_place_single(win)
+
+
+## D-418: the single-screen page is drawn as the stereo overlay: no black
+## backdrop and no black behind the TABLE, so each eye's 3D shows through.
+func set_stereo_page(on: bool) -> void:
+	_stereo_page = on
+	if is_instance_valid(_single_bg):
+		_single_bg.color = Color.TRANSPARENT if on else Color.BLACK
+	if is_instance_valid(_single_table):
+		_single_table.opaque = not on
+
+
+## D-418: where a rectangle of the TABLE (base coordinates; null = all of it)
+## is drawn in the single-screen window, as ScreenView fits the TABLE.
+func table_rect_in_window(r: Variant = null) -> Rect2:
+	var base := Vector2(table.size_2d_override)
+	var rect: Rect2 = r if r != null else Rect2(Vector2.ZERO, base)
+	var t := _single_table
+	if not is_instance_valid(t) or base.x <= 0.0:
+		return rect
+	var s := minf(t.size.x / base.x, t.size.y / base.y)
+	var origin := t.position + t.size * 0.5 - base * s * 0.5
+	return Rect2(origin + rect.position * s, rect.size * s)
 
 
 ## D-254: the flexible TABLE takes its area's shape: base 1080 wide in portrait,

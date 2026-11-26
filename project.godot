@@ -29,6 +29,7 @@ Credits="*res://core/credits.gd"
 HighScores="*res://core/high_scores.gd"
 Dmd="*res://core/dmd/dmd.gd"
 Screens="*res://core/screens.gd"
+Stereo="*res://core/stereo.gd"
 DebugTools="*res://core/debug_tools.gd"
 
 [display]
@@ -54,6 +55,8 @@ pointing/emulate_touch_from_mouse=false
 textures/canvas_textures/default_texture_filter=1
 textures/vram_compression/import_etc2_astc=true
 renderer/rendering_method="forward_plus"
+rendering_device/driver.windows="d3d12"
+rendering_device/fallback_to_vulkan=true
 environment/defaults/default_clear_color=Color(0, 0, 0, 1)
 
 [xr]

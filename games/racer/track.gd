@@ -356,7 +356,14 @@ func _place_desert(s: float) -> void:
 			_add_obj(s + _rng.randf_range(0.0, 8.0), side * (off + 2.0), "rock")
 	if _rng.randf() < 0.22:
 		var side := -1.0 if _rng.randf() < 0.5 else 1.0
-		_add_obj(s, side * _rng.randf_range(70.0, 130.0), "mesa")
+		var mx := _rng.randf_range(70.0, 130.0)
+		# D-444: on the inside of a bend the drawn ground stops short (D-094)
+		# and falls away beyond, so a mesa there floated in the haze. It goes
+		# to the bend's outside instead, or is left out if both sides are short.
+		if not _ground_reaches(s, side * mx):
+			side = -side
+		if _ground_reaches(s, side * mx):
+			_add_obj(s, side * mx, "mesa")
 
 
 ## Forest (D-218): tall lines of trees on both sides, a wall of pines in
@@ -685,6 +692,21 @@ func _area_rise(name: String, s: float, x: float, base: float) -> float:
 		"snow":
 			return base * 3.2
 	return base
+
+
+## D-444: whether the drawn ground reaches x (and a mesa's half width past it)
+## around s. The game cuts the ground strip on the inside of a bend at 0.75 /
+## curvature (D-094), so far props there would stand over the falling skirt.
+const MESA_HALF := 40.0   # m: half the widest mesa (60 m) at its largest scale (1.3)
+func _ground_reaches(s: float, x: float) -> bool:
+	for ds in [-MESA_HALF, 0.0, MESA_HALF]:
+		var c := curvature(s + ds)
+		if absf(c) < 1e-5 or signf(x) != -signf(c):
+			continue   # straight, or the outside of the bend: ground to the strip's edge
+		var inside_max := maxf(0.75 / absf(c), ROAD_HALF + RUMBLE + 4.0)
+		if absf(x) + MESA_HALF > inside_max:
+			return false
+	return true
 
 
 ## Ground rises gently away from the road (embankments), 0 on the road.

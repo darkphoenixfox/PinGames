@@ -17,3 +17,7 @@ Thumbs.db
 # Temporary per-run overrides (scripts/dev_run.sh)
 override.cfg
 /android/
+
+# Native build inputs/outputs (scripts/build_leiasr.ps1)
+/native/third_party/
+/native/build/

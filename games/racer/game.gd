@@ -84,7 +84,9 @@ const MAX_TRAVEL_YAW := 0.45   # rad: the most the nose follows sideways travel 
 const ANIM_FPS := 10.0
 ## Pixel renderer resolution (D-107): 1/3 of the 1080x1920 TABLE.
 const PIXEL_RES := Vector2i(480, 854)   # D-194: softer pixels (was 360 x 640)
-const NES_RES := Vector2i(270, 480)     # D-207: 8-BIT, chunkier pixels
+const NES_RES := Vector2i(350, 622)     # D-207: 8-BIT, chunkier pixels; D-450: 350 (D-447: 420; was 270 x 480)
+const NES_SHORT := 350.0                 # D-450: its short side (16-BIT is 480)
+const NES_FPS := 30                      # D-450: 8-BIT runs at 30 frames a second
 const FLIP_FRAMES := 8.0
 const FLIP_HOP := 1.6
 ## TIME UP slide (D-105): 90 degrees in OVER_TURN_TIME s, OVER_TURN_FRAMES steps.
@@ -122,15 +124,27 @@ const HATCH_POOL := 8
 const HOTHATCH_MODEL := "res://assets/models/racer/hothatch.glb"
 const HOTHATCH_TEXTURE := "res://assets/models/racer/hothatch_albedo.png"
 const HOTHATCH_POOL := 6
+## Traffic kinds that are cars (painted per car, lamps on the body), not trucks.
+const TRAFFIC_CARS := ["car", "hatch", "hothatch", "saloon"]
+## Director's saloon (D-432; the second version, D-435): the easy car (was the
+## hot hatch, which stays in traffic), and in the traffic mix. Its texture is
+## in many small pieces, so 8-BIT/16-BIT sample a 1024 px albedo (as the supercar).
+const SALOON_MODEL := "res://assets/models/racer/saloon.glb"
+const SALOON_TEXTURE := "res://assets/models/racer/saloon_albedo.png"
+const SALOON_POOL := 6
+## The news helicopter (D-436): flies in at the first checkpoint and at the
+## first checkpoint inside the city (D-437: was the second checkpoint).
+const Heli = preload("res://games/racer/heli.gd")
 ## Director's supercar (D-210): the hard car. Its texture atlas is in tiny
 ## pieces, so RETRO samples a 1024 px albedo (256 px turned it to mush).
 const SUPERCAR_MODEL := "res://assets/models/racer/supercar.glb"
 const SUPERCAR_TEXTURE := "res://assets/models/racer/supercar_albedo.png"
 ## The player's model per car (Sim.CARS order: easy, normal, hard).
-const CAR_MODELS := [HOTHATCH_MODEL, CAR_MODEL, SUPERCAR_MODEL]
+const CAR_MODELS := [SALOON_MODEL, CAR_MODEL, SUPERCAR_MODEL]   # D-432: easy = saloon
 ## Each player model's albedo, and its key in TAIL_AT / NIGHT light spots.
-const MODEL_TEXTURES := {CAR_MODEL: CAR_TEXTURE, HOTHATCH_MODEL: HOTHATCH_TEXTURE, SUPERCAR_MODEL: SUPERCAR_TEXTURE}
-const MODEL_LIGHTS := {CAR_MODEL: "car", HOTHATCH_MODEL: "hothatch", SUPERCAR_MODEL: "supercar"}
+const MODEL_TEXTURES := {CAR_MODEL: CAR_TEXTURE, HOTHATCH_MODEL: HOTHATCH_TEXTURE, SUPERCAR_MODEL: SUPERCAR_TEXTURE,
+	SALOON_MODEL: SALOON_TEXTURE}
+const MODEL_LIGHTS := {CAR_MODEL: "car", HOTHATCH_MODEL: "hothatch", SUPERCAR_MODEL: "supercar", SALOON_MODEL: "saloon"}
 ## Exhaust tips per model (model space, rear is -Z): where the nitro and
 ## backfire flames come out. The hot hatch has two pipes together on its left.
 const EXHAUSTS := {
@@ -139,6 +153,8 @@ const EXHAUSTS := {
 	# Twin pipes on each side (D-210).
 	SUPERCAR_MODEL: [Vector3(-0.64, 0.27, -2.2), Vector3(-0.52, 0.27, -2.2),
 		Vector3(0.52, 0.27, -2.2), Vector3(0.64, 0.27, -2.2)],
+	# D-432/D-435: one big pipe; its tip measured by a ray.
+	SALOON_MODEL: [Vector3(-0.41, 0.275, -2.06)],
 }
 ## Number plate per model: [centre, size] (D-127 for the red car). D-212: the
 ## hot hatch and supercar plates fit their own plate recess (measured from
@@ -147,6 +163,7 @@ const PLATES := {
 	CAR_MODEL: [Vector3(0.0, PLATE_Y, PLATE_Z), PLATE_SIZE],
 	HOTHATCH_MODEL: [Vector3(0.0, 0.415, -2.025), Vector2(0.37, 0.185)],
 	SUPERCAR_MODEL: [Vector3(0.0, 0.43, -2.215), Vector2(0.34, 0.17)],
+	SALOON_MODEL: [Vector3(0.0, 0.42, -2.2), Vector2(0.36, 0.18)],   # D-435: just behind its recess (surface at -2.19)
 }
 ## Puts a car's night tail glows on its lamps (D-198): onto the body mesh, in
 ## the model's own space, at the centre of the lamp area the car shader lights
@@ -185,6 +202,7 @@ const TAIL_AT := {
 	"hatch": Vector3(0.62, 0.85, -2.0),
 	"hothatch": Vector3(0.7, 0.8, -2.05),
 	"supercar": Vector3(0.65, 0.78, -2.2),
+	"saloon": Vector3(0.6, 0.79, -2.11),   # D-435: the light bar's outer ends
 	"police": Vector3(0.62, 0.75, -2.35),
 }
 ## Indicator spots per model, on its own right side (D-163).
@@ -193,6 +211,7 @@ const BLINKERS := {
 	"hatch": [Vector3(-0.8, 0.85, -1.95), Vector3(-0.78, 0.65, 1.95)],
 	"hothatch": [Vector3(-0.8, 0.88, -2.0), Vector3(-0.8, 0.5, 2.0)],
 	"supercar": [Vector3(-0.75, 0.78, -2.2), Vector3(-0.6, 0.62, 2.2)],
+	"saloon": [Vector3(-0.68, 0.78, -2.1), Vector3(-0.8, 0.645, 1.95)],   # D-435: the bar's end; front side marker
 	"truck": [Vector3(-1.3, 0.9, -4.95), Vector3(-1.2, 1.1, 4.95)],
 	"truck2": [Vector3(-1.4, 0.9, -4.95), Vector3(-1.3, 1.1, 4.95)],
 }
@@ -203,6 +222,7 @@ const RIMS := "res://assets/textures/racer/"
 const WHEELS := {
 	"res://assets/models/racer/red_car.glb": [RIMS + "rim_5spoke.png", [Vector3(1.204, 0.334, 0.25), Vector3(-1.189, 0.333, 0.25)]],
 	"res://assets/models/racer/supercar.glb": [RIMS + "rim_9spoke.png", [Vector3(1.247, 0.341, 0.25), Vector3(-1.294, 0.339, 0.255)]],
+	"res://assets/models/racer/saloon.glb": [RIMS + "rim_5spoke.png", [Vector3(1.294, 0.329, 0.24), Vector3(-1.195, 0.329, 0.24)]],   # D-435
 	"res://assets/models/racer/hothatch.glb": [RIMS + "rim_9spoke.png", [Vector3(1.202, 0.325, 0.243), Vector3(-1.298, 0.324, 0.243)]],
 	"res://assets/models/racer/hatchback.glb": [RIMS + "rim_5spoke.png", [Vector3(1.186, 0.309, 0.24), Vector3(-1.181, 0.298, 0.24)]],
 	"res://assets/models/racer/police2.glb": [RIMS + "rim_police.png", [Vector3(1.289, 0.359, 0.29), Vector3(-1.375, 0.364, 0.29)]],
@@ -218,6 +238,12 @@ const LAMP_BOXES := {
 		"tail_min": Vector3(0.45, 0.66, -9.0), "tail_max": Vector3(0.85, 0.9, -1.95),
 		"tail_red_only": true,
 		"head_min": Vector3(0.45, 0.52, 1.9), "head_max": Vector3(0.75, 0.7, 9.0),
+	},
+	# D-435: a full-width rear light bar; round headlamps.
+	"res://assets/models/racer/saloon.glb": {
+		"tail_min": Vector3(0.0, 0.7, -9.0), "tail_max": Vector3(0.76, 0.87, -1.95),
+		"tail_red_only": true,
+		"head_min": Vector3(0.5, 0.54, 1.8), "head_max": Vector3(0.76, 0.77, 9.0),
 	},
 	# Measured from orthographic renders of the model (D-205).
 	"res://assets/models/racer/hothatch.glb": {
@@ -244,6 +270,8 @@ const HD_TEXTURES := {
 	POLICE_TEXTURE: "res://assets/models/racer/police2_albedo_hd.png",
 	HOTHATCH_TEXTURE: "res://assets/models/racer/hothatch_hothatch_albedo.jpg",
 	SUPERCAR_TEXTURE: "res://assets/models/racer/supercar_albedo_hd.jpg",   # 4096 px (D-210)
+	SALOON_TEXTURE: "res://assets/models/racer/saloon_saloon_albedo.jpg",   # 4096 px (D-432)
+	Heli.TEXTURE: "res://assets/models/racer/heli_heli_albedo.jpg",   # 4096 px (D-436)
 }
 ## D-207: 8-BIT ("nes"), 16-BIT (id "retro", kept for saved settings) and HD.
 const GFX_OPTIONS := ["nes", "retro", "hd"]
@@ -266,7 +294,7 @@ const MUSIC_RACE := [
 	"res://assets/audio/music/racer/full_throttle.ogg",
 	"res://assets/audio/music/racer/turbo_run_out_of_the_park.ogg",   # D-373 (was Coastal Drive, D-362)
 	"res://assets/audio/music/racer/high_tide.ogg",   # D-377 (was Maximum Overdrive)
-	"res://assets/audio/music/racer/turbo_pixel.ogg",   # D-402 (was One More Round)
+	"res://assets/audio/music/racer/abrupt_cutoff.ogg",   # D-438 (was Turbo Pixel, D-402)
 ]
 ## Who made each song, for the radio's LCD (D-308).
 const SONG_BY := ["RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL", "RC_CREDIT_ORIGINAL"]
@@ -285,7 +313,7 @@ const MUSIC_XFADE := 6.0
 ## 17 s). D-308: Turbo Run's theme is full from ~3 s. D-362: Full Throttle is
 ## full from its first note. D-373: the Out of the Park Mix from ~7 s. D-377:
 ## High Tide from ~1.5 s.
-const MUSIC_SKIP := [3.0, 0.5, 7.0, 1.5, 0.5]   # D-402: Turbo Pixel is full from its first note
+const MUSIC_SKIP := [3.0, 0.5, 7.0, 1.5, 15.5]   # D-438: Abrupt Cutoff is full from ~16 s (a softer intro before)
 const PASSERS := 2          # traffic engine voices (D-134)
 ## Oncoming horns (D-213): a dual-tone electric car horn (low and high tones a
 ## dissonant interval apart, buzzy diaphragm harmonics with a nasal resonance,
@@ -391,12 +419,6 @@ const SOUNDS := {
 	# Near miss: a Doppler pass, engine tone dropping as it whooshes by.
 	"rc_near_miss": {"voices": [[{"f": [440.0, 150.0], "t": 0.5, "w": "saw", "v": 0.16, "lp": 0.6}],
 		[{"f": [4000.0, 500.0], "t": 0.45, "w": "noise", "v": 0.28, "lp": 0.45, "a": 0.05}]], "reverb": [0.4, 0.2]},
-	# Drift points banked (D-121): a short brass stab over a tyre-release swoosh.
-	"rc_drift_bank": {"voices": [
-		[{"f": [294.0, 294.0], "t": 0.22, "w": "saw", "v": 0.16, "lp": 0.6, "a": 0.01}],
-		[{"f": [370.0, 370.0], "t": 0.22, "w": "saw", "v": 0.14, "lp": 0.6, "a": 0.01}],
-		[{"f": [440.0, 440.0], "t": 0.22, "w": "saw", "v": 0.12, "lp": 0.6, "a": 0.01}],
-		[{"f": [3000.0, 800.0], "t": 0.3, "w": "noise", "v": 0.2, "lp": 0.5}]], "reverb": [0.6, 0.22]},   # D-375: no low thump under it
 	# Low-time clock: a woodblock "tock" with a soft body (D-112).
 	"rc_tick": {"voices": [[{"f": [1900.0, 1600.0], "t": 0.05, "w": "triangle", "v": 0.35}],
 		[{"f": [950.0, 900.0], "t": 0.09, "w": "sine", "v": 0.25}],
@@ -521,6 +543,11 @@ var _gfx_mode := "retro"         # D-207: one of GFX_OPTIONS
 ## D-208: animation steps per mode: 8-BIT the base frame counts, 16-BIT twice
 ## as many, HD 0 = smooth (no stepping at all).
 var _anim_mult := 2.0
+## D-446: the step multiplier for the cars' own animations (crashes, rolls,
+## landing bounces, wheels, their stepped sizes): 8-BIT is jumpier than its
+## rotation and scenery (CAR_MULT_NES), 16-BIT as _anim_mult, 0 in HD.
+var _car_mult := 2.0
+const CAR_MULT_NES := 0.55
 var _retro_post: ShaderMaterial  # the 16-bit palette/dither pass, kept for switching back
 var _hd_flipped := {}            # materials HD switched from nearest to smooth filtering
 var _gfx_ui: Control
@@ -592,7 +619,7 @@ var _over_turn := 0.0   # 0..1 TIME UP sideways slide (D-105)
 var _over_slide := true   # D-405: false = too slow to slide, it just stops
 const OVER_SLIDE_MPH := 100   # (director: was 50)
 var _over_dir := 0.0
-var _traffic_pool := {"car": [], "hatch": [], "hothatch": [], "truck": [], "truck2": []}   # pools of Node3D per model
+var _traffic_pool := {"car": [], "hatch": [], "hothatch": [], "saloon": [], "truck": [], "truck2": []}   # pools of Node3D per model
 ## Tyre smoke / dust (D-100): our own pooled billboard puffs in one MultiMesh.
 ## CPUParticles3D drew a stray pure-black puff at the emitter when toggled.
 const PUFF_MAX := 192
@@ -875,6 +902,8 @@ func back() -> bool:
 func _process(delta: float) -> void:
 	if sim == null:
 		return
+	if Config.cli.has("rc-rec-audio"):   # dev: record the race's sound (D-426)
+		_dev_rec(delta)
 	if _two:
 		sim._use(_role)   # D-289: this view's car is the live one
 	_phase_t += delta
@@ -937,6 +966,8 @@ func _process(delta: float) -> void:
 					_p2._begin_finale()
 		else:
 			var inp := _read_input()
+			if Config.cli.has("rc-drift-bot"):   # dev: drift into every bend (D-426)
+				inp = _drift_bot()
 			sim.step(dt, inp[0], inp[1], false, inp[2])
 			_handle_events()
 			_update_hud(delta)
@@ -964,6 +995,17 @@ func _process(delta: float) -> void:
 		_handle_events()
 	if Config.cli.has("rc-burst") and _phase == "race" and fmod(_phase_t, 0.5) < delta:   # dev: collision FX (D-292)
 		_burst(sim.track.point(sim.s, sim.x + Sim.CAR_W * 0.5, 0.45), int(_phase_t) % 2 == 0, _role, sim.v)
+	if Config.cli.has("rc-traffic-show") and _phase == "race" and not has_meta("dev_traffic"):   # dev (D-432): one car of each traffic model ahead, each in another paint
+		set_meta("dev_traffic", true)
+		for k in 5:   # ids 9100..9104: every model of the mix (id % 5)
+			var ln := k % Track.LANES.size()
+			sim.traffic.append({"id": 9100 + k, "s": sim.s + 16.0 + 9.0 * k, "x": Track.LANES[ln], "lane": ln, "v": 2.0,
+				"hue": 0.2 * k, "weave": 0.0, "last_ds": 16.0 + 9.0 * k, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W})
+	if Config.cli.has("rc-boost") and _phase == "race" and sim.state == Sim.State.RACE:   # dev (D-432): nitro always on, to see the flames
+		sim.boosting = true
+		sim.boost_t = maxf(sim.boost_t, 1.0)
+	if Config.cli.has("rc-nitro-show") and _phase == "race":   # dev (D-431): a tank always 22 m ahead, for screenshots
+		sim.pickups = [{"id": -1, "s": sim.s + 22.0, "x": sim.x}]
 	_update_chunks()
 	_animate(delta)
 	_update_audio()
@@ -999,6 +1041,13 @@ const SFX_CHECKPOINT := "res://assets/audio/sfx/racer/checkpoint.ogg"
 ## Sounds that cut their own previous play short when they start again (D-411),
 ## so fast menu presses don't pile up. D-412: menus only.
 const RESTART_SFX := ["rc_menu_ok"]
+## D-428: a sound group `--rc-sound-keep` brings back into `--rc-sound-test`.
+func _sound_kept(group: String) -> bool:
+	return group in str(Config.cli.get("rc-sound-keep", "")).split(",")
+
+
+## D-427: the hero car's own one-shots, the only race sounds `--rc-sound-test` keeps.
+const TEST_SFX := ["rc_shift", "rc_backfire", "rc_chirp", "rc_bump", "rc_crash", "rc_nitro", "rc_perfect"]
 const MENU_SFX := ["start", "rc_menu_ok", "select", "move", "error", "rc_shift", "rc_tick"]
 const QUIET_PHASES := ["attract", "players", "gfx", "stage", "select", "radio"]
 
@@ -1023,7 +1072,59 @@ func _menu_tick() -> void:
 var _restart_players := {}   # sound name -> its last player (D-411)
 
 
+## Dev (D-426): `--rc-drift-bot` steers into every bend fast enough to drift
+## and holds the drift through it; the autopilot drives the rest.
+func _drift_bot() -> Array:
+	sim._autoshift()
+	var c := sim.track.curvature(sim.s)
+	if (sim.drifting and absf(c) > Sim.DRIFT_MIN_CURV * 0.5) or (absf(c) > Sim.DRIFT_MIN_CURV and sim.v > Sim.DRIFT_MIN_SPEED):
+		var left := sim.drift_dir > 0.0 if sim.drifting else c > 0.0
+		if sim.drifting and Config.cli.has("rc-drift-wiggle") and fmod(_phase_t, 0.35) < 0.1:
+			return [not left, left, false]   # dev: a short counter-steer tap every 0.35 s
+		return [left, not left, false]
+	var ap: float = sim._autopilot()
+	return [ap < -0.3, ap > 0.3, false]
+
+
+## Dev (D-426): `--rc-rec-audio=<dir>` records the master bus from the start of
+## the race for `--rc-rec-secs` (default 40) and writes race.wav and
+## race_log.txt (per frame: drift, rpm, engine pitch, skid level; and every
+## sound effect and car view change), then quits. Silent runs (dummy audio
+## driver) still mix, so it works from scripts/dev_run.sh.
+var _rec: AudioEffectRecord
+var _rec_t := 0.0
+var _rec_view := 0.0
+var _rec_log := PackedStringArray()
+
+
+func _dev_rec(delta: float) -> void:
+	if _phase != "race":
+		return
+	if _rec == null:
+		_rec = AudioEffectRecord.new()
+		AudioServer.add_bus_effect(0, _rec)
+		_rec.set_recording_active(true)
+		return
+	_rec_t += delta
+	_rec_log.append("%.3f frame drift=%d rpm=%.3f pitch=%.3f skid=%.1f gear=%d v=%.1f thr=%.2f ab=%d eng=%.1f hi=%.1f duck=%.1f wind=%.1f" % [_rec_t,
+		int(sim.drifting), sim.rpm, _engine.pitch_scale if _engine != null else 0.0, _skid.volume_db if _skid != null else -80.0,
+		sim.gear, sim.v, sim.throttle, int(sim.auto_braking), _engine.volume_db, _engine_hi.volume_db, _pass_duck, _wind.volume_db])
+	if _rec_t >= float(str(Config.cli.get("rc-rec-secs", "40"))):
+		_rec.set_recording_active(false)
+		var dir := str(Config.cli["rc-rec-audio"])
+		_rec.get_recording().save_to_wav(dir.path_join("race.wav"))
+		var f := FileAccess.open(dir.path_join("race_log.txt"), FileAccess.WRITE)
+		f.store_string("
+".join(_rec_log))
+		f.close()
+		get_tree().quit()
+
+
 func _sfx(sound_name: String) -> AudioStreamPlayer:
+	if _rec != null:
+		_rec_log.append("%.3f sfx %s" % [_rec_t, sound_name])
+	if Config.cli.has("rc-sound-test") and not (sound_name in TEST_SFX or sound_name in MENU_SFX or _sound_kept("sfx")):
+		return null
 	if _phase in QUIET_PHASES and not (sound_name in MENU_SFX):
 		return null
 	if sound_name in RESTART_SFX:
@@ -1092,7 +1193,8 @@ func _new_sim() -> void:
 ## The player car's DMD dot sprite (D-243), or null for the plain dot car.
 const DMD_SPRITES := {SUPERCAR_MODEL: "res://assets/textures/racer/dmd_car_supercar.png",
 	CAR_MODEL: "res://assets/textures/racer/dmd_car_sports.png",
-	HOTHATCH_MODEL: "res://assets/textures/racer/dmd_car_hatch.png"}   # D-313: its own side picture (was the sports car's)
+	HOTHATCH_MODEL: "res://assets/textures/racer/dmd_car_hatch.png",   # D-313: its own side picture (was the sports car's)
+	SALOON_MODEL: "res://assets/textures/racer/dmd_car_saloon.png"}   # D-432
 static var _dmd_sprites := {}
 var _select_sprites := {}   # D-313: painted car-select pictures by "car/hue"
 
@@ -1241,6 +1343,8 @@ func _start_gfx() -> String:
 func _apply_gfx(mode: String) -> void:
 	_gfx_mode = mode
 	_anim_mult = {"nes": 1.0, "retro": 2.0}.get(mode, 0.0)
+	_car_mult = {"nes": CAR_MULT_NES, "retro": 2.0}.get(mode, 0.0)   # D-446
+	Engine.max_fps = NES_FPS if mode == "nes" else 0   # D-450: 8-BIT at 30 fps; others uncapped (vsync)
 	_set_ui_res.call_deferred()   # D-233
 	var on := mode == "hd"
 	_gfx_hd = on
@@ -1252,7 +1356,12 @@ func _apply_gfx(mode: String) -> void:
 	_pix_vp.msaa_3d = (q[0] as Viewport.MSAA) if on else Viewport.MSAA_DISABLED
 	_world_view.material = null if on else _retro_post
 	_world_view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if on else CanvasItem.TEXTURE_FILTER_NEAREST
+	if not _stereo_layer.is_empty():   # D-418: the eyes get the same pass
+		_stereo_layer.material = _world_view.material
+		_stereo_layer.filter = _world_view.texture_filter
+		Stereo.refresh_layer(_stereo_layer)
 	Sprites.set_hd(on)
+	Sprites.set_size_step(_size_step())   # D-434
 	_style_gates()   # D-415
 	if _road_mat != null:
 		_road_mat.set_shader_parameter("hd", on)
@@ -2237,6 +2346,8 @@ func _handle_events() -> void:
 			"checkpoint":
 				_bg_flash = 1.2
 				_sfx("rc_checkpoint")
+				if int(e[1]) in _heli_checkpoints() and _heli != null and not _heli.active():
+					_heli.start(-1.0 if sim.x > 0.0 else 1.0)   # D-436: from the side the car isn't on
 				# (D-301: one song, chosen on the radio, plays the whole run.)
 				# Reached on momentum after TIME UP: the race goes on (D-103).
 				var saved: bool = e.size() > 3 and e[3]
@@ -2263,7 +2374,7 @@ func _handle_events() -> void:
 				pass
 			"drift_end":
 				if int(e[1]) > 0:
-					_sfx("rc_drift_bank")
+					# D-429: no sound (it repeated whenever a drift broke and restarted)
 					_drift_label.text = tr("RC_DRIFT_POINTS") % ScoreTable.format_score(int(e[1]))
 					_dmd_anim("drift", [tr("RC_DRIFT"), ScoreTable.format_score(int(e[1]))])
 					_drift_label.modulate.a = 1.0
@@ -2356,7 +2467,7 @@ func _landscape() -> bool:
 ## The 3D view's low resolution for the pixel modes, at the TABLE's shape: the
 ## short side 480 (16-BIT) or 270 (8-BIT) pixels, as in portrait.
 func _low_res(mode: String) -> Vector2i:
-	var short := 270.0 if mode == "nes" else 480.0
+	var short := NES_SHORT if mode == "nes" else 480.0
 	var b := Vector2(_table_base())
 	var k := short / minf(b.x, b.y)
 	return Vector2i(roundi(b.x * k), roundi(b.y * k))
@@ -2501,14 +2612,15 @@ func _set_ui_res() -> void:
 		return
 	var low := _gfx_mode != "hd"
 	if _scan != null:   # D-387: the operator's SCANLINES setting
-		_scan.visible = low and bool(Config.get_value("operator", "scanlines"))
+		# D-418: not in stereo (the lines read the screen behind, which the overlay lacks)
+		_scan.visible = low and bool(Config.get_value("operator", "scanlines")) and _pix_vp_r == null
 		(_scan.material as ShaderMaterial).set_shader_parameter("rows", float(_low_res(_gfx_mode).y))
 	var base := _ui_base()   # D-254
 	_ui_vp.size_2d_override = base
 	_ui_root.size = Vector2(base)
 	var res: Vector2i = base
 	if low:
-		var short := 270.0 if _gfx_mode == "nes" else 480.0
+		var short := NES_SHORT if _gfx_mode == "nes" else 480.0
 		var k := short / float(mini(base.x, base.y))
 		res = Vector2i(roundi(base.x * k), roundi(base.y * k))
 	else:
@@ -2670,6 +2782,7 @@ func _build_world() -> void:
 	_cam.far = 2600.0   # the sky is drawn at infinity (D-193)
 	_root.add_child(_cam)
 	_cam.current = true
+	_build_stereo()
 
 	_road_mat = ShaderMaterial.new()
 	_road_mat.shader = ROAD_SHADER
@@ -2801,23 +2914,24 @@ func _build_cars() -> void:
 	_build_body(CAR_MODELS[_chosen_car])
 	_build_puffs()
 	for kind in _traffic_pool:
-		var count: int = TRAFFIC_POOL if kind == "car" else (HATCH_POOL if kind == "hatch"
-			else (HOTHATCH_POOL if kind == "hothatch" else Sim.MAX_TRUCKS))
+		var count: int = {"car": TRAFFIC_POOL, "hatch": HATCH_POOL, "hothatch": HOTHATCH_POOL,
+			"saloon": SALOON_POOL}.get(kind, Sim.MAX_TRUCKS)
 		for i in count:
 			var t: Node3D
 			match kind:
 				"car": t = _car_instance(0.0)
 				"hatch": t = _car_instance(0.0, HATCH_MODEL, HATCH_TEXTURE)
 				"hothatch": t = _car_instance(0.0, HOTHATCH_MODEL, HOTHATCH_TEXTURE)
+				"saloon": t = _car_instance(0.0, SALOON_MODEL, SALOON_TEXTURE)
 				"truck": t = _car_instance(0.0, TRUCK_MODEL, TRUCK_TEXTURE)
 				_: t = _car_instance(0.0, TRUCK2_MODEL, TRUCK2_TEXTURE)
 			var light_kind := "truck" if kind.begins_with("truck") else "car"
 			_add_headlights(t, light_kind)
 			_add_blinkers(t, kind)
 			t.set_meta("night", Night.add_car_lights(t, light_kind, _puff_texture(), TAIL_AT.get(kind, Vector3.ZERO)))
-			if kind == "car" or kind == "hatch" or kind == "hothatch":
+			if kind in TRAFFIC_CARS:
 				_place_tails(t, t.get_meta("night"),
-					{"hatch": HATCH_MODEL, "hothatch": HOTHATCH_MODEL}.get(kind, CAR_MODEL))
+					{"hatch": HATCH_MODEL, "hothatch": HOTHATCH_MODEL, "saloon": SALOON_MODEL}.get(kind, CAR_MODEL))
 			t.visible = false
 			_root.add_child(t)
 			_traffic_pool[kind].append(t)
@@ -2827,6 +2941,7 @@ func _build_cars() -> void:
 		_root.add_child(pk)
 		_pickup_nodes.append(pk)
 	_build_police()
+	_build_heli()   # D-436
 
 
 func _build_puffs() -> void:
@@ -3056,6 +3171,7 @@ func _add_lamp_lights(node: Node3D, lamps: Array) -> void:
 		mm.set_instance_transform(i, f)
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
+	_stepped_mms.append(_step_set(mmi, mm))   # D-449: the glows step with their lamps
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mmi.visible = Night.level > 0.0
 	mmi.add_to_group(NIGHT_GROUP)
@@ -3098,6 +3214,8 @@ func _prop_kind(o: Dictionary) -> String:
 			return "snow_rock" if _obj_area(o, h) == "snow" else "rock"
 		"cactus":
 			return "cactus_1" if h % 3 == 0 else "cactus_2"
+		"mesa":   # D-437: three buttes, a third each
+			return ["mesa", "mesa_2", "mesa_3"][h % 3]
 		"chalet":   # the finish town (D-229)
 			return ["chalet_1", "chalet_2", "townhouse"][h % 3]
 		"crowd":
@@ -3267,13 +3385,14 @@ func _animate_police_car(rig: Dictionary, pd: Dictionary, delta: float, cam_yaw:
 	var side: float = pd.get("swing", 1.0)
 	lean += roundf(float(rig.swing) * 4.0) / 4.0 * PI * 0.5 * side
 	car.basis = car.basis * Basis(Vector3.UP, _sprite_yaw(h - lean + float(pd.get("sway", 0.0)), cam_yaw) - h) * MODEL_TURN
+	_step_later(car)   # D-449: the police grows in steps too
 	# Its wheels turn with its own speed (D-246), stepped like the player's.
 	# D-248: seen side-on, a flat blurred disc reads as wheels standing still,
 	# so the spokes stay visible: their turning is capped at a rate the eye
 	# can follow (like film of a fast wheel) and only half blurred.
 	rig.wheel = fmod(float(rig.wheel) + minf(absf(float(pd.v)) / 0.37, WHEEL_MAX) * delta, TAU * 100.0)
 	var wheel: float = rig.wheel
-	var pstep := wheel if _anim_mult <= 0.0 else floorf(wheel * 3.0 * _anim_mult) / (3.0 * _anim_mult)
+	var pstep := wheel if _car_mult <= 0.0 else floorf(wheel * 3.0 * _car_mult) / (3.0 * _car_mult)
 	for m in car.find_children("*", "MeshInstance3D", true, false):
 		var pmi := m as MeshInstance3D
 		if pmi.material_override != null:
@@ -3571,9 +3690,18 @@ func _build_chunk(k: int) -> Node3D:
 					f.basis = Basis.from_scale(Vector3.ONE * (0.92 + h * 0.16))
 				"bush_1", "bush_2", "fern", "desert_bush", "cactus_2", "snow_rock":
 					f.basis = Basis.from_scale(Vector3.ONE * (0.8 + h * 0.5))
-				"mesa":
-					f.basis = Basis.from_scale(Vector3.ONE * (0.7 + h * 0.6))
-					f.origin.y -= 2.0   # sunk a little into the dunes
+				"mesa", "mesa_2", "mesa_3":
+					var ms := 0.7 + h * 0.6
+					f.basis = Basis.from_scale(Vector3.ONE * ms)
+					# D-445: a mesa is a flat picture ~60 m wide on ground that
+					# rises away from the road, so its road-side half hung over
+					# lower ground. Sink it by the drop to its road-side edge, and
+					# by the dunes' height, so its whole base stands in the sand.
+					var half: float = (Sprites.mesh(kind) as QuadMesh).size.x * ms * 0.5
+					var inner: float = o.x - signf(o.x) * half
+					var drop := tr_.ground_rise(o.s, o.x) - minf(tr_.ground_rise(o.s, inner),
+						minf(tr_.ground_rise(o.s - half, o.x), tr_.ground_rise(o.s + half, o.x)))
+					f.origin.y -= 2.0 + maxf(drop, 0.0) + 1.6
 				"sign_curve", "sign_curve_l", "sign_green":
 					f.basis = Basis.IDENTITY
 				"rock":
@@ -3587,7 +3715,8 @@ func _build_chunk(k: int) -> Node3D:
 			mm.set_instance_transform(i, f)
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
-		# D-253: 3D props cast real shadows; flat sprites a blob on the ground.
+		if not Sprites.has(kind):   # D-449: 3D props (lamps, rocks) step like the sprites
+			_stepped_mms.append(_step_set(mmi, mm))
 		if Sprites.has(kind):
 			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_add_blobs(node, list, kind)
@@ -3669,6 +3798,7 @@ func _build_gate(parent: Node3D, s: float, text: String, finish := false) -> voi
 func _style_gate(m: ShaderMaterial) -> void:
 	m.set_shader_parameter("retro", not _gfx_hd)
 	m.set_shader_parameter("step_fps", ANIM_FPS * _anim_mult)
+	m.set_shader_parameter("size_step", _size_step())   # D-434
 	# Half the sprites' moonlit tint: the old beam glowed, and the text must read at night.
 	m.set_shader_parameter("tint", Color.WHITE.lerp(Sprites.NIGHT_TINT, _night * 0.5))
 
@@ -3682,17 +3812,17 @@ func _style_gates() -> void:
 ## Animation progress t (0..1 over `seconds`) held on ANIM_FPS steps, so crash
 ## animations play like a few sprite frames instead of smooth motion (D-098).
 func _anim_steps(t: float, seconds: float) -> float:
-	if _anim_mult <= 0.0:
+	if _car_mult <= 0.0:
 		return clampf(t, 0.0, 1.0)
-	var n := maxf(1.0, seconds * ANIM_FPS * _anim_mult)
+	var n := maxf(1.0, seconds * ANIM_FPS * _car_mult)
 	return floorf(clampf(t, 0.0, 1.0) * n) / n
 
 
 ## Rounds x (in units of whole steps of 1/frames) to the mode's frames (D-208).
 func _frame_steps(x: float, frames: float) -> float:
-	if _anim_mult <= 0.0:
+	if _car_mult <= 0.0:
 		return x
-	var n := frames * _anim_mult
+	var n := frames * _car_mult
 	return roundf(x * n) / n
 
 
@@ -3706,6 +3836,84 @@ func _camera_yaw() -> float:
 	var tr_ := sim.track
 	var d := tr_.point(sim.s + CAM_LOOK, _cam_x * 0.9) - tr_.point(sim.s - CAM_BACK, _cam_x * 0.85)
 	return atan2(-d.x, -d.z)
+
+
+## Stepped sprite sizes (D-433): in 8-BIT and 16-BIT a car at `pos` is scaled
+## so its size on screen snaps to a ladder of sizes, as if it were a set of
+## pre-drawn sprites: it holds one size, then jumps to the next as it comes
+## closer. Each rung is SPRITE_SIZE_STEP bigger (log), halved in 16-BIT (as
+## the rotation steps, D-208). Nearer than SPRITE_STEP_FROM m it stays smooth
+## (cars passing beside the camera). HD: no steps (1.0).
+const SPRITE_SIZE_STEP := 0.14   # ~15 % a rung in 8-BIT, ~7 % in 16-BIT
+const SPRITE_STEP_FROM := 8.0
+func _sprite_scale(pos: Vector3) -> float:
+	if _car_mult <= 0.0:
+		return 1.0
+	return _step_scale(pos, SPRITE_SIZE_STEP / _car_mult)   # D-446: the cars' own ladder (8-BIT ~29 % a rung)
+
+
+## D-449: steps for what is placed in script, applied once the camera has
+## moved this frame (they used the last frame's camera, about a metre behind
+## at speed, so they still drifted between steps). Cars, the police and the
+## helicopter on the cars' ladder; lamps, their glows and rocks on the
+## scenery's (D-434).
+var _step_nodes: Array[Node3D] = []
+var _stepped_mms: Array = []   # {node, mm, base: Array[Transform3D]}
+
+
+func _step_later(n: Node3D) -> void:
+	_step_nodes.append(n)
+
+
+func _step_set(mmi: MultiMeshInstance3D, mm: MultiMesh) -> Dictionary:
+	var base: Array[Transform3D] = []
+	for i in mm.instance_count:
+		base.append(mm.get_instance_transform(i))
+	return {"node": mmi, "mm": mm, "base": base}
+
+
+func _apply_steps() -> void:
+	for n in _step_nodes:
+		if is_instance_valid(n):
+			n.basis = n.basis * Basis.from_scale(Vector3.ONE * _sprite_scale(n.global_position))
+	_step_nodes.clear()
+	var step := _size_step()
+	for k in range(_stepped_mms.size() - 1, -1, -1):
+		var e: Dictionary = _stepped_mms[k]
+		if not is_instance_valid(e.node):
+			_stepped_mms.remove_at(k)
+			continue
+		var mmi: MultiMeshInstance3D = e.node
+		if not mmi.is_visible_in_tree() and step > 0.0:
+			continue
+		var mm: MultiMesh = e.mm
+		var base: Array = e.base
+		var to_world := mmi.global_transform
+		for i in base.size():
+			var t: Transform3D = base[i]
+			var k_s := 1.0 if step <= 0.0 else _step_scale(to_world * t.origin, step)
+			mm.set_instance_transform(i, Transform3D(t.basis * Basis.from_scale(Vector3.ONE * k_s), t.origin))
+
+
+## The factor that snaps a thing at `pos` (world) to the size ladder `step`
+## (log size per rung): its size on screen holds still between rungs (D-448).
+func _step_scale(pos: Vector3, step: float) -> float:
+	if step <= 0.0 or _cam == null:
+		return 1.0
+	var d := -(_cam.global_transform.affine_inverse() * pos).z   # depth ahead of the camera
+	if d < SPRITE_STEP_FROM:
+		return 1.0
+	# D-448: the size on screen is 1 / (depth x tan(half the view angle)):
+	# the camera's view widens with speed, so the zoom counts as well as the
+	# depth, or between rungs things shrank smoothly as the car sped up.
+	var size := -log(d * tan(deg_to_rad(_cam.fov) * 0.5))   # log of the size on screen
+	return exp(roundf(size / step) * step - size)
+
+
+## The rung size for this graphics mode (0 in HD); the sprite shaders use the
+## same ladder (D-434).
+func _size_step() -> float:
+	return SPRITE_SIZE_STEP / _anim_mult if _anim_mult > 0.0 else 0.0
 
 
 ## Simulated sprite car (D-092): the 3D model only ever shows one of
@@ -3766,7 +3974,13 @@ func _animate(delta: float) -> void:
 			_over_dir = 0.0
 	yaw += _frame_steps(_over_turn, OVER_TURN_FRAMES) * PI * 0.5 * _over_dir * (FINISH_DRIFT if sim.finished else 1.0)
 	var cam_yaw := _camera_yaw()
+	_place_heli(delta, cam_yaw)   # D-436
 	yaw = _sprite_yaw(tr_.heading(sim.s) + yaw, cam_yaw) - tr_.heading(sim.s)
+	if _rec != null:   # dev (D-426): the car's stepped view, relative to the camera
+		var view := wrapf(tr_.heading(sim.s) + yaw - cam_yaw, -PI, PI)
+		if absf(view - _rec_view) > 0.001:
+			_rec_log.append("%.3f view %.1f" % [_rec_t, rad_to_deg(view)])
+			_rec_view = view
 	var bounce := 0.0
 	if sim.offroad and sim.v > 5.0:
 		bounce = sin(_phase_t * 40.0) * 0.05
@@ -3788,8 +4002,8 @@ func _animate(delta: float) -> void:
 		if q >= 1.0:
 			_land_t += delta
 			var t := _land_t
-			if _anim_mult > 0.0:
-				var fps := ANIM_FPS * 2.0 * _anim_mult
+			if _car_mult > 0.0:
+				var fps := ANIM_FPS * 2.0 * _car_mult
 				t = floorf(t * fps) / fps
 			if t < LAND_TIME:
 				var k := exp(-t * LAND_DECAY)
@@ -3815,7 +4029,7 @@ func _animate(delta: float) -> void:
 	# D-249: the wheels turn for real; capped at WHEEL_MAX so they're seen to
 	# turn (faster would strobe between frames).
 	_wheel_phase = fmod(_wheel_phase + minf(sim.v / 0.32, WHEEL_MAX) * delta, TAU * 100.0)
-	var phase_step := _wheel_phase if _anim_mult <= 0.0 else floorf(_wheel_phase * 3.0 * _anim_mult) / (3.0 * _anim_mult)
+	var phase_step := _wheel_phase if _car_mult <= 0.0 else floorf(_wheel_phase * 3.0 * _car_mult) / (3.0 * _car_mult)
 	for m in _car_body.find_children("*", "MeshInstance3D", true, false):
 		var gi := m as MeshInstance3D
 		if gi.material_override != null:   # the body, not its outline shell
@@ -3879,7 +4093,7 @@ func _animate(delta: float) -> void:
 			fl.scale = Vector3(1.0, sy, 1.0)
 			fl.position.z = _exhaust_z - 0.5 * sy   # keep the cone's base on the pipe
 	# Traffic
-	var used := {"car": 0, "hatch": 0, "hothatch": 0, "truck": 0, "truck2": 0}
+	var used := {"car": 0, "hatch": 0, "hothatch": 0, "saloon": 0, "truck": 0, "truck2": 0}
 	for t in sim.traffic:
 		var kind: String = t.get("kind", "car")
 		if kind == "truck" and int(t.id) % 2 == 1:
@@ -3888,6 +4102,8 @@ func _animate(delta: float) -> void:
 			kind = "hatch"    # the hatchback in the mix (D-136)
 		elif kind == "car" and int(t.id) % 5 == 4:
 			kind = "hothatch"   # the hot hatch too (D-205)
+		elif kind == "car" and int(t.id) % 5 == 2:
+			kind = "saloon"   # and the saloon (D-432): a fifth each, the hatchback two
 		var pool: Array = _traffic_pool[kind]
 		if used[kind] >= pool.size():
 			continue
@@ -3898,7 +4114,8 @@ func _animate(delta: float) -> void:
 		var h := tr_.heading(t.s)
 		var wy := h + (PI if t.v < 0.0 else 0.0) + float(t.get("sway", 0.0))   # oncoming faces us (D-099); D-239 sway
 		node.basis = node.basis * Basis(Vector3.UP, _sprite_yaw(wy, cam_yaw) - h) * MODEL_TURN
-		if kind == "car" or kind == "hatch" or kind == "hothatch":
+		_step_later(node)   # D-433: stepped sizes (D-449: after the camera moves)
+		if kind in TRAFFIC_CARS:
 			for m in node.find_children("*", "MeshInstance3D", true, false):
 				InstParam.set_param((m as MeshInstance3D), "hue", t.hue)
 				InstParam.set_param((m as MeshInstance3D), "overhead", _overhead(t.s))
@@ -3967,6 +4184,114 @@ func _animate(delta: float) -> void:
 		_cam.rotate_object_local(Vector3.RIGHT, deg_to_rad(float(str(Config.cli["rc-look-up"]))))
 	var fov := CAM_FOV + sim.v / Sim.MAX_SPEED * 6.0 + (8.0 if sim.boosting else (5.0 if sim.perfect_t > 0.0 else 0.0))
 	_cam.fov = lerpf(_cam.fov, fov, 1.0 - exp(-delta * 4.0))
+	_apply_steps()   # D-449: with this frame's camera
+	_stereo_frame()
+
+
+# --- news helicopter (D-436) -----------------------------------------------------------
+var _heli: Node3D
+var _chopper: AudioStreamPlayer
+var _heli_dist := -1.0
+var _heli_doppler := 0.0
+const CHOPPER_DB := -6.0
+
+
+func _build_heli() -> void:
+	if _two:
+		return
+	_heli = Heli.new()
+	_heli.setup(_car_instance(0.0, Heli.MODEL, Heli.TEXTURE))
+	_root.add_child(_heli)
+	_chopper = AudioStreamPlayer.new()
+	_chopper.bus = "SFX"
+	_chopper.stream = Heli.chopper_sound()   # D-441
+	_chopper.volume_db = -80.0
+	add_child(_chopper)
+
+
+## The checkpoints the helicopter comes at (D-437): the first, and the first
+## one inside the city (the end of the first city stage).
+func _heli_checkpoints() -> Array:
+	return [1, Track.STAGE_AREAS.find("city") + 1]
+
+
+## Flies the helicopter and places it on the road; its sound plays while it's
+## on screen. Stepped like the other models in 8-BIT/16-BIT (D-092, D-433).
+func _place_heli(delta: float, cam_yaw: float) -> void:
+	if _heli == null:
+		return
+	if Config.cli.has("rc-heli") and _phase == "race" and sim.state == Sim.State.RACE \
+			and not has_meta("dev_heli"):   # dev: the helicopter at once (D-436)
+		set_meta("dev_heli", true)
+		_heli.start(1.0)
+	_heli.update(delta, sim.s, sim.x)
+	if not _heli.active():
+		if _chopper.playing:
+			_chopper.stop()
+		return
+	var tr_ := sim.track
+	_heli.transform = tr_.frame(_heli.s, _heli.x, _heli.h)
+	var road := tr_.heading(_heli.s)
+	var facing: float = road + PI + _heli.yaw   # nose towards the car, turned by yaw
+	_heli.basis = _heli.basis * Basis(Vector3.UP, _sprite_yaw(facing, cam_yaw) - road) * MODEL_TURN \
+		* Basis.from_euler(Vector3(_heli.pitch, 0.0, _heli.roll))
+	_step_later(_heli)   # D-449
+	_heli.night_lights(_night, tr_.point(sim.s, sim.x, 0.5))   # D-442
+	if not _chopper.playing:
+		_chopper.play()
+		_heli_dist = -1.0
+	# D-441: louder near the camera; the pitch rises as it closes in and drops
+	# as it goes away (Doppler, gently), and the blades sound a touch faster.
+	var dist := maxf(_cam.global_position.distance_to(_heli.global_position), 4.0)
+	var closing := 0.0 if _heli_dist < 0.0 or delta <= 0.0 else (_heli_dist - dist) / delta
+	_heli_dist = dist
+	_heli_doppler = lerpf(_heli_doppler, clampf(closing / 340.0, -0.12, 0.12), 1.0 - exp(-delta * 6.0))
+	_chopper.pitch_scale = 1.0 + _heli_doppler
+	var near := clampf(22.0 / dist, 0.35, 1.5)
+	_chopper.volume_db = CHOPPER_DB + linear_to_db(maxf(_heli.loudness() * near, 0.001))
+
+
+# --- stereo 3D (D-418) ------------------------------------------------------------------
+## Stereo: the world from two cameras either side of the chase camera, in two
+## pixel viewports sharing the world; both go through the pixel pass as a layer
+## under the HUD, which floats in front. The near road sits at the screen's
+## depth, the car just behind it (D-420).
+# D-420: the screen's depth at the road near the bottom of the view (was the
+# car, 9.5 m): the near road's bright markings ghosted where they popped out.
+const STEREO_CONVERGE := 5.0              # metres ahead with no parallax
+const STEREO_FAR := 0.010                 # parallax of the horizon, of the image width (was 0.012)
+var _cam_l: Camera3D
+var _cam_r: Camera3D
+var _pix_vp_r: SubViewport
+var _stereo_layer := {}
+
+
+func _build_stereo() -> void:
+	if not Stereo.active() or _two:
+		return
+	_cam_l = Camera3D.new()
+	_root.add_child(_cam_l)
+	_cam_l.current = true
+	_pix_vp_r = SubViewport.new()
+	_pix_vp_r.size = _pix_vp.size
+	_pix_vp_r.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_pix_vp_r.world_3d = _pix_vp.find_world_3d()
+	add_to_table(_pix_vp_r)
+	_cam_r = Camera3D.new()
+	_pix_vp_r.add_child(_cam_r)
+	_cam_r.current = true
+	_stereo_layer = Stereo.add_layer([_pix_vp.get_texture(), _pix_vp_r.get_texture()], 0.0,
+		_world_view.material, null, _world_view, _world_view.texture_filter)
+	_world_view.texture = null   # the eyes draw the world; the TABLE keeps the HUD only
+
+
+func _stereo_frame() -> void:
+	if _pix_vp_r == null:
+		return
+	if _pix_vp_r.size != _pix_vp.size:
+		_pix_vp_r.size = _pix_vp.size
+	_pix_vp_r.msaa_3d = _pix_vp.msaa_3d
+	Stereo.perspective_pair(_cam, _cam_l, _cam_r, STEREO_CONVERGE, STEREO_FAR)
 
 
 # --- HUD -----------------------------------------------------------------------------
@@ -4259,7 +4584,7 @@ func _update_hud(delta: float) -> void:
 			_nag_lever.set_gear(true)
 	_nitro_label.modulate.a = 1.0 if sim.boosting else 0.0
 	_nitro_strip.size.x = roundf((_nitro_strip.get_parent() as Control).custom_minimum_size.x * sim.boost_t / Sim.NITRO_TIME)
-	if sim.drifting or Config.cli.has("rc-drift-show"):   # (--rc-drift-show: dev, always shown)
+	if sim.drifting or sim.drift_resume_t > 0.0 or Config.cli.has("rc-drift-show"):   # (--rc-drift-show: dev, always shown; D-430: and while a broken drift can go on)
 		_drift_label.text = tr("RC_DRIFT_POINTS") % ScoreTable.format_score(int(sim.drift_points / 10.0) * 10 + (1230 if Config.cli.has("rc-drift-show") else 0))
 		_drift_label.modulate.a = 1.0
 	else:
@@ -4620,6 +4945,8 @@ func _tod_progress() -> float:
 ## Radar beep (D-215): its own player on a dry bus with the SFX bus's volume,
 ## so the tunnel reverb on SFX doesn't touch it (the detector is in the car).
 func _radar_beep() -> void:
+	if Config.cli.has("rc-sound-test") and not _sound_kept("radar"):   # D-427
+		return
 	if _phase in QUIET_PHASES:   # D-304: the attract demo's radar stays quiet
 		return
 	var sfx := AudioServer.get_bus_index("SFX")
@@ -4641,6 +4968,7 @@ func _radar_beep() -> void:
 
 
 func _exit_tree() -> void:
+	Engine.max_fps = 0   # D-450: the 8-BIT frame cap ends with the game
 	_spectrum_on(false)   # D-301
 	if _two and _main:
 		CabinetInput.set_two_player(false)   # D-289: player 2's keys go back to 1P
@@ -4996,6 +5324,26 @@ func _update_audio() -> void:
 	_wind.volume_db = -46.0 + clampf(sim.v / Sim.MAX_SPEED, 0.0, 1.3) * 28.0 - _pass_duck
 	var squeal := sim.drifting or (sim.state == Sim.State.OVER and sim.v > 3.0 and _over_slide) 		or (sim.spin_t > 0.0 and not sim.stalled()) or sim.auto_braking
 	_skid.volume_db = lerpf(_skid.volume_db, -10.0 if squeal else -60.0, 0.2)
+	if Config.cli.has("rc-sound-test"):   # dev (D-426, D-427): only the hero car's one-shots, to find a stray noise
+		# D-428: --rc-sound-keep=engine,wind,traffic,skid,music,rain,radar,sfx
+		# brings groups back, to find which one makes a noise.
+		var muted: Array = []
+		if not _sound_kept("engine"):
+			muted += [_engine, _engine_hi]
+		if not _sound_kept("wind"):
+			muted.append(_wind)
+		if not _sound_kept("traffic"):
+			muted += [_siren, _horn] + _passers
+		if not _sound_kept("skid"):
+			muted.append(_skid)
+		for pl in muted:
+			if pl != null:
+				(pl as AudioStreamPlayer).volume_db = -80.0
+		if _weather != null and not _sound_kept("rain"):
+			_weather._hiss.volume_db = -80.0
+		var mus := AudioServer.get_bus_index("Music")
+		if mus >= 0:
+			AudioServer.set_bus_mute(mus, not _sound_kept("music"))
 	# D-235: the attract demo (and the menus over it) is music only.
 	if _phase in QUIET_PHASES:   # D-236: car select too; D-302: every menu
 		for pl in [_engine, _engine_hi, _wind, _skid, _siren, _horn] + _passers:

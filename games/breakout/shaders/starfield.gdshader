@@ -9,6 +9,9 @@ uniform float angle = 0.0;                 // radians, accumulated by the game
 uniform vec2 pivot = vec2(0.5, 3.0);       // in screen UV (y down); far below
 uniform vec2 base_size = vec2(1080.0, 1920.0);
 uniform vec4 space_color : source_color = vec4(0.008, 0.01, 0.025, 1.0);
+// Stereo (D-418): each band drawn on its own at its own depth. -1 = all three.
+uniform int band = -1;
+uniform bool opaque = true;               // false: only the stars, clear between
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -39,9 +42,19 @@ vec3 star_layer(vec2 px, float rot, float cell, float star_px, float density, ve
 
 void fragment() {
 	vec2 px = UV * base_size;
-	vec3 col = space_color.rgb;
-	col += star_layer(px, angle * 0.35, 48.0, 3.0, 0.28, vec3(0.35, 0.4, 0.55), 0.0);  // far
-	col += star_layer(px, angle * 0.6, 90.0, 3.0, 0.22, vec3(0.6, 0.65, 0.8), 31.0);   // mid
-	col += star_layer(px, angle, 170.0, 4.0, 0.2, vec3(0.9, 0.88, 0.8), 73.0);         // near
-	COLOR = vec4(col, 1.0);
+	vec3 col = vec3(0.0);
+	if (band < 0 || band == 0) {
+		col += star_layer(px, angle * 0.35, 48.0, 3.0, 0.28, vec3(0.35, 0.4, 0.55), 0.0);  // far
+	}
+	if (band < 0 || band == 1) {
+		col += star_layer(px, angle * 0.6, 90.0, 3.0, 0.22, vec3(0.6, 0.65, 0.8), 31.0);   // mid
+	}
+	if (band < 0 || band == 2) {
+		col += star_layer(px, angle, 170.0, 4.0, 0.2, vec3(0.9, 0.88, 0.8), 73.0);         // near
+	}
+	if (opaque) {
+		COLOR = vec4(space_color.rgb + col, 1.0);
+	} else {
+		COLOR = vec4(col, step(0.001, max(col.r, max(col.g, col.b))));
+	}
 }
