@@ -489,7 +489,7 @@ var _dispatch_msg := ""              # D-466: the police radio's message on the 
 var _dispatch_t := -1.0              # its start (_phase_t), -1 = none
 const DISPATCH_SPEED := 42.0         # DMD dots per s it scrolls          # D-464: shown once per speeder, when we reach it
 const TARGET_TAG_NEAR := 45.0        # m: "reached"
-const TARGET_TAG_TIME := 2.2   # D-464: three bounces, then it fades
+const TARGET_TAG_TIME := 5.0   # D-464: three bounces, then it rests on the car; D-479: 5 s (was 2.2), then it fades
 const TARGET_ARROW := "res://assets/textures/racer/target_arrow.png"   # D-464: replaceable (tip at the bottom centre)
 var _pursuit_box: Control            # HUD: SUSPECT, the distance and the damage meter
 var _pursuit_dist: Label

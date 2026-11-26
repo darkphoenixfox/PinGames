@@ -4543,3 +4543,8 @@ un.ps1 --layout=single` (or add `--stereo=sr`).
 - **Rear light:** the police model's lamp area (D-474) is now that strip: |x| up to 0.98 m, 0.79 to 0.86 m high, all texels (it isn't red in the texture). The car shader takes a per-model feather for the tail box (`tail_soft`, default 0.06 m as before); the police strip uses 0.012 m, as the default bled over the panel below.
 - **Checked:** cropped rain screenshots from behind.
 - **Status:** Accepted
+### D-479 — Turbo Run pursuit: the arrow stays longer
+- **Date:** 2026-11-26
+- **Decision (director):** the target's arrow disappeared too early.
+- **How:** it shows 5 s (was 2.2): the three bounces (1.8 s), then it rests over the car, then fades over the last 0.4 s.
+- **Status:** Accepted
