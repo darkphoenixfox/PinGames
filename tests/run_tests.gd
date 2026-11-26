@@ -1585,6 +1585,49 @@ func test_racer_hd_assets() -> void:
 	var waiter: Dictionary = sw.traffic[0] if not sw.traffic.is_empty() else {}
 	check(not waiter.is_empty() and float(waiter.v) < 1.0 and sw.s - float(waiter.s) > SimA.CAR_LEN,
 		"traffic behind a crash stops and waits")
+	# D-452: a fast car catching a slow one in its lane follows it, never
+	# through it; one behind a stopped car stops short of it.
+	# D-453: with the other lane clear, it changes lanes and passes instead.
+	for passing in [false, true]:
+		var fo = SimA.new()
+		fo.setup(4)
+		fo.state = SimA.State.OVER   # traffic moves, nothing spawns
+		fo.s = 1000.0
+		fo.track.ensure(3000.0)
+		fo.x = TrackA.LANES[0]
+		fo.v = 0.0
+		fo.traffic.clear()
+		var cars := [[970, 200.0, 3, 21.0, "truck"], [971, 120.0, 3, 44.0, "car"],
+			[972, 400.0, 1, -0.001, "car"], [976, 400.0, 0, -0.001, "car"], [973, 480.0, 1, -34.0, "car"]]
+		if not passing:
+			cars.append([974, 200.0, 2, 21.0, "car"])   # alongside the truck: no way past
+		for c in cars:
+			var big: bool = c[4] == "truck"
+			fo.traffic.append({"id": c[0], "s": fo.s + c[1], "x": TrackA.LANES[c[2]], "lane": c[2],
+				"v": c[3], "v0": c[3], "hue": 0.0, "weave": 0.0, "last_ds": c[1], "kind": c[4],
+				"len": SimA.TRUCK_LEN if big else SimA.CAR_LEN, "w": SimA.TRUCK_W if big else SimA.CAR_W})
+		var fo_ok := true
+		for i in 600:
+			for t in fo.traffic:
+				t.weave = 0.0
+			fo._update_traffic(1.0 / 60.0)
+			for a in fo.traffic.size():
+				for b in range(a + 1, fo.traffic.size()):
+					var ta: Dictionary = fo.traffic[a]
+					var tb: Dictionary = fo.traffic[b]
+					if absf(float(ta.x) - float(tb.x)) < (float(ta.w) + float(tb.w)) * 0.5 - 0.05 \
+							and absf(float(ta.s) - float(tb.s)) < (float(ta.len) + float(tb.len)) * 0.5 - 0.05:
+						fo_ok = false
+		var by_id := {}
+		for t in fo.traffic:
+			by_id[int(t.id)] = t
+		if passing:
+			check(fo_ok and by_id.has(971) and int(by_id[971].lane) == 2 and float(by_id[971].s) > float(by_id[970].s) + 10.0,
+				"traffic held up by a slower car changes lanes and passes it, never driving through anything")
+		else:
+			check(fo_ok and by_id.has(971) and absf(float(by_id[971].v) - 21.0) < 1.5
+				and by_id.has(973) and absf(float(by_id[973].v)) < 1.0,
+				"traffic with no way past follows a slower car and stops short of stopped ones, never driving through")
 	var sf = SimA.new()
 	sf.setup(4)
 	sf.state = SimA.State.RACE
@@ -1663,6 +1706,7 @@ func test_racer_hd_assets() -> void:
 	# D-219: random weather spells: at least WEATHER_MIN long, suited to the
 	# area, different per seed, the same for the same seed.
 	var spell_ok := true
+	var clear_ok := true
 	var firsts := {}
 	for sd in range(1, 9):
 		var wt = TrackA.new()
@@ -1675,10 +1719,20 @@ func test_racer_hd_assets() -> void:
 		for sp in wt.spells:
 			spell_ok = spell_ok and float(sp.b) - float(sp.a) >= TrackA.WEATHER_MIN
 			var mid := (float(sp.a) + float(sp.b)) * 0.5
-			spell_ok = spell_ok and sp.kind in TrackA.AREA_WEATHER[wt.area_at(mid)]
-		var w_mid: Dictionary = wt.weather((float(wt.spells[0].a) + float(wt.spells[0].b)) * 0.5)
-		spell_ok = spell_ok and not w_mid.is_empty() and wt.weather(float(wt.spells[0].a) - 10.0).is_empty()
+			var suits: Array = TrackA.AREA_WEATHER[wt.area_at(mid)]
+			spell_ok = spell_ok and (sp.kind in suits or (suits.is_empty() and sp.kind == ""))
+			if sp.kind != "":
+				var w_mid: Dictionary = wt.weather(mid)
+				spell_ok = spell_ok and (not w_mid.is_empty() or wt.area_at(mid) != wt.area_at(float(sp.a)))
+		spell_ok = spell_ok and wt.weather(float(wt.spells[0].a) - 10.0).is_empty()
+		# D-456: never any weather on the beach or in the desert.
+		var sx := 0.0
+		while sx < 10.0 * SimA.CHECKPOINT_EVERY:
+			if wt.area_w(sx, "beach") + wt.area_w(sx, "desert") > 0.999:
+				clear_ok = clear_ok and wt.weather(sx).is_empty()
+			sx += 50.0
 	check(spell_ok and firsts.size() >= 6, "weather comes in random spells of at least %d m, suited to the area (D-219)" % int(TrackA.WEATHER_MIN))
+	check(clear_ok, "no rain, fog or haze on the beach or in the desert (D-456)")
 
 
 func test_racer_time_of_day() -> void:
@@ -2407,6 +2461,18 @@ func test_racer_sim() -> void:
 	tr.traffic = [{"id": 1, "s": 104.2, "x": 1.875, "lane": 2, "v": 30.0, "hue": 0.3, "weave": 0.0, "last_ds": 4.6}]
 	tr.step(dt, false, false)
 	check(tr.spin_t > 0.0 and tr.v <= 14.0 and not tr.flipping, "rear-ending traffic at speed spins out")
+	# D-455: the car we hit is knocked too: shoved on, spun round, hazards on,
+	# skids to a stop and waits, then drives off straightening up.
+	var hit_car: Dictionary = tr.traffic[0] if not tr.traffic.is_empty() else {}
+	var pushed: bool = not hit_car.is_empty() and float(hit_car.v) > 30.0
+	for i in 150:
+		tr._move_traffic(hit_car, dt, tr._players_view())
+	var knocked: bool = pushed and absf(float(hit_car.v)) < 0.5 and bool(hit_car.blink) \
+		and absf(float(hit_car.hit_yaw)) > 0.3 and absf(float(hit_car.shove)) > 0.3
+	for i in 600:
+		tr._move_traffic(hit_car, dt, tr._players_view())
+	check(knocked and absf(float(hit_car.v)) < 0.1 and bool(hit_car.blink) and absf(float(hit_car.shove)) > 0.3,
+		"the car we crash into is shoved, spun and stopped with its hazards on, and stays stopped")
 	# Side-swipe (D-152): touching a car alongside bumps both apart, no crash.
 	var sw = Sim.new()
 	sw.setup(7)

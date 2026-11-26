@@ -600,8 +600,10 @@ const WEATHER_MIN := 1400.0
 const WEATHER_MAX := 3000.0
 const WEATHER_GAP := Vector2(1200.0, 3500.0)
 const WEATHER_FADE := 300.0   # m to set in and to clear, inside the spell
-const AREA_WEATHER := {"beach": ["rain", "fog"], "fields": ["rain", "fog"], "city": ["rain", "fog"],
-	"desert": ["haze"], "forest": ["rain", "fog"], "snow": ["snow", "fog"]}
+## D-456: the beach and the desert stay clear (no rain, fog or haze); a spell
+## from a neighbouring area fades out as the road enters them.
+const AREA_WEATHER := {"beach": [], "fields": ["rain", "fog"], "city": ["rain", "fog"],
+	"desert": [], "forest": ["rain", "fog"], "snow": ["snow", "fog"]}
 
 var weather_seed := 1:
 	set(v):
@@ -623,8 +625,9 @@ func _ensure_spells(s: float) -> void:
 
 func _new_spell(a: float) -> Dictionary:
 	var b := a + _wrng.randf_range(WEATHER_MIN, WEATHER_MAX)
-	var kinds: Array = AREA_WEATHER.get(area_at((a + b) * 0.5), ["rain"])
-	return {"a": a, "b": b, "kind": kinds[_wrng.randi() % kinds.size()]}
+	var kinds: Array = AREA_WEATHER.get(area_at((a + b) * 0.5), [])
+	var pick := _wrng.randi()   # drawn either way, so later spells keep their kinds
+	return {"a": a, "b": b, "kind": "" if kinds.is_empty() else kinds[pick % kinds.size()]}
 
 
 ## Weather weights at s: {kind: 0..1}, empty when clear.

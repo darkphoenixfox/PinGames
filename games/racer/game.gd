@@ -582,6 +582,8 @@ var _lamps_shown := -1.0
 var _tunnel_k := 0.0        # 0 outside .. 1 inside a tunnel (D-127)
 var _tunnel_shown := -1.0
 var _lamps := 0.0           # car lights level: max(night, tunnel)
+const RAIN_LAMPS := 0.8     # low beams' lamp level (D-454)
+var _car_lamps := 0.0       # the cars' own lamps: _lamps, or low beams in rain (D-454)
 var _reverb: AudioEffectReverb
 var _reverb_on := false
 ## D-283: the phone can't hold the frame rate in HD -> steps down the world's
@@ -909,6 +911,8 @@ func _process(delta: float) -> void:
 	_phase_t += delta
 	if _dim != null:   # D-368
 		var dim_on: bool = _phase in DIM_PHASES or (_phase == "finale" and is_instance_valid(_finale_ui))
+		if Config.cli.has("rc-no-dim"):   # D-451: menus over the undimmed race
+			dim_on = false
 		_dim.color.a = move_toward(_dim.color.a, MENU_DIM if dim_on else 0.0, delta * 3.0)
 	if _main:
 		_update_backglass(delta)
@@ -2167,7 +2171,7 @@ func _animate_rival(delta: float, cam_yaw: float) -> void:
 			InstParam.set_param(gi, "spin", 1.0)
 			InstParam.set_param(gi, "wheel_phase", _rival_wheel)
 			InstParam.set_param(gi, "wheel_blur", clampf((rv - 6.0) / 20.0, 0.0, 1.0))
-			InstParam.set_param(gi, "lamps", _lamps)
+			InstParam.set_param(gi, "lamps", _car_lamps)
 			InstParam.set_param(gi, "overhead", _overhead(rs))
 	(_rival.get_meta("night") as Node3D).visible = _lamps > 0.0
 
@@ -3408,7 +3412,7 @@ func _animate_police_car(rig: Dictionary, pd: Dictionary, delta: float, cam_yaw:
 	# Its own head/tail lights at night (D-198), like every other car.
 	for m in car.find_children("*", "MeshInstance3D", true, false):
 		if (m as MeshInstance3D).material_override is ShaderMaterial:
-			InstParam.set_param(m as MeshInstance3D, "lamps", _lamps)
+			InstParam.set_param(m as MeshInstance3D, "lamps", _car_lamps)
 	(rig.night as Node3D).visible = _lamps > 0.0
 	# Siren light around the car (D-198), red and blue in turn, stronger at night.
 	var glow := lerpf(0.7, 2.6, _night)
@@ -4036,7 +4040,7 @@ func _animate(delta: float) -> void:
 			InstParam.set_param(gi, "spin", 1.0)
 			InstParam.set_param(gi, "wheel_phase", phase_step)
 			InstParam.set_param(gi, "wheel_blur", clampf((sim.v - 6.0) / 20.0, 0.0, 1.0))
-			InstParam.set_param(gi, "lamps", _lamps)
+			InstParam.set_param(gi, "lamps", _car_lamps)
 			InstParam.set_param(gi, "overhead", _overhead(sim.s))
 			InstParam.set_param(gi, "brake", 1.0 if braking else 0.0)
 	if _player_lights != null:
@@ -4112,14 +4116,16 @@ func _animate(delta: float) -> void:
 		node.visible = true
 		node.transform = tr_.frame(t.s, t.x)
 		var h := tr_.heading(t.s)
-		var wy := h + (PI if t.v < 0.0 else 0.0) + float(t.get("sway", 0.0))   # oncoming faces us (D-099); D-239 sway
+		# Oncoming faces us (D-099; by its cruising direction, so a car knocked
+		# backwards doesn't flip round); D-239 sway; D-455 spun by a crash.
+		var wy := h + (PI if float(t.get("v0", t.v)) < 0.0 else 0.0) + float(t.get("sway", 0.0)) + float(t.get("hit_yaw", 0.0))
 		node.basis = node.basis * Basis(Vector3.UP, _sprite_yaw(wy, cam_yaw) - h) * MODEL_TURN
 		_step_later(node)   # D-433: stepped sizes (D-449: after the camera moves)
 		if kind in TRAFFIC_CARS:
 			for m in node.find_children("*", "MeshInstance3D", true, false):
 				InstParam.set_param((m as MeshInstance3D), "hue", t.hue)
 				InstParam.set_param((m as MeshInstance3D), "overhead", _overhead(t.s))
-				InstParam.set_param((m as MeshInstance3D), "lamps", maxf(_night, 1.0 if sim.track.in_tunnel(t.s) else 0.0))
+				InstParam.set_param((m as MeshInstance3D), "lamps", maxf(maxf(_night, 1.0 if sim.track.in_tunnel(t.s) else 0.0), _rain_lamps()))
 		# D-250: their wheels turn too (rate capped like the player's).
 		var tph := fposmod(_phase_t * minf(absf(float(t.v)) / 0.4, WHEEL_MAX) + float(t.id) * 1.3, TAU * 100.0)
 		for m in node.find_children("*", "MeshInstance3D", true, false):
@@ -4829,6 +4835,12 @@ func _build_backglass() -> void:
 	add_to_backglass(art)
 
 
+## D-454: in rain the cars run their low beams: their own head and tail lamps
+## glow (the car shader's lamps), with no beams thrown on the road.
+func _rain_lamps() -> float:
+	return clampf(float(_wx.get("rain", 0.0)) * 1.5, 0.0, 1.0) * RAIN_LAMPS
+
+
 ## Time of day (D-193): the race's progress sets the hour (games/racer/sky.gd):
 ## stages 1-3 day, 4-5 sunset, 6-9 night, dawn in 10. The sun and moon move,
 ## the sky, light, ambient and fog take the palette of the sun's elevation, and
@@ -4845,6 +4857,7 @@ func _update_night(delta: float) -> void:
 	var in_t := sim != null and sim.in_tunnel
 	_tunnel_k = move_toward(_tunnel_k, 1.0 if in_t else 0.0, delta / 0.4)
 	_lamps = maxf(_night, _tunnel_k)
+	_car_lamps = maxf(_lamps, _rain_lamps())
 	if _reverb != null:
 		_reverb.wet = 0.45 * _tunnel_k
 		_set_reverb(_tunnel_k > 0.0)

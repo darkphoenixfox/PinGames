@@ -4320,3 +4320,48 @@ un.ps1 --layout=single` (or add `--stereo=sr`).
 - **Frame rate:** choosing 8-BIT (`_apply_gfx`) sets `Engine.max_fps` to 30 (`NES_FPS`); 16-BIT and HD set it back to uncapped (vsync paces them). Leaving Turbo Run clears the cap, so the shell and Tilt Breaker are unaffected. The simulation is time-based, so speeds and timings are unchanged; only the picture updates half as often.
 - **Checked:** `--print-fps`: 8-BIT holds 30, 16-BIT uncapped (500+ with vsync off); 8-BIT screenshot.
 - **Status:** Accepted
+
+### D-451 — Turbo Run: `--rc-no-dim` keeps the race undimmed behind menus
+- **Date:** 2026-11-26
+- **Decision (director):** a flag to remove the dark layer (D-368) over the gameplay in Turbo Run's menus.
+- **How:** with `--rc-no-dim` on the command line, the dim layer stays clear in every menu phase (players, graphics, stage, radio, finale). Without it, nothing changes.
+- **Status:** Accepted
+### D-452 — Turbo Run: traffic never drives through traffic
+- **Date:** 2026-11-26
+- **Decision (director):** traffic cars must not pass through each other; they drive behind, or stop.
+- **How:** after each traffic car moves, it looks up to 90 m ahead in its own direction of travel for the nearest car in line with it (sideways overlap plus 0.3 m). It brakes (up to 16 m/s²) to that car's speed, 6 m behind it, allowing a little more speed the more room there is. If that car is stopped or coming towards it, it stops. It is never let closer than 1 m (a hard hold, for spawns and shoves). No overtaking: a car caught behind a truck follows it.
+- **Covers:** same-lane catch-ups, cars pulled over for the police, and oncoming cars dodging a crashed player into a lane that's in use.
+- **Test:** a fast car behind a truck settles at the truck's speed without overlapping; an oncoming car stops short of a stopped one.
+- **Status:** Accepted, pending the director's look
+### D-453 — Turbo Run: faster traffic changes lanes to pass slower traffic
+- **Date:** 2026-11-26
+- **Decision (director):** faster traffic cars switch lanes to get past slower ones (extends D-452, which only made them follow).
+- **When:** a car (not a truck) held up within 45 m by one going at least 3 m/s under its own cruising speed moves to the other lane of its direction (2 ↔ 3 our way, 0 ↔ 1 oncoming).
+- **Only if clear:** nothing in the new lane from 15 m behind (plus 2.5 s of anything closing on it) to 20 m ahead, nothing coming the other way in it within 250 m, and no player there or about to arrive on the same terms. Not while waiting, yielding to the police or dodging.
+- **The move:** the lane switches at once and an offset eases the car across at 2.5 m/s (a lane in 1.5 s), its nose turned into the move; 5 s before it changes again. It stays in the new lane (no moving back). D-452's following still applies throughout, so it brakes for anything in its path, including both lanes while it's between them. With no way past, it follows as before.
+- **Tests:** passing a truck with the other lane clear; following and stopping when both lanes are blocked; no two cars ever overlap in either case.
+- **Status:** Accepted, pending the director's look
+### D-454 — Turbo Run: cars run their low beams in the rain
+- **Date:** 2026-11-26
+- **Decision (director):** in rain, the cars' lights come on (the lamp textures light up) but throw no beams on the road.
+- **How:** the car shader's `lamps` level for the player, the rival, the police and traffic is the larger of the usual level (night, tunnels) and the rain's: 0.8 at full rain (`RAIN_LAMPS`), rising with the smoothed rain weight. Head lamps glow and tail lamps get their dim running glow. The beams, light pools and street-lamp level still follow night and tunnels only (`_lamps`), so nothing new is lit on the road. Snow and fog are unchanged.
+- **Checked:** HD rain screenshot: the player's and traffic's tail lamps glow, no beams.
+- **Status:** Accepted, pending the director's look
+### D-455 — Turbo Run: the car you crash into reacts too
+- **Date:** 2026-11-26
+- **Decision (director):** crashing into another vehicle should affect that vehicle as well.
+- **Crash at speed:** a rear-ended car is shoved on by 45% of the closing speed; an oncoming car is stopped dead and knocked back a little. Either way it spins part way round (about 0.5–1.4 rad, more the further off-centre the hit), slides 1.8 m away from the player, and skids to a stop (28 m/s²) with its hazards on. It stays there for 3.5 s from the hit (and doesn't wait for, dodge or pass anything meanwhile), then drives off, easing back into its lane and straightening up.
+- **Low-speed knock (D-223's soft bump):** the same at 40%.
+- **Bumps:** a rear bump also kicks its tail aside (sway), as side-swipes already did (D-239).
+- **Trucks:** too heavy to spin. Rear-ended, they're shoved on as before (D-317); hit head-on, they stop with hazards on.
+- **Facing:** traffic now faces by its cruising direction (`v0`), so an oncoming car knocked backwards doesn't flip round.
+- **Others:** traffic behind a knocked car follows or passes it (D-452, D-453).
+- **Test:** a rear-ended car is shoved, spun, slid aside and stopped with hazards on, then drives off.
+- **Status:** Accepted, pending the director's look
+### D-456 — Turbo Run: crashed-into cars stay put; no weather on the beach or in the desert
+- **Date:** 2026-11-26
+- **Decision (director):** cars the player crashes into don't drive on again; no fog or rain on the beach or desert stages.
+- **Wrecks (supersedes D-455's "drives off"):** a car crashed into (or knocked at low speed) stops spun round and slid aside with its hazards on, and stays there until it's left behind; traffic follows or passes it (D-452, D-453). A truck hit head-on stays too; a rear-ended truck is still shoved on (D-317).
+- **Weather (amends D-219):** the beach and the desert have no weather kinds (the desert's haze goes too). A spell whose middle falls there is clear, and a spell from a neighbouring area fades out as the road enters them. The random draws are unchanged, so later spells keep their kinds.
+- **Tests:** the crashed-into car stays stopped; sampled every 50 m over ten stages, the beach and desert never have weather.
+- **Status:** Accepted

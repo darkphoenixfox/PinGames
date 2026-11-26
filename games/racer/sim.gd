@@ -115,6 +115,26 @@ const WAIT_GAP := 5.0
 const DODGE_AHEAD := 170.0   # m ahead it starts to react
 const DODGE_CLEAR := 0.7     # m of clearance it keeps
 const DODGE_RATE := 4.5      # m/s it moves across
+## Traffic following traffic (D-452): a car never drives through another one.
+## One that catches up a car in line with it ahead brakes to sit FOLLOW_GAP m
+## behind it at its speed (or stops, if that one is stopped or coming at it).
+const FOLLOW_LOOK := 90.0    # m ahead it looks
+const FOLLOW_GAP := 6.0      # m bumper to bumper it keeps
+const FOLLOW_K := 0.7        # m/s of extra speed allowed per m of spare gap
+const FOLLOW_BRAKE := 16.0   # m/s^2
+const FOLLOW_MIN := 1.0      # m: never closer than this (a hard stop)
+const FOLLOW_DX := 0.3       # m of side clearance that still counts as in line
+## Traffic passing slower traffic (D-453): held up within PASS_LOOK m by a car
+## PASS_SLOWER m/s below its own cruising speed, a car (not a truck) moves to
+## the other lane of its direction when that's clear.
+const PASS_LOOK := 45.0
+const PASS_SLOWER := 3.0
+const PASS_CLEAR_AHEAD := 20.0    # m clear ahead in the new lane
+const PASS_CLEAR_BEHIND := 15.0   # m clear behind in it...
+const PASS_CLOSING_S := 2.5       # ...plus this many s of anything closing on it
+const PASS_ONCOMING := 250.0      # m clear of oncoming cars in it
+const PASS_RATE := 2.5            # m/s it moves across (a lane in 1.5 s)
+const PASS_COOLDOWN := 5.0        # s before it changes lanes again
 const FINISH_DECEL := 30.0   # m/s^2: the drift-brake after the line (D-222; D-231: doubled, half the slide)
 const FINISH_BONUS := 100000
 const TIME_BONUS_PER_S := 2000
@@ -283,6 +303,14 @@ var crash_slide := false       # a rolled car sliding to a stop (D-106)
 var veer_x := 0.0
 var veer_id := -1
 const TRUCK_SHOVE := 8.0         # m/s a truck gains when rear-ended
+## The car we hit (D-455): it's knocked too. A crash spins it part way round
+## and slides it aside; it skids to a stop with its hazards on and stays there
+## as a wreck (D-456). A bump just kicks it.
+const HIT_DECEL := 28.0          # m/s^2 it skids to a stop at (under 2 s)
+const HIT_YAW := 0.9             # rad it's spun round by a crash (more off-centre)
+const HIT_SLIDE := 1.8           # m it's shoved aside
+const HIT_PUSH := 0.45           # share of our closing speed a rear-ended car gains
+const HIT_STRAIGHTEN := 0.6      # rad/s it straightens at as it drives off
 const VEER_RATE := 14.0          # m/s the car moves aside while rolling off it
 var flip_dir := 1.0            # +1 rolls to the right, -1 to the left
 var flip_turns := 1            # full rolls in this roll-over (2 at 100+ mph, D-206)
@@ -1399,6 +1427,7 @@ func _update_traffic(dt: float) -> void:
 			elif (t.v < 0.0 or (ds > 0.0 and rel > 22.0)) and v * MPH < SOFT_CRASH_MPH:
 				# Slow (D-223): just a knock; stop short of it and bounce aside.
 				_soft_bump(t.x)
+				_knock_traffic(t, 0.4, rel, big)
 				if ds > 0.0:
 					s = t.s - (CAR_LEN + tlen) * 0.5 - 0.3
 				x += signf(x - t.x + 0.01) * 1.2
@@ -1406,6 +1435,7 @@ func _update_traffic(dt: float) -> void:
 				# Head-on, or rear-ending at speed: a truck rolls the car over.
 				_crash("truck" if big else "car", t.x - x, t.v >= 0.0)
 				s = t.s - (CAR_LEN + tlen) * 0.5 - 0.3
+				_knock_traffic(t, 1.0, rel, big)
 				if big and t.v >= 0.0 and ds > 0.0:
 					# D-317: into a truck's back: the truck is shoved on, and the
 					# car rolls off to the truck's nearer side (towards the road
@@ -1421,6 +1451,7 @@ func _update_traffic(dt: float) -> void:
 				x += signf(x - t.x + 0.01) * 1.2
 				if not big:
 					t.v = minf(t.v + 4.0, 52.0)
+					t.sway = signf(t.x - x + 0.01) * -SWAY   # D-455: its tail kicked aside
 				events.append(["bump", t.id])
 		t.swipe_cd = maxf(0.0, float(t.get("swipe_cd", 0.0)) - dt)
 		t.sway = move_toward(float(t.get("sway", 0.0)), 0.0, SWAY_BACK * dt)
@@ -1436,6 +1467,29 @@ func _update_traffic(dt: float) -> void:
 		_spawn_traffic()
 
 
+## D-455: the traffic car we crashed into (strength 1) or knocked at low
+## speed (0.4) reacts too. A rear-ended car is shoved on by part of our closing
+## speed, an oncoming one is stopped dead and knocked back a little; either way
+## a car spins part way round (more the further off-centre we hit), slides
+## away from us and skids to a stop with its hazards on, for good (D-456).
+## A truck is too heavy to spin: hit head-on, it just stops and flashes.
+func _knock_traffic(t: Dictionary, strength: float, rel: float, big: bool) -> void:
+	var dir := signf(float(t.get("v0", t.v)))
+	var away := signf(float(t.x) - x) if absf(float(t.x) - x) > 0.15 else (1.0 if _rng.randf() < 0.5 else -1.0)
+	if dir < 0.0:
+		t.v = minf(2.0, rel * 0.05) * strength   # head-on: stopped, knocked back
+	elif not big:
+		t.v = float(t.v) + maxf(0.0, rel) * HIT_PUSH * strength
+	if big:
+		if dir < 0.0:
+			t.hit_t = INF   # D-456: stays where it stopped (rear-ended, it's shoved on instead, D-317)
+		return
+	t.hit_t = INF   # D-456: a wreck: it never drives on
+	var off := clampf(absf(float(t.x) - x) / CAR_W, 0.0, 1.0)
+	t.hit_yaw_to = -away * dir * HIT_YAW * strength * (0.6 + 0.8 * off) * _rng.randf_range(0.8, 1.2)
+	t.shove = float(t.get("shove", 0.0)) + away * HIT_SLIDE * strength
+
+
 ## Moves one traffic car (its speed, lane, yielding, waiting and dodging),
 ## reacting to every player (D-288; one player outside 2P).
 func _move_traffic(t: Dictionary, dt: float, pv: Array) -> void:
@@ -1444,7 +1498,9 @@ func _move_traffic(t: Dictionary, dt: float, pv: Array) -> void:
 	t.s += t.v * dt
 	t.weave += dt
 	# Shoved aside by a side bump (D-152): an offset that eases back to the lane.
-	t.shove = move_toward(float(t.get("shove", 0.0)), 0.0, 2.0 * dt)
+	# (D-455: a knocked car stays where it slid to until it drives on.)
+	if float(t.get("hit_t", 0.0)) <= 0.0:
+		t.shove = move_toward(float(t.get("shove", 0.0)), 0.0, 2.0 * dt)
 	# Yielding to the police (D-163): near its lights, traffic pulls over
 	# to its own right-hand edge, slows and indicates; then rejoins.
 	var lane_x: float = Track.LANES[t.lane]
@@ -1452,7 +1508,19 @@ func _move_traffic(t: Dictionary, dt: float, pv: Array) -> void:
 	for p in pv:
 		if p.lights and t.s > float(p.ps) - 40.0 and t.s < float(p.ps) + YIELD_AHEAD:
 			yielding = true
-	t.blink = yielding
+	# D-455: knocked by a player: it skids to a stop, spun part way round,
+	# hazards on; then it straightens up as it drives off.
+	var hit: float = t.get("hit_t", 0.0)
+	if hit > 0.0:
+		t.hit_t = hit - dt
+	t.blink = yielding or hit > 0.0
+	var yaw: float = t.get("hit_yaw", 0.0)
+	if hit > 0.0:
+		yaw = move_toward(yaw, float(t.get("hit_yaw_to", 0.0)), 4.0 * dt)
+	else:
+		t.hit_yaw_to = 0.0
+		yaw = move_toward(yaw, 0.0, HIT_STRAIGHTEN * dt)
+	t.hit_yaw = yaw
 	var tw2: float = t.get("w", CAR_W)
 	var edge := signf(lane_x) * (Track.ROAD_HALF - tw2 * 0.5 - 0.2)
 	t.pull = move_toward(float(t.get("pull", 0.0)), (edge - lane_x) if yielding else 0.0, 2.2 * dt)
@@ -1461,15 +1529,17 @@ func _move_traffic(t: Dictionary, dt: float, pv: Array) -> void:
 	var waited := false
 	for p in pv:
 		var behind: float = p.s - t.s
-		if p.spin > 0.0 and t.v0 > 0.0 and behind > 0.0 and behind < WAIT_BEHIND \
+		if hit <= 0.0 and p.spin > 0.0 and t.v0 > 0.0 and behind > 0.0 and behind < WAIT_BEHIND \
 				and absf(float(t.get("x", lane_x)) - p.x) < (CAR_W + tw) * 0.5 + 0.8:
 			# A player crashed in its way (D-223): it brakes and waits behind.
 			var room: float = behind - (CAR_LEN + tlen) * 0.5 - WAIT_GAP
 			t.v = move_toward(t.v, clampf(room * 0.9, 0.0, float(t.v0)), 16.0 * dt)
 			waited = true
 			break
-	t.waiting = waited
-	if not waited:
+	t.waiting = waited or hit > 0.0
+	if hit > 0.0:
+		t.v = move_toward(t.v, 0.0, HIT_DECEL * dt)
+	elif not waited:
 		t.v = move_toward(t.v, float(t.v0) * (YIELD_SLOW if yielding else 1.0), 6.0 * dt)
 	# D-271: oncoming traffic heading at us while we're crashed or stopped
 	# swerves round us (keeping clear by a margin), slowing as it passes;
@@ -1477,7 +1547,7 @@ func _move_traffic(t: Dictionary, dt: float, pv: Array) -> void:
 	var dodge_to := 0.0
 	for p in pv:
 		var ahead: float = t.s - p.s
-		if not ((p.spin > 0.0 or p.v < 4.0) and float(t.v0) < 0.0 and ahead > -2.0 and ahead < DODGE_AHEAD):
+		if hit > 0.0 or not ((p.spin > 0.0 or p.v < 4.0) and float(t.v0) < 0.0 and ahead > -2.0 and ahead < DODGE_AHEAD):
 			continue
 		var px: float = p.x
 		var need := (CAR_W + tw) * 0.5 + DODGE_CLEAR
@@ -1497,7 +1567,109 @@ func _move_traffic(t: Dictionary, dt: float, pv: Array) -> void:
 				t.waiting = true
 		break
 	t.dodge = move_toward(float(t.get("dodge", 0.0)), dodge_to, DODGE_RATE * dt)
-	t.x = lane_x + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6) * (0.0 if yielding else 1.0) 			+ t.shove + t.pull + float(t.dodge)
+	t.x = lane_x + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6) * (0.0 if yielding else 1.0) 			+ t.shove + t.pull + float(t.dodge) + _lane_change_offset(t, dt)
+	_follow_traffic(t, dt, pv)
+
+
+## D-453: a lane change is a jump of `lane`, with an offset back to the old
+## lane's x that eases out over the change; the car's nose turns into it.
+func _lane_change_offset(t: Dictionary, dt: float) -> float:
+	t.lc_cd = maxf(0.0, float(t.get("lc_cd", 0.0)) - dt)
+	var before: float = t.get("lc", 0.0)
+	if before == 0.0:
+		return 0.0
+	var now := move_toward(before, 0.0, PASS_RATE * dt)
+	t.lc = now
+	# Lateral speed over forward speed is the heading change; sway's sign
+	# follows the car's facing (D-239).
+	var lat := (now - before) / maxf(dt, 0.0001)
+	var dir := signf(float(t.get("v0", t.v)))
+	t.sway = clampf(-lat * dir / maxf(absf(float(t.v)), 8.0), -0.15, 0.15)
+	return now
+
+
+## D-452: holds a traffic car behind the nearest car in line with it ahead (in
+## its own direction of travel): it slows to that car's speed FOLLOW_GAP m
+## behind, stops for one that's stopped or coming at it, and is never let
+## closer than FOLLOW_MIN.
+func _follow_traffic(t: Dictionary, dt: float, pv: Array = []) -> void:
+	var dir := signf(float(t.get("v0", t.v)))
+	if dir == 0.0:
+		return
+	var tlen: float = t.get("len", CAR_LEN)
+	var tw: float = t.get("w", CAR_W)
+	var lead: Dictionary = {}
+	var lead_gap := INF
+	for o in traffic:
+		if is_same(o, t):
+			continue
+		var olen: float = o.get("len", CAR_LEN)
+		var ow: float = o.get("w", CAR_W)
+		if absf(float(o.x) - float(t.x)) >= (tw + ow) * 0.5 + FOLLOW_DX:
+			continue
+		var ahead: float = (float(o.s) - float(t.s)) * dir
+		var gap: float = ahead - (tlen + olen) * 0.5
+		if ahead > 0.0 and gap < FOLLOW_LOOK and gap < lead_gap:
+			lead = o
+			lead_gap = gap
+	if lead.is_empty():
+		return
+	var lead_v := maxf(0.0, float(lead.v) * dir)   # its speed our way; 0 if coming at us
+	if lead_gap < PASS_LOOK and lead_v < float(t.v0) * dir - PASS_SLOWER:
+		_try_pass(t, pv)
+	var cap :=maxf(0.0, lead_v + (lead_gap - FOLLOW_GAP) * FOLLOW_K)
+	var speed: float = float(t.v) * dir
+	if speed > cap:
+		t.v = move_toward(speed, cap, FOLLOW_BRAKE * dt) * dir
+	if lead_gap < FOLLOW_MIN:
+		# Too close (a spawn, a shove or a hard catch-up): hold it right there.
+		var olen2: float = lead.get("len", CAR_LEN)
+		t.s = float(lead.s) - dir * ((tlen + olen2) * 0.5 + FOLLOW_MIN)
+		t.v = minf(float(t.v) * dir, lead_v) * dir
+
+
+## D-453: a car held up by a slower one moves to the other lane of its own
+## direction when that's clear: no traffic there from PASS_CLEAR_BEHIND m behind
+## (more if it's closing fast) to PASS_CLEAR_AHEAD m ahead, nothing coming the
+## other way in it, and no player there or about to arrive. Trucks don't pass.
+func _try_pass(t: Dictionary, pv: Array) -> void:
+	if t.get("kind", "car") == "truck" or float(t.get("lc_cd", 0.0)) > 0.0 \
+			or float(t.get("lc", 0.0)) != 0.0 or bool(t.get("waiting", false)) \
+			or absf(float(t.get("pull", 0.0))) > 0.05 or absf(float(t.get("dodge", 0.0))) > 0.05:
+		return
+	var dir := signf(float(t.v0))
+	var to_lane: int = int(t.lane) ^ 1   # 0 <-> 1 (oncoming), 2 <-> 3 (our way)
+	var to_x: float = Track.LANES[to_lane]
+	var tlen: float = t.get("len", CAR_LEN)
+	var tw: float = t.get("w", CAR_W)
+	var speed: float = float(t.v) * dir
+	for o in traffic:
+		if is_same(o, t):
+			continue
+		var olen: float = o.get("len", CAR_LEN)
+		var ow: float = o.get("w", CAR_W)
+		if absf(float(o.x) - to_x) >= (tw + ow) * 0.5 + 0.5:
+			continue
+		var rel: float = (float(o.s) - float(t.s)) * dir
+		var half: float = (tlen + olen) * 0.5
+		var o_speed: float = float(o.v) * dir
+		if o_speed < 0.0:
+			if rel > -half and rel < PASS_ONCOMING:
+				return   # something coming the other way in it
+		elif rel > -(half + PASS_CLEAR_BEHIND + maxf(0.0, o_speed - speed) * PASS_CLOSING_S) \
+				and rel < half + PASS_CLEAR_AHEAD:
+			return
+	for p in pv:
+		if absf(float(p.x) - to_x) >= (tw + CAR_W) * 0.5 + 0.5:
+			continue
+		var prel: float = (float(p.s) - float(t.s)) * dir
+		var half_p := (tlen + CAR_LEN) * 0.5
+		if prel > -(half_p + PASS_CLEAR_BEHIND + maxf(0.0, float(p.v) * dir - speed) * PASS_CLOSING_S) \
+				and prel < half_p + PASS_CLEAR_AHEAD:
+			return
+	t.lc = float(Track.LANES[t.lane]) - to_x   # eases out: no jump in x
+	t.lane = to_lane
+	t.lc_cd = PASS_COOLDOWN
 
 
 ## Each player's position and state as the traffic sees them.
