@@ -13,6 +13,12 @@ uniform bool retro = true;
 uniform vec2 retro_size = vec2(64.0, 128.0);   // texels across x up in RETRO
 uniform float levels = 12.0;                   // colour steps per channel in RETRO
 uniform vec4 tint : source_color = vec4(1.0);  // night tint (Sprites.set_night)
+// D-529: lit windows at night. `lights` is the kind's own greyscale mask
+// (white = window glass or lamp); `lit` is how far they are on.
+uniform sampler2D lights : filter_linear_mipmap, repeat_disable;
+uniform float lit = 0.0;
+uniform vec3 light_col : source_color = vec3(1.0, 0.74, 0.36);
+uniform float light_energy = 1.5;
 uniform bool flip = false;                     // mirrored (left-turn curve sign)
 uniform bool billboard = true;
 uniform float roll = 0.0;                      // radians, about the view axis (D-408: the nitro tank rocks)
@@ -66,15 +72,28 @@ void fragment() {
 		uv.x = 1.0 - uv.x;
 	}
 	vec4 c;
+	float glass = 0.0;
 	if (retro) {
 		vec2 cell = (floor(uv * retro_size) + 0.5) / retro_size;
 		float lod = log2(max(1.0, float(textureSize(tex, 0).y) / retro_size.y));
 		c = textureLod(tex, cell, lod);
 		c.rgb = floor(c.rgb * levels + 0.5) / levels;
+		if (lit > 0.0) {
+			glass = step(0.5, textureLod(lights, cell, lod).r);
+		}
 	} else {
 		c = texture(tex, uv);
+		if (lit > 0.0) {
+			glass = texture(lights, uv).r;
+		}
 	}
 	ALBEDO = c.rgb * tint.rgb;
+	if (glass > 0.0) {
+		// The glass keeps a little of its painted detail (curtains, bars).
+		float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+		vec3 glow = light_col * (retro ? 1.0 : light_energy) * (0.7 + 0.3 * lum);
+		ALBEDO = mix(ALBEDO, glow, glass * lit);
+	}
 	ALPHA = c.a;
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 }

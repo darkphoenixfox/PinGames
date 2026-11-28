@@ -1,20 +1,20 @@
-## TURBO RUN city (D-216): the buildings, cross-street junctions and traffic
-## lights of the city area, built per road chunk. Buildings are one MultiMesh of
-## unit boxes per chunk, scaled per building and drawn by building.gdshader;
-## junctions are ground strips (junction.gdshader); traffic lights are small
-## low-poly nodes whose lamps cycle green, amber, red.
+## TURBO RUN city (D-216): the buildings of the city area, built per road
+## chunk: one MultiMesh of unit boxes per chunk, scaled per building and drawn
+## by building.gdshader. D-514: the road is an urban motorway: concrete walls
+## along both sides and overpasses carrying roads across (the junctions and
+## traffic lights of D-216 are gone).
 extends RefCounted
 
 const Track = preload("res://games/racer/track.gd")
 const BUILDING_SHADER = preload("res://games/racer/shaders/building.gdshader")
-const JUNCTION_SHADER = preload("res://games/racer/shaders/junction.gdshader")
-const CYCLE := [7.0, 1.6, 5.0]   # s of green, amber, red
+const Tunnel = preload("res://games/racer/tunnel.gd")
+const DECK_T := 1.3              # m, an overpass deck's thickness
+const DECK_REACH := Track.OVERPASS_REACH   # m it runs to each side of the road
+const PIER_EVERY := 30.0
 
 static var _bmat: ShaderMaterial
-static var _jmat: ShaderMaterial
-static var _lamp_mats: Array = []   # green, amber, red
-static var _halo_mats: Array = []   # glow round each lit lamp (D-225)
-static var _pole_mat: StandardMaterial3D
+static var _wall_mat: StandardMaterial3D
+static var _deck_mat: StandardMaterial3D
 
 
 static func building_material() -> ShaderMaterial:
@@ -24,31 +24,28 @@ static func building_material() -> ShaderMaterial:
 	return _bmat
 
 
-static func junction_material() -> ShaderMaterial:
-	if _jmat == null:
-		_jmat = ShaderMaterial.new()
-		_jmat.shader = JUNCTION_SHADER
-		_jmat.set_shader_parameter("road_half", Track.ROAD_HALF)
-		_jmat.set_shader_parameter("jhalf", Track.JUNCTION_HALF)
-	return _jmat
+## The walls: the tunnels' concrete panels, lit by the scene.
+static func wall_material() -> StandardMaterial3D:
+	if _wall_mat == null:
+		_wall_mat = StandardMaterial3D.new()
+		_wall_mat.albedo_texture = ImageTexture.create_from_image(Tunnel._concrete())
+		_wall_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		_wall_mat.albedo_color = Color(1.25, 1.25, 1.27)
+		_wall_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return _wall_mat
 
 
-## Night level and HD flag for the shared materials; the traffic lights' phase.
-static func update(night: float, hd: bool, time: float) -> void:
+static func deck_material() -> StandardMaterial3D:
+	if _deck_mat == null:
+		_deck_mat = StandardMaterial3D.new()
+		_deck_mat.albedo_color = Color(0.56, 0.55, 0.53)
+	return _deck_mat
+
+
+## Night level and HD flag for the shared materials.
+static func update(night: float, hd: bool, _time: float) -> void:
 	building_material().set_shader_parameter("night", night)
 	building_material().set_shader_parameter("hd", hd)
-	junction_material().set_shader_parameter("hd", hd)
-	if _lamp_mats.is_empty():
-		return
-	var t := fmod(time, CYCLE[0] + CYCLE[1] + CYCLE[2])
-	var on := 0 if t < CYCLE[0] else (1 if t < CYCLE[0] + CYCLE[1] else 2)
-	for i in 3:
-		(_lamp_mats[i] as StandardMaterial3D).emission_energy_multiplier = 5.0 if i == on else 0.12
-		(_halo_mats[i] as StandardMaterial3D).albedo_color = Color(_lamp_col(i), (0.35 + 0.4 * night) if i == on else 0.0)
-
-
-static func _lamp_col(i: int) -> Color:
-	return [Color(0.2, 1.0, 0.45), Color(1.0, 0.7, 0.1), Color(1.0, 0.15, 0.1)][i]
 
 
 ## Buildings in [s0, s1) as one MultiMesh under `parent`.
@@ -71,7 +68,9 @@ static func build_buildings(parent: Node3D, tr_, list: Array) -> void:
 		var base: Vector3 = tr_.point(o.s, cx)
 		# Sit on the lower of its two front corners, so it never floats.
 		base.y = minf(tr_.point(o.s - float(o.w) * 0.5, o.x).y, tr_.point(o.s + float(o.w) * 0.5, o.x).y) - 0.3
-		var b := Basis(Vector3.UP, tr_.heading(o.s)).scaled(Vector3(float(o.d), float(o.h) + 0.3, float(o.w)))
+		# D-514: scaled along its own axes. (scaled() works along the world's:
+		# where the road had turned, the boxes were skewed and reached the road.)
+		var b := Basis(Vector3.UP, tr_.heading(o.s)).scaled_local(Vector3(float(o.d), float(o.h) + 0.3, float(o.w)))
 		mm.set_instance_transform(i, Transform3D(b, base + Vector3(0.0, (float(o.h) + 0.3) * 0.5, 0.0)))
 		mm.set_instance_custom_data(i, Color(float(o.style) / 6.0, fmod(absf(float(o.s)) * 0.0137, 1.0), 0.0, 0.0))
 	var mmi := MultiMeshInstance3D.new()
@@ -81,124 +80,83 @@ static func build_buildings(parent: Node3D, tr_, list: Array) -> void:
 	parent.add_child(mmi)
 
 
-## Cross streets with zebra crossings for the junctions in [s0, s1).
-static func build_junctions(parent: Node3D, tr_, s0: float, s1: float) -> void:
-	for j in tr_.junctions:
+## The motorway walls (D-514) on both sides of the road in [s0, s1): a face
+## towards the road and a cap on top, following the road.
+static func build_walls(parent: Node3D, tr_, s0: float, s1: float) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var any := false
+	var n := maxi(1, ceili((s1 - s0) / Track.SAMPLE))
+	const CAP := 0.5
+	for i in n:
+		var sa := s0 + (s1 - s0) * i / n
+		var sb := s0 + (s1 - s0) * (i + 1) / n
+		var ha: float = tr_.city_wall_h(sa)
+		var hb: float = tr_.city_wall_h(sb)
+		if ha <= 0.0 or hb <= 0.0:
+			continue
+		any = true
+		for side in [-1.0, 1.0]:
+			var w: float = side * Track.CITY_WALL
+			var wo: float = side * (Track.CITY_WALL + CAP)
+			var a0: Vector3 = tr_.point(sa, w, -0.3)
+			var b0: Vector3 = tr_.point(sb, w, -0.3)
+			var a1: Vector3 = tr_.point(sa, w, ha)
+			var b1: Vector3 = tr_.point(sb, w, hb)
+			var a2: Vector3 = tr_.point(sa, wo, ha)
+			var b2: Vector3 = tr_.point(sb, wo, hb)
+			var inward: Vector3 = (tr_.point(sa, 0.0) - tr_.point(sa, w))
+			inward.y = 0.0
+			inward = inward.normalized()
+			var ua := sa / Tunnel.PANEL
+			var ub := sb / Tunnel.PANEL
+			st.set_normal(inward)
+			for vv in [[a0, Vector2(ua, 1.0)], [b0, Vector2(ub, 1.0)], [b1, Vector2(ub, 0.0)],
+					[a0, Vector2(ua, 1.0)], [b1, Vector2(ub, 0.0)], [a1, Vector2(ua, 0.0)]]:
+				st.set_uv(vv[1])
+				st.add_vertex(vv[0])
+			st.set_normal(Vector3.UP)
+			for vv in [a1, b1, b2, a1, b2, a2]:
+				st.set_uv(Vector2(0.4, 0.3))   # plain concrete
+				st.add_vertex(vv)
+	if not any:
+		return
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = wall_material()
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+
+
+## The overpasses (D-514) in [s0, s1): a deck with parapets crossing over the
+## road at tunnel height, an abutment at each wall and piers further out.
+static func build_overpasses(parent: Node3D, tr_, s0: float, s1: float) -> void:
+	for j in tr_.overpasses:
 		var js: float = j
 		if js < s0 or js >= s1:
 			continue
-		var st := SurfaceTool.new()
-		st.begin(Mesh.PRIMITIVE_TRIANGLES)
-		var reach := Track.JUNCTION_HALF + 3.4
-		var rows := int(ceil(reach * 2.0 / Track.SAMPLE)) + 1
-		var xs: Array = []
-		var x := -110.0
-		while x <= 110.0:
-			xs.append(x)
-			x += 5.0
-		for r in rows:
-			var dz := -reach + r * (reach * 2.0 / (rows - 1))
-			for xv in xs:
-				st.set_uv(Vector2(xv, dz))
-				st.add_vertex(tr_.point(js + dz, xv, 0.04))
-		var cols := xs.size()
-		for r in rows - 1:
-			for c in cols - 1:
-				var a := r * cols + c
-				st.add_index(a)
-				st.add_index(a + cols)
-				st.add_index(a + 1)
-				st.add_index(a + 1)
-				st.add_index(a + cols)
-				st.add_index(a + cols + 1)
-		st.generate_normals()
-		var mi := MeshInstance3D.new()
-		mi.mesh = st.commit()
-		mi.material_override = junction_material()
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		parent.add_child(mi)
-
-
-## Traffic lights: a pole on the sidewalk, an arm out over the road and a
-## three-lamp head facing the traffic it controls (dir: +1 right side, facing
-## the player; -1 left side, facing oncoming traffic).
-static func build_lights(parent: Node3D, tr_, list: Array) -> void:
-	_ensure_light_mats()
-	for o in list:
-		var side: float = o.dir
-		var f: Transform3D = tr_.frame(o.s, o.x)
-		f.basis = Basis(Vector3.UP, tr_.heading(o.s))
 		var n := Node3D.new()
-		n.transform = f
+		n.transform = Transform3D(Basis(Vector3.UP, tr_.heading(js)), tr_.point(js, 0.0))
 		parent.add_child(n)
-		_box(n, Vector3(0.0, 2.9, 0.0), Vector3(0.22, 5.8, 0.22), _pole_mat)
-		_box(n, Vector3(-side * 2.2, 5.6, 0.0), Vector3(4.6, 0.16, 0.16), _pole_mat)
-		var hx := -side * 4.1
-		_box(n, Vector3(hx, 4.9, 0.0), Vector3(0.5, 1.4, 0.4), _pole_mat)
-		var face := 0.22 if side > 0.0 else -0.22   # +Z faces back down the road, at the player
-		for i in 3:
-			var lamp := MeshInstance3D.new()
-			var q := QuadMesh.new()
-			q.size = Vector2(0.32, 0.32)
-			lamp.mesh = q
-			lamp.material_override = _lamp_mats[2 - i]   # red on top, then amber, green
-			lamp.position = Vector3(hx, 5.35 - i * 0.42, face)
-			if side < 0.0:
-				lamp.rotation.y = PI
-			n.add_child(lamp)
-			# A soft glow round it (D-225), facing the camera.
-			var halo := MeshInstance3D.new()
-			var hq := QuadMesh.new()
-			hq.size = Vector2(1.6, 1.6)
-			halo.mesh = hq
-			halo.material_override = _halo_mats[2 - i]
-			halo.position = lamp.position + Vector3(0.0, 0.0, 0.05 * signf(face))
-			halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			n.add_child(halo)
+		var clear: float = Track.TUNNEL_HEIGHT
+		var deep: float = Track.OVERPASS_HALF * 2.0
+		_box(n, Vector3(0.0, clear + DECK_T * 0.5, 0.0), Vector3(DECK_REACH * 2.0, DECK_T, deep), true)
+		for e in [-1.0, 1.0]:
+			_box(n, Vector3(0.0, clear + DECK_T + 0.5, e * (Track.OVERPASS_HALF - 0.2)), Vector3(DECK_REACH * 2.0, 1.0, 0.4), false)
+			# The abutment stands a little proud of the wall.
+			_box(n, Vector3(e * (Track.CITY_WALL + 0.85), clear * 0.5 - 0.5, 0.0), Vector3(2.0, clear + 1.0, deep + 1.0), false)
+			var x := Track.CITY_WALL + PIER_EVERY
+			while x < DECK_REACH:
+				_box(n, Vector3(e * x, clear * 0.5 - 1.0, 0.0), Vector3(1.6, clear + 2.0, deep * 0.6), false)
+				x += PIER_EVERY
 
 
-static func _ensure_light_mats() -> void:
-	if not _lamp_mats.is_empty():
-		return
-	_pole_mat = StandardMaterial3D.new()
-	_pole_mat.albedo_color = Color(0.16, 0.17, 0.19)
-	var glow := _glow_texture()
-	for i in 3:
-		# Emissive (D-225), bright enough to bloom in the night.
-		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.05, 0.05, 0.05)
-		m.emission_enabled = true
-		m.emission = _lamp_col(i)
-		_lamp_mats.append(m)
-		var h := StandardMaterial3D.new()
-		h.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		h.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		h.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		h.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-		h.no_depth_test = false
-		h.albedo_texture = glow
-		h.albedo_color = Color(_lamp_col(i), 0.0)
-		_halo_mats.append(h)
-
-
-## A soft round glow (white centre fading out) for the lamp halos.
-static func _glow_texture() -> Texture2D:
-	var n := 32
-	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
-	for y in n:
-		for x in n:
-			var d := Vector2(x - n * 0.5 + 0.5, y - n * 0.5 + 0.5).length() / (n * 0.5)
-			var a := clampf(1.0 - d, 0.0, 1.0)
-			img.set_pixel(x, y, Color(1, 1, 1, a * a))
-	return ImageTexture.create_from_image(img)
-
-
-static func _box(parent: Node3D, at: Vector3, size: Vector3, mat: Material) -> void:
+static func _box(parent: Node3D, at: Vector3, size: Vector3, shadow: bool) -> void:
 	var mi := MeshInstance3D.new()
 	var b := BoxMesh.new()
 	b.size = size
-	b.material = mat
+	b.material = deck_material()
 	mi.mesh = b
 	mi.position = at
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(mi)

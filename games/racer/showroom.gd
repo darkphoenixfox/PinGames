@@ -9,6 +9,8 @@ const InstParam = preload("res://core/util/inst_param.gd")
 const UI = preload("res://core/ui/ui.gd")
 const Sim = preload("res://games/racer/sim.gd")
 const PIXEL_POST = preload("res://games/racer/shaders/pixel_post.gdshader")
+const INK_FONT = preload("res://assets/fonts/pinpixel.ttf")   # D-542
+const WANTED_PRINT = preload("res://games/racer/shaders/wanted_print.gdshader")   # D-527
 
 const RES := Vector2i(360, 640)
 const HD_RES := Vector2i(1080, 1920)   # D-195: HD graphics renders at the TABLE's size, no pixel pass
@@ -116,6 +118,7 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 		cyl.material = tm
 		table.mesh = cyl
 		table.position = Vector3(cp.x, y - 0.09, 0)
+		table.visible = not pursuit   # D-524: in a pursuit the car turns in its poster's photo
 		root.add_child(table)
 		var ring := MeshInstance3D.new()
 		var rc := CylinderMesh.new()
@@ -125,6 +128,7 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 		rc.radial_segments = 32
 		ring.mesh = rc
 		ring.position = Vector3(cp.x, y - 0.16, 0)
+		ring.visible = not pursuit
 		root.add_child(ring)
 		_rings.append(ring)
 		var car: Node3D = make_car.call(float(Sim.CARS[i].hue), i)   # each car's own model (D-205)
@@ -140,7 +144,8 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 	_cam.position = Vector3(0, 7.0, 14.0)
 	root.add_child(_cam)
 	# Landscape: the cars in the upper half, the cards below them.
-	_cam.look_at(Vector3(0, -1.5 if landscape else -0.4, 0), Vector3.UP)
+	# (D-524: in a pursuit a little lower, so the posters clear the title.)
+	_cam.look_at(Vector3(0, (-0.3 if pursuit else -1.5) if landscape else -0.4, 0), Vector3.UP)
 	_cam.current = true
 	var view := TextureRect.new()
 	view.texture = _vp.get_texture()
@@ -164,7 +169,7 @@ func build(make_car: Callable, sky_tex: Texture2D, title_font: String) -> void:
 	title.offset_top = 30 + (Screens.dmd_cover() if landscape else 0.0)   # D-255: clear of the DMD
 	_stage.add_child(title)
 	for i in 3:
-		_boxes.append(_stats_box(i))
+		_boxes.append(_wanted_poster(i, view) if pursuit else _stats_box(i))
 	_refresh()
 
 
@@ -185,6 +190,135 @@ func _ring_mat(c: Color, glow: float) -> StandardMaterial3D:
 		m.emission = c
 		m.emission_energy_multiplier = glow
 	return m
+
+
+## D-524 (director): in a pursuit each target has a WANTED poster: aged paper,
+## WANTED across the top, a photo frame with the car turning in it, then its
+## name and stats. The paper and the photo's backdrop are drawn under the 3D
+## view and the frame and print over it, so the car shows in the photo.
+## Landscape: an upright poster, the stats under the photo. Portrait TABLE:
+## a wide one, the stats beside the photo.
+const PAPER := Color(0.86, 0.76, 0.56)
+const PAPER_EDGE := Color(0.33, 0.22, 0.12)
+const PHOTO_BACK := Color(0.63, 0.56, 0.44)
+const INK := Color(0.2, 0.12, 0.07)
+const PHOTO := Vector2(430.0, 250.0)
+const PHOTO_TALL := Vector2(520.0, 340.0)   # portrait TABLE: the cars are drawn bigger there
+const POSTER_PAD := 16.0
+const PRINT_DOT := 7.0           # the photo's ink dots, base px apart
+const POSTER_HEAD := 84.0        # the WANTED line's height
+const POSTER_STATS_H := 356.0    # the name and three stats
+const POSTER_STATS_W := 400.0    # portrait: the stats column beside the photo
+
+
+## D-542: print on a poster. The UI's dot lettering has a dark rim round every
+## dot (made for light text over a scene): in dark ink the dots and the rim
+## ran together and nothing could be read. Print is the plain pixel font,
+## solid, in ink, with no rim. (No "dot_size": the game doesn't swap it.)
+func _ink_label(text: String, size: int, align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_CENTER) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.horizontal_alignment = align
+	l.add_theme_font_override("font", INK_FONT)
+	l.add_theme_font_size_override("font_size", UI.pixel_size(size))
+	l.add_theme_color_override("font_color", INK)
+	l.add_theme_constant_override("outline_size", 0)
+	return l
+
+
+func _wanted_poster(i: int, view: Control) -> Control:
+	var spec: Dictionary = Sim.CARS[i]
+	var mid := _cam.unproject_position(_car_pos(i) + Vector3(0.0, 0.6 if landscape else 0.4, 0.0)) * (_base().y / _res.y)
+	var psize := PHOTO if landscape else PHOTO_TALL
+	var photo := Rect2(mid - psize * 0.5, psize)
+	# The print: name and stats, in ink.
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	box.add_child(_ink_label(tr(spec.name), 60))
+	_stat_row(box, tr("RC_STAT_SPEED"), speed_pips(i), tr("RC_STAT_MPH") % roundi(float(spec.top) * Sim.MPH), INK, INK)
+	_stat_row(box, tr("RC_STAT_CORNER"), corner_pips(i), "", INK, INK)
+	var rams := ceili(1.0 / float(Sim.TARGETS[i].dmg))
+	_stat_row(box, tr("RC_STAT_RAMS"), clampi(roundi(rams / 4.0), 1, PIPS), str(rams), INK, INK)
+	var stats_h := POSTER_STATS_H
+	var sheet: Rect2
+	if landscape:
+		sheet = Rect2(photo.position.x - POSTER_PAD, photo.position.y - POSTER_HEAD,
+			psize.x + POSTER_PAD * 2.0, POSTER_HEAD + psize.y + stats_h + POSTER_PAD * 2.0)
+		box.position = Vector2(photo.position.x, photo.end.y + POSTER_PAD * 0.5)
+		box.size = Vector2(psize.x, stats_h)
+	else:
+		sheet = Rect2(photo.position.x - POSTER_PAD, photo.position.y - POSTER_HEAD,
+			psize.x + POSTER_STATS_W + POSTER_PAD * 3.0, POSTER_HEAD + maxf(psize.y, stats_h - POSTER_HEAD * 0.5) + POSTER_PAD)
+		box.position = Vector2(photo.end.x + POSTER_PAD, sheet.position.y + POSTER_HEAD * 0.5)
+		box.size = Vector2(POSTER_STATS_W, stats_h)
+	# Under the 3D view: the paper and the photo's backdrop.
+	var under := Control.new()
+	under.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var paper := Panel.new()
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = PAPER
+	ps.border_color = PAPER_EDGE
+	ps.set_border_width_all(5)
+	ps.set_corner_radius_all(4)
+	ps.shadow_color = Color(0, 0, 0, 0.45)
+	ps.shadow_size = 12
+	paper.add_theme_stylebox_override("panel", ps)
+	paper.position = sheet.position
+	paper.size = sheet.size
+	under.add_child(paper)
+	var back := ColorRect.new()
+	back.color = PHOTO_BACK
+	back.position = photo.position
+	back.size = photo.size
+	under.add_child(back)
+	_stage.add_child(under)
+	_stage.move_child(under, view.get_index())
+	# D-527: the car shows only inside the photo: the 3D view again, cut to
+	# the photo's frame (the whole view is hidden in a pursuit).
+	view.visible = false
+	var cut := Control.new()
+	cut.clip_contents = true
+	cut.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cut.position = photo.position
+	cut.size = photo.size
+	var shot := TextureRect.new()
+	shot.texture = (view as TextureRect).texture
+	shot.texture_filter = view.texture_filter
+	shot.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shot.stretch_mode = TextureRect.STRETCH_SCALE
+	# Printed in black and white: a screen of ink dots on the paper.
+	var print_mat := ShaderMaterial.new()
+	print_mat.shader = WANTED_PRINT
+	print_mat.set_shader_parameter("ink", INK)
+	print_mat.set_shader_parameter("paper", PHOTO_BACK.lightened(0.25))
+	print_mat.set_shader_parameter("cells", _base() / PRINT_DOT)
+	shot.material = print_mat
+	shot.position = -photo.position
+	shot.size = _base()
+	cut.add_child(shot)
+	_stage.add_child(cut)
+	# Over it: the photo's frame and the print.
+	var over := Control.new()
+	over.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var frame := Panel.new()
+	var fs := StyleBoxFlat.new()
+	fs.draw_center = false
+	fs.border_color = INK
+	fs.set_border_width_all(5)
+	frame.add_theme_stylebox_override("panel", fs)
+	frame.position = photo.position
+	frame.size = photo.size
+	over.add_child(frame)
+	var head := _ink_label(tr("RC_WANTED"), 72)   # (72: the plain font stands taller than the dot lettering did at 84)
+	head.position = Vector2(sheet.position.x, sheet.position.y + 2.0)
+	head.size = Vector2(psize.x + POSTER_PAD * 2.0 if not landscape else sheet.size.x, POSTER_HEAD)
+	head.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	over.add_child(head)
+	over.add_child(box)
+	over.set_meta("under", under)
+	over.set_meta("cut", cut)
+	_stage.add_child(over)
+	return over
 
 
 ## The car's card (D-185): name, then TOP SPEED, CORNERING and TIME as 5-pip
@@ -208,7 +342,6 @@ func _stats_box(i: int) -> Control:
 	panel.add_child(box)
 	var name := UI.label(tr(spec.name), 60, col)
 	box.add_child(name)
-	box.add_child(UI.spacer(4))
 	_stat_row(box, tr("RC_STAT_SPEED"), speed_pips(i), tr("RC_STAT_MPH") % roundi(float(spec.top) * Sim.MPH), col)
 	_stat_row(box, tr("RC_STAT_CORNER"), corner_pips(i), "", col)
 	if pursuit:   # D-460: how many rams it takes to stop it, not the race clock
@@ -227,10 +360,20 @@ func _stats_box(i: int) -> Control:
 	return panel
 
 
+const STAT_NAME_GAP := -4   # between a stat's name and its bar (the font's line has air under it)
+const STAT_GAP := 12        # above each stat
+
+
 ## A stat: its name, then a bar of PIPS segments (n lit) and its value.
-func _stat_row(box: VBoxContainer, label: String, n: int, value: String, col: Color) -> void:
-	var l := UI.label(label, 36, Color(0.85, 0.82, 0.95), HORIZONTAL_ALIGNMENT_LEFT)
-	box.add_child(l)
+func _stat_row(box: VBoxContainer, label: String, n: int, value: String, col: Color, ink: Color = Color(0, 0, 0, 0)) -> void:
+	var printed := ink.a > 0.0   # D-524: on a poster's paper: ink for the text, blank boxes for the unlit pips
+	# D-522: a stat's name sits right on its own bar, with a gap before the next stat.
+	var stat := VBoxContainer.new()
+	stat.add_theme_constant_override("separation", STAT_NAME_GAP)
+	box.add_child(UI.spacer(STAT_GAP))
+	box.add_child(stat)
+	var l := _ink_label(label, 36, HORIZONTAL_ALIGNMENT_LEFT) if printed else UI.label(label, 36, Color(0.85, 0.82, 0.95), HORIZONTAL_ALIGNMENT_LEFT)
+	stat.add_child(l)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	for k in PIPS:
@@ -243,17 +386,17 @@ func _stat_row(box: VBoxContainer, label: String, n: int, value: String, col: Co
 			ps.bg_color = col
 			ps.border_color = col.lightened(0.45)
 		else:
-			ps.bg_color = Color(0.12, 0.1, 0.2, 0.9)
-			ps.border_color = Color(0.3, 0.28, 0.4)
+			ps.bg_color = Color(ink, 0.12) if printed else Color(0.12, 0.1, 0.2, 0.9)
+			ps.border_color = Color(ink, 0.55) if printed else Color(0.3, 0.28, 0.4)
 		ps.set_border_width_all(2)
 		pip.add_theme_stylebox_override("panel", ps)
 		row.add_child(pip)
 	if not value.is_empty():
 		row.add_child(UI.spacer(0))
-		var v := UI.label(value, 36, UI.WHITE, HORIZONTAL_ALIGNMENT_LEFT)
+		var v := _ink_label(value, 36, HORIZONTAL_ALIGNMENT_LEFT) if printed else UI.label(value, 36, UI.WHITE, HORIZONTAL_ALIGNMENT_LEFT)
 		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(v)
-	box.add_child(row)
+	stat.add_child(row)
 
 
 ## Top speed as 2..5 pips (the cars run 72..88 m/s).
@@ -291,9 +434,11 @@ func _refresh() -> void:
 		for m in (_cars[i] as Node3D).find_children("*", "MeshInstance3D", true, false):
 			var gi := m as MeshInstance3D
 			if gi.material_override != null:
-				InstParam.set_param(gi, "bright", 1.0 if on else 0.55)
+				InstParam.set_param(gi, "bright", 1.0 if on or pursuit else 0.55)   # (D-527: a poster is dimmed whole)
 		# Dimmed, not see-through (the sunset would wash it out).
 		(_boxes[i] as Control).modulate = Color.WHITE if on else Color(0.5, 0.5, 0.56)
+		if (_boxes[i] as Control).has_meta("under"):   # D-524: the poster's paper, under the 3D view
+			((_boxes[i] as Control).get_meta("under") as Control).modulate = (_boxes[i] as Control).modulate
 
 
 func _process(delta: float) -> void:

@@ -154,7 +154,7 @@ func _setup_windowed() -> void:
 
 	var root := get_window()
 	root.mode = Window.MODE_WINDOWED
-	root.title = "PinGames - TABLE"
+	root.title = "VPin Games - TABLE"
 	root.size = table_size
 	root.position = Vector2i(x0, y0)
 	_recall(root, "windowed_table@%d" % mon)   # D-383
@@ -162,7 +162,7 @@ func _setup_windowed() -> void:
 	_add_view(root, table.get_texture(), 0, false)
 
 	var right_x := x0 + table_size.x + 12   # right of the TABLE (D-197)
-	var bgw := _make_window("PinGames - BACKGLASS", Rect2i(Vector2i(right_x, y0), bg_size), false)
+	var bgw := _make_window("VPin Games - BACKGLASS", Rect2i(Vector2i(right_x, y0), bg_size), false)
 	_recall(bgw, "windowed_backglass@%d" % mon)
 	_add_view(bgw, backglass.get_texture(), 0, false)
 	if dmd_in_backglass:  # preview of the 2-screen cabinet look (D-080)
@@ -170,7 +170,7 @@ func _setup_windowed() -> void:
 		return
 	if str(Config.get_value("display", "dmd_sink")) == "hardware":
 		return
-	var dmw := _make_window("PinGames - DMD",
+	var dmw := _make_window("VPin Games - DMD",
 		Rect2i(Vector2i(right_x, y0 + bg_size.y + TITLE_BAR), dmd_size), false)
 	_recall(dmw, "windowed_dmd@%d" % mon)
 	_add_view(dmw, Dmd.texture(), 0, true)
@@ -562,7 +562,7 @@ func _setup_single() -> void:
 	var root := get_window()
 	if not OS.has_feature("android") and not OS.has_feature("web"):   # the page owns the canvas (D-270)
 		root.mode = Window.MODE_WINDOWED
-		root.title = "PinGames"
+		root.title = "VPin Games"
 		var mon := _clamp_monitor(int(Config.get_value("display", "windowed_monitor")))
 		var area := DisplayServer.screen_get_usable_rect(mon)
 		var want := Vector2i(1280, 720)
@@ -802,7 +802,7 @@ func _setup_vr() -> void:
 		_vr_cabinet()   # the headset owns the display (D-170)
 		return
 	root.mode = Window.MODE_WINDOWED
-	root.title = "PinGames - VR"
+	root.title = "VPin Games - VR"
 	var mon := _clamp_monitor(int(Config.get_value("display", "windowed_monitor")))
 	var area := DisplayServer.screen_get_usable_rect(mon)
 	root.size = Vector2i(mini(1280, area.size.x - 40), mini(720, area.size.y - 80))
@@ -830,13 +830,13 @@ func _setup_cabinet(_two_screens: bool) -> void:
 
 	var root := get_window()
 	root.mode = Window.MODE_WINDOWED
-	root.title = "PinGames"
+	root.title = "VPin Games"
 	root.position = t_rect.position
 	root.size = t_rect.size
 	root.mode = Window.MODE_FULLSCREEN
 	_add_view(root, table.get_texture(), t_rot, false)
 
-	var bgw := _make_window("PinGames Backglass", _monitor_rect(b_mon), true)
+	var bgw := _make_window("VPin Games Backglass", _monitor_rect(b_mon), true)
 	var b_view := _add_view(bgw, backglass.get_texture(),
 		int(Config.get_value("display", "backglass_rotation")), false)
 
@@ -847,7 +847,7 @@ func _setup_cabinet(_two_screens: bool) -> void:
 		_add_framed_dmd(bgw)
 		return
 	var d_mon := _clamp_monitor(int(Config.get_value("display", "dmd_monitor")))
-	var dmw := _make_window("PinGames DMD", _monitor_rect(d_mon), true)
+	var dmw := _make_window("VPin Games DMD", _monitor_rect(d_mon), true)
 	_add_view(dmw, Dmd.texture(), int(Config.get_value("display", "dmd_rotation")), true)
 
 
@@ -954,7 +954,7 @@ func identify_monitors(seconds: float = 4.0) -> void:
 		var r := _monitor_rect(i)
 		var sz := Vector2i(560, 380)
 		var w := Window.new()
-		w.title = "PinGames monitor %d" % (i + 1)
+		w.title = "VPin Games monitor %d" % (i + 1)
 		w.borderless = true
 		w.always_on_top = true
 		w.unfocusable = true

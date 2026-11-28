@@ -114,6 +114,8 @@ const WAIT_GAP := 5.0
 ## Oncoming traffic avoiding a crashed or stopped car (D-271).
 const DODGE_AHEAD := 170.0   # m ahead it starts to react
 const DODGE_CLEAR := 0.7     # m of clearance it keeps
+const DODGE_TURN := 0.32          # D-530: sideways speed over forward speed, at most, while steering round
+const DODGE_YAW := 0.3            # rad: how far the nose turns into it
 const DODGE_RATE := 4.5      # m/s it moves across
 ## Traffic following traffic (D-452): a car never drives through another one.
 ## One that catches up a car in line with it ahead brakes to sit FOLLOW_GAP m
@@ -135,6 +137,19 @@ const PASS_CLOSING_S := 2.5       # ...plus this many s of anything closing on i
 const PASS_ONCOMING := 250.0      # m clear of oncoming cars in it
 const PASS_RATE := 2.5            # m/s it moves across (a lane in 1.5 s)
 const PASS_COOLDOWN := 5.0        # s before it changes lanes again
+## Random traffic that can always be dodged (D-483): whatever speed a player
+## drives at, the cars they'd reach within any OPEN_GAP_S of driving never
+## fill more than OPEN_MAX_LANES of the four lanes, so two lanes are always
+## open with time to move across. Checked for player speeds from OPEN_V_MIN
+## to OPEN_V_MAX every OPEN_V_STEP m/s, when a car appears and before one
+## changes lanes.
+const OPEN_GAP_S := 1.5
+const OPEN_MAX_LANES := 2
+const OPEN_V_MIN := 20.0
+const OPEN_V_MAX := 110.0
+const OPEN_V_STEP := 5.0
+const OPEN_SOON_S := 8.0
+const OPEN_CLOSING := 3.0   # m/s: slower than this towards a car, it isn't being caught
 const FINISH_DECEL := 30.0   # m/s^2: the drift-brake after the line (D-222; D-231: doubled, half the slide)
 const FINISH_BONUS := 100000
 const TIME_BONUS_PER_S := 2000
@@ -186,8 +201,16 @@ const RAMMED_SLOW := 0.45       # speed the police keeps when the player runs in
 const BUMP_LAT := 1.0           # D-364: m/s sideways towards a police car that makes the contact the player's bump
 const RAMMER_SLOW := 0.92       # D-198: speed the player keeps doing it
 const HIT_SLOW := 0.78          # speed kept per hit
-const HIT_BOUNCE := 9.0         # m/s sideways shove
+const HIT_BOUNCE := 10.8        # m/s sideways shove (D-504: +20 %, was 9.0)
 const POLICE_BUMP_SLOW := 0.55  # speed the police keeps after hitting traffic
+## D-520: a knocked police car is slow to get going again: for STUN_TIME s
+## after the player's bump (STUN_TIME_TRAFFIC after hitting traffic) it only
+## gains STUN_ACCEL m/s^2. (It was back at full speed within a second.)
+const STUN_TIME := 3.0
+const STUN_TIME_TRAFFIC := 1.2
+const STUN_TIME_RAM := 1.5      # D-523: after its own ram on the player
+const RAM_SELF_SLOW := 0.75     # D-523: speed the police keeps after ramming the player
+const STUN_ACCEL := 7.0
 ## Losing the police (D-200): stay more than ESCAPE_GAP ahead of it for
 ## ESCAPE_TIME in a row. Getting closer starts the count again, however long
 ## the chase has gone on. D-443: the count also runs while it is still
@@ -221,10 +244,28 @@ const CLASH_SLOW_AHEAD := 0.85
 const CLASH_SHOVE := 0.9         # m sideways, each
 const TAIL_GAP := 9.0
 const LEAD_SWAP := 6.0
+## Roadblock (D-521, director): with MAX_POLICE cars after a player, the road
+## is closed ROADBLOCK_AHEAD m ahead: a police car across each outer lane,
+## lights on, and a wooden barrier across each middle lane, which breaks when
+## driven through. Hitting a police car is a crash. One at a time, shared by
+## both players; the next comes no sooner than ROADBLOCK_EVERY m further on.
+## No traffic appears within ROADBLOCK_CLEAR m of it; traffic that reaches it
+## pulls over to the kerb, hazards on, and stops.
+const ROADBLOCK_AHEAD := 700.0
+const ROADBLOCK_EVERY := 1500.0
+const ROADBLOCK_CLEAR := 350.0
+const ROADBLOCK_STOP := 170.0     # traffic this close to it (on its way there) pulls over
+const ROADBLOCK_STOP_GAP := 35.0  # ... and stops this far short of it
+const ROADBLOCK_PAST := 150.0     # it is cleared away once every player is this far past it
+const ROADBLOCK_FAR := 1300.0     # ... or this far from it, either way
+const BARRIER_W := 3.6            # m across the lane
+const BARRIER_SLOW := 0.9         # speed kept driving through one
+const BARRIER_SCORE := 3000.0
+const ROADBLOCK_COPS := 2         # D-532 (director): police cars and barriers, in lanes drawn at random
 const YIELD_AHEAD := 350.0      # m ahead of the police where traffic pulls over (D-163)
 const YIELD_SLOW := 0.6         # speed traffic slows to while yielding
 const SIDE_SLOW := 0.93         # speed kept on a side-swipe
-const SIDE_BOUNCE := 7.0        # m/s sideways shove
+const SIDE_BOUNCE := 8.4        # m/s sideways shove (D-503: +20 %, was 7.0)
 ## Side impacts make both cars turn away from each other a little (D-239):
 ## a yaw kick of SWAY rad that eases back at SWAY_BACK rad/s. `sway` is a turn
 ## about the vertical (+ = anticlockwise from above; nose to -x when driving on).
@@ -322,6 +363,9 @@ var _score_f := 0.0
 var traffic: Array = []        # {id, s, x, v, lane, hue, weave, last_ds, kind, len, w}
 var _next_id := 0
 var _rng := RandomNumberGenerator.new()
+## The traffic's own random stream (D-483): the shared one unless
+## randomize_traffic() gave it its own, so each race's traffic differs.
+var _trng: RandomNumberGenerator = _rng
 var over_t := 0.0
 var done := false
 
@@ -338,9 +382,19 @@ const PLAYER_FIELDS := ["state", "countdown", "manual", "shift_request", "autopi
 	"sway", "time_bonus", "spin_t", "flipping", "crash_anim", "crash_slide", "flip_dir", "flip_turns", "veer_x", "veer_id",
 	"time_left", "next_checkpoint", "checkpoints", "score", "_score_f", "over_t", "done"]
 const P2_START_X := 1.9          # the two cars start side by side, either side of the line
-const RIVAL_SIDE_BOUNCE := 6.0   # m/s sideways when the two players swipe each other
+const RIVAL_SIDE_BOUNCE := 7.2   # (D-503: +20 %, was 6.0) m/s sideways when the two players swipe each other
 const WIN_WAIT := 8.0            # s the race goes on after the winner crosses the line
+## D-501: 2P catch-up. The car behind gets more top speed and pull, growing
+## with the gap from CATCH_FROM to CATCH_FULL metres. The leader is untouched.
+const CATCH_FROM := 40.0
+const CATCH_FULL := 300.0
+const CATCH_TOP := 0.08          # + this share of top speed at the full gap
+const CATCH_PULL := 0.25         # + this share of engine pull at the full gap
 var two_player := false
+var roadblock: Dictionary = {}   # D-521: {id, s, broken: [bool, bool]} or empty; shared by both players
+var _roadblock_id := 0
+var _roadblock_from := 0.0       # no new one before this distance
+var tod_start := 0               # D-517: the stage of the day's cycle the race starts at (the views' skies)
 var cur := 0                     # the player whose fields are live
 var _pl := [{}, {}]
 var event_player: Array = []     # 2P: the player each event of the last step belongs to
@@ -430,6 +484,14 @@ func step_two(dt: float, inputs: Array) -> void:
 		_win_t += dt
 		if (player_get(0, "done") and player_get(1, "done")) or _win_t >= WIN_WAIT:
 			race_over = true
+
+
+## D-501: how much catch-up the live player gets, 0..1 (2P, the car behind).
+func catch_up() -> float:
+	if not two_player:
+		return 0.0
+	var gap := float(player_get(1 - cur, "s")) - s
+	return clampf((gap - CATCH_FROM) / (CATCH_FULL - CATCH_FROM), 0.0, 1.0)
 
 
 ## The two players' cars touching (2P): a side-swipe pushes both apart and
@@ -606,6 +668,8 @@ func step(dt: float, left: bool, right: bool, _gas: bool = false, brake: bool = 
 	else:
 		_update_traps()
 		_update_police(dt)
+		_call_roadblock()
+	_update_roadblock()
 	_update_traffic(dt)
 	_update_pickups()
 	_collide_objects()
@@ -656,7 +720,7 @@ func _finish() -> void:
 
 
 func _add_score(p: float) -> void:
-	_score_f += p
+	_score_f = maxf(0.0, _score_f + p)
 	score = int(_score_f)
 
 
@@ -754,6 +818,91 @@ func call_police() -> void:
 func call_backup() -> void:
 	backup.append({"s": s - POLICE_BEHIND, "x": x, "v": v, "state": "chase", "t": 0.0})
 	events.append(["police_backup", backup.size() + 1])
+
+
+# --- roadblock (D-521) ------------------------------------------------------------------
+## Closes the road ahead of a player with MAX_POLICE cars in the chase.
+func _call_roadblock() -> void:
+	if not roadblock.is_empty() or state != State.RACE or police.is_empty() or police.state != "chase" \
+			or backup.size() < MAX_POLICE - 1 or s + ROADBLOCK_AHEAD < _roadblock_from:
+		return
+	var at := s + ROADBLOCK_AHEAD
+	var f := track.finish_s()
+	for i in 8:
+		var gate := roundf(at / CHECKPOINT_EVERY) * CHECKPOINT_EVERY
+		if absf(at - gate) > 200.0 and not track.tunnel_between(at - 120.0, at + 120.0) \
+				and track.near_overpass(at, 40.0) < 0.0 and absf(track.curvature(at)) < 1.0 / 250.0 \
+				and (f <= 0.0 or at < f - Track.TOWN_BEFORE - 200.0):
+			place_roadblock(at)
+			return
+		at += 70.0
+	_roadblock_from = s + ROADBLOCK_AHEAD + 300.0   # no room for one here: try again further on
+
+
+## Closes the road at `at` (public for the --rc-roadblock dev flag).
+func place_roadblock(at: float) -> void:
+	_roadblock_id += 1
+	# D-532 (director): two police cars and two barriers, in random lanes.
+	var lanes := []
+	for ln in Track.LANES.size():
+		lanes.insert(_rng.randi() % (lanes.size() + 1), ln)
+	var cops := lanes.slice(0, ROADBLOCK_COPS)
+	var barriers := lanes.slice(ROADBLOCK_COPS)
+	cops.sort()
+	barriers.sort()
+	var broken := []
+	broken.resize(barriers.size())
+	broken.fill(false)
+	roadblock = {"id": _roadblock_id, "s": at, "broken": broken, "cops": cops, "barriers": barriers}
+	for k in range(traffic.size() - 1, -1, -1):   # nothing standing in it
+		if absf(float(traffic[k].s) - at) < 60.0:
+			traffic.remove_at(k)
+	events.append(["roadblock", at])
+
+
+## The live player against the roadblock, and its clearing away.
+func _update_roadblock() -> void:
+	if roadblock.is_empty():
+		return
+	var rs: float = roadblock.s
+	var key := "ahead%d" % cur
+	var reach := CAR_LEN * 0.5 + 0.6   # the car's nose at the line
+	var was: float = roadblock.get(key, rs - s)
+	var ahead := rs - s
+	roadblock[key] = ahead
+	if state == State.RACE and spin_t <= 0.0 and was > reach and ahead <= reach:
+		var hit_cop := false
+		for ln in roadblock.cops:
+			var cx: float = Track.LANES[ln]
+			if absf(x - cx) < (CAR_LEN + CAR_W) * 0.5:   # the police car stands across the lane
+				hit_cop = true
+				s = rs - reach - 0.4
+				roadblock[key] = rs - s
+				if v * MPH < SOFT_CRASH_MPH:
+					_soft_bump(cx)
+				else:
+					_crash("car", cx - x)
+				events.append(["roadblock_hit", cx])
+				break
+		if not hit_cop:
+			for k in roadblock.barriers.size():
+				var bx: float = Track.LANES[roadblock.barriers[k]]
+				if not roadblock.broken[k] and absf(x - bx) < (BARRIER_W + CAR_W) * 0.5:
+					roadblock.broken[k] = true
+					v *= BARRIER_SLOW
+					_add_score(BARRIER_SCORE)
+					events.append(["barrier", k, bx])
+	if two_player and cur == 0:
+		return   # cleared on the last player's pass
+	var gone := true
+	var far := true
+	for i in (2 if two_player else 1):
+		var ps: float = player_get(i, "s")
+		gone = gone and ps > rs + ROADBLOCK_PAST
+		far = far and absf(ps - rs) > ROADBLOCK_FAR
+	if gone or far:
+		_roadblock_from = rs + ROADBLOCK_EVERY
+		roadblock = {}
 
 
 ## Every police car around the live player: the lead first, then the backup.
@@ -882,7 +1031,8 @@ func _update_car(dt: float) -> void:
 				if ds > CAR_LEN * 0.3 or _car_i > 0 or steered_in:
 					_hit_police()
 				else:
-					_police_hit()
+					# D-523: its ram slows it too; as much as our bump if we steered into it.
+					_police_hit((float(police.x) - x) * lat_v > 0.0 and absf(lat_v) > BUMP_LAT)
 			var close := ds > -BUST_NEAR
 			if close and (spin_t > 0.0 or v < BUST_SPEED):
 				_bust()
@@ -969,7 +1119,13 @@ func _police_follow(dt: float, want_ds: float, close: float, rate: float = 40.0,
 	# Its top speed (D-142): a bit over the player car's own, below nitro, so
 	# a nitro burst gets away.
 	target = minf(target, top_speed() * top_k)
-	police.v = move_toward(police.v, maxf(target, -back), rate * dt)
+	target = maxf(target, -back)
+	var stun := float(police.get("stun_t", 0.0))
+	if stun > 0.0:   # D-520
+		police.stun_t = stun - dt
+		if police.state == "chase" and target > float(police.v):
+			rate = STUN_ACCEL
+	police.v = move_toward(police.v, target, rate * dt)
 
 
 ## D-372: police cars collide with each other (while moving: not during the
@@ -1017,8 +1173,9 @@ func _check_hit_police(ds: float, dt: float) -> void:
 func _hit_police() -> void:
 	police.hit_cd = 0.8
 	police.v = minf(float(police.v), v) * RAMMED_SLOW
+	police.stun_t = STUN_TIME   # D-520
 	var away := signf(float(police.x) - x) if absf(float(police.x) - x) > 0.05 else 1.0
-	police.x = float(police.x) + away * 1.4
+	police.x = float(police.x) + away * 1.68   # D-504: +20 % (was 1.4)
 	v *= RAMMER_SLOW
 	lat_v = -away * HIT_BOUNCE * 0.5
 	police.sway = -away * SWAY    # D-239: both turn away
@@ -1029,7 +1186,7 @@ func _hit_police() -> void:
 
 ## The police car slams into the player (D-142): both bounce apart and the
 ## player loses speed; the third hit spins the player out (then it's a bust).
-func _police_hit() -> void:
+func _police_hit(met: bool = false) -> void:
 	police.hits = int(police.get("hits", 0)) + 1
 	police.last_hit_t = police.t
 	police.hit_cd = 0.8
@@ -1040,10 +1197,11 @@ func _police_hit() -> void:
 	else:
 		v *= HIT_SLOW
 		lat_v = away * HIT_BOUNCE
-		police.x = float(police.x) - away * 1.2
+		police.x = float(police.x) - away * 1.44   # D-504: +20 % (was 1.2)
 		sway = -away * SWAY            # D-239: both turn away
 		police.sway = away * SWAY * 0.7
-		police.v = minf(float(police.v), v) - 4.0
+		police.v = minf(float(police.v), v) * (RAMMED_SLOW if met else RAM_SELF_SLOW)   # D-523 (was 4 m/s less than us)
+		police.stun_t = STUN_TIME if met else STUN_TIME_RAM
 		_end_drift()
 	events.append(["police_ram", police.hits])
 
@@ -1055,6 +1213,7 @@ func _police_obstacles(dt: float) -> void:
 		var tw: float = t.get("w", CAR_W)
 		if absf(float(t.s) - float(police.s)) < (CAR_LEN + tl) * 0.5 				and absf(float(t.x) - float(police.x)) < (CAR_W + tw) * 0.5 				and float(police.get("bump_cd", 0.0)) <= 0.0:
 			police.v = float(police.v) * POLICE_BUMP_SLOW
+			police.stun_t = maxf(float(police.get("stun_t", 0.0)), STUN_TIME_TRAFFIC)   # D-520
 			police.x = float(police.x) + signf(float(police.x) - float(t.x) + 0.01) * 1.5
 			police.bump_cd = 0.5
 			events.append(["police_bump"])
@@ -1181,9 +1340,10 @@ func _drive(dt: float, left: bool, right: bool, gas: bool, brake: bool) -> void:
 	# across the road; full authority from STEER_FULL_V.
 	var authority := clampf(v / STEER_FULL_V, 0.0, 1.0) * STEER * (L_GRIP if gear == Gear.LOW else 1.0) * grip()
 	_update_drift(dt, want, c, brake)
-	var vmax := nitro_speed() if boosting else gear_top()
+	var band := catch_up()   # D-501
+	var vmax := (nitro_speed() if boosting else gear_top()) * (1.0 + CATCH_TOP * band)
 	rpm = clampf(v / gear_top(), 0.0, 1.0)
-	var pull := gear_pull()
+	var pull := gear_pull() * (1.0 + CATCH_PULL * band)
 	# Throttle and brakes
 	var accel := 0.0
 	auto_braking = false
@@ -1356,6 +1516,8 @@ func _crash(kind: String, side: float = 0.0, slide: bool = true) -> void:
 		boosting = false
 		boost_t = 0.0
 		events.append(["nitro_end"])
+	if pursuit:   # D-531 (director): the police car pays for its crashes
+		_add_score(-CRASH_PENALTY)
 	events.append(["crash", kind])
 
 
@@ -1429,7 +1591,7 @@ func _update_traffic(dt: float) -> void:
 				sway = -away * SWAY
 				t.sway = (away if t.v >= 0.0 else -away) * SWAY
 				x += away * 0.3
-				t.shove = float(t.get("shove", 0.0)) - away * (0.8 if big else 1.6)
+				t.shove = float(t.get("shove", 0.0)) - away * (0.96 if big else 1.92)   # D-503: +20 % (was 0.8 / 1.6)
 				t.swipe_cd = 0.4
 				_end_drift()
 				events.append(["bump", t.id])
@@ -1463,11 +1625,15 @@ func _update_traffic(dt: float) -> void:
 				if not big:
 					t.v = minf(t.v + 4.0, 52.0)
 					t.sway = signf(t.x - x + 0.01) * -SWAY   # D-455: its tail kicked aside
+				if pursuit:   # D-531
+					_add_score(-BUMP_PENALTY)
 				events.append(["bump", t.id])
 		t.swipe_cd = maxf(0.0, float(t.get("swipe_cd", 0.0)) - dt)
 		t.sway = move_toward(float(t.get("sway", 0.0)), 0.0, SWAY_BACK * dt)
 		if (not two_player or cur == 1) and _far_from_all(t.s, pv):
 			traffic.remove_at(i)
+	if move:
+		_separate_traffic()
 	if state == State.OVER:
 		return
 	var near := 0
@@ -1476,6 +1642,50 @@ func _update_traffic(dt: float) -> void:
 			near += 1
 	if near < traffic_target():
 		_spawn_traffic()
+
+
+## D-521: traffic cars never overlap each other. A pair that does (a car
+## shoved or pulled aside into another, a lane change gone wrong, one stopped
+## in the way) is pushed apart: sideways when they only just touch that way,
+## otherwise along the road, the one behind held at the other's bumper at no
+## more than its speed (two facing each other both stop).
+func _separate_traffic() -> void:
+	for i in traffic.size():
+		var a: Dictionary = traffic[i]
+		for j in range(i + 1, traffic.size()):
+			var b: Dictionary = traffic[j]
+			var half_s: float = (float(a.get("len", CAR_LEN)) + float(b.get("len", CAR_LEN))) * 0.5
+			var half_x: float = (float(a.get("w", CAR_W)) + float(b.get("w", CAR_W))) * 0.5
+			var ds: float = float(b.s) - float(a.s)
+			var dx: float = float(b.x) - float(a.x)
+			var in_s := half_s - absf(ds)
+			var in_x := half_x - absf(dx)
+			if in_s <= 0.0 or in_x <= 0.0:
+				continue
+			if in_x < in_s and in_x < half_x * 0.5:
+				var side := signf(dx) if absf(dx) > 0.001 else 1.0
+				for pair in [[a, -side], [b, side]]:
+					var c: Dictionary = pair[0]
+					var push: float = float(pair[1]) * in_x * 0.5
+					c.x = float(c.x) + push
+					c.shove = float(c.get("shove", 0.0)) + push
+				continue
+			var da := signf(float(a.get("v0", a.v)))
+			var db := signf(float(b.get("v0", b.v)))
+			if da == db and da != 0.0:
+				var a_behind := ds * da > 0.0
+				var rear: Dictionary = a if a_behind else b
+				var front: Dictionary = b if a_behind else a
+				rear.s = float(front.s) - da * half_s
+				rear.v = minf(float(rear.v) * da, maxf(float(front.v) * da, 0.0)) * da
+			else:
+				var along := signf(ds) if absf(ds) > 0.001 else 1.0
+				a.s = float(a.s) - along * in_s * 0.5
+				b.s = float(b.s) + along * in_s * 0.5
+				if float(a.v) * along > 0.0:
+					a.v = 0.0
+				if float(b.v) * along < 0.0:
+					b.v = 0.0
 
 
 ## D-455: the traffic car we crashed into (strength 1) or knocked at low
@@ -1528,6 +1738,15 @@ func _move_traffic(t: Dictionary, dt: float, pv: Array) -> void:
 	var hit: float = t.get("hit_t", 0.0)
 	if hit > 0.0:
 		t.hit_t = hit - dt
+	if not t.has("v0"):
+		t.v0 = t.v
+	# D-521: a roadblock on its way: over to the kerb, hazards on, and stop.
+	var to_block := INF
+	if not roadblock.is_empty() and hit <= 0.0:
+		var d: float = (float(roadblock.s) - float(t.s)) * signf(float(t.v0))
+		if d > 0.0 and d < ROADBLOCK_STOP:
+			to_block = d
+			yielding = true
 	t.blink = yielding or hit > 0.0
 	var yaw: float = t.get("hit_yaw", 0.0)
 	if hit > 0.0:
@@ -1539,8 +1758,6 @@ func _move_traffic(t: Dictionary, dt: float, pv: Array) -> void:
 	var tw2: float = t.get("w", CAR_W)
 	var edge := signf(lane_x) * (Track.ROAD_HALF - tw2 * 0.5 - 0.2)
 	t.pull = move_toward(float(t.get("pull", 0.0)), (edge - lane_x) if yielding else 0.0, 2.2 * dt)
-	if not t.has("v0"):
-		t.v0 = t.v
 	var waited := false
 	for p in pv:
 		var behind: float = p.s - t.s
@@ -1551,21 +1768,32 @@ func _move_traffic(t: Dictionary, dt: float, pv: Array) -> void:
 			t.v = move_toward(t.v, clampf(room * 0.9, 0.0, float(t.v0)), 16.0 * dt)
 			waited = true
 			break
-	t.waiting = waited or hit > 0.0
+	t.waiting = waited or hit > 0.0 or to_block < INF
 	if hit > 0.0:
 		t.v = move_toward(t.v, 0.0, HIT_DECEL * dt)
+	elif to_block < INF:
+		var room := to_block - ROADBLOCK_STOP_GAP - tlen * 0.5
+		var cap := clampf(room * 0.5, 0.0, absf(float(t.v0)) * YIELD_SLOW)
+		if absf(float(t.v)) > cap or not waited:
+			t.v = move_toward(t.v, cap * signf(float(t.v0)), 16.0 * dt)
 	elif not waited:
 		t.v = move_toward(t.v, float(t.v0) * (YIELD_SLOW if yielding else 1.0), 6.0 * dt)
 	# D-271: oncoming traffic heading at us while we're crashed or stopped
 	# swerves round us (keeping clear by a margin), slowing as it passes;
 	# if there's no room either side, it stops short of us.
 	var dodge_to := 0.0
+	var way := signf(float(t.v0))
 	for p in pv:
-		var ahead: float = t.s - p.s
-		if hit > 0.0 or not ((p.spin > 0.0 or p.v < 4.0) and float(t.v0) < 0.0 and ahead > -2.0 and ahead < DODGE_AHEAD):
+		# D-525: a block in the road (see _players_view) is driven round by
+		# traffic both ways; a crashed or stopped player by the oncoming only.
+		var blocks: bool = p.get("block", false)
+		var ahead: float = (float(p.s) - float(t.s)) * way if blocks else t.s - p.s
+		var plen: float = p.get("len", CAR_LEN)
+		var past := -2.0 - ((plen + tlen) * 0.5 if blocks else 0.0)   # a block: until it is clear of its far end
+		if hit > 0.0 or not ((blocks or ((p.spin > 0.0 or p.v < 4.0) and float(t.v0) < 0.0)) and ahead > past and ahead < DODGE_AHEAD):
 			continue
 		var px: float = p.x
-		var need := (CAR_W + tw) * 0.5 + DODGE_CLEAR
+		var need := (float(p.get("w", CAR_W)) + tw) * 0.5 + DODGE_CLEAR
 		var dx := lane_x - px
 		if absf(dx) < need:
 			var lim := Track.ROAD_HALF + Track.RUMBLE - tw * 0.5
@@ -1577,12 +1805,27 @@ func _move_traffic(t: Dictionary, dt: float, pv: Array) -> void:
 				dodge_to = want_x - lane_x
 				t.v = move_toward(t.v, float(t.v0) * 0.6, 10.0 * dt)
 			else:
-				var room := ahead - (CAR_LEN + tlen) * 0.5 - WAIT_GAP
-				t.v = move_toward(t.v, -clampf(room * 0.9, 0.0, absf(float(t.v0))), 18.0 * dt)
+				var room := ahead - (plen + tlen) * 0.5 - WAIT_GAP
+				t.v = move_toward(t.v, (way if blocks else -1.0) * clampf(room * 0.9, 0.0, absf(float(t.v0))), 18.0 * dt)
 				t.waiting = true
 		break
-	t.dodge = move_toward(float(t.get("dodge", 0.0)), dodge_to, DODGE_RATE * dt)
+	# D-530 (director): it steers round, it doesn't slide: no faster sideways
+	# than its own speed allows (DODGE_TURN), and its nose turns into the move.
+	var dodge_was: float = t.get("dodge", 0.0)
+	t.dodge = move_toward(dodge_was, dodge_to, minf(DODGE_RATE, maxf(absf(float(t.v)), 1.5) * DODGE_TURN) * dt)
+	if float(t.dodge) != dodge_was and hit <= 0.0:
+		var dodge_lat := (float(t.dodge) - dodge_was) / maxf(dt, 0.0001)
+		t.sway = clampf(-dodge_lat * way / maxf(absf(float(t.v)), 4.0), -DODGE_YAW, DODGE_YAW)
 	t.x = lane_x + sin(t.weave * 0.4) * (0.25 if t.get("kind", "car") == "truck" else 0.6) * (0.0 if yielding else 1.0) 			+ t.shove + t.pull + float(t.dodge) + _lane_change_offset(t, dt)
+	# D-525: nothing drives through a block: a car still in line with it is held at its edge.
+	for p in pv:
+		if not p.get("block", false) or hit > 0.0:
+			continue
+		var half_s: float = (float(p.len) + tlen) * 0.5
+		if absf(float(t.x) - float(p.x)) < (float(p.w) + tw) * 0.5 and absf(float(t.s) - float(p.s)) < half_s:
+			t.s = float(p.s) - way * half_s
+			t.v = 0.0
+			t.waiting = true
 	# D-457: tunnel walls and the town's sidewalk barrier hold traffic too (a
 	# car knocked or shoved aside stops against them, it doesn't go through).
 	var wall := Track.TUNNEL_HALF if track.in_tunnel(float(t.s)) else track.side_wall(float(t.s))
@@ -1695,6 +1938,8 @@ func _try_pass(t: Dictionary, pv: Array) -> void:
 		if prel > -(half_p + PASS_CLEAR_BEHIND + maxf(0.0, float(p.v) * dir - speed) * PASS_CLOSING_S) \
 				and prel < half_p + PASS_CLEAR_AHEAD:
 			return
+	if not lanes_stay_open(to_lane, float(t.s), float(t.v0), t, true):
+		return   # D-483: the pass would close the road to a player
 	t.lc = float(Track.LANES[t.lane]) - to_x   # eases out: no jump in x
 	t.lane = to_lane
 	t.lc_cd = PASS_COOLDOWN
@@ -1712,6 +1957,20 @@ func _players_view() -> Array:
 			ps = s
 		out.append({"s": float(player_get(i, "s")), "x": float(player_get(i, "x")), "v": float(player_get(i, "v")),
 			"spin": float(player_get(i, "spin_t")), "lights": lights, "ps": ps})
+	# D-525: a wrecked speeder, and the police car parking in front of it, stand
+	# in the road: one block that traffic drives round (or stops short of).
+	if not wreck.is_empty() and float(wreck.get("v", 0.0)) < 4.0:
+		var lo: float = float(wreck.s) - CAR_LEN * 0.5
+		var hi: float = float(wreck.s) + CAR_LEN * 0.5
+		var x0: float = float(wreck.x) - CAR_W * 0.5
+		var x1: float = float(wreck.x) + CAR_W * 0.5
+		if not arrest.is_empty() and absf(s - float(wreck.s)) < 20.0:
+			lo = minf(lo, s - CAR_LEN * 0.5)
+			hi = maxf(hi, s + CAR_LEN * 0.5)
+			x0 = minf(x0, x - CAR_LEN * 0.5)   # it stands turned across the lane
+			x1 = maxf(x1, x + CAR_LEN * 0.5)
+		out.append({"s": (lo + hi) * 0.5, "x": (x0 + x1) * 0.5, "v": 0.0, "spin": 0.0, "lights": false, "ps": 0.0,
+			"block": true, "w": x1 - x0, "len": hi - lo})
 	return out
 
 
@@ -1723,24 +1982,93 @@ func _far_from_all(ts: float, pv: Array) -> bool:
 	return true
 
 
+## D-483: a different traffic each race (seed_in >= 0 repeats one). The track
+## and everything else keep the race's seed.
+func randomize_traffic(seed_in: int = -1) -> void:
+	_trng = RandomNumberGenerator.new()
+	if seed_in >= 0:
+		_trng.seed = seed_in
+	else:
+		_trng.randomize()
+
+
+## D-483: would a car in `lane` at `ts` driving at `tv` still leave every
+## player lanes to get by? For each player and each speed they might drive
+## at, no OPEN_GAP_S of driving that reaches this car may reach cars in more
+## than OPEN_MAX_LANES lanes, its own included. `skip` is left out (the car
+## itself, when it's already on the road). `soon`: a car already on the road
+## changing lanes: only the speeds around the player's own count, and only
+## if they'd reach it within OPEN_SOON_S (it won't be passing for long).
+func lanes_stay_open(lane: int, ts: float, tv: float, skip = null, soon := false) -> bool:
+	for i in (2 if two_player else 1):
+		var ps: float = player_get(i, "s")
+		var d := ts - ps
+		if d <= 0.0:
+			continue
+		var speeds: Array[float] = []
+		if soon:
+			var pv: float = player_get(i, "v")
+			speeds = [pv - 10.0, pv, pv + 10.0]
+		else:
+			var vs := OPEN_V_MIN
+			while vs <= OPEN_V_MAX:
+				speeds.append(vs)
+				vs += OPEN_V_STEP
+		for vp in speeds:
+			var closing := vp - tv
+			if closing <= OPEN_CLOSING:
+				continue
+			var at := d / closing
+			if soon and at > OPEN_SOON_S:
+				continue
+			# The cars reached near it: when, and in which lane.
+			var near_t: Array[float] = [at]
+			var near_lane: Array[int] = [lane]
+			for o in traffic:
+				if skip != null and is_same(o, skip):
+					continue
+				var od: float = float(o.s) - ps
+				var oc: float = closing + tv - float(o.v)
+				if od <= 0.0 or oc <= OPEN_CLOSING or absf(od / oc - at) >= OPEN_GAP_S:
+					continue
+				near_t.append(od / oc)
+				near_lane.append(int(o.lane))
+			if near_t.size() <= OPEN_MAX_LANES:
+				continue
+			# Every stretch of OPEN_GAP_S that starts at one of them and holds this car.
+			for a in near_t.size():
+				if near_t[a] > at:
+					continue
+				var lanes := 0
+				var n := 0
+				for b in near_t.size():
+					var bit := 1 << near_lane[b]
+					if near_t[b] >= near_t[a] and near_t[b] < near_t[a] + OPEN_GAP_S and lanes & bit == 0:
+						lanes |= bit
+						n += 1
+				if n > OPEN_MAX_LANES:
+					return false
+	return true
+
+
 func _spawn_traffic() -> void:
-	var oncoming := _rng.randf() < ONCOMING_SHARE
+	var oncoming := _trng.randf() < ONCOMING_SHARE
 	var trucks := 0
 	for t in traffic:
 		if t.get("kind", "car") == "truck":
 			trucks += 1
-	var truck := trucks < MAX_TRUCKS and _rng.randf() < TRUCK_SHARE
+	var truck := trucks < MAX_TRUCKS and _trng.randf() < TRUCK_SHARE
 	var lane: int
 	var v_t: float
 	if oncoming:
 		# Oncoming drivers keep to their right: the far-left lane for trucks.
-		lane = 0 if truck or _rng.randf() < 0.4 else 1
-		v_t = -(_rng.randf_range(18.0, 24.0) if truck else _rng.randf_range(22.0, 36.0))
+		lane = 0 if truck or _trng.randf() < 0.4 else 1
+		v_t = -(_trng.randf_range(18.0, 24.0) if truck else _trng.randf_range(22.0, 36.0))
 	else:
-		lane = 3 if truck or _rng.randf() < 0.4 else 2
-		v_t = _rng.randf_range(20.0, 26.0) if truck else _rng.randf_range(28.0, 46.0)
+		lane = 3 if truck or _trng.randf() < 0.4 else 2
+		v_t = _trng.randf_range(20.0, 26.0) if truck else _trng.randf_range(28.0, 46.0)
 	# Oncoming traffic closes fast, so it appears further out.
-	var ahead := (560.0 if oncoming else 380.0) + _rng.randf() * 250.0
+	var ahead := (560.0 if oncoming else 380.0) + _trng.randf() * 250.0
 	for t in traffic:  # keep spawns apart
 		if absf(t.s - (s + ahead)) < 40.0 and t.lane == lane:
 			return
@@ -1751,9 +2079,13 @@ func _spawn_traffic() -> void:
 			return
 	if s + ahead > FINISH_STAGE * CHECKPOINT_EVERY - 20.0:
 		return   # nothing appears past the finish line (D-223)
+	if not roadblock.is_empty() and absf(s + ahead - float(roadblock.s)) < ROADBLOCK_CLEAR:
+		return   # D-521: nothing appears near a roadblock, before or after it
+	if not lanes_stay_open(lane, s + ahead, v_t):
+		return   # D-483: it would leave no way past; another try next step
 	var kind := "truck" if truck else "car"
 	traffic.append({"id": _next_id, "s": s + ahead, "x": Track.LANES[lane], "lane": lane,
-		"v": v_t, "hue": _rng.randf(), "weave": _rng.randf() * 10.0, "last_ds": ahead,
+		"v": v_t, "hue": _trng.randf(), "weave": _trng.randf() * 10.0, "last_ds": ahead,
 		"kind": kind, "len": TRUCK_LEN if truck else CAR_LEN, "w": TRUCK_W if truck else CAR_W})
 	_next_id += 1
 
@@ -1784,6 +2116,14 @@ func _autopilot() -> float:
 ## it's wrecked: BUSTED, extra time, and the next speeder is up the road.
 const PURSUIT_CAR := {"top": 88.0, "grip": 1.1}   # the police car: the HARD car's top speed (D-468), sure-footed
 const PURSUIT_TIME := 90.0
+## D-531 (director): points the police car loses for a crash (traffic or
+## scenery) and for knocking a traffic car. The score never goes below 0.
+const CRASH_PENALTY := 5000.0
+const BUMP_PENALTY := 1000.0
+## D-530 (director): with the police car in front of it and in its way, the
+## speeder swerves round it. BLOCKED_AHEAD m is how far ahead counts.
+const BLOCKED_AHEAD := 16.0
+const BLOCKED_LAT := 1.6          # x its sideways speed while swerving round
 const PURSUIT_BONUS_TIME := 60.0
 const SPEEDER_FIRST := 800.0      # m ahead at the start (D-465; D-464 had 1,000, D-460 600)
 const SPEEDER_NEXT := 650.0       # m ahead of the player for each next one (D-473: we start from a stop after the arrest; D-465 had 1,000)
@@ -1804,6 +2144,11 @@ const STAY_GAP := 90.0            # m ahead it lets the gap grow to (still in si
 const STAY_K := 0.4               # m/s slower per m past it
 const PASS_LIMIT := 10.0          # m the player can get past it before being held to its speed
 const RAM_CD := 0.6
+## D-496: left alone, the speeder's damage slowly goes down: HEAL_WAIT s after
+## the last hit, HEAL_RATE of the bar a second (a full bar in 50 s).
+const HEAL_WAIT := 3.0
+const DMG_STEP := 0.25            # D-534: the damage thresholds (25, 50, 75, 100 %)
+const HEAL_RATE := 0.02
 const RAM_SPEED_DMG := 0.002      # extra damage per m/s of closing speed (D-464: a third)
 const WRECK_DECEL := 18.0
 const BUST_POINTS := 50000.0
@@ -1898,6 +2243,12 @@ func _update_speeder(dt: float) -> void:
 	var top := float(sp.top)
 	sp.t = float(sp.t) + dt
 	sp.hit_cd = maxf(0.0, float(sp.hit_cd) - dt)
+	sp.calm = float(sp.get("calm", 0.0)) + dt   # D-496: s since the last hit
+	if float(sp.calm) > HEAL_WAIT and state == State.RACE:
+		# D-534 (director): never back across a damage threshold (25, 50, 75 %):
+		# from 55 % it mends to 50 % and no further.
+		var held := floorf(float(sp.dmg) / DMG_STEP + 0.0001) * DMG_STEP
+		sp.dmg = maxf(held, float(sp.dmg) - HEAL_RATE * dt)
 	sp.sway = move_toward(float(sp.sway), 0.0, SWAY_BACK * dt)
 	var gap := speeder_gap()
 	# The chase: on within ENGAGE_RANGE, off again once it's LOSE_RANGE away.
@@ -1932,6 +2283,11 @@ func _update_speeder(dt: float) -> void:
 	if c > 0.0001:
 		want_v = minf(want_v, sqrt(0.95 * STEER * g * g / (c * CENTRIFUGAL * H_SLIDE)))
 	# Traffic: pick the clearest lane ahead; brake for what's in the way.
+	# D-530: the police car in front of it, in its way: round it, now.
+	var boxed := _speeder_boxed(sp)
+	if boxed and not sp.get("boxed", false):
+		sp.think = 0.0
+	sp.boxed = boxed
 	sp.think = float(sp.think) - dt
 	if sp.think <= 0.0:
 		sp.think = 0.25
@@ -1941,7 +2297,7 @@ func _update_speeder(dt: float) -> void:
 		want_v = minf(want_v, maxf(0.0, (block - 4.0) * 1.2))
 	var rate := SPEEDER_ACCEL if want_v > float(sp.v) else SPEEDER_BRAKE
 	sp.v = move_toward(float(sp.v), want_v, rate * dt)
-	sp.x = move_toward(float(sp.x), Track.LANES[int(sp.lane)], float(tg.lat) * dt)
+	sp.x = move_toward(float(sp.x), Track.LANES[int(sp.lane)], float(tg.lat) * (BLOCKED_LAT if boxed else 1.0) * dt)
 	var wall := Track.TUNNEL_HALF if track.in_tunnel(float(sp.s)) else track.side_wall(float(sp.s))
 	var lim: float = (wall if wall > 0.0 else Track.ROAD_HALF + 0.5) - CAR_W * 0.5 - 0.1
 	sp.x = clampf(float(sp.x), -lim, lim)
@@ -1982,10 +2338,20 @@ func _speeder_lane(sp: Dictionary, tg: Dictionary) -> void:
 	sp.lane = best
 
 
+## D-530: is the police car just ahead of it and in its way?
+func _speeder_boxed(sp: Dictionary) -> bool:
+	var d: float = s - float(sp.s)
+	return engaged and spin_t <= 0.0 and d > 0.0 and d < BLOCKED_AHEAD and absf(x - float(sp.x)) < CAR_W * 1.05
+
+
 func _lane_room(sp: Dictionary, ln: int) -> float:
 	var lx: float = Track.LANES[ln]
 	var vv := maxf(float(sp.v), 5.0)
 	var room := 200.0
+	# D-530: the police car ahead closes a lane like any car in the way.
+	var pd: float = s - float(sp.s)
+	if engaged and pd > -2.0 and pd < BLOCKED_AHEAD * 2.0 and absf(x - lx) < CAR_W + 0.3:
+		room = minf(room, maxf(pd, 0.0))
 	for t in traffic:
 		if absf(float(t.x) - lx) > (CAR_W + float(t.get("w", CAR_W))) * 0.5 + 0.3:
 			continue
@@ -2043,7 +2409,7 @@ func _speeder_contact(sp: Dictionary, tg: Dictionary) -> void:
 	if across < along:
 		# Side by side: both bounce apart.
 		closing = absf(lat_v) + 4.0
-		sp.x = float(sp.x) + away * across * CAR_W * 0.6
+		sp.x = float(sp.x) + away * across * CAR_W * 0.72   # D-503: +20 % (was 0.6)
 		lat_v = -away * SIDE_BOUNCE
 		sp.sway = -away * SWAY
 		sway = away * SWAY * 0.7
@@ -2063,6 +2429,7 @@ func _speeder_contact(sp: Dictionary, tg: Dictionary) -> void:
 	if float(sp.hit_cd) > 0.0:
 		return
 	sp.hit_cd = RAM_CD
+	sp.calm = 0.0
 	sp.dmg = minf(1.0, float(sp.dmg) + float(tg.dmg) + closing * RAM_SPEED_DMG)
 	events.append(["speeder_hit", float(sp.dmg)])
 	if float(sp.dmg) >= 1.0:

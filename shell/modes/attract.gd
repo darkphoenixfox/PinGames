@@ -72,8 +72,8 @@ func _next_page() -> void:
 func _title_page() -> void:
 	# Shell text in the shell's styled fonts (D-186); the games as their logos.
 	var col := UI.vstack(60)
-	col.add_child(UI.styled_label(tr("APP_TITLE"), UI.SHELL_TITLE_FONT, 3))
 	var land := Screens.table_base().x > Screens.table_base().y   # D-255: side by side
+	col.add_child(UI.shell_logo(260.0 if land else 440.0))   # D-490: the logo (was the title in the marquee font)
 	var list: BoxContainer = col
 	col.offset_top = Screens.dmd_cover()
 	if land:
@@ -89,9 +89,8 @@ func _title_page() -> void:
 	col.add_child(_blink)
 	col.add_child(UI.styled_label(Credits.status_text(), UI.SHELL_TEXT_FONT, 1))
 	_page_nodes.append(add_table(col))
-	var bg := UI.styled_label(tr("APP_TITLE"), UI.SHELL_TITLE_FONT, 5)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var bg := UI.shell_logo(0.0)   # D-490: the logo fills the backglass, with a margin
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 110)
 	_page_nodes.append(add_backglass(bg))
 	_dmd_lines = [[tr("APP_TITLE"), Dmd.YELLOW], [tr("ATTRACT_PRESS_START"), Dmd.WHITE],
 		[Credits.status_text(), Dmd.GREEN]]

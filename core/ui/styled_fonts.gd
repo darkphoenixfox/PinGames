@@ -7,9 +7,12 @@ extends RefCounted
 static var _cache := {}
 
 
-static func get_font(style: String) -> FontFile:
-	if _cache.has(style):
-		return _cache[style]
+## `tabular` (D-500): the digits 0-9 all take the widest digit's advance, each
+## centred in it, so a changing number keeps its width and place.
+static func get_font(style: String, tabular: bool = false) -> FontFile:
+	var cache_key := style + (":tabular" if tabular else "")
+	if _cache.has(cache_key):
+		return _cache[cache_key]
 	var meta: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/fonts/title_%s.json" % style))
 	var tex := load("res://assets/fonts/title_%s.png" % style) as Texture2D
 	if meta == null or tex == null:
@@ -50,12 +53,22 @@ static func get_font(style: String) -> FontFile:
 	f.set_glyph_advance(0, size, space, Vector2(float(meta.space), 0))
 	f.set_glyph_size(0, key, space, Vector2.ZERO)
 	f.set_glyph_texture_idx(0, key, space, -1)
+	var digit_adv := 0.0
+	if tabular:
+		for g in meta.glyphs:
+			if int(g.code) >= 48 and int(g.code) <= 57:
+				digit_adv = maxf(digit_adv, float(g.adv))
 	for g in meta.glyphs:
 		var code := int(g.code)
-		f.set_glyph_advance(0, size, code, Vector2(float(g.adv), 0))
-		f.set_glyph_offset(0, key, code, Vector2(0, -float(meta.ascent)))
+		var adv := float(g.adv)
+		var shift := 0.0
+		if tabular and code >= 48 and code <= 57:
+			shift = floorf((digit_adv - adv) * 0.5)
+			adv = digit_adv
+		f.set_glyph_advance(0, size, code, Vector2(adv, 0))
+		f.set_glyph_offset(0, key, code, Vector2(shift, -float(meta.ascent) + float(g.get("dy", 0.0))))   # D-536: "dy" moves one glyph up (-) or down
 		f.set_glyph_size(0, key, code, Vector2(float(g.w), float(g.h)))
 		f.set_glyph_uv_rect(0, key, code, Rect2(float(g.x), float(g.y), float(g.w), float(g.h)))
 		f.set_glyph_texture_idx(0, key, code, 0)
-	_cache[style] = f
+	_cache[cache_key] = f
 	return f

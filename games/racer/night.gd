@@ -205,6 +205,8 @@ static func add_car_lights(node: Node3D, kind: String, glow_tex: Texture2D, tail
 		var tl := MeshInstance3D.new()
 		tl.mesh = _tail_mesh
 		tl.position = Vector3(sx * 0.95, up + 0.1, -front - 0.05)
+		if tail_at != Vector3.ZERO:   # this truck's own lamps
+			tl.position = Vector3(signf(sx) * tail_at.x, tail_at.y, tail_at.z)
 		holder.add_child(tl)
 	holder.visible = false
 	return holder

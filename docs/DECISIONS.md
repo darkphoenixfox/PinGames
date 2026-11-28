@@ -4548,3 +4548,504 @@ un.ps1 --layout=single` (or add `--stereo=sr`).
 - **Decision (director):** the target's arrow disappeared too early.
 - **How:** it shows 5 s (was 2.2): the three bounces (1.8 s), then it rests over the car, then fades over the last 0.4 s.
 - **Status:** Accepted
+### D-480 — Turbo Run pursuit: faster radio text; a random clocked speed
+- **Date:** 2026-11-26
+- **Decision (director):** the radio text scrolls faster; the clocked speed is random in a range.
+- **How:** the DMD radio scrolls at 70 dots/s (was 42). The call's speed is random each time, from 15 mph under to 25 mph over the speeder's top speed, to the nearest 5 mph (was its top, to the nearest 10).
+- **Status:** Accepted
+### D-481 — Turbo Run: the police car's rear LED line and the light bar where the bar is
+- **Date:** 2026-11-26
+- **Report (director):** the rear light lit a band in the middle of the lamps; the real light is the LED line along their top and round their ends (marked), red in tunnels, at night etc. The roof lights seemed to be only at the front of the car, hidden from the player; the bar's two lamp halves must clearly flash red and blue.
+- **Measured:** orthographic renders of `police2.glb` (rear, side, top) with its HD texture. The LED line is red in the texture (dark red in parts): y 0.87 to 0.90 across the middle, dropping to 0.75 at the ends, hooks back in to |x| 0.45, out to |x| 0.9. The roof bar is at z −0.48 to −0.17 (behind the roof's middle), |x| up to 0.6, y 1.34 to 1.42; its lamp halves are |x| 0.15 to 0.6.
+- **Rear light (supersedes D-478's strip):** the lamp area is the whole lamp cluster (|x| up to 1.0, y 0.72 to 0.92), red texels only, so the LED line's own shape lights. The car shader's red test is now per model (`tail_red`: least red, ratio over green and blue; default 0.3 and 1.8 as before); the police car uses 0.08 and 2.5, so the line's dark reds light too. D-478's 0.012 m feather stays. The two night glows (D-198) move from the line's middle to the lamps at its ends (|x| 0.72, y 0.81; `tail_glow`).
+- **Light bar:** D-462's lit blocks and the glows sat at z +0.15, about 0.45 m in front of the bar, so from behind the roof and the bar hid them. The lit block per lamp half now wraps the painted lamp (0.46 × 0.085 × 0.33 m at |x| 0.375, y 1.387, z −0.32), on every police car, not only the player's. The glows sit on the bar's front and back faces (the player's on its middle), the siren lights over it.
+- **Checked:** tests; pursuit screenshots from behind by day and at night.
+- **Status:** Accepted
+### D-482 — Turbo Run pursuit: the arrow shows between 200 and 150 ft
+- **Date:** 2026-11-26
+- **Decision (director):** the red arrow over the target car appears between 200 and 150 ft.
+- **How (supersedes D-464's trigger, D-472, D-475 and D-479's 5 s):** the arrow shows while the gap to the speeder is between 200 ft and 150 ft (61 to 45.7 m), every time the gap is in that range: it drops and bounces three times, rests over the car, and fades over 0.4 s once the gap leaves the range (closer or further).
+- **Status:** Accepted
+### D-483 — Turbo Run: random traffic that can always be dodged
+- **Date:** 2026-11-26
+- **Decision (director):** make the traffic random without causing impossible-to-dodge situations.
+- **Before:** every race used the same seed (7) for the track and the traffic, so the traffic was the same each time.
+- **Random:** the traffic has its own random stream (`Sim.randomize_traffic()`), seeded afresh each race; the track, pickups and the rest keep the race's seed. `--rc-tseed=N` repeats one. Tests keep the shared stream.
+- **Always a way past (`Sim.lanes_stay_open`):** for any speed a player might drive at (20 to 110 m/s, every 5), the cars they would reach within any 1.5 s of driving may fill at most two of the four lanes. So two lanes are always open, for long enough to move across (a lane takes about 0.3 s at full steering). A new car that would break this isn't placed; another is tried on the next step, so the traffic stays as dense (about 11 cars ahead).
+- **Lane changes (D-453):** a car doesn't start a pass that would break the rule for a player about to reach it (within 8 s at their own speed, ±10 m/s). Otherwise two cars side by side in our lanes could meet oncoming traffic right in front of the player.
+- **Not covered:** cars that change speed after they appear (following, yielding to the police, knocked cars) can still bunch up; the rule is checked when a car appears and when one changes lanes.
+- **Tests:** 12 seeds give 12 different traffics, each keeping the rule at every speed, with as many cars as before.
+- **Status:** Accepted
+### D-484 — Turbo Run: every model's rear lamps checked against renders
+- **Date:** 2026-11-26
+- **Decision (director):** the police car's rear light is right when braking, but in tunnels it's still two circles; check and fix the other models the same way.
+- **Method:** `scripts/tools/render_car_views.py` (Blender, headless) renders each model from behind, the side and above, unlit, at a known scale; the lit texels (lamp box and red test) and the night glows were drawn over the renders and compared with the lamps.
+- **Police, saloon:** no round night glows (D-198) any more: a light bar lights in its own shape (`tail_glow: false`; supersedes D-481's move). The saloon's bar lights to its dark edges.
+- **Sports car (red):** it used the shader's default box, which also lit the red paint above, below and at the corners of its lamps. Now its own area: the two pill-shaped clusters (|x| 0.19 to 0.71, y 0.735 to 0.855, corners rounded 0.055 m; `tail_round` in the car shader).
+- **Supercar:** its yellow paint passed the red test and lit inside the box, while its dark red lenses didn't. The red test is stricter on colour and looser on brightness (0.08, 5×): the red lamps and grille light, the amber outer lamps and the paint don't.
+- **Hot hatch:** the box was looser than the cluster and lit red paint round it; now the cluster only (|x| 0.57 to 0.862, y 0.70 to 0.888).
+- **Hatchback:** the lit area was right; its night glows sat inboard of the lamps and are now on them.
+- **Trucks:** their tail lamps didn't light at all (only glow dots, 0.3 m above the lamps). Both trucks now have a lamp area (red lenses only) that lights at night, in tunnels and in rain, and the dots sit on the lamps. Their headlamps stay glow dots.
+- **Glows:** each model's night glows are placed by `tail_glow` on its red lamps, not at the box's middle.
+- **Checked:** tests; the overlays; one night screenshot (the supercar). Not each model in the game.
+- **Status:** Accepted
+### D-485 — Turbo Run pursuit: a smaller arrow with TARGET over it, from 300 ft
+- **Date:** 2026-11-26
+- **Decision (director):** the red arrow 20 % smaller, with a TARGET text on top; shown from 300 ft.
+- **How:** the arrow's size is 0.8 of D-464's. TARGET (`RC_TARGET`, PinPixel, the tag red with a dark outline, like the rival's tag D-290) sits just above it, bounces and fades with it. The range (D-482) is now 300 ft down to 150 ft.
+- **Checked:** a pursuit screenshot.
+- **Status:** Accepted
+### D-486 — Turbo Run pursuit: no dark blob where the damaged car's smoke starts
+- **Date:** 2026-11-26
+- **Report (director):** sometimes a black circle where the smoke comes from on the damaged target car.
+- **Cause (likely):** at high damage the smoke was dark (grey 0.3) and dense (alpha 0.7), and every puff started small at one point at nearly full strength, so the newest puffs piled up into a dark disc at the source.
+- **Fix:** puffs start spread over a 0.3 m sphere and fade in over the first third of their life (was 12 %); the heaviest smoke is lighter and thinner (grey 0.42, alpha 0.5).
+- **Checked:** not seen in a run yet (it needs a heavily damaged speeder up close); the director to confirm.
+- **Status:** Accepted
+### D-487 — Turbo Run pursuit: the tunnel turns see-through for an arrest
+- **Date:** 2026-11-26
+- **Decision (director):** when busting a car in a tunnel, as the camera moves back, make the tunnel semi-transparent so the cars can be seen.
+- **How:** while the arrest camera (D-472) is out and the player or the camera is inside a tunnel, the tunnel's walls, roof and portals fade to 30 % solid (`ARREST_TUNNEL_ALPHA`), with the camera's move, and back as it returns. The materials are only switched to blending while faded, so nothing changes the rest of the time.
+- **Checked:** tests only; not seen in a run (it needs a bust inside a tunnel).
+- **Status:** Accepted
+### D-488 — Turbo Run: the helicopter comes in over the camera and turns with its movement
+- **Date:** 2026-11-26
+- **Report (director):** the helicopter's flight makes no sense: it appears out of thin air (it could fly in from the top of the screen) and turns the wrong way for the movement it's making.
+- **Cause:** it started in mid-sky, 150 m ahead and 30 m to one side, and came in with its nose turned 70° towards the side it came from, so it flew sideways and backwards. Hovering, its turn and bank ran at another rate (0.8 rad/s) than its sideways drift (0.6), so half the time it leaned and turned against its own movement.
+- **Fly-in (supersedes D-436's):** it starts 24 m behind the car, 16 m up (behind and above the camera), and comes over the camera into the top of the screen, nose first and nose down, overtaking the car. It flares as it slows, then swings round by its side to face the car, banking into the turn, and settles into the hover. The chopper sound is loud almost at once, as it passes overhead.
+- **Hover:** it drifts out to its side and back (4 m); its nose (up to 25°) and bank (6°) follow its sideways speed.
+- **Leaving (D-437):** still at the camera and over it, now straight from where it hovered, with its nose and bank easing level (it side-stepped and banked for no reason).
+- **Checked:** screenshots of the end of the turn, the hover and the exit. The first second of the fly-in (the entry at the top of the screen) wasn't caught in a screenshot; the director to confirm.
+- **Status:** Accepted
+### D-489 — Turbo Run pursuit: the fine animation shows the busted car
+- **Date:** 2026-11-26
+- **Report (director):** the BUSTED animation on the DMD in a pursuit shows two police cars instead of one police car and the busted car.
+- **Cause:** the animation (D-135) draws the player's car and a police car pulling up; in a pursuit the player's picture is the police car.
+- **Fix:** in a pursuit's fine, the car drawn is the busted speeder's picture, in its paint (`DmdAnims.busted_sprite`); a race's own bust still shows the player's car.
+- **Checked:** tests only. Not seen on the DMD: in the quick dev bust (`--rc-bust-at=1`) the first radio call was still showing, and it has priority over animations (D-468). The director to confirm.
+- **Status:** Accepted
+### D-490 — The collection is called VPin Games, with the director's logo
+- **Date:** 2026-11-26
+- **Decision (director):** rename the game from PinGames to VPin Games; the director added a logo, `vpingames.png`.
+- **Name:** shown as VPIN GAMES (`APP_TITLE`, still used on the DMD), in the window titles, the project name (`config/name`, which the browser build's page title and app name follow), the Windows and Android app names, and the README.
+- **Logo:** `assets/textures/shell/logo.png` (the director's picture cropped to its content, 1280 px wide; `scripts/tools/prepare_shell_logo.py`, the original kept in `assets/source/shell/`). It replaces the marquee-font title on the attract title page (TABLE and BACKGLASS) and on the game picker (`UI.shell_logo`). The app icons are the logo on a dark rounded tile (replaces D-177's placeholder and its `gen_app_icon.py`).
+- **Left as they are, on purpose:** the settings folder and file (`%APPDATA%\PinGames\pingames.cfg`: renaming would lose settings and scores unless moved), the Android package ids (`org.pingames.*`: a new id installs as a second app), the export file names and deploy addresses (`exports\PinGames-*.apk`, `web.phoenixfox.net/pingames/`), the `PINGAMES_DEV_*` variables, the repository and its folder, and the name in older log entries. Each is the director's call.
+- **Checked:** tests; a screenshot of the game picker (the logo over SELECT GAME). The attract title page and its backglass weren't seen.
+- **Status:** Accepted
+
+### D-491 — Turbo Run pursuit: an upright damage bar with DAMAGE inside it
+- **Date:** 2026-11-26
+- **Decision (director):** make the pursuit damage bar vertical, with the D A M A G E text drawn inside the bar.
+- **How:** the bar under SUSPECT and the distance is now upright (48 x 252 px) and fills from the bottom; the word (`RC_DAMAGE`) runs down it, a letter a line, in the UI font, over the fill. It replaces the word above a 260 x 24 bar. Same place (under the clock block, D-461), same colours (red; blinking yellow from 75 %).
+- **Checked:** tests; a pursuit screenshot with a damaged speeder.
+- **Status:** Accepted
+### D-492 — Turbo Run pursuit: a see-through damage bar in a metal frame, on the left in portrait
+- **Date:** 2026-11-26
+- **Decision (director):** on 3 screens place the damage bar on the left side of the screen; make it transparent except a metallic frame and the text inside; fill it from the bottom up with red, 50 % transparent.
+- **Look:** no backing any more: a metal frame (a dark edge, bright steel, darker steel inside; 7 px), the letters of DAMAGE down it, and the fill behind them, red at half strength, rising from the bottom (it still blinks yellow from 75 %, also at half strength). 58 x 260 px.
+- **Place:** with a portrait TABLE (the cabinet layouts, and any tall window) it sits on the HUD's left side, 40 px in and 24 % down the screen (`PURSUIT_BAR_AT`). With a landscape TABLE it stays under SUSPECT and the distance (D-491), which is already at the left there.
+- **Checked:** tests; a portrait pursuit screenshot with a damaged speeder.
+- **Status:** Accepted
+### D-493 — Turbo Run pursuit: on one screen the damage bar sits left of the timer; no stage message on the DMD
+- **Date:** 2026-11-26
+- **Decision (director):** on 1 screen put the damage bar to the left of the timer and distance; the DMD shouldn't show stage changes in a pursuit.
+- **Bar:** with a landscape TABLE (the one-screen layouts) the bar stands at the HUD's left edge, level with the top of the clock, and the clock, SUSPECT and distance block sits to its right (it was under that block, D-491). Portrait is as D-492. The bar is always a child of the HUD now, placed by its layout.
+- **DMD:** a pursuit's stage crossings (D-460) no longer flash STAGE n on the DMD; the HUD's stage number still counts.
+- **Checked:** tests; a landscape pursuit screenshot.
+- **Status:** Accepted
+### D-494 — Turbo Run pursuit: the damage bar is as tall as the timer and distance block
+- **Date:** 2026-11-26
+- **Decision (director):** the damage bar needs to be aligned vertically with the time + distance.
+- **How:** in landscape the bar starts at the top of TIME and ends at the bottom of the distance: it takes the block's top and height each frame (never shorter than its letters need), and the letters stay centred in it. It sat a little higher and was shorter than the block (D-493).
+- **Checked:** tests; a landscape pursuit screenshot.
+- **Status:** Accepted
+### D-495 — Turbo Run pursuit: the damage bar's fill a bit more solid
+- **Date:** 2026-11-26
+- **Decision (director):** make the damage bar fill a bit more solid.
+- **How:** the fill is 68 % solid (`PURSUIT_BAR_FILL`; D-492 had 50 %), red and the yellow blink alike.
+- **Checked:** tests only.
+- **Status:** Accepted
+### D-496 — Turbo Run pursuit: the speeder's damage slowly goes down when it isn't being hit
+- **Date:** 2026-11-26
+- **Decision (director):** make the damage go slowly down if the target is not being hit.
+- **How:** 3 s after the last ram (`HEAL_WAIT`) the speeder's damage drops by 2 % of the bar a second (`HEAL_RATE`: a full bar would empty in 50 s), until the next ram, whether or not the chase is on. A wrecked car stays wrecked. The bar, the smoke and the DMD follow it down.
+- **Tests:** a speeder at 50 % left alone keeps it for 3 s, then is down to about 36 % after 10 s.
+- **Status:** Accepted
+### D-497 — Turbo Run pursuit: the police car's siren has three tones
+- **Date:** 2026-11-26
+- **Decision (director):** more than one siren sound for the cop car in pursuit mode, like a real cop car.
+- **Tones** (`OWN_SIRENS`, each a seamless loop made in code with the two-tone siren's square-and-sine voice, its pitch sweeping smoothly up and down): a **wail** (600 to 1400 Hz over 4 s), a **yelp** (the same sweep in 0.32 s) and a **phaser** (750 to 1450 Hz, 12.5 times a second).
+- **When:** while the chase is on, by the gap to the suspect: the wail further than 85 m off, the yelp from there in, the phaser within 32 m (right behind it, ramming). It drops back a tone 14 m further out than it stepped up, so it doesn't flutter at the edge. The tone switches at once, as on a real car. Silent when the chase is off, during the arrest, and in the menus.
+- **Unchanged:** the race's police cars (chasing the player) keep their two-tone siren (D-135); the player's pursuit car no longer uses that one.
+- **Checked:** tests only. Not heard: the director to judge the sound.
+- **Status:** Accepted
+### D-498 — Turbo Run: the SHIFT notice uses the game's title font
+- **Date:** 2026-11-26
+- **Decision (director):** the shift notice in the middle of the screen should use the sunset font.
+- **How:** the blinking SHIFT word beside the gear lever is drawn with `UI.styled_label` in the game's title font (`sunset_metal`, D-366) at scale 3, as the other big words are (D-062). It was red UI dot text, 144 px. Its place, blink and rise are unchanged.
+- **Checked:** tests only. The notice wasn't caught in a screenshot (the test runs' autopilot shifts by itself).
+- **Status:** Accepted
+### D-499 — Turbo Run: the engine settles at top speed
+- **Date:** 2026-11-27
+- **Decision (director):** the car's sound at top speed is a bit annoying and sounds as if the engine is forced.
+- **Cause:** at top speed in H the revs sit at the top of the tachometer, so the rev limiter's bounce (D-112: the pitch dropping 18 times a second) ran the whole time, on the engine's highest note with the whine at its loudest.
+- **How:** the limiter bounces only where it tells the player something: in L at the redline (time to shift) and revving on the grid. In H the note rises less over the rev range (`ENGINE_H_PITCH` 1.15, L keeps 1.5: about 17 % lower at top speed) and the whine rises 15 dB instead of 22 (`ENGINE_H_WHINE_DB`), so top speed is a steady, lower cruise. Nitro still lifts the pitch.
+- **Checked:** tests only. Not heard: the director to judge the sound.
+- **Status:** Accepted
+### D-500 — Styled fonts: fixed-width digits for numbers that change
+- **Date:** 2026-11-27
+- **Decision (director):** the score font should be fixed width, so the numbers don't shake when they change.
+- **How:** `StyledFonts.get_font(style, tabular)` builds a second version of a styled font in which the digits 0-9 all take the widest digit's advance, each centred in its cell; letters and punctuation are unchanged. `UI.styled_label(..., tabular)` asks for it, and Turbo Run's pixel-font swap (D-384) keeps it in 8-BIT and 16-BIT.
+- **Used by:** Turbo Run's score, clock, drift points and the pursuit's distance. Titles and other text keep the proportional digits.
+- **Tests:** the tabular sunset fonts (HD, 8-BIT, both 16-BIT) have one digit width.
+- **Status:** Accepted
+### D-501 — Turbo Run 2P: a little catch-up for the car behind
+- **Date:** 2026-11-27
+- **Decision (director):** in two-player mode add a bit of rubber-banding to keep things interesting.
+- **How:** the car behind gets more top speed and engine pull, growing with the gap: nothing within 40 m (`CATCH_FROM`), rising evenly to +8 % top speed (`CATCH_TOP`, nitro's too) and +25 % pull (`CATCH_PULL`) at 300 m or more (`CATCH_FULL`). The leader is never slowed. The tachometer and gears are unchanged; the speedometer shows the real speed.
+- **1P and pursuit:** unchanged.
+- **Tests:** none side by side, full for the car far behind, none for the leader, none in 1P.
+- **Status:** Accepted
+### D-502 — Turbo Run 2P: the race map on the line between the halves
+- **Date:** 2026-11-27
+- **Decision (director):** in two-player mode draw a map in the split of the screens: a black line with markers for the stage borders and an icon for each player's car.
+- **How:** the black line between the halves (D-289) is now the map (`games/racer/split_map.gd`, drawn in code over both halves). The whole race runs up it, start at the bottom (300 px up, above the gauges) and finish at the top (90 px down, between the two DMDs): a white tick at the start and at every stage border, a chequered bar at the finish. Each car is a small top-down car icon placed by its distance: P1 yellow on the left of the line, P2 cyan on the right (the DMD strip's colours, D-289), so both show when they are level.
+- **Proposed by Claude, for the director to judge:** the icons' colours (player colours rather than each car's paint), their size (26 x 46) and the map covering the whole race even when starting from a later stage.
+- **Tests:** a car's place on the map is its share of the race.
+- **Status:** Accepted
+### D-503 — Turbo Run: side hits bounce both cars 20 % more
+- **Date:** 2026-11-27
+- **Decision (director):** when hitting cars on the side, bounce both cars 20 % more.
+- **How:** a side-swipe with traffic throws the player sideways at 8.4 m/s (`SIDE_BOUNCE`, was 7.0) and shoves the other car 1.92 m (a truck 0.96 m; were 1.6 and 0.8). The two players swiping each other (2P) both bounce at 7.2 m/s (`RIVAL_SIDE_BOUNCE`, was 6.0). In a pursuit, side contact with the speeder uses the same 8.4 m/s for the player and pushes the speeder 20 % further.
+- **Unchanged:** the speed lost, the turn away (D-239), and the police ramming the player or being rammed (D-142, D-198), which are hits rather than side-swipes.
+- **Checked:** tests only.
+- **Status:** Accepted
+### D-504 — Turbo Run: police rams bounce both cars 20 % more
+- **Date:** 2026-11-27
+- **Decision (director):** police rams too (after D-503).
+- **How:** when the police car slams into the player, the player is thrown sideways at 10.8 m/s (`HIT_BOUNCE`, was 9.0) and the police car moves 1.44 m the other way (was 1.2). When the player runs into the police car, it is shoved 1.68 m aside (was 1.4) and the player bounces at 5.4 m/s (half of `HIT_BOUNCE`, was 4.5).
+- **Unchanged:** the speed lost, the turn away, the third hit's spin-out, and police cars clashing with each other (D-372).
+- **Checked:** tests only.
+- **Status:** Accepted
+### D-505 — Turbo Run: car bits fly out of a contact, in each car's colour
+- **Date:** 2026-11-27
+- **Decision (director):** make some particles blast out of cars when there is contact, in the colour of the car texture, representing car bits.
+- **What:** every contact between vehicles throws out small flat pieces (13 cm, tumbling) from both of them, on top of the sparks and dust (D-292): 14 from each vehicle for a bump or ram, 30 and bigger for a crash. Each vehicle's pieces go up and out to its own side of the contact, carried along at about the car's speed, then drop behind and fade (0.8 s).
+- **Colour:** the paintwork's colour is read from the vehicle's own texture (the average of its strongly coloured texels, which is how the car shader tells paint from glass and chrome, D-312; a texture with hardly any, such as a grey truck, gives its overall average), then repainted as the car is (hue turn, black, grey; as `car.gdshader`). Pieces vary between that colour and a darker shade of it. The police car's are white and black.
+- **Where:** side-swipes and nose-to-tail bumps with traffic, crashes into a car or truck (the other vehicle is the nearest one), the two players touching, police rams both ways, police cars clashing, and the pursuit's hits on the speeder.
+- **Code:** `_bits`, `_paint_color` and `_traffic_kind` in `games/racer/game.gd` (the last one now also picks the traffic model for drawing).
+- **Tests:** the red car's colour comes out red, a repaint changes it, black is black. **Checked:** a staged truck crash screenshot (orange pieces from the car, grey from the truck).
+- **Status:** Accepted
+### D-506 — Turbo Run map: stage markers are red circles with a black border
+- **Date:** 2026-11-27
+- **Decision (director):** make the stage markers in the 2-player map red circles with a black border.
+- **How:** the white ticks of D-502 give way to red discs (9 px radius) with a 3 px black rim, at the start and at every stage border. The chequered finish bar stays.
+- **Status:** Accepted
+### D-507 — Turbo Run: the race map in 1 player too, down the left side
+- **Date:** 2026-11-27
+- **Decision (director):** display the map in 1 player too, at the left side of the screen, not touching the screen's end.
+- **How:** the same map (`split_map.gd`, `solo`) is part of the 1P HUD: its line stands 56 px in from the left edge and runs only from the start (300 px up, above the tachometer) to the finish (90 px down), with the player's yellow car icon on the line.
+- **Not in a pursuit (proposed by Claude):** a pursuit has no finish line to drive to, and in landscape its damage bar stands at the left edge (D-493). 2P keeps its map on the split (D-502).
+- **Checked:** tests; a portrait 1P screenshot.
+- **Status:** Accepted
+### D-508 — Turbo Run: the 1P map closer to the left edge
+- **Date:** 2026-11-27
+- **Decision (director):** move the 1-player map closer to the edge, leaving just a handful of pixels between the map and the edge.
+- **How:** the line stands 26 px from the left edge (was 56, D-507). The 1P finish bar is 4 chequers wide instead of 6, so its left end is 6 px from the edge; the stage circles end 14 px from it and the car icon about 12 px. 2P is unchanged.
+- **Checked:** tests; a portrait 1P screenshot.
+- **Status:** Accepted
+### D-509 — Turbo Run: the 1P map at the screen edge, its line from the first marker to the finish
+- **Date:** 2026-11-27
+- **Decision (director, with a marked-up screenshot):** place the map where the green line is (close to the left edge of the screen, from the finish height down to near the bottom, left of the tachometer); the black line starts under the first red marker and stops under the goal marker, not past or before.
+- **Cause of the gap:** on a landscape screen wider than 16:9 the HUD is a centred 1920 x 1080 area (D-254), so a map inside the HUD could not get nearer the screen edge than that area does.
+- **How:** the 1P map is drawn on the TABLE itself, not in the HUD (it shows and hides with the HUD; not in 2P or a pursuit). Its line is 36 px from the screen edge (`SOLO_X`), the finish 90 px from the top and the start 50 px from the bottom (`SOLO_BOTTOM`). On a landscape screen where the HUD starts less than 60 px in (16:9 or narrower) the tachometer is in that corner, so there the start stays 300 px up, above it. The line runs exactly from the start marker to the finish bar. Supersedes the positions of D-507 and D-508.
+- **Checked:** tests; screenshots in portrait, in the single-screen layout at 16:9, and at 21:9 (a wide screen like the one in the screenshot).
+- **Status:** Accepted
+### D-510 — Turbo Run: realistic contact effects (streak sparks, textured shards that bounce, smoke)
+- **Date:** 2026-11-27
+- **Decision (director):** make the contact particles more realistic: fewer, another shape, smoke, less travel, closer to the ground; sparks like a grinder's (smaller, brighter). After Claude's proposal: all three parts, and the shards carry the car's texture.
+- **Sparks** (supersede the dots of D-303 and D-310): 100 per contact (150 in a crash), each a thin streak along its own flight (2.2 cm wide, up to about half a metre long), turned to face the camera, drawn additively at 1.6 times white so the scene's glow blooms on them. White-hot, cooling through yellow and orange to dull red. They stream for under half a second from the contact point, which rides along with the car, back and outward in a cone, slowing in the air and falling. A streak is never thinner than about a pixel, so it survives 8-BIT and 16-BIT. `shaders/spark.gdshader`.
+- **Shards** (supersede the particle bits of D-505): 6 per vehicle in a bump or ram, 13 in a crash (were 14 and 30), irregular flat pieces with 3 to 5 corners, 6 to 14 cm across. Each shows a patch of the vehicle's own texture taken from its paintwork and repainted as the car is (`shaders/shard.gdshader`, the hue rules of the car shader); the police car's come from its white and its black. They are thrown low (under a metre) and to their vehicle's side, tumble, bounce once or twice on the road, then lie flat, skid to a stop and are left behind. Moved by the game, not the particle system (which can neither bounce nor tumble a piece). At most 80 at once per view.
+- **Smoke:** a scrape leaves a thin light-grey wisp trailing from the contact for a third of a second; a crash makes a dark puff where it happened and a grey trail from the car for about two seconds. The tan road dust (D-292) stays, a little thinner.
+- **Where:** as D-505: traffic bumps and side-swipes, crashes, the two players, police rams and clashes, the pursuit's hits and the wreck.
+- **Code:** `games/racer/contact_fx.gd` (one per view), called from `_contact_at` in `game.gd`. Both shaders are in the loading warm-up (D-178). `--rc-burst` stages a contact every half second.
+- **A bug found on the way:** a spark's brightness used pow() of a value that could fall a hair below zero; the result is not a number, and the glow smeared each such pixel into a white disc. The shader clamps it.
+- **Tests:** shard patches come from the red car's red paintwork; trucks and the police car have patches; a shard stays below a metre, lands and stops. **Checked:** staged contacts in HD and 16-BIT screenshots. Not seen in motion: the director to judge.
+- **Status:** Accepted
+### D-511 — Turbo Run contact effects: shards seen flying, no black blob in smoke, sparks at the moment of the hit
+- **Date:** 2026-11-27
+- **Reports (director, after D-510):** the shards show lying on the road but aren't seen flying out; the black circle blob seen before on a smoking car is there again; the sparks look good but feel delayed to the hit.
+- **Shards:** they were thrown towards their own vehicle's side, so under it, and were back on the road in a third of a second. Now they are twice the size (12 to 26 cm across), start at 0.3 to 0.7 m, go up at 1.6 to 3.6 m/s (to about roof height, no more) and spread both ways across the road, leaving at 88 to 99 % of the car's speed so they stay beside and behind it. They bounce a little higher and skid much longer (the road takes 9 m/s² off them, was 30) before they are left behind.
+- **Black blob, the real cause:** a CPUParticles3D emitter draws a stray black puff at its origin (already noted for the tyre smoke, D-100). The speeder's smoke (D-464) and the contact smoke and dust (D-292, D-510) all used such emitters; the earlier fixes changed the texture and the colour (D-474, D-486) and so did not cure it. All of them are now our own pooled puffs in one MultiMesh (`ContactFx.puff`, at most 256), which fade in over the first fifth of their life: the road dust, the scrape wisp, the crash puff and trail, and the damaged speeder's and wreck's smoke (same colours, rate and drift as before). The contact smoke is also lighter and thinner (crash puff mid grey at 30 %, trail light grey at 22 %), and keeps most of the car's speed so it trails behind instead of vanishing at once.
+- **Sparks:** four fifths of them now leave in the first tenth of a second (they were spread evenly over 0.4 s, so the fan built up after the hit). They are also slower (up to 22 % of the car's speed, was 50 %: some shot metres up into the sky) in a slightly narrower cone.
+- **Still CPUParticles3D:** the sparks only. They are additive, so a black puff adds nothing and cannot show.
+- **Tests:** as D-510 (the shard's flight still stays under 1.2 m and ends at rest). **Checked:** a staged contact at 150 mph in a screenshot (sparks, flying shards, wisp, no blob). The damaged speeder's smoke was not seen up close in a run: the director to confirm the blob is gone there.
+- **Status:** Accepted
+### D-512 — Turbo Run: square pixel sparks in 8-BIT and 16-BIT; the 1P map runs from the clock caption to the tachometer
+- **Date:** 2026-11-27
+- **Decision (director):** in 16-BIT and 8-BIT the metal scratch particles are pixelated. The single player map lines up at the top with the top of the TIME text and at the bottom with the top of the tachometer.
+- **Sparks:** in 8-BIT and 16-BIT each spark is a hard square, 2 of the low-resolution pixels across, sitting on the pixel grid, in flat colours (white, yellow, orange, red: the heat ramp in steps of a third), fully there or gone, and not over white, so the glow leaves it alone. HD keeps the streaks of D-510. One uniform (`pixels`) on the spark shader, set with the graphics mode.
+- **1P map** (supersedes the ends of D-509; its place by the left edge stays): the top of the finish marker is level with the top of the TIME letters, the bottom of the start marker with the top of the tachometer arc, in portrait and landscape. Read from the HUD each frame, so it follows the layout. The 2P map is unchanged.
+- **Checked:** windowed HD screenshot, measured: finish marker top and TIME top on the same row, start marker bottom one pixel above the arc; 32:9 screenshots in 16-BIT and 8-BIT. The sparks were caught in the 8-BIT shot only, and not seen in motion: the director to judge their size.
+- **Status:** Accepted
+### D-513 — Turbo Run sparks: brighter, light golden yellow, changing colour over their life
+- **Date:** 2026-11-27
+- **Decision (director):** the sparks need to be brighter, light golden yellow, with a colour change over their life.
+- **Colour:** a spark starts light golden yellow, turns gold by a third of its life, orange by half, orange-red by four fifths, and fades out dark red (was white, yellow, orange, red, D-510).
+- **Brightness:** HD draws them at 2.6 times white (was 1.6), so the glow blooms more on them. 8-BIT and 16-BIT stay at full brightness with no glow (D-512), with the ramp in steps of a quarter (was a third), so the yellow, gold, orange and red steps all show.
+- **A bug fixed on the way:** D-512 made the HD sparks invisible. Its pixel path sets the vertex's screen position, and once a shader sets that anywhere the engine stops filling it in, so the HD path drew nothing. The shader now always sets it.
+- **Checked:** HD and 16-BIT screenshots of staged contacts (HD: a white-gold burst at the hit, golden streaks cooling to orange and red; 16-BIT: square yellow and orange pixels).
+- **Status:** Accepted
+### D-514 — Turbo Run city: an urban motorway (walls, overpasses, tunnels) instead of crossroads
+- **Date:** 2026-11-27
+- **Decision (director):** in the city stage, instead of crossroads, walls like some motorways through cities have; some overpasses and tunnels.
+- **Walls:** a concrete wall 4.5 m high stands on both sides, on the barrier that already held the car (D-216), so nothing changes in how the car or the traffic is stopped. It uses the tunnels' concrete panels with the yellow guide stripe, lit by the scene, and has a flat cap. It rises over the first metres of the city, runs into each tunnel mouth, and the buildings and street lamps show over it.
+- **Overpasses** (replace the junctions of D-216, same spacing of 260 to 420 m): a road crosses over on a concrete deck 14 m wide with parapets, its underside at tunnel height (6.5 m), on an abutment at each wall and piers further out. The buildings leave it a gap; no lamp stands under it. Scenery only. None within 40 m of a tunnel mouth.
+- **Tunnels in town:** the city had none. Gentle sections wholly inside it may now be a tunnel of 140 to 300 m (6 in 10 of those that qualify, at least 500 m apart, clear of the checkpoints as ever). Its mouth is a concrete face between the building lines, 10 m high, and the buildings stand on beside it. Everything else is the tunnel of D-127 (walls, lamps, sound, no rain).
+- **Removed:** the cross streets with zebra crossings and the traffic lights (`junction.gdshader`, the light builder in `city.gd`, the `tlight` object).
+- **A bug fixed on the way:** buildings were scaled along the world's axes, not their own, so where the road had turned they were skewed and their corners reached towards the road (seen poking through a tunnel wall). Now scaled along their own axes: the blocks are square to the road everywhere.
+- **Code:** `track.gd` (`overpasses`, `_maybe_city_tunnel`, `city_wall_h`), `city.gd` (`build_walls`, `build_overpasses`), `tunnel.gd` (the town portal).
+- **Tests:** the city has at least 5 overpasses, all in the city and none at a tunnel; at least one city tunnel; a wall in the city and none on the beach. The older tunnel test now allows buildings beside a tunnel.
+- **Checked:** night screenshots of stages 6 and 7 in HD (windowed) and 16-BIT (32:9): walls, an overpass, a city tunnel inside and its mouth. Not seen in daylight (the city is always at night) nor in motion.
+- **Status:** Accepted
+### D-515 — The Android APK also installs and shows on Android TV
+- **Date:** 2026-11-27
+- **Decision (director):** an Android build of the single-screen version; then whatever Android TV needs: a banner and the LEANBACK_LAUNCHER intent filter.
+- **Single screen:** the "Android" preset already is the single-screen version (D-251: `Config.layout()` gives `single` on Android). No change; `scripts\build_android.ps1` builds it.
+- **Android TV, one APK for phones and TVs:**
+  - the preset's `package/show_in_android_tv` is on: Godot adds the LEANBACK_LAUNCHER category next to LAUNCHER;
+  - a banner, 320x180: the VPin Games logo on the app icon's dark tile (`scripts/tools/prepare_tv_banner.py` writes `scripts/android/res/drawable-xhdpi/tv_banner.png`; that folder has a `.gdignore`);
+  - the touch screen and leanback are declared "not required", so a TV accepts the app.
+- **How:** Godot has no export option for the banner or those two declarations, and `android\` (its build template) is not in the repo. The build script copies the banner into the template and adds `android:banner` and the two `uses-feature` lines to its main manifest, once; on a fresh checkout it builds once to get the template, patches it and builds again. The Quest build shares the template; the additions do nothing there.
+- **Nothing else needed in the game:** the touch overlay only shows on a touch screen, and a gamepad uses the single-screen pad layout (D-256).
+- **Checked:** the built APK's manifest (aapt2): banner set, LEANBACK_LAUNCHER present, both features not required. Not run on a TV or a phone.
+- **Open:** a TV remote without a gamepad. Left and right should work as the flippers; whether its centre button arrives as Enter (START) is not verified, and it has no button for LAUNCH. The director to say if a remote-only layout is wanted.
+- **Test:** the Android preset shows on Android TV.
+- **Status:** Accepted
+### D-516 — Turbo Run two players: a helicopter in each half, for its own player
+- **Date:** 2026-11-28
+- **Report (director):** in two-player games only player 1 triggers the helicopter, and player 2's screen does not show it at all.
+- **Cause:** D-436 meant "not in two-player", but the check ran when the view's world was built: player 1's is built before the mode is chosen, so it had a helicopter anyway; player 2's is built afterwards and had none.
+- **Decision:** each half has its own helicopter, called by its own player's checkpoints (the first, and the first in the city, D-437) and filming that player's car. Supersedes D-436's "not in two-player". The halves are separate worlds, so a player doesn't see the other's helicopter; each half plays its chopper sound while its own is out.
+- **Checked:** a 2P screenshot (32:9, `--rc-2p --rc-heli`): the helicopter hovers in both halves, ahead of each player's car.
+- **Status:** Accepted
+### D-517 — Turbo Run: a random time of day that turns with the stages; the helicopter keeps clear of tunnels and flies over overpasses
+- **Date:** 2026-11-28
+- **Decision (director), time of day:** the game starts at a random time of the day and it progresses as the stages change: day and night last 2 stages each, sunset 1 and dawn 1. Supersedes the fixed schedule of D-193 and D-225 (day 1-3, sunset 4-5, night 6-8, dawn 9-10) and the pursuit loop's own timing (D-460).
+- **How:** the day is a cycle of 6 stages (`sky.gd`, `CYCLE`): day 07:30 to 16:24, sunset to 18:24 (the sun sets late in that stage), night to 04:54, dawn to 07:30 (the sun rises a little before half way). A race starts at the beginning of one of those 6 stages, picked at random (`sim.tod_start`), so each kind of light lasts whole stages. Proposal: the director may prefer any moment of the day instead of a whole stage. Both players of a 2P race share the start. The pursuit runs round the same cycle. The attract demo stays in daylight.
+- **Consequence:** every area can now be seen at any hour: the city by day, the beach at night. Nothing in the scenery was changed for that.
+- **Dev flags:** `--rc-tod-start=N` picks the starting stage of the cycle (0-1 day, 2 sunset, 3-4 night, 5 dawn). `--rc-tod`, `--rc-night` and `--rc-sunset` still fix the time (now in cycle stages).
+- **Report (director), helicopter:** the second helicopter clips through an overpass and a tunnel; it should spawn somewhere else or fly over them.
+- **Decision:** both.
+  - **Tunnels:** called at its checkpoint, it comes only once no tunnel is within 450 m ahead (it is out for 10 s); it waits up to 25 s for that, then does not come. If it still meets a tunnel it climbs over the mouth (out of sight from inside).
+  - **Overpasses** (260 to 420 m apart, so it cannot avoid them): from 70 m before one it climbs to 12.5 m above the road, over the deck and its parapets, and comes back down 16 m after it.
+- **Code:** `game.gd` (`_heli_wait`, `_heli_clearance`), `heli.gd` (`lift`), `track.gd` (`tunnel_between`).
+- **Tests:** the time-of-day test now checks the cycle (2 day, 1 sunset, 2 night, 1 dawn, and round again).
+- **Checked:** screenshots of stage 6 by day, at night and at first light (32:9); the helicopter climbing as an overpass comes up (stage 7, staged with `--rc-heli`). Not seen in motion; the wait for a clear stretch is not seen in play.
+- **Status:** Accepted
+### D-518 — Turbo Run: no tunnel in the finish town or on the run-in to it
+- **Date:** 2026-11-28
+- **Report (director):** a tunnel appeared at the end of the snow stage, before the goal.
+- **Cause:** tunnels (D-127) only kept 60 m clear of the checkpoints and the finish line, so one could stand inside the finish town (D-229). The race's road had one from 450 m to 148 m before the line: through the town's houses and crowd, coming out just before the goal.
+- **Fix:** no tunnel in the finish town (the last 600 m and the village after the line), nor within 200 m before it. One that would reach in is cut short, or dropped if that leaves less than the shortest tunnel. The rest of the road is unchanged.
+- **Test:** no tunnel in the finish town or within 200 m before it.
+- **Status:** Accepted
+### D-519 — Turbo Run: a second desert stage and a second fields stage (12 stages)
+- **Date:** 2026-11-28
+- **Decision (director):** add a desert 2 and a fields 2 stage.
+- **Stages:** 1-2 beach, 3-4 forest, 5-6 desert, 7-8 city, 9-10 fields, 11-12 snow. The finish line and its town are at the end of stage 12 (was 10, D-221). Supersedes the order of D-225. The pursuit's loop (D-460) is those twelve, then the forest back to the beach (13 stages round).
+- **What follows by itself:** the START STAGE screen goes up to 12; the race map has 12 stage marks; the helicopter's second visit is at the first city checkpoint, now the end of stage 7 (D-437); the day's cycle of 6 stages (D-517) turns exactly twice in a race.
+- **Not changed:** the checkpoint bonuses and the clock. The race is 4.6 km longer (27.6 km); the bonus per checkpoint keeps falling to its floor as before, so the last stages are as tight as stages 9-10 were. The director to say if the clock needs retuning.
+- **The new stages:** generated like the first of their kind (same scenery rules, another stretch of road); nothing new was drawn for them.
+- **Tests:** the areas by stage, the city tests (now stage 7) and the pursuit loop were updated.
+- **Checked:** 16-BIT screenshots at the start of stages 6 (desert), 10 (fields) and 12 (snow), with the 12-mark map.
+- **Status:** Accepted
+### D-520 — Turbo Run: a bumped police car stays slow for a while
+- **Date:** 2026-11-28
+- **Report (director):** in single player the police car does not slow down when hit; escaping is virtually impossible once it gets to you.
+- **Cause:** the bump did cut its speed to 45 % (D-198, D-364), but it then accelerated at 40 m/s² back to the player's speed: at full speed again within a second, about 20 m behind. Escaping needs 120 m (D-200).
+- **Fix:** after the player's bump the police car gains only 7 m/s² for 3 s (`STUN_TIME`, `STUN_ACCEL`); after it hits traffic, for 1.2 s. Measured at the normal car's top speed: one bump now leaves it about 95 m behind after 4 s (was 20 m), so one clean bump and a few seconds flat out, or a second bump, loses it.
+- **Not changed:** what counts as the player's bump (running into it from behind, steering into its side while it isn't swerving in, or any backup car, D-364). A contact while the lead car is swerving in is still its ram on the player. The same code runs in two-player.
+- **Test:** a bumped police car is still slow, and well behind, a second later.
+- **Checked:** by simulation only (the gap over time, before and after). Not played.
+- **Status:** Accepted, pending the director's play
+### D-521 — Turbo Run: police roadblocks, traffic that never overlaps, and cat's eyes
+- **Date:** 2026-11-28
+- **Decision (director), roadblock:** when a player has 3 police cars after them, a roadblock appears: 2 police cars with flashing lights across the outer lanes and red and white wooden barriers with orange flashing lights in the middle lanes, which can be destroyed by driving through them. No traffic appears near it, before or after. Traffic that reaches it moves to the kerb with its emergency lights on and stops. Traffic cars must not clip through each other.
+- **Roadblock (`sim.gd`):**
+  - With 3 cars in the chase (`MAX_POLICE`), the road is closed 700 m ahead. It is moved on until the spot is clear of tunnels, overpasses, checkpoint gates (200 m), sharp bends and the finish town.
+  - One at a time, shared by both players in a 2P race. The next comes at least 1,500 m further on, while 3 cars are still chasing.
+  - A police car stands across each outer lane: driving into one is a crash (a knock at low speed), and a crash with the police close is a bust, as ever. A barrier closes each middle lane: driving through it breaks it (splinters, a jolt), costs 10 % of the speed and scores 3,000. A broken barrier stays open, also for the other player.
+  - Going round on the verge is possible (the grass slows the car as usual). Proposal: the director to say if that should be closed too.
+  - It is cleared away once every player is 150 m past it.
+- **Traffic:** nothing appears within 350 m of it, either side. A car within 170 m on its way there pulls over to its own kerb, indicator flashing (the cars have no separate hazard lamps: the pull-over blinker of D-163), and stops 35 m short; the next stops behind it. It drives on when the roadblock is gone.
+- **No overlapping (all traffic, always):** a pass over all pairs each step. Cars that only just touch sideways are pushed apart sideways; otherwise the one behind is held at the other's bumper at no more than its speed; two facing each other both stop.
+- **Looks (`roadblock.gd`, `game.gd`):** the game's police model with its light bar flashing, across the lane, nose to the middle. The barrier: two striped planks (`assets/textures/racer/barrier.png`, `scripts/tools/gen_barrier.py`) on A-frame legs, two amber lamps flashing in turn. ROADBLOCK! on the TABLE and the DMD when it is called.
+- **Decision (director), cat's eyes:** in the stages not lit by plenty of lamps (all but the city), reflective cat's eyes on the sides of the road that reflect the light of cars: simulated by making them bright where a car is driving.
+- **Cat's eyes (`cat_eyes.gd`, `shaders/cat_eye.gdshader`):** a stud every 9 m on both edge lines, everywhere but the city, the finish town and the tunnels. Each is a small disc that faces the camera and is never smaller than about a pixel, so a row reads as points of light. They show only in the dark (night, or the low beams of rain) and only near a car: within 62 m of a spot 34 m ahead of the player's car, and within 30 m of a spot 14 m ahead of each other car (the other player, the police, the nearest traffic, up to 12 cars). 8-BIT and 16-BIT: hard square pixels, no glow.
+- **Dev flag:** `--rc-roadblock=N` closes the road N m ahead at GO. `--rc-police --rc-backup=2` gives 3 police cars at once.
+- **Tests:** two police cars: none; three: the road is closed ahead; no traffic appears near it; traffic reaching it pulls over, blinks and stops short, never overlapping; a barrier breaks and the car goes on; a police car is a crash; it is cleared once passed.
+- **Checked:** screenshots of the roadblock by day (HD and 16-BIT, single screen) and at night (32:9), the splinters after a barrier (cabinet layout), cat's eyes at night in HD and 16-BIT. Not seen: the roadblock called by a real 3-car chase, traffic queuing at it, the police lights at night up close.
+- **Status:** Accepted, pending the director's play
+### D-522 — Turbo Run car select: a stat's name sits on its own bar; TIME is TIME EXTENSION
+- **Date:** 2026-11-28
+- **Decision (director):** the text in the stat boxes should be closer to the bar it describes than to the bar before it; TIME is renamed TIME EXTENSION.
+- **How:** each stat (name and bar) is one group with the name right on its bar, and a 12 px gap above each group (`showroom.gd`: `STAT_NAME_GAP`, `STAT_GAP`). `RC_STAT_CLOCK` reads TIME EXTENSION.
+- **Checked:** a screenshot of the car select (single screen).
+- **Status:** Accepted
+### D-523 — Turbo Run: the police car's ram sets it back too
+- **Date:** 2026-11-28
+- **Decision (director):** a contact while the lead police car is swerving in should slow it as well (after D-520 it did not).
+- **How:** it is still its ram on the player (the hit counts, the player is slowed and shoved). The police car now keeps 75 % of the player's speed and is slow to recover for 1.5 s; if the player steered into it as it came, it is slowed as much as by the player's own bump (45 %, 3 s) and falls far enough back to clear its ram count (D-198).
+- **Test:** the two-car position test no longer lets a ram happen while it measures.
+- **Checked:** by the tests only. Not played.
+- **Status:** Accepted, pending the director's play
+### D-524 — Turbo Run pursuit: CHOOSE YOUR TARGET in the police lettering, the targets on WANTED posters
+- **Date:** 2026-11-28
+- **Decision (director):** CHOOSE YOUR TARGET uses the police letters; the EASY, NORMAL and HARD boxes in the pursuit mode look like WANTED signs with the cars spinning in the photo area.
+- **How (`showroom.gd`):** the title uses the police title font (`cops_metal`, D-371). Each target has a poster of aged paper: WANTED across the top, a framed photo with the car turning in it, then the name and the stats printed in dark ink (the pips are ink boxes). The turntables are hidden in a pursuit. The paper and the photo's backdrop are drawn under the 3D view and the frame and print over it. Single screen: upright posters, the stats under the photo. Cabinet TABLE: wide posters, the stats beside the photo. The chosen poster is bright, the others dimmed, as the cards were.
+- **Proposal:** the paper is a flat colour and the lettering is the UI font; the director may want a paper texture, a stencil or western font, or a reward line.
+- **Checked:** screenshots of the pursuit car select, single screen and cabinet layout.
+- **Status:** Accepted, pending the director's look
+### D-525 — Turbo Run pursuit: traffic drives round the bust, never through it
+- **Date:** 2026-11-28
+- **Report (director):** when the police car busts someone it becomes invulnerable and cars clip through it. It should not; traffic should just drive around.
+- **Cause:** during the arrest (D-466) the player's car was made immune to traffic so nothing could spoil the parking, and nothing told the traffic it was there: cars drove through it and through the wreck.
+- **Fix:** a stopped wreck, and the police car parking in front of it, are one block in the road for the traffic. Cars coming either way move across to pass it with clearance and at reduced speed until they are clear of its far end; with no room they stop short. As a last guard, a car still in line with the block is held at its edge.
+- **Kept:** the player's car cannot be crashed by traffic during the automatic parking (the player is not driving it). With traffic keeping clear this should no longer show.
+- **Test:** a car coming up behind the bust never overlaps the police car or the wreck, and gets past or stops.
+- **Checked:** by the tests only. Not played.
+- **Status:** Accepted, pending the director's play
+### D-526 — Turbo Run city: no building in the way of an overpass
+- **Date:** 2026-11-28
+- **Report (director):** overpasses in the city can't go directly into buildings.
+- **Cause:** the deck runs straight out 150 m each way, but the buildings follow the road: where the road bends, blocks further along stood across the deck's line. Only the plots right at the crossing were kept clear (D-514).
+- **Fix (`track.gd`, `_in_deck`):** every building plot is checked against the decks near it, in the deck's own direction: a plot that would touch the deck's strip stays empty, and a building already placed in the way when an overpass is decided is removed.
+- **Test:** no building stands in the way of an overpass.
+- **Checked:** by the test only. Not seen on screen.
+- **Status:** Accepted
+### D-527 — Turbo Run WANTED posters: the car stays inside the photo, printed in black and white
+- **Date:** 2026-11-28
+- **Decision (director):** the cars must render inside the photograph area of the WANTED sign (masked), and look as if printed by a black and white printer on the poster's paper.
+- **Mask:** in a pursuit the whole 3D view is hidden; each poster shows it again cut to its photo frame, so nothing of a car reaches past the frame (D-524 drew the cars over the posters).
+- **Print (`shaders/wanted_print.gdshader`):** the photo is a slanted screen of ink dots in the poster's ink on its paper: big dots where the car is dark, none where it is light. The grey is part brightness, part strongest colour channel, so the blue and the red car keep their shading and stripes (by brightness alone they printed as black shapes). The cars are no longer darkened one by one when not chosen: the whole poster is dimmed.
+- **Checked:** screenshots of the pursuit car select at 32:9 and in the cabinet layout.
+- **Status:** Accepted, pending the director's look
+### D-528 — Turbo Run: no racing kerbs; cat's eyes red on the edges, white on the centre line
+- **Date:** 2026-11-28
+- **Decision (director):** the roads are not a race track: the red and white kerbs all along them go, the asphalt is a bit wider there instead. Cat's eyes are red on the sides and white on the median.
+- **How:** the 1.2 m kerb strip (`RUMBLE`) is drawn as asphalt: a paved shoulder outside the edge line (`road.gdshader`). Nothing changes in the driving: the car is off the road past the same line as before. The city keeps its grey kerb stone and sidewalk. The studs take a colour each (`cat_eyes.gd`): red on both edge lines, white on the centre line (a third row, same 9 m spacing).
+- **Checked:** screenshots by day (beach, HD) and at night (forest, HD at 32:9 and 16-BIT in the cabinet layout).
+- **Status:** Accepted
+### D-529 — Turbo Run: the houses are dark at night, with lit windows
+- **Date:** 2026-11-28
+- **Decision (director):** the houses (beach and snow) have lights in their windows at night; and they were extremely bright at night with no light source.
+- **Cause of the brightness:** the sprites are pre-lit and only tinted at night (D-113); the houses' pale walls stayed far brighter than the land round them.
+- **How:** the six house sprites (three beach houses, two chalets, the townhouse) take a darker night tint than the other sprites. Each has a window mask, `<name>_lights.png`, a greyscale texture of its own (not the sprite's alpha), made by `scripts/tools/gen_house_lights.py`: a box round each window's glass, of which only the glass-coloured pixels count, so frames and bars stay dark; plus the door lamps. The sprite shader lights the masked pixels warm as night falls (from night level 0.45), glowing in HD and as flat pixels in 8-BIT and 16-BIT. Not every window is lit. Every house of one kind has the same windows lit.
+- **Checked:** screenshots of the beach at night (HD cabinet and 32:9, 16-BIT) and at dawn. The snow town's houses use the same code and masks; not seen in the game at night.
+- **Status:** Accepted, pending the director's look
+### D-530 — Turbo Run pursuit: traffic steers round, and the speeder swerves round a police car in front
+- **Date:** 2026-11-28
+- **Decision (director):** traffic avoiding the police car needs to turn, not slide. If the police car blocks the target by driving in front of it, the target does evasive manoeuvres to the sides instead of repeatedly bumping the police car in front.
+- **Traffic:** a car driving round something (D-271, D-525) moves sideways no faster than 0.32 of its own speed, and its nose turns into the move (up to 0.3 rad). A car that is stopped no longer slides across.
+- **Speeder:** the police car up to 16 m in front of it and in its way closes that lane for it like a car in the way: it picks a neighbouring lane with room at once and moves over at 1.6 times its usual sideways speed. With no free lane it stays, as before.
+- **Test:** with the police car held in front of it, the speeder changes lane and is clear, with no bump.
+- **Checked:** by the tests only. Not played.
+- **Status:** Accepted, pending the director's play
+### D-531 — Turbo Run pursuit: crashes cost the police car points
+- **Date:** 2026-11-28
+- **Decision (director):** the police car must lose points for crashing into traffic or scenery.
+- **How (proposal for the amounts):** a crash (traffic or scenery) costs 5,000; knocking a traffic car without crashing costs 1,000 (a bust is 50,000). The score never goes below 0. The crash animation on the DMD shows the points lost. Races are unchanged.
+- **Tests:** a crash in a pursuit takes 5,000 and the score stops at 0; a crash in a race takes nothing.
+- **Checked:** by the tests only. The DMD line not seen.
+- **Status:** Accepted, pending the director's play
+### D-532 — Turbo Run roadblock: the police cars and barriers stand in random lanes
+- **Date:** 2026-11-28
+- **Decision (director):** in a roadblock the cars and barriers are placed at random, 2 and 2, over the 4 lanes (D-521 always had the cars on the outer lanes and the barriers in the middle).
+- **How:** each roadblock draws its own lanes (`roadblock.cops`, `roadblock.barriers`): any of the 6 arrangements, two police cars side by side included. Both players see the same one. A police car standing across its lane reaches a little into the lanes beside it, so a barrier next to one is a narrower gap, as before.
+- **Tests:** two cars and two barriers over the four lanes; the layouts differ.
+- **Checked:** by the tests only (the screenshots taken were too far from the roadblock to show its layout).
+- **Status:** Accepted
+### D-533 — Turbo Run cat's eyes: dark once past the bonnet
+- **Date:** 2026-11-28
+- **Decision (director):** a cat's eye goes dark as soon as it passes the player car's bonnet, unless another car going the same way is behind.
+- **How:** every car lights the studs in front of its own bonnet only (D-521 lit a round patch that reached about 28 m behind the player's car). The game passes each car's bonnet and facing to the shader (`fronts`). A car following behind lights the studs ahead of its own bonnet, so those beside and behind the player's car shine again in its lights; an oncoming car lights the studs on its side of the meeting.
+- **Checked:** a screenshot at night (HD, 32:9).
+- **Status:** Accepted
+### D-534 — Turbo Run pursuit: damage never mends back across a threshold
+- **Date:** 2026-11-28
+- **Decision (director):** there are 4 damage thresholds: up to 25 %, up to 50 %, up to 75 % and 100 %. The damage that goes down over time (D-496) can never cross one: a wanted car at 55 % only mends down to 50 %.
+- **How:** the mending stops at the threshold at or below the current damage (`DMG_STEP`). Under 25 % it still mends to nothing.
+- **Not done:** nothing else is tied to the thresholds yet (the damage bar and the car's look are as they were). The director to say if the bar should show the four steps or the car should look different at each.
+- **Test:** 55 % mends to 50 % and stays; 20 % mends to 0.
+- **Status:** Accepted
+### D-535 — Turbo Run pursuit: TARGET for SUSPECT, INTERCEPT! for ENGAGING!
+- **Date:** 2026-11-28
+- **Decision (director):** replace SUSPECT with TARGET and the ENGAGE call with INTERCEPT! (the director wrote INCERCEPT!; taken as a slip for INTERCEPT!).
+- **How:** the texts only (`strings.csv`; the keys keep their names): the HUD label, TARGET LOST, TARGETS BUSTED, the two radio lines (IN SIGHT, and INTERCEPT THE TARGET AND STOP IT), and INTERCEPT! when the chase comes on.
+- **Status:** Accepted
+### D-536 — Turbo Run 8-BIT police title font: one baseline for all three rows
+- **Date:** 2026-11-28
+- **Report (director):** the text in `title_cops_8` has misaligned letters in the game; the director resized the second row in the PNG.
+- **Found:** in the image A to P stood 1 px higher than the rest. After the director's resize, rows 1 and 2 (A to Z, 0 to 5) end on the same line, and row 3 (6 to 9, ! ? & . , - :) still ends 1 px lower.
+- **Fix:** the styled-font data takes an optional `dy` per glyph (`styled_fonts.gd`); row 3 of `title_cops_8.json` has `dy` -1, so every glyph sits on one baseline. The image is the director's, untouched.
+- **Left as drawn:** Q to Z are now 16 px tall and A to P 17 px (their tops differ by 1 px), and 6 to 9 are 18 px tall where 0 to 5 are 17. `gen_pixel_font.py --police` would overwrite the image and this data: not to be run on this font.
+- **Checked:** a screenshot of the pursuit target select in 8-BIT.
+- **Status:** Accepted, pending the director's look
+### D-537 — Turbo Run 8-BIT police title font: glyph boxes re-read from the director's new image
+- **Date:** 2026-11-28
+- **Context:** the director updated `title_cops_8.png` again. Most glyphs are now 1 px wider than the boxes in `title_cops_8.json`, so their right-hand column was cut off in the game.
+- **Fix:** the boxes' widths and advances are re-read from the image (each glyph's own run of columns in its row); positions, heights and the row 3 offset of D-536 are unchanged (the rows are where they were).
+- **Checked:** a screenshot of the pursuit target select in 8-BIT.
+- **Status:** Accepted
+### D-538 — Turbo Run 8-BIT title font: glyph boxes re-read from the director's new image
+- **Date:** 2026-11-28
+- **Context:** the director updated `title_sunset_8.png` as well: the same shapes as the new police image (most glyphs 1 px wider), and the third row drawn 1 px lower than the boxes in `title_sunset_8.json` expected.
+- **Fix:** widths and advances re-read from the image, as in D-537. The third row's boxes start 1 px lower (y 47), which puts 6 to 9 and the punctuation on the same baseline as the letters and keeps the comma's tail whole (it was cut by a pixel). No `dy` is needed here.
+- **Left as drawn:** Q to Z are 16 px tall, A to P 17 px.
+- **Checked:** a screenshot of the car select title in 8-BIT.
+- **Status:** Accepted
+### D-539 — Turbo Run 8-BIT title font: the director's upright sheet, on trial
+- **Date:** 2026-11-28
+- **Decision (director):** try `title_sunset_8_b.png` instead of the italic 8-BIT title font.
+- **The file:** not a ready font image but a sheet (4640x928): upright pixel letters blown up 13.81 times on a 336-pixel-wide grid, rows A to N, O to Z, then 0 to 9 ! ? & . , ;
+- **How:** `scripts/tools/gen_pixel_font_b.py` reads each art pixel back from the middle of its cell, snaps the colours to 3 (yellow, pink, the darker pink edge) and cuts the glyphs: `assets/fonts/title_sunset_8b.png` + `.json` (336x67, style `sunset_8b`; glyphs 19 px tall, 1 px between letters). ":" is two of the sheet's periods. The 8-BIT mode's title font is now `sunset_8b` (`PIXEL_FONTS` in `game.gd`). The italic `sunset_8` stays in the project: one word in `PIXEL_FONTS` switches back.
+- **Open (director):** the sheet has no "-" (it falls back to the HD font's); the letters have no dark outline, so they stand out less on a bright sky than the italic ones; the police font in 8-BIT (`cops_8`) is still the italic one, so a blue and red version of this would be needed for a pursuit to match; the director's sheet lies in `assets/fonts/` (8.7 MB, it would go into the builds): proposal to move it to `assets/source/racer/`.
+- **Checked:** screenshots in 8-BIT: car select, the HUD in a race, single screen and cabinet layout.
+- **Status:** On trial, the director to decide
+### D-540 — Turbo Run 8-BIT title font on trial: the director's own pixel image, used as it is
+- **Date:** 2026-11-28
+- **Context:** the director replaced the big sheet of D-539 with a finished pixel image under the same name, `assets/fonts/title_sunset_8_b.png` (336x67): slanted letters with a dark drop shadow, a "-" after Z, and 0 to 9 ! ? & . , ;
+- **How:** the image is used directly, untouched. `scripts/tools/gen_pixel_font_b.py` (rewritten) only reads the glyph boxes from it into `title_sunset_8_b.json` (style `sunset_8_b`): every letter, digit and ! ? & is 19 px tall on one baseline. The 8-BIT title font is `sunset_8_b` (`PIXEL_FONTS`). The files made for D-539 (`title_sunset_8b.png/.json`) are removed. This supersedes the conversion of D-539.
+- **Open (director):** the image has ";" but no ":" (a colon falls back to the HD font's); the police font in 8-BIT is still the older italic `cops_8`.
+- **Checked:** screenshots in 8-BIT: car select and the HUD in a race.
+- **Status:** On trial, the director to decide
+### D-541 — Turbo Run 8-BIT police title font on trial: the director's `title_cops_8_b`
+- **Date:** 2026-11-28
+- **Context:** the director added `assets/fonts/title_cops_8_b.png` (336x67), in police blue over red.
+- **How:** used directly, untouched; `gen_pixel_font_b.py` reads its glyph boxes into `title_cops_8_b.json` (each image has its own list of glyphs there). The 8-BIT police font is `cops_8_b` (`PIXEL_FONTS`); the italic `cops_8` stays in the project.
+- **Found:** this image is a recolour of the upright conversion of D-539 (the first try), not of the director's later slanted image of D-540: upright letters, no drop shadow, no "-", a ":" at the end, and a few stray orange pixels left by that conversion. So in 8-BIT the police lettering and the race lettering are two different styles.
+- **Proposal:** make the police image from `title_sunset_8_b.png` by recolouring it (yellow to blue, magenta to red, the shadow kept), as the older police fonts were made (D-384). The director to decide.
+- **Checked:** screenshots in 8-BIT: the pursuit target select title.
+- **Status:** On trial, the director to decide
+### D-542 — Turbo Run WANTED posters: the print is plain ink lettering
+- **Date:** 2026-11-28
+- **Report (director, with a screenshot in 8-BIT):** the text on the posters is not legible.
+- **Cause:** the UI lettering is made of dots, each with a dark rim baked in so that light text reads over a scene (D-232). Coloured in dark ink for the posters (D-524), the dots and their rims ran together into blobs, worst in 8-BIT and 16-BIT.
+- **Fix (`showroom.gd`, `_ink_label`):** everything printed on a poster (WANTED, the name, the stat names and numbers) uses the plain pixel font (PinPixel), solid, in ink, with no rim. WANTED is set at 72 so it clears the photo frame.
+- **Checked:** screenshots of the pursuit target select in 8-BIT, 16-BIT and HD at 32:9, and 8-BIT in the cabinet layout.
+- **Status:** Accepted
+### D-543 — Turbo Run 8-BIT logo: the director's full-size image, shown like logo.png
+- **Date:** 2026-11-28
+- **Decision (director):** `logo_8.png` is now the same size as `logo.png` (1200x488) and already pixelated; use it at that size without scaling it, the same as `logo.png`.
+- **Before:** it was a small image (225x92) drawn through the low-resolution UI of the 8-BIT mode, which stretched its pixels unevenly (225 art pixels over about 292 UI pixels).
+- **How (`_logo_rect`):** in 8-BIT the logo is drawn on the TABLE at full resolution, in the same place and at the same size as `logo.png` is in HD. A hidden rect keeps its place in the attract layout and the full-resolution one follows it (position, visibility, blinking). The 16-BIT logo (`logo_16.png`, small) is unchanged.
+- **Checked:** screenshots of the attract screen in 8-BIT, cabinet layout and 32:9; gone once the race starts.
+- **Status:** Accepted
+### D-544 — Turbo Run: the race map is pixelated in 8-BIT and 16-BIT
+- **Date:** 2026-11-28
+- **Report (director):** the stage map is not pixelated in 16-BIT and 8-BIT.
+- **Cause:** the map is drawn on the TABLE itself, outside the UI layer, to reach the screen's edge (D-509); only the UI layer is low-resolution in those modes.
+- **Fix (`_pixel_layer`):** the map (1P, and the line between the halves in 2P) draws into a layer of its own at the UI's pixel density: the low resolution in 8-BIT and 16-BIT, shown with hard pixels, and full resolution in HD.
+- **Checked:** screenshots in 8-BIT, 16-BIT and HD (cabinet layout), 8-BIT at 32:9, 16-BIT in 2P.
+- **Status:** Accepted

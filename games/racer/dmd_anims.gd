@@ -40,12 +40,16 @@ const CAR := [
 var player_sprite: Image
 ## D-245: the police car (from its 3D model, rendered side-on), drawn the same way.
 var police_sprite: Image
+## D-489: the car being fined when it isn't the player's (a pursuit's busted
+## speeder); null = the player's own car.
+var busted_sprite: Image
 
 
 # --- helpers ------------------------------------------------------------------------
 ## The player's car at the 13x5 car's spot (x, y = its top-left): the sprite,
 ## standing on the same ground row and centred on the same spot.
-func _player(p, x: float, y: float, flip: bool = false, upside_down: bool = false) -> void:
+func _player(p, x: float, y: float, flip: bool = false, upside_down: bool = false, other: Image = null) -> void:
+	var player_sprite: Image = other if other != null else self.player_sprite   # D-489: or another car's picture
 	if player_sprite == null:
 		_car(p, x, y, RED, flip)
 		return
@@ -228,7 +232,7 @@ func _car_pose(p, pose: int, x: float, y: float) -> void:
 				p.dot(x + 8, y - 5 + wy, DARK.lightened(0.3))
 
 
-func crash(p, t: float, title: String) -> void:
+func crash(p, t: float, title: String, lost: String = "") -> void:
 	var rock_x := 70.0
 	for r in ROCK.size():
 		var row: String = ROCK[r]
@@ -275,6 +279,8 @@ func crash(p, t: float, title: String) -> void:
 	if tt > 0.1:
 		var shake := 0.0 if tt > 0.5 else (2.0 if int(tt * 30.0) % 2 == 0 else -2.0)
 		p.text(title, 4 + shake, 2, 2, RED if _blink(tt, 0.15) else WHITE)
+		if lost != "":   # D-531: the points a crash costs in a pursuit
+			p.text(lost, 128 - p.text_width(lost) - 3, 2, 1, RED)
 
 
 ## Checkpoint: a waving chequered flag and the time bonus.
@@ -327,7 +333,7 @@ func perfect(p, t: float, title: String) -> void:
 ## flashing, then a ticket slides out with the fine.
 func fine(p, t: float, title: String, label: String, amount: String) -> void:
 	p.line(0, 29, 127, 29, DARK.lightened(0.1))
-	_player(p, 10, 24)
+	_player(p, 10, 24, false, false, busted_sprite)   # D-489: in a pursuit, the busted car (we are the police car)
 	# Police car rolls in from the left and stops behind ours.
 	var px := lerpf(-16.0, 30.0, clampf(t / 0.6, 0.0, 1.0))   # D-243: clear of the bigger player sprite
 	_police(p, px, 24, t)   # D-245

@@ -40,8 +40,6 @@ uniform float rumble = 1.2;
 uniform vec3 asphalt_a : source_color = vec3(0.36, 0.36, 0.4);
 uniform vec3 asphalt_b : source_color = vec3(0.32, 0.32, 0.36);
 uniform vec3 line_col : source_color = vec3(0.95, 0.95, 0.9);
-uniform vec3 kerb_a : source_color = vec3(0.9, 0.12, 0.12);
-uniform vec3 kerb_b : source_color = vec3(0.95, 0.95, 0.95);
 uniform vec3 sand_a : source_color = vec3(0.93, 0.8, 0.55);
 uniform vec3 sand_b : source_color = vec3(0.86, 0.72, 0.48);
 uniform vec3 grass_a : source_color = vec3(0.28, 0.62, 0.2);
@@ -57,13 +55,13 @@ void fragment() {
 	float sv = m.y;
 	float band = mod(floor(sv / 8.0), 2.0);
 	vec3 col;
-	if (x < road_half) {
+	if (x < road_half + rumble) {
+		// D-528: no racing kerbs: the asphalt runs on as a paved shoulder
+		// outside the edge line (`rumble` is that strip's width).
 		col = mix(asphalt_a, asphalt_b, band);
 		bool dash = mod(sv, 12.0) < 6.0;
 		if (dash && (x < 0.13 || abs(x - 3.75) < 0.13)) col = line_col;
 		if (abs(x - (road_half - 0.35)) < 0.13) col = line_col;
-	} else if (x < road_half + rumble) {
-		col = mod(floor(sv / 4.0), 2.0) < 1.0 ? kerb_a : kerb_b;
 	} else if (x < road_half + rumble + 3.0) {
 		col = mix(sand_a, sand_b, band);
 	} else {

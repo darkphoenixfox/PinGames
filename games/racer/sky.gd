@@ -5,21 +5,21 @@
 ##
 ## Stages (the director's spec): 1-3 daylight with the sun coming down, 4-5
 ## sunset (the sun sets late in stage 5), 6-9 night with the moon and stars,
-## dawn in stage 10, then the day goes on.
+## dawn in stage 10, then the day goes on. (Superseded by D-517: see CYCLE.)
 extends RefCounted
 
 const MAX_ELEVATION := 50.0   # degrees at noon
-## Race progress (stages played, fractional) -> hour of the day.
-## D-225 (director): day 1-3, sunset 4-5, night 6-8, dawn 9-10.
+## D-517 (director): the day is a cycle of 6 stages: day 2, sunset 1, night 2,
+## dawn 1. Progress (stages, fractional; a race starts at a random whole stage
+## of it) -> hour of the day.
+const CYCLE := 6.0
 const PROGRESS_HOURS := [
-	[0.0, 13.0],   # stage 1 starts in the early afternoon
-	[3.0, 16.4],   # stage 4: the sun is getting low
-	[5.0, 18.3],   # stage 6: just set, twilight
-	[8.0, 28.9],   # stage 9: first light (04:54)
-	[9.0, 30.0],   # stage 10: sunrise
-	[10.0, 31.0],  # stage 11: morning
+	[0.0, 7.5],    # day: the morning sun, well up
+	[2.0, 16.4],   # sunset: the sun is getting low
+	[3.0, 18.4],   # night: just set, twilight
+	[5.0, 28.9],   # dawn: first light (04:54); the sun rises before half way
+	[6.0, 31.5],   # day again (07:30)
 ]
-const LATE_HOURS_PER_STAGE := 1.2   # after stage 11 the day goes on at this pace
 
 ## Palette keyframes by the sun's elevation (degrees), high to low.
 const KEYS := [
@@ -53,15 +53,13 @@ const KEYS := [
 ## Hour of the day (may run past 24) for race progress p (stages played).
 static func hour_at(p: float) -> float:
 	var keys: Array = PROGRESS_HOURS
-	if p <= keys[0][0]:
-		return keys[0][1]
+	p = fposmod(p, CYCLE)
 	for i in range(1, keys.size()):
 		if p <= keys[i][0]:
 			var a: Array = keys[i - 1]
 			var b: Array = keys[i]
 			return lerpf(a[1], b[1], (p - a[0]) / (b[0] - a[0]))
-	var last: Array = keys[keys.size() - 1]
-	return last[1] + (p - last[0]) * LATE_HOURS_PER_STAGE
+	return keys[0][1]
 
 
 ## The sun's elevation in degrees: up from 6:00, highest at 12:00, down at 18:00.

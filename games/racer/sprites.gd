@@ -59,15 +59,31 @@ const NIGHT_TINT := Color(0.3, 0.34, 0.58)
 static var _night := 0.0
 ## Kinds that stay bright at night (pick-ups must stay readable).
 const UNTINTED := ["nitro"]
+## D-529 (director): the houses. Their pale walls stayed far brighter than the
+## land around them at night: they take a darker tint, and their windows (and
+## door lamps) light up, from <kind>_lights.png (scripts/tools/gen_house_lights.py).
+const HOUSES := ["house_1", "house_2", "house_3", "chalet_1", "chalet_2", "townhouse"]
+const HOUSE_NIGHT_TINT := Color(0.13, 0.15, 0.27)
+const LIGHTS_FROM := 0.45   # night level at which the windows start to light
+
+
+static func _tint(kind: String, k: float) -> Color:
+	if kind in UNTINTED:
+		return Color.WHITE
+	return Color.WHITE.lerp(HOUSE_NIGHT_TINT if kind in HOUSES else NIGHT_TINT, k)
+
+
+static func _lit(k: float) -> float:
+	return smoothstep(LIGHTS_FROM, LIGHTS_FROM + 0.25, k)
 
 
 ## Darkens every sprite towards the night tint (0 = day, 1 = night).
 static func set_night(k: float) -> void:
 	_night = k
 	for kind in _meshes:
-		if kind in UNTINTED:
-			continue
-		_mat(kind).set_shader_parameter("tint", Color.WHITE.lerp(NIGHT_TINT, k))
+		_mat(kind).set_shader_parameter("tint", _tint(kind, k))
+		if kind in HOUSES:
+			_mat(kind).set_shader_parameter("lit", _lit(k))
 
 
 static func set_hd(on: bool) -> void:
@@ -116,7 +132,10 @@ static func mesh(kind: String) -> Mesh:
 	m.set_shader_parameter("retro_size", Vector2(maxf(1.0, roundf(rt * aspect)), rt))
 	m.set_shader_parameter("billboard", spec[2])
 	m.set_shader_parameter("flip", spec[3])
-	m.set_shader_parameter("tint", Color.WHITE if kind in UNTINTED else Color.WHITE.lerp(NIGHT_TINT, _night))
+	m.set_shader_parameter("tint", _tint(kind, _night))
+	if kind in HOUSES:
+		m.set_shader_parameter("lights", load(DIR + spec[0] + "_lights.png"))
+		m.set_shader_parameter("lit", _lit(_night))
 	var q := QuadMesh.new()
 	q.size = Vector2(w, h)
 	q.center_offset = Vector3(0, h * 0.5, 0)

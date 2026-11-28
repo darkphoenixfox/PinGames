@@ -23,39 +23,47 @@ const TUNNEL_MAX_CURV := 1.0 / 260.0
 const TUNNEL_MAX_GRADE := 0.06   # no tunnel through a steep hill (D-143)
 const TUNNEL_HALF := ROAD_HALF + 0.3   # wall distance from the centre line (road edge)
 const TUNNEL_HEIGHT := 6.5
+const TUNNEL_BEFORE_TOWN := 200.0   # D-518: m of open road between a tunnel and the finish town
 const MAX_TURN := deg_to_rad(110.0)      # per curve section
 const MAX_HEADING := deg_to_rad(80.0)    # overall, from the start direction
 ## Roadside objects: [kind, collision radius]. Kinds are drawn by the view.
 const OBJ_RADIUS := {"palm": 0.6, "rock": 1.5, "chevron": 0.5, "lamp": 0.35, "gate": 0.0,
 	"bush": 0.0, "sign": 2.5, "gantry": 0.0, "speedtrap": 0.4, "house": 0.0, "lifeguard": 0.0,
-	"building": 0.0, "tlight": 0.4, "cactus": 0.5, "mesa": 0.0, "chalet": 0.0, "crowd": 0.0}
+	"building": 0.0, "cactus": 0.5, "mesa": 0.0, "chalet": 0.0, "crowd": 0.0}
 ## The finish (D-221) is the end of stage FINISH_STAGE. A small town (D-229)
 ## stands in the last TOWN_BEFORE m before it and TOWN_AFTER m after, with
 ## spectators along both kerbs over the last CROWD_BEFORE m.
-const FINISH_STAGE := 10
+const FINISH_STAGE := 12   # D-519: was 10
 const TOWN_BEFORE := 600.0
 const TOWN_AFTER := 700.0     # D-234: the village goes on well past the line (was 120)
 const CROWD_BEFORE := 260.0
 const CROWD_AFTER := 160.0    # D-234: people line the run-out too (was 40)
-## Areas (D-216; order D-225, director): the area of each stage 1..10; past the
-## finish (stage 11 on) the last one goes on. The look cross-fades into the
+## Areas (D-216; order D-225, director; D-519: a second desert and a second
+## fields stage): the area of each stage 1..12; past the finish the last one goes on. The look cross-fades into the
 ## next area over the last AREA_BLEND m of a stage.
-const STAGE_AREAS := ["beach", "beach", "forest", "forest", "desert", "city", "city", "fields", "snow", "snow"]
-## Pursuit (D-460, director): the road never ends. After the ten stages it
-## goes back through the forest to the beach and round again (stage 11 is
-## the forest, 12 the beach of stage 1, ...). No finish town, no speed cameras.
-const LOOP_AREAS := ["beach", "beach", "forest", "forest", "desert", "city", "city", "fields", "snow", "snow", "forest"]
+const STAGE_AREAS := ["beach", "beach", "forest", "forest", "desert", "desert", "city", "city", "fields", "fields", "snow", "snow"]
+## Pursuit (D-460, director): the road never ends. After the twelve stages it
+## goes back through the forest to the beach and round again (stage 13 is
+## the forest, 14 the beach of stage 1, ...). No finish town, no speed cameras.
+const LOOP_AREAS := ["beach", "beach", "forest", "forest", "desert", "desert", "city", "city", "fields", "fields", "snow", "snow", "forest"]
 var loop := false
 ## The guaranteed tunnel (D-132) is laid in the second half of this stage.
 const TUNNEL_STAGE := 3
 const AREA_BLEND := 200.0
 ## City (D-216): buildings stand behind a sidewalk; the car is held off it by
-## a barrier at CITY_WALL (it scrapes along, like a tunnel wall). Junctions
-## cross the road every so often.
+## a barrier at CITY_WALL (it scrapes along, like a tunnel wall).
+## D-514: the road runs through town as an urban motorway: a concrete wall
+## stands on that barrier, roads cross over it on overpasses (no junctions),
+## and short tunnels take it under the blocks.
 const CITY_WALL := ROAD_HALF + RUMBLE + 2.6
+const CITY_WALL_H := 4.5                       # m, the wall's height
 const SIDEWALK := 5.0                          # m from the kerb to the building line
-const JUNCTION_HALF := 7.0                     # half width of a cross street
-const JUNCTION_GAP := Vector2(260.0, 420.0)
+const OVERPASS_REACH := 150.0                  # how far the deck runs out each way (City.DECK_REACH)
+const OVERPASS_HALF := 7.0                     # half the width of an overpass's deck (along the road)
+const OVERPASS_GAP := Vector2(260.0, 420.0)
+const CITY_TUNNEL_LEN := Vector2(140.0, 300.0)
+const CITY_TUNNEL_GAP := 500.0                 # m between tunnels in town
+const CITY_TUNNEL_CHANCE := 0.6                # of eligible sections
 ## Beach stage (D-204): sand and sea on the left (with waves), a flat-ish road,
 ## small buildings on the right, palms. Blends out over AREA_BLEND m at
 ## the stage's ends.
@@ -85,9 +93,9 @@ var _next_sign_s := 300.0
 var _next_trap_s := -1.0
 var _next_gantry_s := 700.0
 var _next_bush_s := 20.0
-## City junctions (D-216): s of each cross street's centre line, in order.
-var junctions: Array = []
-var _next_junction_s := -1.0
+## City overpasses (D-514): s of each one's centre line, in order.
+var overpasses: Array = []
+var _next_overpass_s := -1.0
 var _next_bld := [0.0, 0.0]   # next free s for a building, left and right
 
 
@@ -105,9 +113,9 @@ func setup(seed_in: int = 1) -> void:
 	_next_trap_s = -1.0
 	_next_gantry_s = 700.0
 	_next_bush_s = 20.0
-	junctions.clear()
+	overpasses.clear()
 	spells.clear()
-	_next_junction_s = -1.0
+	_next_overpass_s = -1.0
 	_next_bld = [0.0, 0.0]
 	_add_section(START_STRAIGHT, 0.0, 0.0)
 
@@ -200,6 +208,8 @@ func _add_section(len: float, c: float, dh: float) -> void:
 	if absf(dh) <= (_built_to - s0) * TUNNEL_MAX_GRADE and beach_w(s0) <= 0.0 and beach_w(_built_to) <= 0.0 \
 			and area_w(s0, "city") <= 0.0 and area_w(_built_to, "city") <= 0.0:
 		_maybe_tunnel(s0, _built_to, c)
+	elif area_w(s0, "city") >= 1.0 and area_w(_built_to, "city") >= 1.0:
+		_maybe_city_tunnel(s0, _built_to, c)
 	_place_objects(s0, _built_to)
 
 
@@ -281,38 +291,85 @@ func _place_beach(s: float) -> void:
 		_add_obj(s, ROAD_HALF + 2.5, "lamp")
 
 
-## City (D-216): street lamps on the sidewalk, buildings in a row on each side
-## (gaps at junctions), traffic lights at each junction.
+## City (D-216): street lamps on the sidewalk, buildings in a row on each side.
+## D-514: a road crosses over on an overpass every so often (the buildings
+## leave it a gap), and the buildings stand on beside the town's tunnels.
 func _place_city(s: float) -> void:
-	for side in [-1.0, 1.0]:
-		_add_obj(s + (0.0 if side < 0.0 else 15.0), side * (ROAD_HALF + RUMBLE + 1.4), "lamp")
-	if _next_junction_s < 0.0:
-		_next_junction_s = s + 120.0
-	while _next_junction_s < s + 30.0:
-		var js := _next_junction_s
-		if absf(curvature(js)) < 1.0 / 300.0 and area_at(js) == "city" and not in_tunnel(js):
-			junctions.append(js)
-			for side in [-1.0, 1.0]:
-				_add_obj(js - side * (JUNCTION_HALF + 2.0), side * (ROAD_HALF + RUMBLE + 1.0), "tlight", side)
-			_next_junction_s += _rng.randf_range(JUNCTION_GAP.x, JUNCTION_GAP.y)
+	if _next_overpass_s < 0.0:
+		_next_overpass_s = s + 120.0
+	while _next_overpass_s < s + 30.0:
+		var js := _next_overpass_s
+		if js + 20.0 > _built_to:
+			break   # the next section may be a tunnel: decided once it is laid
+		if absf(curvature(js)) < 1.0 / 150.0 and area_w(js, "city") >= 1.0 \
+				and not in_tunnel(js - 40.0) and not in_tunnel(js + 40.0):
+			overpasses.append(js)
+			# D-526: nor a building already placed in the deck's way (the road bends).
+			for i in range(objects.size() - 1, maxi(objects.size() - 400, -1), -1):
+				var ob: Dictionary = objects[i]
+				if ob.kind == "building" and _in_deck(js, float(ob.s), float(ob.x), float(ob.w), float(ob.d), float(ob.dir)):
+					objects.remove_at(i)
+			# No street lamp stands up through the deck.
+			for i in range(objects.size() - 1, maxi(objects.size() - 200, -1), -1):
+				if objects[i].kind == "lamp" and absf(float(objects[i].s) - js) < OVERPASS_HALF + 3.0:
+					objects.remove_at(i)
+			_next_overpass_s += _rng.randf_range(OVERPASS_GAP.x, OVERPASS_GAP.y)
 		else:
-			_next_junction_s += 40.0
+			_next_overpass_s += 40.0
+	for side in [-1.0, 1.0]:
+		var ls: float = s + (0.0 if side < 0.0 else 15.0)
+		if near_overpass(ls, OVERPASS_HALF + 3.0) < 0.0:
+			_add_obj(ls, side * (ROAD_HALF + RUMBLE + 1.4), "lamp")
 	for si in 2:
 		var side := -1.0 if si == 0 else 1.0
 		while float(_next_bld[si]) < s + 30.0:
 			var b0: float = maxf(float(_next_bld[si]), s - 30.0)
 			var w := _rng.randf_range(12.0, 26.0)
-			var j := near_junction(b0 + w * 0.5, w * 0.5 + JUNCTION_HALF + 1.0)
+			if b0 + w > _built_to + 15.0:
+				break   # past the road laid so far: an overpass may still land there
+			var j := near_overpass(b0 + w * 0.5, w * 0.5 + OVERPASS_HALF + 1.0)
 			if j >= 0.0:
-				_next_bld[si] = maxf(b0 + 1.0, j + JUNCTION_HALF + 1.0)   # leave the cross street open
+				_next_bld[si] = maxf(b0 + 1.0, j + OVERPASS_HALF + 1.0)   # leave the crossing road open
 				continue
-			var o := {"s": b0 + w * 0.5, "x": side * (ROAD_HALF + RUMBLE + SIDEWALK), "kind": "building",
+			var bld := {"s": b0 + w * 0.5, "x": side * (ROAD_HALF + RUMBLE + SIDEWALK), "kind": "building",
 				"r": 0.0, "dir": side, "w": w, "d": _rng.randf_range(14.0, 24.0),
 				"h": _rng.randf_range(16.0, 70.0) * (1.6 if _rng.randf() < 0.15 else 1.0),
 				"style": _rng.randi() % 6}
-			if not in_tunnel(o.s):
-				objects.append(o)
 			_next_bld[si] = b0 + w + _rng.randf_range(0.5, 2.5)
+			# D-526: the crossing road runs straight on while ours bends, so a
+			# block further along can stand in its way: that plot stays empty.
+			var in_way := false
+			for ov in overpasses:
+				if absf(float(ov) - float(bld.s)) < OVERPASS_REACH * 2.0 and _in_deck(float(ov), float(bld.s), float(bld.x), w, float(bld.d), side):
+					in_way = true
+			if not in_way:
+				objects.append(bld)
+
+
+## D-526: does a building (its front's middle at (bs, bx), `w` along the road,
+## `d` deep, away from the road on `side`) stand in the way of the overpass at
+## js? The deck runs straight across the road there, OVERPASS_REACH m each way.
+func _in_deck(js: float, bs: float, bx: float, w: float, d: float, side: float) -> bool:
+	var o := point(js, 0.0)
+	var across := point(js, 1.0) - o
+	var along := point(js + 1.0, 0.0) - o
+	across.y = 0.0
+	along.y = 0.0
+	across = across.normalized()
+	along = along.normalized()
+	var u0 := INF
+	var u1 := -INF
+	var f0 := INF
+	var f1 := -INF
+	for ds in [-0.5, 0.5]:
+		for dd in [0.0, 1.0]:
+			var c: Vector3 = point(bs + float(ds) * w, bx + side * d * float(dd)) - o
+			u0 = minf(u0, c.dot(across))
+			u1 = maxf(u1, c.dot(across))
+			f0 = minf(f0, c.dot(along))
+			f1 = maxf(f1, c.dot(along))
+	var half := OVERPASS_HALF + 0.5
+	return f0 < half and f1 > -half and u0 < OVERPASS_REACH and u1 > -OVERPASS_REACH
 
 
 ## The finish line's distance (D-221), 0 if checkpoints aren't set.
@@ -342,9 +399,9 @@ func _place_town(s: float) -> void:
 		_add_obj(s + 15.0, -(ROAD_HALF + RUMBLE + 1.0), "lamp")
 
 
-## The junction within `reach` m of s, or -1.
-func near_junction(s: float, reach: float) -> float:
-	for j in junctions:
+## The overpass within `reach` m of s, or -1.
+func near_overpass(s: float, reach: float) -> float:
+	for j in overpasses:
 		if absf(float(j) - s) <= reach:
 			return j
 	return -1.0
@@ -451,12 +508,55 @@ func _maybe_tunnel(s0: float, s1: float, c: float) -> void:
 		return
 	var a := s0 + 20.0
 	var b := minf(s1 - 20.0, a + TUNNEL_MAX)
+	# D-518: none in the finish town or over the run-in to it (the goal is in view).
+	var f := finish_s()
+	if f > 0.0 and a < f + TOWN_AFTER:
+		b = minf(b, f - TOWN_BEFORE - TUNNEL_BEFORE_TOWN)
+		if b - a < TUNNEL_MIN:
+			return
 	if avoid_every > 0.0:
 		# No checkpoint gate inside, or within 60 m of either portal.
 		var k := ceilf((a - 60.0) / avoid_every) * avoid_every
 		if k <= b + 60.0:
 			return
 	tunnels.append(Vector2(a, b))
+
+
+## Town (D-514): shorter tunnels, and more of them, under the blocks. The same
+## rules otherwise: gentle sections only, clear of the checkpoints.
+func _maybe_city_tunnel(s0: float, s1: float, c: float) -> void:
+	if s1 - s0 < CITY_TUNNEL_LEN.x + 40.0 or absf(c) > TUNNEL_MAX_CURV:
+		return
+	if not tunnels.is_empty() and s0 - (tunnels[-1] as Vector2).y < CITY_TUNNEL_GAP:
+		return
+	if _rng.randf() > CITY_TUNNEL_CHANCE:
+		return
+	var a := s0 + 20.0
+	var b := minf(s1 - 20.0, a + _rng.randf_range(CITY_TUNNEL_LEN.x, CITY_TUNNEL_LEN.y))
+	if avoid_every > 0.0:
+		var k := ceilf((a - 60.0) / avoid_every) * avoid_every
+		if k <= b + 60.0:
+			return
+	if near_overpass(a, 60.0) >= 0.0 or near_overpass(b, 60.0) >= 0.0 or near_overpass((a + b) * 0.5, (b - a) * 0.5) >= 0.0:
+		return
+	tunnels.append(Vector2(a, b))
+
+
+## The wall's height beside the road at s (D-514): it rises over the first
+## metres of the town and stops at a tunnel's mouth. 0 = none.
+func city_wall_h(s: float) -> float:
+	if in_tunnel(s):
+		return 0.0
+	return CITY_WALL_H * clampf((area_w(s, "city") - 0.5) / 0.2, 0.0, 1.0)
+
+
+## True when a tunnel lies anywhere between s0 and s1.
+func tunnel_between(s0: float, s1: float) -> bool:
+	for t in tunnels:
+		var tv: Vector2 = t
+		if tv.x <= s1 and tv.y >= s0:
+			return true
+	return false
 
 
 ## True when s is inside a tunnel.

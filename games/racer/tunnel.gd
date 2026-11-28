@@ -11,6 +11,7 @@ const PANEL := 8.0              # m of wall per texture tile
 const LIGHT_EVERY := 24.0       # m between ceiling lights (halved count, D-133)
 const PORTAL_W := 42.0          # portal face half width
 const PORTAL_H := 18.0
+const CITY_PORTAL := Vector2(Track.ROAD_HALF + Track.RUMBLE + Track.SIDEWALK, 10.0)   # D-514: in town it fits between the building lines
 const SODIUM := Color(1.0, 0.62, 0.25)
 
 static var _wall_mat: StandardMaterial3D
@@ -171,10 +172,13 @@ static func _lights(node: Node3D, tr_, a: float, b: float) -> void:
 static func _portal(node: Node3D, tr_, s: float) -> void:
 	var w := Track.TUNNEL_HALF
 	var h := Track.TUNNEL_HEIGHT
+	var city: bool = tr_.area_w(s, "city") > 0.5
+	var pw := CITY_PORTAL.x if city else PORTAL_W
+	var ph := CITY_PORTAL.y if city else PORTAL_H
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for r in [Rect2(-PORTAL_W, 0, PORTAL_W - w, PORTAL_H), Rect2(w, 0, PORTAL_W - w, PORTAL_H),
-			Rect2(-w, h, 2.0 * w, PORTAL_H - h)]:
+	for r in [Rect2(-pw, 0, pw - w, ph), Rect2(w, 0, pw - w, ph),
+			Rect2(-w, h, 2.0 * w, ph - h)]:
 		var rr: Rect2 = r
 		var c := [Vector3(rr.position.x, rr.position.y - 2.0, 0), Vector3(rr.end.x, rr.position.y - 2.0, 0),
 			Vector3(rr.end.x, rr.end.y, 0), Vector3(rr.position.x, rr.end.y, 0)]
@@ -183,7 +187,7 @@ static func _portal(node: Node3D, tr_, s: float) -> void:
 			c[1].y = rr.position.y
 		for i in [0, 1, 2, 0, 2, 3]:
 			var v: Vector3 = c[i]
-			st.set_uv(Vector2((v.x + PORTAL_W) / (2.0 * PORTAL_W), 1.0 - v.y / PORTAL_H))
+			st.set_uv(Vector2((v.x + pw) / (2.0 * PORTAL_W), 1.0 - v.y / PORTAL_H))
 			st.add_vertex(v)
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()

@@ -51,7 +51,7 @@ func enter() -> void:
 	var col := UI.vstack(40)
 	add_table(col)
 	# Shell text in the shell's styled fonts (D-186): gold marquee titles, chrome headings.
-	col.add_child(UI.styled_label(tr("APP_TITLE"), UI.SHELL_TITLE_FONT, 2 if Screens.table_base().x > Screens.table_base().y else 3))
+	col.add_child(UI.shell_logo(170.0 if Screens.table_base().x > Screens.table_base().y else 300.0))   # D-490: the logo (was the title text)
 	col.add_child(UI.styled_label(tr("PICKER_TITLE") if locked_game.is_empty() else tr("PICKER_PLAY_AGAIN"),
 		UI.SHELL_TEXT_FONT, 1))
 	col.add_child(UI.spacer(10))

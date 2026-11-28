@@ -1,4 +1,4 @@
-# PinGames
+# VPin Games
 
 A bundle of arcade-inspired games built for **PC virtual pinball cabinets** on Windows and Linux. Each game uses three screens and is played with pinball buttons only:
 

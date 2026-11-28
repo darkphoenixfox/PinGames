@@ -32,6 +32,7 @@ func _initialize() -> void:
 	test_racer_first_nitro()
 	test_racer_police_rams()
 	test_racer_police_backup()
+	test_racer_roadblock()
 	test_music_files()
 	test_setup_wizard()
 	test_window_places()
@@ -1234,6 +1235,8 @@ func test_export_includes_data() -> void:
 		var feats := str(cfg.get_value(sec, "custom_features", ""))
 		var xr := int(cfg.get_value(sec + ".options", "xr_features/xr_mode", 0))
 		check((xr == 1) == ("quest" in feats), "%s: OpenXR mode only with the quest feature" % preset_name)
+		if preset_name == "Android":   # D-515
+			check(bool(cfg.get_value(sec + ".options", "package/show_in_android_tv", false)), "the Android build shows on Android TV")
 
 
 ## Exported builds don't carry the CSV, only the imported translation (D-171):
@@ -1292,9 +1295,136 @@ func test_racer_police_rams() -> void:
 	c.step(dt, false, false)
 	check(float(c.police.v) < 30.0 and c.v > 40.0 and int(c.police.get("hits", 0)) == 0,
 		"running into the police car slows it, not a ram (%.0f / %.0f m/s)" % [float(c.police.v), c.v])
+	# D-520: and it stays slow for a while (it was back at speed within a second).
+	c.police.hit_cd = 9.0
+	for i in 60:
+		c.traffic.clear()
+		c.v = 50.0
+		c.step(dt, false, false)
+	check(not c.police.is_empty() and float(c.police.v) < 35.0 and float(c.police.s) - c.s < -15.0,
+		"a bumped police car is slow to get going again (%.0f m/s, %.0f m behind after 1 s)" % [float(c.police.get("v", 0.0)), c.s - float(c.police.get("s", 0.0))])
 
 
 ## D-364: speeding past another camera during a chase calls backup.
+## D-521: three police cars after the player close the road ahead.
+func test_racer_roadblock() -> void:
+	var dt := 1.0 / 60.0
+	var Sim = load("res://games/racer/sim.gd")
+	var Tr = load("res://games/racer/track.gd")
+	var a = Sim.new()
+	a.setup(7)
+	a.state = Sim.State.RACE
+	a.freeze_time = true
+	a.s = 3000.0
+	a.track.ensure(6000.0)
+	a.v = 50.0
+	a.call_police()
+	a.call_backup()
+	a.step(dt, false, false)
+	check(a.roadblock.is_empty(), "two police cars: no roadblock")
+	a.call_backup()
+	a.step(dt, false, false)
+	var rs: float = a.roadblock.get("s", 0.0)
+	check(not a.roadblock.is_empty() and rs >= a.s + Sim.ROADBLOCK_AHEAD - 60.0 and not a.track.in_tunnel(rs),
+		"three police cars close the road ahead (%.0f m)" % (rs - a.s))
+	# Traffic: none appears near it; what reaches it pulls over and stops, apart.
+	a.traffic.clear()
+	var shown := true
+	for n in 400:
+		a._spawn_traffic()
+	for t in a.traffic:
+		shown = shown and absf(float(t.s) - rs) >= Sim.ROADBLOCK_CLEAR
+	check(shown, "no traffic appears near the roadblock")
+	a.traffic.clear()
+	a.police = {}
+	a.backup = []
+	a.traffic.append({"id": 801, "s": rs - 150.0, "x": Tr.LANES[2], "lane": 2, "v": 34.0, "hue": 0.0, "weave": 0.0, "last_ds": 500.0, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W})
+	a.traffic.append({"id": 802, "s": rs - 165.0, "x": Tr.LANES[2], "lane": 2, "v": 40.0, "hue": 0.0, "weave": 0.0, "last_ds": 480.0, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W})
+	a.traffic.append({"id": 803, "s": rs + 150.0, "x": Tr.LANES[1], "lane": 1, "v": -30.0, "hue": 0.0, "weave": 0.0, "last_ds": 900.0, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W})
+	var apart := true
+	for n in 60 * 14:
+		a.v = 0.0
+		a.s = rs - 500.0
+		a._update_traffic(dt)
+		for i in a.traffic.size():
+			for j in range(i + 1, a.traffic.size()):
+				if absf(float(a.traffic[i].s) - float(a.traffic[j].s)) < Sim.CAR_LEN - 0.05 and absf(float(a.traffic[i].x) - float(a.traffic[j].x)) < Sim.CAR_W - 0.05:
+					apart = false
+	var stopped: bool = a.traffic.size() == 3
+	for t in a.traffic:
+		var short: float = (rs - float(t.s)) * signf(float(t.v0))
+		stopped = stopped and absf(float(t.v)) < 0.5 and short > 20.0 and bool(t.get("blink", false)) 			and absf(float(t.x)) > Tr.ROAD_HALF - Sim.CAR_W
+	check(stopped, "traffic reaching the roadblock pulls over to the kerb, hazards on, and stops short of it")
+	check(apart, "traffic cars never overlap each other")
+	# Through a barrier: it breaks, the car goes on. Into a police car: a crash.
+	a.traffic.clear()
+	a.s = rs - 6.0
+	# D-532: two police cars and two barriers, the lanes drawn at random.
+	var rb_lanes: Array = a.roadblock.cops + a.roadblock.barriers
+	rb_lanes.sort()
+	check(a.roadblock.cops.size() == 2 and a.roadblock.barriers.size() == 2 and rb_lanes == [0, 1, 2, 3],
+		"a roadblock is two police cars and two barriers over the four lanes")
+	a.roadblock.cops = [0, 3]
+	a.roadblock.barriers = [1, 2]
+	a.x = Tr.LANES[2]
+	a.v = 60.0
+	a.grace_t = 0.0
+	for n in 20:
+		a.step(dt, false, false)
+		a.traffic.clear()
+	check(bool(a.roadblock.broken[1]) and not bool(a.roadblock.broken[0]) and a.spin_t <= 0.0 and a.s > rs and a.v > 40.0,
+		"driving through a barrier breaks it and the car goes on")
+	var c = Sim.new()
+	c.setup(7)
+	c.state = Sim.State.RACE
+	c.freeze_time = true
+	c.s = 3000.0
+	c.track.ensure(6000.0)
+	c.place_roadblock(3050.0)
+	c.x = Tr.LANES[int(c.roadblock.cops[0])]
+	c.v = 60.0
+	c.grace_t = 0.0
+	for n in 60:
+		c.traffic.clear()
+		c.step(dt, false, false)
+	check(c.spin_t > 0.0 and c.s < 3050.0, "driving into a roadblock's police car is a crash")
+	c.spin_t = 0.0
+	c.s = 3050.0 + Sim.ROADBLOCK_PAST + 5.0
+	c.step(dt, false, false)
+	check(c.roadblock.is_empty(), "the roadblock is cleared away once it is passed")
+	var layouts := {}
+	for n in 40:
+		c.place_roadblock(3050.0)
+		layouts[str(c.roadblock.cops)] = true
+	c.roadblock = {}
+	check(layouts.size() >= 4, "roadblocks differ: %d layouts in 40" % layouts.size())
+	# D-525: a wrecked speeder with the police car parked in front of it: traffic
+	# drives round the pair (or stops), never through them.
+	var w = Sim.new()
+	w.setup(7)
+	w.setup_pursuit(1)
+	w.state = Sim.State.RACE
+	w.s = 3000.0
+	w.x = Tr.LANES[2] + 2.4
+	w.v = 0.0
+	w.track.ensure(6000.0)
+	w.wreck = {"s": w.s - Sim.ARREST_AHEAD, "x": Tr.LANES[2], "v": 0.0, "sway": 0.0, "side": 1.0, "car": 1}
+	w.arrest = {"phase": "fined", "t": 0.0, "pass": 1.0}
+	w.traffic.clear()
+	w.traffic.append({"id": 811, "s": w.s - 58.0, "x": Tr.LANES[2], "lane": 2, "v": 30.0, "hue": 0.0, "weave": 0.0, "last_ds": -58.0, "kind": "car", "len": Sim.CAR_LEN, "w": Sim.CAR_W})
+	var through := false
+	var car811: Dictionary = w.traffic[0]
+	for n in 60 * 20:
+		w.arrest.t = 0.0   # held in the fine
+		w.v = 0.0
+		w._update_traffic(dt)
+		for ob in [[w.s, w.x, Sim.CAR_LEN], [float(w.wreck.s), float(w.wreck.x), Sim.CAR_W]]:
+			if absf(float(car811.s) - float(ob[0])) < Sim.CAR_LEN - 0.1 and absf(float(car811.x) - float(ob[1])) < (float(ob[2]) + Sim.CAR_W) * 0.5 - 0.1:
+				through = true
+	check(not through, "traffic never drives through a wrecked speeder or the police car parked at it (D-525)")
+	check(float(car811.s) > w.s + 10.0 or absf(float(car811.v)) < 1.0, "it drives round them, or stops short (%.0f m past, %.0f m/s)" % [float(car811.s) - w.s, float(car811.v)])
+
+
 func test_racer_police_backup() -> void:
 	var Sim = load("res://games/racer/sim.gd")
 	var dt := 1.0 / 60.0
@@ -1327,6 +1457,7 @@ func test_racer_police_backup() -> void:
 	b.backup[0].s = b.s - 45.0
 	for n in 60 * 3:
 		b.v = 45.0   # a steady cruise the police can keep up with
+		b.police.hit_cd = 9.0   # no rams meanwhile (a ram now sets the police car back, D-523)
 		b.step(dt, false, false)
 	check(b.backup.size() == 1 and b.police.state == "chase" and b.backup[0].state == "chase", "both cars are chasing")
 	var lead_ds: float = float(b.police.s) - b.s
@@ -1524,15 +1655,15 @@ func test_racer_hd_assets() -> void:
 	# D-216: areas per stage, and the city's sidewalk barrier.
 	var TrackA = load("res://games/racer/track.gd")
 	var seq: Array = []
-	for k in range(1, 12):
+	for k in range(1, 14):
 		seq.append(TrackA.stage_area(k))
-	check(seq == ["beach", "beach", "forest", "forest", "desert", "city", "city", "fields", "snow", "snow", "snow"],
-		"areas by stage (D-225: %s)" % ", ".join(seq))
+	check(seq == ["beach", "beach", "forest", "forest", "desert", "desert", "city", "city", "fields", "fields", "snow", "snow", "snow"],
+		"areas by stage (D-225, D-519: %s)" % ", ".join(seq))
 	var SimA = load("res://games/racer/sim.gd")
 	var cs = SimA.new()
 	cs.setup(5)
 	cs.state = SimA.State.RACE
-	cs.s = 5.0 * SimA.CHECKPOINT_EVERY + 500.0
+	cs.s = 6.0 * SimA.CHECKPOINT_EVERY + 500.0   # stage 7: the city (D-519)
 	cs.track.ensure(cs.s + 600.0)
 	cs.x = 20.0
 	cs.v = 30.0
@@ -1542,8 +1673,27 @@ func test_racer_hd_assets() -> void:
 	for o in cs.track.objects_between(cs.s - 200.0, cs.s + 400.0):
 		if o.kind == "building":
 			nb += 1
-	check(nb > 10 and not cs.track.junctions.is_empty(), "the city has buildings (%d) and junctions (%d)" % [nb, cs.track.junctions.size()])
-	# D-221: the end of stage 10 is the finish line.
+	# D-514: an urban motorway: walls, overpasses clear of the tunnels, tunnels in town.
+	cs.track.ensure(8.0 * SimA.CHECKPOINT_EVERY)
+	var city_tunnels := 0
+	var over_ok := true
+	for tv in cs.track.tunnels:
+		if cs.track.area_at(tv.x) == "city":
+			city_tunnels += 1
+	for ov in cs.track.overpasses:
+		if cs.track.in_tunnel(ov - 30.0) or cs.track.in_tunnel(ov + 30.0) or cs.track.area_at(ov) != "city":
+			over_ok = false
+	check(nb > 10 and cs.track.overpasses.size() >= 5 and over_ok, "the city has buildings (%d) and overpasses (%d), none at a tunnel" % [nb, cs.track.overpasses.size()])
+	check(city_tunnels >= 1, "the city has tunnels (%d)" % city_tunnels)
+	# D-526: no building stands in a deck's way, however the road bends.
+	var deck_clear := true
+	for ov in cs.track.overpasses:
+		for o in cs.track.objects_between(float(ov) - 300.0, float(ov) + 300.0):
+			if o.kind == "building" and cs.track._in_deck(float(ov), float(o.s), float(o.x), float(o.w), float(o.d), float(o.dir)):
+				deck_clear = false
+	check(deck_clear, "no building stands in the way of an overpass")
+	check(is_equal_approx(cs.track.city_wall_h(cs.s), TrackA.CITY_WALL_H) and cs.track.city_wall_h(1000.0) == 0.0, "the city road has walls, the beach none")
+	# D-221: the end of the last stage is the finish line.
 	var fs = SimA.new()
 	fs.setup(4)
 	fs.state = SimA.State.RACE
@@ -1598,12 +1748,12 @@ func test_racer_hd_assets() -> void:
 	var waiter: Dictionary = sw.traffic[0] if not sw.traffic.is_empty() else {}
 	check(not waiter.is_empty() and float(waiter.v) < 1.0 and sw.s - float(waiter.s) > SimA.CAR_LEN,
 		"traffic behind a crash stops and waits")
-	# D-460: PURSUIT. The road loops: after the ten stages, the forest, then
+	# D-460: PURSUIT. The road loops: after the twelve stages (D-519), the forest, then
 	# the beach of stage 1 again; no finish town.
 	var lt = TrackA.new()
 	lt.loop = true
-	check(lt.area_of_stage(10) == "snow" and lt.area_of_stage(11) == "forest" and lt.area_of_stage(12) == "beach"
-		and lt.area_of_stage(22) == "forest" and lt.area_of_stage(23) == "beach" and lt.finish_s() == 0.0,
+	check(lt.area_of_stage(12) == "snow" and lt.area_of_stage(13) == "forest" and lt.area_of_stage(14) == "beach"
+		and lt.area_of_stage(26) == "forest" and lt.area_of_stage(27) == "beach" and lt.finish_s() == 0.0,
 		"pursuit: the stages loop (snow, forest, back to the beach), no finish")
 	var pu = SimA.new()
 	pu.setup(4)
@@ -1632,6 +1782,70 @@ func test_racer_hd_assets() -> void:
 	check(pu.time_left > SimA.PURSUIT_TIME + SimA.REACH_TIME - 30.0, "pursuit: reaching the speeder extends the clock (D-465)")
 	check(on_t >= 0.0 and pu.engaged and max_gap < SimA.STAY_GAP + 50.0 and pu.spin_t <= 0.0,
 		"pursuit: within range the chase is on and the speeder stays in sight ahead (gap up to %.0f m)" % max_gap)
+	# D-530: the police car in front of it and in its way: it swerves round.
+	var bx = SimA.new()
+	bx.setup(4)
+	bx.setup_pursuit(1)
+	bx.state = SimA.State.RACE
+	bx.engaged = true
+	bx.gear = SimA.Gear.HIGH
+	bx.speeder.s = bx.s + 300.0
+	bx.speeder.v = 70.0
+	bx.s = float(bx.speeder.s) + 9.0
+	bx.x = float(bx.speeder.x)
+	bx.v = 66.0
+	var lane0 := int(bx.speeder.lane)
+	var hits0 := float(bx.speeder.dmg)
+	for i in 90:
+		bx.traffic.clear()
+		bx.pickups.clear()
+		bx.x = SimA.Track.LANES[lane0]
+		bx.v = 66.0
+		bx.step(1.0 / 60.0, false, false)
+	check(not bx.speeder.is_empty() and int(bx.speeder.lane) != lane0 and absf(float(bx.speeder.x) - bx.x) > SimA.CAR_W
+		and is_equal_approx(float(bx.speeder.dmg), hits0),
+		"pursuit: a speeder with the police car in front of it swerves round, without a bump (D-530)")
+	# D-534: damage mends down to the threshold below it, never across.
+	var hl = SimA.new()
+	hl.setup(4)
+	hl.setup_pursuit(1)
+	hl.state = SimA.State.RACE
+	hl.speeder.dmg = 0.55
+	hl.speeder.calm = 99.0
+	for i in 1200:
+		hl.traffic.clear()
+		hl.pickups.clear()
+		hl.time_left = 60.0
+		hl.step(1.0 / 60.0, false, false)
+	var held_at: float = hl.speeder.dmg
+	hl.speeder.dmg = 0.2
+	for i in 1200:
+		hl.traffic.clear()
+		hl.pickups.clear()
+		hl.time_left = 60.0
+		hl.step(1.0 / 60.0, false, false)
+	check(is_equal_approx(held_at, 0.5) and float(hl.speeder.dmg) < 0.01,
+		"pursuit: damage mends to the threshold below it and no further (55 %% -> %.0f %%; D-534)" % (held_at * 100.0))
+	# D-531: a crash costs the police car points, never below 0.
+	var pn = SimA.new()
+	pn.setup(4)
+	pn.setup_pursuit(1)
+	pn.state = SimA.State.RACE
+	pn._add_score(8000.0 - pn.score)
+	var before_pen: int = pn.score
+	pn._crash("car")
+	var after_one: int = pn.score
+	pn.spin_t = 0.0
+	pn._crash("car")
+	check(before_pen - after_one == int(SimA.CRASH_PENALTY) and pn.score == 0,
+		"pursuit: a crash costs points, and the score stops at 0 (D-531)")
+	var np_ = SimA.new()
+	np_.setup(4)
+	np_.state = SimA.State.RACE
+	np_._add_score(8000.0)
+	var race_before: int = np_.score
+	np_._crash("car")
+	check(np_.score == race_before, "a crash costs no points in a race")
 	# D-463: flat out we gain on it slowly; with nitro, much faster.
 	var gains := []
 	for boost in [false, true]:
@@ -1672,6 +1886,23 @@ func test_racer_hd_assets() -> void:
 		gains.append(g0 - gq.speeder_gap())
 	check(float(gains[0]) > 5.0 and float(gains[1]) > float(gains[0]) * 1.8,
 		"pursuit: flat out the police car gains on the speeder (%.0f m in 2 s), with nitro much faster (%.0f m)" % [gains[0], gains[1]])
+	# D-496: left alone, its damage slowly goes down (after a short wait).
+	var he = SimA.new()
+	he.setup(7)
+	he.setup_pursuit(1)
+	he.state = SimA.State.RACE
+	he.speeder.dmg = 0.7   # (D-534: clear of a threshold)
+	he.speeder.calm = 0.0
+	var heal_wait := 0.0
+	for i in 600:
+		he.traffic.clear()
+		he.pickups.clear()
+		he.s = float(he.speeder.s) - 100.0   # behind it, never touching
+		he.step(1.0 / 60.0, false, false)
+		if i == 150:
+			heal_wait = float(he.speeder.dmg)
+	check(is_equal_approx(heal_wait, 0.7) and float(he.speeder.dmg) < 0.6 and float(he.speeder.dmg) > 0.5,
+		"pursuit: a speeder left alone keeps its damage 3 s, then loses it slowly (0.70 to %.2f in 10 s)" % float(he.speeder.dmg))
 	# Nitro can't carry the police car far past it.
 	pu.s = float(pu.speeder.s) + 15.0
 	pu.v = 98.0
@@ -1849,8 +2080,8 @@ func test_racer_hd_assets() -> void:
 		wt.avoid_every = SimA.CHECKPOINT_EVERY
 		wt.setup(3)
 		wt.weather_seed = sd
-		wt.ensure(10.0 * SimA.CHECKPOINT_EVERY)
-		wt.weather(10.0 * SimA.CHECKPOINT_EVERY)
+		wt.ensure(12.0 * SimA.CHECKPOINT_EVERY)
+		wt.weather(12.0 * SimA.CHECKPOINT_EVERY)
 		firsts[int(float(wt.spells[0].a))] = true
 		for sp in wt.spells:
 			spell_ok = spell_ok and float(sp.b) - float(sp.a) >= TrackA.WEATHER_MIN
@@ -1863,7 +2094,7 @@ func test_racer_hd_assets() -> void:
 		spell_ok = spell_ok and wt.weather(float(wt.spells[0].a) - 10.0).is_empty()
 		# D-456: never any weather on the beach or in the desert.
 		var sx := 0.0
-		while sx < 10.0 * SimA.CHECKPOINT_EVERY:
+		while sx < 12.0 * SimA.CHECKPOINT_EVERY:
 			if wt.area_w(sx, "beach") + wt.area_w(sx, "desert") > 0.999:
 				clear_ok = clear_ok and wt.weather(sx).is_empty()
 			sx += 50.0
@@ -1874,17 +2105,18 @@ func test_racer_hd_assets() -> void:
 func test_racer_time_of_day() -> void:
 	var T = load("res://games/racer/sky.gd")
 	var el := func(p: float) -> float: return T.sun_elevation(T.hour_at(p))
+	# D-517: a cycle of 6 stages: day 2, sunset 1, night 2, dawn 1.
 	var day_ok := true
-	for p in [0.0, 1.0, 2.0, 2.9]:
-		day_ok = day_ok and el.call(p) > 15.0
-	check(day_ok, "stages 1-3: the sun is well up")
-	check(el.call(3.0) > 0.0 and el.call(3.0) < 25.0 and el.call(4.5) > 0.0 and el.call(4.5) < 8.0, "stages 4-5: the sun is low (sunset)")
-	check(el.call(4.99) < 0.0, "the sun has set by the end of stage 5")
+	for p in [0.0, 0.5, 1.0, 1.5, 1.99, 6.0, 7.0]:
+		day_ok = day_ok and el.call(p) > 15.0 and T.night_level(el.call(p)) < 0.01
+	check(day_ok, "day lasts 2 stages of the cycle: the sun is well up (D-517)")
+	check(el.call(2.0) > 0.0 and el.call(2.0) < 25.0 and el.call(2.7) > 0.0 and el.call(2.7) < 8.0, "sunset lasts 1 stage: the sun is low")
+	check(el.call(2.99) < 0.0, "the sun has set by the end of the sunset stage")
 	var night_ok := true
-	for p in [5.2, 6.0, 7.0, 7.7]:
+	for p in [3.2, 4.0, 4.9, 9.2, 10.0]:
 		night_ok = night_ok and T.night_level(el.call(p)) > 0.5
-	check(night_ok, "stages 6-8: night (lights on, D-225)")
-	check(el.call(8.0) < 0.0 and el.call(9.2) > 0.0, "dawn in stages 9-10: first light, then the sun comes up (D-225)")
+	check(night_ok, "night lasts 2 stages (lights on), and comes round again")
+	check(el.call(5.0) < 0.0 and el.call(5.6) > 0.0 and el.call(5.99) > 15.0, "dawn lasts 1 stage: first light, then the sun comes up")
 	# One sun: its direction is a single unit vector, ahead of the road at sunset.
 	var sd: Vector3 = T.sun_dir(18.0)
 	check(is_equal_approx(sd.length(), 1.0) and sd.z < -0.9, "the sun sets ahead of the road's start")
@@ -1950,6 +2182,56 @@ func test_racer_sim() -> void:
 	for k in int(Sim.WIN_WAIT * 60.0) + 10:
 		r2.step_two(dt, [idle, idle])
 	check(r2.race_over, "2P racer: the race ends a while after the winner crosses")
+	# D-501: 2P catch-up for the car behind only.
+	var rb = Sim.new()
+	rb.setup_two(7, [0, 0])
+	check(is_zero_approx(rb.catch_up()), "D-501: no catch-up side by side")
+	rb.player_set(1, "s", float(rb.player_get(0, "s")) + Sim.CATCH_FULL + 50.0)
+	rb._use(0)
+	var behind: float = rb.catch_up()
+	rb._use(1)
+	check(is_equal_approx(behind, 1.0) and is_zero_approx(rb.catch_up()), "D-501: full catch-up for the car far behind, none for the leader")
+	rb._use(0)
+	var solo_rb = Sim.new()
+	solo_rb.setup(7)
+	check(is_zero_approx(solo_rb.catch_up()), "D-501: no catch-up in 1P")
+	# D-510: shards show the car's own paintwork, and stay low and stop.
+	var RG = load("res://games/racer/game.gd")
+	var CF = load("res://games/racer/contact_fx.gd")
+	var red_cells: PackedVector2Array = CF.paint_cells(RG.CAR_TEXTURE)
+	var red_img: Image = (load(RG.CAR_TEXTURE) as Texture2D).get_image()
+	if red_img.is_compressed():
+		red_img.decompress()
+	var reds := 0
+	for uv in red_cells:
+		var px: Color = red_img.get_pixel(int(uv.x * red_img.get_width()), int(uv.y * red_img.get_height()))
+		if px.r > px.g * 1.5 and px.r > px.b * 1.5:
+			reds += 1
+	check(red_cells.size() > 20 and reds * 10 >= red_cells.size() * 9, "D-510: the red car's shards come from its red paintwork (%d of %d)" % [reds, red_cells.size()])
+	check(CF.paint_cells(RG.TRUCK_TEXTURE).size() > 20 and CF.paint_cells(RG.POLICE_TEXTURE, true).size() > 4,
+		"D-510: trucks and the police car have shard patches too")
+	var shard := {"s": 0.0, "x": 0.0, "h": 0.6, "vs": 70.0, "vx": 3.9, "vh": 2.7, "ang": 0.0, "spin": 20.0, "life": 0.0, "down": false}
+	var shard_top := 0.0
+	for k in 600:
+		CF.step_shard(shard, dt)
+		shard_top = maxf(shard_top, float(shard.h))
+	check(shard_top < 1.2 and shard.down and is_zero_approx(float(shard.vs)) and float(shard.h) <= CF.GROUND + 0.001,
+		"D-510: a shard stays below a metre, lands and skids to a stop (top %.2f)" % shard_top)
+	check(RG._traffic_kind({"id": 3, "kind": "truck"}) == "truck2" and RG._traffic_kind({"id": 5, "kind": "car"}) == "car",
+		"D-510: a traffic vehicle's model is fixed by its id")
+	# D-502: the 2P map runs from the start to the finish line.
+	var SM = load("res://games/racer/split_map.gd")
+	check(is_zero_approx(SM.progress(0.0)) and is_equal_approx(SM.progress(Sim.CHECKPOINT_EVERY), 1.0 / Sim.FINISH_STAGE) 		and is_equal_approx(SM.progress(Sim.FINISH_STAGE * Sim.CHECKPOINT_EVERY + 500.0), 1.0),
+		"D-502: the 2P map places a car by its share of the race")
+	# D-500: fixed-width digits in the styled fonts' tabular versions.
+	var SF = load("res://core/ui/styled_fonts.gd")
+	for style in ["sunset_metal", "sunset_8", "sunset_8_b", "sunset_16s", "sunset_16"]:
+		var tf: FontFile = SF.get_font(style, true)
+		var pf: FontFile = SF.get_font(style)
+		var widths := {}
+		for code in range(48, 58):
+			widths[tf.get_glyph_advance(0, tf.fixed_size, code).x] = true
+		check(widths.size() == 1 and tf != pf, "D-500: %s digits share one width in the tabular font" % style)
 	# D-183: the cars set the clock: the easy car gets the most time, the hard car the least.
 	var times: Array = []
 	var bonuses: Array = []
@@ -2024,8 +2306,13 @@ func test_racer_sim() -> void:
 		var k := ceilf((tv.x - 60.0) / 2300.0) * 2300.0
 		clear = clear and k > tv.y + 60.0
 		for o in tt_.objects_between(tv.x, tv.y):
-			clear = false
+			if o.kind != "building":   # D-514: in town the blocks stand on beside the tunnel
+				clear = false
 	check(tt_.tunnels.size() >= 3 and clear, "tunnels appear, clear of checkpoints and empty (%d)" % tt_.tunnels.size())
+	var goal_clear := true   # D-518
+	for tv in tt_.tunnels:
+		goal_clear = goal_clear and not (tv.y > tt_.finish_s() - 800.0 and tv.x < tt_.finish_s() + 700.0)
+	check(goal_clear, "no tunnel in the finish town or within 200 m before it (D-518)")
 	for sd in [1, 7, 42, 99]:
 		var gt = load("res://games/racer/track.gd").new()
 		gt.avoid_every = 2300.0
@@ -2684,6 +2971,41 @@ func test_racer_sim() -> void:
 				seen.truck += 1
 	check(lanes_ok and seen.ahead > 100 and seen.oncoming > 100 and seen.truck > 40,
 		"traffic drives on its own side, both directions, with trucks (%s)" % str(seen))
+	# D-483: random traffic always leaves two lanes open, at any player speed.
+	var open_ok := true
+	var open_cars := 0
+	var open_sig := {}
+	for seed_i in 12:
+		var ot = Sim.new()
+		ot.setup(7)
+		ot.randomize_traffic(seed_i)
+		ot.state = Sim.State.RACE
+		ot.s = 1000.0
+		ot.track.ensure(4000.0)
+		ot.traffic.clear()
+		for i in 300:
+			ot._spawn_traffic()
+		open_cars += ot.traffic.size()
+		var sig := ""
+		for t in ot.traffic:
+			sig += "%d:%d " % [int(t.lane), int(t.s)]
+		open_sig[sig] = true
+		var vp := 20.0
+		while vp <= 110.0:
+			for t in ot.traffic:
+				var ct: float = vp - float(t.v)
+				if ct <= 3.0:
+					continue
+				var lanes := {int(t.lane): true}
+				for o in ot.traffic:
+					var co: float = vp - float(o.v)
+					var gap: float = (float(o.s) - ot.s) / maxf(co, 0.001) - (float(t.s) - ot.s) / ct
+					if co > 3.0 and gap >= 0.0 and gap < 1.5:
+						lanes[int(o.lane)] = true
+				open_ok = open_ok and lanes.size() <= 2
+			vp += 5.0
+	check(open_ok and open_cars >= 12 * 8 and open_sig.size() == 12,
+		"random traffic differs by seed and never fills more than two lanes at once (%d cars over 12 seeds)" % open_cars)
 	var ho = Sim.new()
 	ho.setup(7)
 	ho.state = Sim.State.RACE

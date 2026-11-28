@@ -1,7 +1,9 @@
 ## TURBO RUN news helicopter (D-436): at the first checkpoint and the first in
-## the city (D-437) it flies in from high up ahead and to one side, hovers
-## ahead of the player's car facing it (filming), swinging a little sideways,
-## then flies at the camera and over it (D-437: was turning away and climbing off).
+## the city (D-437) it comes over the camera from behind (in at the top of the
+## screen, D-488), flies ahead nose first, swings round to face the player's
+## car and hovers ahead of it (filming), drifting a little sideways, then flies
+## at the camera and over it (D-437: was turning away and climbing off).
+## D-488: its nose and bank follow the way it is moving against the car.
 ## Its blades are blurred discs (scripts/tools/gen_rotor_blur.py) spun on the
 ## hubs. This node is the body's holder; the game places it on the road each
 ## frame from `s`, `x`, `h`, `yaw`, `pitch` and `roll` (stepped like the other
@@ -26,10 +28,12 @@ const OUT_PAST := 75.0    # D-437: m it closes in on the car, ending well behind
 const OUT_CLIMB := 9.0    # m it rises on the way, passing over the camera
 const AHEAD := 16.0       # m ahead of the car while hovering (D-440: was 28)
 const HEIGHT := 5.5       # m above the road while hovering (D-440: was 7)
-const FROM_AHEAD := 150.0 # where it comes from
-const FROM_SIDE := 30.0
-const FROM_HEIGHT := 34.0
+const IN_BEHIND := 24.0   # D-488: m behind the car where it comes from (the camera is 8 m behind)
+const IN_HEIGHT := 16.0   # and how high: above the top of the screen until it is ahead
+const IN_TURN := 0.5      # of the fly-in: from here it swings round to face the car
 const SWING_DEG := 25.0   # the sideways turn while hovering
+const DRIFT := 2.0        # m: half its sideways drift while hovering
+const DRIFT_RATE := 0.6   # rad/s of that drift
 
 var phase := ""           # "", "in", "hover", "out"
 var t := 0.0
@@ -41,6 +45,9 @@ var h := 0.0
 var yaw := 0.0
 var pitch := 0.0
 var roll := 0.0
+## D-517: extra height, set by the game: it rises over an overpass (or a tunnel
+## mouth) in its way and comes back down after it.
+var lift := 0.0
 var _side := 1.0
 var _main: Node3D
 var _tail: Node3D
@@ -83,10 +90,11 @@ func active() -> bool:
 	return phase != ""
 
 
-## Starts the fly-in; `side` (+1 / -1) is where it comes from and leaves to.
+## Starts the fly-in; `side` (+1 / -1) is the side it swings round by and drifts to.
 func start(side: float) -> void:
 	phase = "in"
 	t = 0.0
+	lift = 0.0
 	_side = signf(side) if side != 0.0 else 1.0
 	visible = true
 
@@ -101,24 +109,33 @@ func update(delta: float, car_s: float, car_x: float) -> void:
 	var hover_x := car_x * 0.6
 	match phase:
 		"in":
+			# D-488: over the camera from behind, nose first and nose down,
+			# overtaking the car; it flares (nose up) as it slows, then swings
+			# round by its side to face the car, banking into the turn.
 			var k := clampf(t / IN_TIME, 0.0, 1.0)
-			var e := 1.0 - pow(1.0 - k, 3.0)   # fast in, easing to a stop
-			s = car_s + lerpf(FROM_AHEAD, AHEAD, e)
-			x = lerpf(_side * FROM_SIDE, hover_x, e)
-			h = lerpf(FROM_HEIGHT, HEIGHT, e)
-			yaw = _side * deg_to_rad(70.0) * (1.0 - e)   # swings round to face the car
-			pitch = deg_to_rad(14.0) * (1.0 - k) - deg_to_rad(8.0) * sin(k * PI) * k   # nose down, then a flare
-			roll = -_side * deg_to_rad(18.0) * sin(k * PI)
+			var e := 1.0 - (1.0 - k) * (1.0 - k)   # fast in, easing to a stop
+			var turn := smoothstep(IN_TURN, 1.0, k)
+			s = car_s + lerpf(-IN_BEHIND, AHEAD, e)
+			x = hover_x
+			h = lerpf(IN_HEIGHT, HEIGHT, smoothstep(0.0, 1.0, e))
+			yaw = _side * PI * (1.0 - turn)   # PI = nose ahead, the way it flies; 0 = facing the car
+			pitch = deg_to_rad(12.0) * (1.0 - smoothstep(0.0, 0.4, k)) \
+				- deg_to_rad(10.0) * sin(PI * clampf((k - 0.3) / 0.45, 0.0, 1.0))
+			roll = _side * deg_to_rad(12.0) * sin(PI * turn)
 			if k >= 1.0:
 				phase = "hover"
 				t = 0.0
 		"hover":
 			s = car_s + AHEAD + 1.5 * sin(t * 0.9)
-			x = hover_x + _side * 2.0 * sin(t * 0.6)
+			# D-488: it drifts out to its side and back; its nose and bank go
+			# with its sideways speed (they ran at another rate, so half the
+			# time it leaned and turned against its own movement).
+			var go := sin(t * DRIFT_RATE)   # its sideways speed, -1..1 (towards its side)
+			x = hover_x + _side * DRIFT * (1.0 - cos(t * DRIFT_RATE))
 			h = HEIGHT + 0.6 * sin(t * 1.3)
-			yaw = _side * deg_to_rad(SWING_DEG) * sin(t * 0.8)
+			yaw = _side * deg_to_rad(SWING_DEG) * go     # the nose a little into the drift
 			pitch = deg_to_rad(2.0) * sin(t * 0.7)
-			roll = -_side * deg_to_rad(6.0) * cos(t * 0.8)   # banks with the swing
+			roll = -_side * deg_to_rad(6.0) * go         # leaning the way it goes (facing us, its left is our right)
 			if t >= HOVER_TIME:
 				phase = "out"
 				t = 0.0
@@ -128,11 +145,15 @@ func update(delta: float, car_s: float, car_x: float) -> void:
 			var k := clampf(t / OUT_TIME, 0.0, 1.0)
 			var e := k * k
 			s = car_s + AHEAD + 1.5 * sin(HOVER_TIME * 0.9) - OUT_PAST * e
-			x = lerpf(hover_x + _side * 2.0 * sin(HOVER_TIME * 0.6), car_x * 0.85 + _side * 3.0, smoothstep(0.0, 0.7, k))
+			# D-488: straight at us from where it hovered (no side-step), its
+			# nose and bank easing level from the drift.
+			var go_end := sin(HOVER_TIME * DRIFT_RATE)
+			var level := 1.0 - smoothstep(0.0, 0.4, k)
+			x = hover_x + _side * DRIFT * (1.0 - cos(HOVER_TIME * DRIFT_RATE))
 			h = HEIGHT + 0.6 * sin(HOVER_TIME * 1.3) + OUT_CLIMB * e
-			yaw = lerpf(_side * deg_to_rad(SWING_DEG) * sin(HOVER_TIME * 0.8), _side * deg_to_rad(12.0), smoothstep(0.0, 0.5, k))
+			yaw = _side * deg_to_rad(SWING_DEG) * go_end * level
 			pitch = deg_to_rad(18.0) * smoothstep(0.0, 0.35, k)   # nose down, coming at us
-			roll = _side * deg_to_rad(10.0) * sin(k * PI)
+			roll = -_side * deg_to_rad(6.0) * go_end * level
 			if k >= 1.0:
 				phase = ""
 				visible = false
@@ -142,7 +163,7 @@ func update(delta: float, car_s: float, car_x: float) -> void:
 func loudness() -> float:
 	match phase:
 		"in":
-			return clampf(t / IN_TIME, 0.0, 1.0) * 0.8 + 0.2
+			return clampf(t / 0.6, 0.0, 1.0)   # D-488: it comes over us: loud almost at once
 		"hover":
 			return 1.0
 		"out":   # loudest as it passes over, then gone behind
